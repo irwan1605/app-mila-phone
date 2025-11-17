@@ -1,6 +1,12 @@
 // src/pages/UserManagement.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import TOKO_LABELS from "../data/TokoLabels";
+import {
+  listenUsers,
+  saveUserOnline,
+  deleteUserOnline,
+  getAllUsersOnce,
+} from "../services/FirebaseService";
 
 export default function UserManagement() {
   /* =========================
@@ -11,11 +17,9 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [tokoFilter, setTokoFilter] = useState("ALL");
 
-  // Pagination
   const pageSize = 10;
   const [page, setPage] = useState(1);
 
-  // Form tambah user
   const [form, setForm] = useState({
     username: "",
     password: "",
@@ -25,25 +29,14 @@ export default function UserManagement() {
   });
 
   /* =========================
-      LOAD USERS FROM localStorage
+      REALTIME LIST USER
   ========================== */
   useEffect(() => {
-    try {
-      const ls = JSON.parse(localStorage.getItem("users"));
-      if (Array.isArray(ls)) setUsers(ls);
-      else setUsers([]);
-    } catch {
-      setUsers([]);
-    }
+    const unsub = listenUsers((list) => {
+      setUsers(Array.isArray(list) ? list : []);
+    });
+    return () => unsub && unsub();
   }, []);
-
-  /* =========================
-      SAVE USERS → localStorage
-  ========================== */
-  const saveUsers = (list) => {
-    localStorage.setItem("users", JSON.stringify(list));
-    setUsers(list);
-  };
 
   /* =========================
       FILTERING + SEARCH
@@ -51,48 +44,51 @@ export default function UserManagement() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
 
-    return (Array.isArray(users) ? users : [])
-      .filter((u) =>
-        (u.username || "").toLowerCase().includes(q) ||
-        (u.name || "").toLowerCase().includes(q)
+    return users
+      .filter(
+        (u) =>
+          (u.username || "").toLowerCase().includes(q) ||
+          (u.name || "").toLowerCase().includes(q)
       )
       .filter((u) => {
-        // Filter role
         if (roleFilter === "ALL") return true;
         if (roleFilter === "superadmin") return u.role === "superadmin";
         if (roleFilter === "pic_toko") return u.role.startsWith("pic_toko");
         return true;
       })
       .filter((u) => {
-        // Filter toko
         if (tokoFilter === "ALL") return true;
 
-        // PIC Role format → pic_toko3
         if (String(u.role).startsWith("pic_toko")) {
           const roleTokoId = u.role.replace("pic_toko", "");
           return String(roleTokoId) === String(tokoFilter);
         }
 
-        // Manual toko field
         return String(u.toko) === String(tokoFilter);
       });
-  }, [search, roleFilter, tokoFilter, users]);
+  }, [users, search, roleFilter, tokoFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   /* =========================
-      HANDLER: ADD USER
+      ADD USER (ONLINE)
   ========================== */
-  const addUser = () => {
+  const addUser = async () => {
     if (!form.username || !form.password) {
       alert("Username & Password wajib diisi.");
       return;
     }
 
-    const baseUsers = Array.isArray(users) ? users : [];
+    const existing = await getAllUsersOnce();
 
-    if (baseUsers.some((u) => u.username === form.username)) {
+    if (
+      existing.some(
+        (u) =>
+          (u.username || "").trim().toLowerCase() ===
+          form.username.trim().toLowerCase()
+      )
+    ) {
       alert("Username sudah digunakan.");
       return;
     }
@@ -111,15 +107,21 @@ export default function UserManagement() {
     }
 
     const newUser = {
-      username: form.username,
+      username: form.username.trim(),
       password: form.password,
       role,
       toko,
       name: form.name || form.username,
+      tokoName: toko ? TOKO_LABELS[toko] : "ALL",
     };
 
-    const updated = [...baseUsers, newUser];
-    saveUsers(updated);
+    try {
+      await saveUserOnline(newUser);
+      alert("User berhasil ditambahkan!");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menyimpan user ke server.");
+    }
 
     setForm({
       username: "",
@@ -128,27 +130,27 @@ export default function UserManagement() {
       toko: "",
       name: "",
     });
-
-    alert("User berhasil ditambahkan.");
   };
 
   /* =========================
-      HANDLER: DELETE USER
+      DELETE USER (ONLINE)
   ========================== */
-  const deleteUser = (username) => {
+  const deleteUser = async (username) => {
     if (!window.confirm("Hapus user ini?")) return;
 
-    const updated = (Array.isArray(users) ? users : []).filter(
-      (u) => u.username !== username
-    );
-
-    saveUsers(updated);
+    try {
+      await deleteUserOnline(username);
+      alert("User berhasil dihapus!");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menghapus user.");
+    }
   };
 
   /* =========================
       HELPER DISPLAY
   ========================== */
-  const displayRole = (role, toko) => {
+  const displayRole = (role) => {
     if (role === "superadmin") return "Superadmin";
 
     if (role.startsWith("pic_toko")) {
@@ -168,7 +170,7 @@ export default function UserManagement() {
   };
 
   /* =========================
-      RENDER
+      UI — TIDAK DIUBAH
   ========================== */
   return (
     <div className="p-4 space-y-6">
@@ -289,7 +291,7 @@ export default function UserManagement() {
         </select>
       </div>
 
-      {/* TABLE */}
+      {/* TABEL USER */}
       <div className="bg-white shadow rounded overflow-auto">
         <table className="min-w-[800px] w-full">
           <thead className="bg-gray-50">
@@ -307,7 +309,7 @@ export default function UserManagement() {
               <tr key={i} className="border-t">
                 <td className="p-2">{u.username}</td>
                 <td className="p-2">{u.name}</td>
-                <td className="p-2">{displayRole(u.role, u.toko)}</td>
+                <td className="p-2">{displayRole(u.role)}</td>
                 <td className="p-2">{displayToko(u.role, u.toko)}</td>
                 <td className="p-2">
                   <button

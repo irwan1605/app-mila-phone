@@ -1,4 +1,4 @@
-// DashboardToko.jsx — FINAL VERSION
+// DashboardToko.jsx — FINAL REALTIME FIREBASE (UI TIDAK DIUBAH)
 import React, { useEffect, useState, useMemo } from "react";
 import {
   listenTransaksiByToko,
@@ -61,17 +61,15 @@ export default function DashboardToko({ tokoId }) {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
-  // =====================================================
-  // 1. LOAD NAMA TOKO + LISTENER TRANSAKSI REALTIME
-  // =====================================================
+  /* -------------------------------------------
+      1. LOAD NAMA TOKO + LISTENER REALTIME
+  ------------------------------------------- */
   useEffect(() => {
-    // Load nama toko
     getTokoName(tokoId).then((name) => {
       if (name) setTokoName(name);
       else setTokoName(fallbackTokoNames[tokoId - 1] || `Toko ${tokoId}`);
     });
 
-    // Realtime listener transaksi
     const unsub = listenTransaksiByToko(tokoId, (items) => {
       const formatted = items.map((r) => ({
         id: r.id,
@@ -90,9 +88,9 @@ export default function DashboardToko({ tokoId }) {
     return () => unsub();
   }, [tokoId]);
 
-  // =====================================================
-  // 2. FORM HANDLING
-  // =====================================================
+  /* -------------------------------------------
+      2. FORM HANDLING
+  ------------------------------------------- */
   const handleChange = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   };
@@ -125,9 +123,9 @@ export default function DashboardToko({ tokoId }) {
     if (window.confirm("Hapus data ini?")) deleteTransaksi(tokoId, id);
   };
 
-  // =====================================================
-  // 3. FILTER
-  // =====================================================
+  /* -------------------------------------------
+      3. FILTER
+  ------------------------------------------- */
   const filteredData = useMemo(() => {
     if (filterType === "semua" || !filterValue) return data;
 
@@ -140,7 +138,10 @@ export default function DashboardToko({ tokoId }) {
       }
 
       if (filterType === "bulan") {
-        return d.getFullYear() === v.getFullYear() && d.getMonth() === v.getMonth();
+        return (
+          d.getFullYear() === v.getFullYear() &&
+          d.getMonth() === v.getMonth()
+        );
       }
 
       if (filterType === "tahun") {
@@ -151,26 +152,26 @@ export default function DashboardToko({ tokoId }) {
     });
   }, [data, filterType, filterValue]);
 
-  // =====================================================
-  // 4. PAGINATION
-  // =====================================================
+  /* -------------------------------------------
+      4. PAGINATION
+  ------------------------------------------- */
   const totalPages = Math.max(1, Math.ceil(filteredData.length / rowsPerPage));
   const paginated = filteredData.slice(
     (currentPage - 1) * rowsPerPage,
     currentPage * rowsPerPage
   );
 
-  // =====================================================
-  // 5. OMZET
-  // =====================================================
+  /* -------------------------------------------
+      5. OMZET
+  ------------------------------------------- */
   const totalOmzet = filteredData.reduce(
     (sum, r) => sum + r.QTY * r.HARGA,
     0
   );
 
-  // =====================================================
-  // 6. CHART DATA
-  // =====================================================
+  /* -------------------------------------------
+      6. CHART DATA
+  ------------------------------------------- */
   const chartData = useMemo(() => {
     const map = {};
     filteredData.forEach((r) => {
@@ -184,9 +185,9 @@ export default function DashboardToko({ tokoId }) {
 
   const COLORS = ["#4F46E5", "#10B981", "#F59E0B", "#EF4444", "#3B82F6"];
 
-  // =====================================================
-  // 7. EXPORT
-  // =====================================================
+  /* -------------------------------------------
+      7. EXPORT
+  ------------------------------------------- */
   const exportExcel = () => {
     const ws = XLSX.utils.json_to_sheet(filteredData);
     const wb = XLSX.utils.book_new();
@@ -206,12 +207,12 @@ export default function DashboardToko({ tokoId }) {
     });
   };
 
-  // =====================================================
-  // 8. UI
-  // =====================================================
+  /* -------------------------------------------
+      8. UI (TIDAK DIUBAH)
+  ------------------------------------------- */
+
   return (
     <div className="p-4 bg-gray-100 rounded-xl shadow-md">
-
       <h2 className="text-xl font-bold mb-3">
         Dashboard Penjualan Toko – {tokoName}
       </h2>
@@ -282,6 +283,7 @@ export default function DashboardToko({ tokoId }) {
               className="w-full p-2 border rounded"
             />
           </div>
+
         </div>
 
         <button
@@ -296,7 +298,6 @@ export default function DashboardToko({ tokoId }) {
       {/* FILTER */}
       <div className="flex items-center mb-4 space-x-3">
         <FaFilter />
-
         <select
           value={filterType}
           onChange={(e) => setFilterType(e.target.value)}
@@ -349,7 +350,6 @@ export default function DashboardToko({ tokoId }) {
                   <td className="p-2 border text-right">
                     {total.toLocaleString()}
                   </td>
-
                   <td className="p-2 border text-center space-x-2">
                     <button
                       onClick={() => handleEdit(r)}
@@ -420,7 +420,9 @@ export default function DashboardToko({ tokoId }) {
         </div>
 
         <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-3 text-center">Diagram Pie Omzet</h3>
+          <h3 className="font-semibold mb-3 text-center">
+            Diagram Pie Omzet
+          </h3>
 
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>

@@ -2,8 +2,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import defaultUsersRaw from "../data/UserManagementRole";
+import { listenUsers, getAllUsersOnce } from "../services/FirebaseService";
 
-// Normalisasi default user list
+// --- Normalisasi user default (backup jika Firebase kosong) ---
 const normalizeDefaultUsers = () => {
   if (Array.isArray(defaultUsersRaw)) return defaultUsersRaw;
   if (defaultUsersRaw && typeof defaultUsersRaw === "object")
@@ -17,32 +18,47 @@ export default function Login({ onLogin, users: usersProp }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  /* ============================
-       LOAD USER LIST
-  ============================ */
+  // realtime users
+  const [onlineUsers, setOnlineUsers] = useState([]);
+
   const defaultUsers = useMemo(() => normalizeDefaultUsers(), []);
 
+  /* ======================================================
+        1. LOAD USERS DARI FIREBASE (REALTIME)
+  ====================================================== */
+  useEffect(() => {
+    // Realtime listener users
+    const unsub = listenUsers((list) => {
+      setOnlineUsers(list || []);
+      localStorage.setItem("users", JSON.stringify(list || []));
+    });
+
+    return () => unsub && unsub();
+  }, []);
+
+  /* ======================================================
+        2. PRIORITAS PEMILIHAN LIST USER
+  ====================================================== */
   const users = useMemo(() => {
-    // 1. dari props App.jsx
+    // 1. Jika ada dari props App.jsx
     if (Array.isArray(usersProp) && usersProp.length) return usersProp;
 
-    // 2. dari localStorage
+    // 2. Jika sudah terupdate dari Firebase realtime
+    if (Array.isArray(onlineUsers) && onlineUsers.length) return onlineUsers;
+
+    // 3. Cek localStorage
     try {
       const ls = JSON.parse(localStorage.getItem("users"));
-      return Array.isArray(ls) && ls.length ? ls : defaultUsers;
-    } catch {
-      return defaultUsers;
-    }
-  }, [usersProp, defaultUsers]);
+      if (Array.isArray(ls) && ls.length) return ls;
+    } catch {}
 
-  // selalu simpan user list
-  useEffect(() => {
-    localStorage.setItem("users", JSON.stringify(users));
-  }, [users]);
+    // 4. Default fallback
+    return defaultUsers;
+  }, [usersProp, onlineUsers, defaultUsers]);
 
-  /* ============================
-          SUBMIT LOGIN
-  ============================ */
+  /* ======================================================
+        3. HANDLE LOGIN
+  ====================================================== */
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -57,24 +73,21 @@ export default function Login({ onLogin, users: usersProp }) {
       return;
     }
 
-    // ============================
-    // NORMALISASI ROLE DAN TOKO
-    // ============================
+    // ===== NORMALISASI ROLE & TOKO =====
     let role = u.role;
     let tokoId = u.toko;
 
-    // contoh: role = "pic_toko3"
     if (String(role).startsWith("pic_toko")) {
-      const parsed = Number(String(role).replace("pic_toko", ""));
-      const finalId = parsed || Number(tokoId);
+      const parsedId = Number(String(role).replace("pic_toko", ""));
+      const finalId = parsedId || Number(tokoId);
 
       if (Number.isFinite(finalId)) {
-        tokoId = finalId;
         role = `pic_toko${finalId}`;
+        tokoId = finalId;
       }
     }
 
-    // data user login lengkap
+    // Data login lengkap
     const logged = {
       username: u.username,
       name: u.name || u.username,
@@ -85,9 +98,7 @@ export default function Login({ onLogin, users: usersProp }) {
     localStorage.setItem("user", JSON.stringify(logged));
     if (typeof onLogin === "function") onLogin(logged);
 
-    // ============================
-    // AUTO REDIRECT SESUAI ROLE
-    // ============================
+    // ===== REDIRECT OTOMATIS =====
     if (role === "superadmin" || role === "admin") {
       navigate("/dashboard", { replace: true });
       return;
@@ -98,13 +109,13 @@ export default function Login({ onLogin, users: usersProp }) {
       return;
     }
 
-    // fallback jika error
+    // fallback
     navigate("/dashboard", { replace: true });
   };
 
-  /* ============================
-            UI LOGIN
-  ============================ */
+  /* ======================================================
+        4. USER INTERFACE (TIDAK DIUBAH)
+  ====================================================== */
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-indigo-50 p-4">
       <div className="w-full max-w-md">

@@ -32,7 +32,6 @@ import PenjualanAccessories from "./pages/PenjualanAccessories";
 
 import DataManagement from "./pages/DataManagement";
 import TransferBarangPusat from "./pages/Reports/TransferBarangPusat";
-// import PembelianProdukPusat from "./pages/Reports/PembelianProdukPusat";
 
 /* Stock pages */
 import StockAccessories from "./pages/stock/StockAccessories";
@@ -50,7 +49,6 @@ import StrukPenjualanIMEI from "./pages/StrukPenjualanIMEI";
 import SuratJalan from "./pages/SuratJalan";
 import Invoice from "./pages/Invoice";
 
-/* Reports */
 import FinanceReportMonthly from "./pages/Reports/FinanceReportMonthly";
 import FinanceReport from "./pages/Reports/FinanceReport";
 
@@ -60,11 +58,16 @@ import Sperpar from "./pages/Sperpar";
 /* Guards */
 import ProtectedRoute from "./components/ProtectedRoute";
 
-/* Default users */
-import defaultUsers from "./data/UserManagementRole";
+/* Firebase Services */
+import {
+  listenUsers,
+  saveUserOnline,
+  deleteUserOnline,
+  getAllUsersOnce,
+} from "./services/FirebaseService";
 
 /* ============================================
-   UTILITY: menentukan toko yang boleh untuk PIC
+      ROLE TOKO VALIDATION
 ============================================ */
 function getAllowedTokoIdFromUser(u) {
   if (!u) return null;
@@ -87,12 +90,10 @@ function TokoWrapper({ user }) {
   const { id } = useParams();
   const tokoId = Number(id);
 
-  // Superadmin & admin bebas akses toko mana saja
   if (user.role === "superadmin" || user.role === "admin") {
     return <DashboardToko tokoId={tokoId} user={user} />;
   }
 
-  // PIC Toko hanya bisa buka tokonya sendiri
   if (user.role?.startsWith("pic_toko")) {
     const allowed = getAllowedTokoIdFromUser(user) ?? 1;
 
@@ -103,15 +104,16 @@ function TokoWrapper({ user }) {
     return <DashboardToko tokoId={tokoId} user={user} />;
   }
 
-  // selain itu diarahkan ke dashboard pusat
   return <Navigate to="/dashboard" replace />;
 }
 
 /* ============================================
-    MAIN APP
+    MAIN APP (Realtime Firebase)
 ============================================ */
 export default function App() {
-  /* Session Login */
+  /* =============================
+      SESSION LOGIN
+  ============================= */
   const [user, setUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("user"));
@@ -128,45 +130,49 @@ export default function App() {
   const handleLogin = (u) => setUser(u);
   const handleLogout = () => setUser(null);
 
-  /* User Database */
-  const [users, setUsers] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("users"));
-      return Array.isArray(saved) && saved.length ? saved : defaultUsers;
-    } catch {
-      return defaultUsers;
-    }
-  });
+  /* =============================
+      USER LIST (Realtime)
+  ============================= */
+  const [users, setUsers] = useState([]);
 
+  // Listen realtime user list
   useEffect(() => {
-    localStorage.setItem("users", JSON.stringify(users));
-  }, [users]);
-
-  const addUser = (newUser) => {
-    setUsers((prev) => {
-      if (prev.some((u) => u.username === newUser.username)) return prev;
-      return [...prev, newUser];
+    const unsub = listenUsers((list) => {
+      setUsers(list || []);
     });
+    return () => unsub && unsub();
+  }, []);
+
+  // Add user online
+  const addUser = async (data) => {
+    try {
+      await saveUserOnline(data);
+    } catch (err) {
+      console.error("Gagal menambahkan user:", err);
+    }
   };
 
   /* ============================================
-      RENDERING
+      RENDER
   ============================================= */
   return (
     <Router>
       {!user ? (
-        /* ================================
-           BELUM LOGIN
-        ================================= */
+        /* ===============================
+            BELUM LOGIN
+        =============================== */
         <Routes>
-          <Route path="/" element={<Login onLogin={handleLogin} users={users} />} />
+          <Route
+            path="/"
+            element={<Login onLogin={handleLogin} users={users} />}
+          />
           <Route path="/register" element={<Register addUser={addUser} />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       ) : (
-        /* ================================
-           SUDAH LOGIN
-        ================================= */
+        /* ===============================
+            SUDAH LOGIN
+        =============================== */
         <div className="flex h-screen overflow-hidden">
           <Sidebar role={user.role} toko={user.toko} onLogout={handleLogout} />
 
@@ -175,10 +181,9 @@ export default function App() {
 
             <main className="flex-1 overflow-y-auto p-4">
               <Routes>
-                {/* Default redirect */}
                 <Route path="/" element={<Navigate to="/dashboard" />} />
 
-                {/* Dashboard pusat (sekarang sudah ada Pilih Toko di dalamnya) */}
+                {/* DASHBOARD PUSAT */}
                 <Route
                   path="/dashboard"
                   element={
@@ -188,7 +193,7 @@ export default function App() {
                   }
                 />
 
-                {/* Dashboard toko per id */}
+                {/* DASHBOARD TOKO */}
                 <Route
                   path="/toko/:id"
                   element={
@@ -198,30 +203,58 @@ export default function App() {
                   }
                 />
 
-                {/* ---- Modules lainnya tetap sama ---- */}
+                {/* MODULES */}
                 <Route path="/user-management" element={<UserManagement />} />
                 <Route path="/sales-report" element={<SalesReport />} />
                 <Route path="/inventory-report" element={<InventoryReport />} />
-                {/* <Route path="/pembelian-produk-pusat" element={<PembelianProdukPusat />} /> */}
                 <Route path="/finance-report" element={<FinanceReport />} />
-                <Route path="/finance-report-monthly" element={<FinanceReportMonthly />} />
+                <Route
+                  path="/finance-report-monthly"
+                  element={<FinanceReportMonthly />}
+                />
+
                 <Route path="/products" element={<Products />} />
                 <Route path="/data-management" element={<DataManagement />} />
-                <Route path="/transfer-barang-pusat" element={<TransferBarangPusat />} />
-                <Route path="/service-handphone" element={<ServiceHandphone user={user} />} />
-                <Route path="/service-motor-listrik" element={<ServiceMotorListrik user={user} />} />
+                <Route
+                  path="/transfer-barang-pusat"
+                  element={<TransferBarangPusat />}
+                />
+
+                <Route
+                  path="/service-handphone"
+                  element={<ServiceHandphone user={user} />}
+                />
+                <Route
+                  path="/service-motor-listrik"
+                  element={<ServiceMotorListrik user={user} />}
+                />
+
                 <Route path="/surat-jalan" element={<SuratJalan />} />
                 <Route path="/invoice" element={<Invoice />} />
                 <Route path="/struk-penjualan" element={<StrukPenjualan />} />
-                <Route path="/struk-penjualan-imei" element={<StrukPenjualanIMEI />} />
-                <Route path="/penjualan-handphone" element={<PenjualanHandphone />} />
-                <Route path="/penjualan-motor-listrik" element={<PenjualanMotorListrik />} />
+                <Route
+                  path="/struk-penjualan-imei"
+                  element={<StrukPenjualanIMEI />}
+                />
+
+                <Route
+                  path="/penjualan-handphone"
+                  element={<PenjualanHandphone />}
+                />
+                <Route
+                  path="/penjualan-motor-listrik"
+                  element={<PenjualanMotorListrik />}
+                />
                 <Route path="/input-penjualan" element={<InputPenjualan />} />
                 <Route path="/accessories" element={<PenjualanAccessories />} />
+
                 <Route path="/modul-sparepart" element={<Sperpar />} />
 
                 {/* Fallback */}
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                <Route
+                  path="*"
+                  element={<Navigate to="/dashboard" replace />}
+                />
               </Routes>
             </main>
           </div>
