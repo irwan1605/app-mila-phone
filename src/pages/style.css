@@ -1,0 +1,19 @@
+@media print {
+    /* Sembunyikan semua elemen kecuali tabel */
+    body * {
+      visibility: hidden;
+    }
+  
+    /* Tampilkan hanya tabel yang akan dicetak */
+    table, 
+    table * {
+      visibility: visible;
+    }
+  
+    /* Atur posisi tabel agar terletak di sudut kiri atas */
+    table {
+      position: absolute;
+      left: 10;
+      top: 10;
+    }
+  }

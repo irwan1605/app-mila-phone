@@ -1,0 +1,159 @@
+.logo {
+    display: block;
+    margin: 2 auto;
+    width: auto; /* Sesuaikan ukuran sesuai kebutuhan */
+    height: auto;
+    border-radius: 0%;
+    box-shadow:  1 4px 8px rgba(229, 249, 4, 0.935), 1 6px 20px rgba(231, 250, 28, 0.3);
+    transition: all 0.3s ease-in-out;
+  }
+  
+  .logo:hover {
+    box-shadow: 1 4px 8px rgba(249, 241, 9, 0.4), 1 6px 20px rgba(220, 253, 4, 0.883), 0 0 15px rgba(255, 255, 255, 0.6);
+  }
+
+  /* Sidebar.css */
+
+/* Logo opsional */
+.logo {
+  width: 100%;
+  object-fit: contain;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding: 8px 12px;
+}
+
+/* Tombol keluar merah dengan efek */
+.logout-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #e510b0;               /* merah */
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+
+  /* efek */
+  box-shadow: 0 6px 16px rgba(90, 11, 149, 0.45),
+              inset 0 -2px 0 rgba(0,0,0,0.15);
+  transition: transform 120ms ease, box-shadow 160ms ease, filter 160ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* subtle shine on hover */
+.logout-btn::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -120%;
+  width: 120%;
+  height: 100%;
+  transform: skewX(-20deg);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,0.25) 50%,
+    transparent 100%
+  );
+  transition: left 400ms ease;
+}
+
+.logout-btn:hover::after {
+  left: 120%;
+}
+
+.logout-btn:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 8px 22px rgba(106, 11, 115, 0.55), inset 0 -2px 0 rgba(0,0,0,0.15);
+  animation: btn-pop 120ms ease;
+}
+
+.logout-btn:active {
+  transform: translateY(1px) scale(0.99);
+  box-shadow: 0 4px 12px rgba(119, 12, 97, 0.45) inset;
+}
+
+.logout-icon {
+  transform: translateX(0);
+  transition: transform 160ms ease;
+}
+
+.logout-btn:hover .logout-icon {
+  transform: translateX(-2px);
+}
+
+/* kecilkan pada layar sempit */
+@media (max-width: 420px) {
+  .logout-btn {
+    padding: 10px 12px;
+    border-radius: 8px;
+  }
+}
+
+/* wa
+
+
+/* subtle shine on hover */
+.wa-btn::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -120%;
+  width: 120%;
+  height: 100%;
+  transform: skewX(-20deg);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,0.25) 50%,
+    transparent 100%
+  );
+  transition: left 400ms ease;
+}
+
+.wa-btn:hover::after {
+  left: 120%;
+}
+
+.wa-btn:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 8px 22px rgba(106, 11, 115, 0.55), inset 0 -2px 0 rgba(0,0,0,0.15);
+  animation: btn-pop 120ms ease;
+}
+
+.logout-btn:active {
+  transform: translateY(1px) scale(0.99);
+  box-shadow: 0 4px 12px rgba(119, 12, 97, 0.45) inset;
+}
+
+.wa-icon {
+  transform: translateX(0);
+  transition: transform 160ms ease;
+}
+
+.wa-btn:hover .wa-icon {
+  transform: translateX(-2px);
+}
+
+/* kecilkan pada layar sempit */
+@media (max-width: 420px) {
+  .logout-btn {
+    padding: 10px 12px;
+    border-radius: 8px;
+  }
+}
+
+
+/* animasi pop */
+@keyframes btn-pop {
+  0%   { transform: scale(1);   }
+  50%  { transform: scale(1.02);}
+  100% { transform: scale(1);   }
+}
+
+  

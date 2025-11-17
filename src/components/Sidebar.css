@@ -1,0 +1,203 @@
+/* =============================
+   Sidebar Modern + Glow Dinamis mila phone
+   ============================= */
+
+/* Container dasar (mobile overlay/panel) */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+  z-index: 50;
+}
+.sidebar-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sidebar-panel {
+  position: fixed;
+  inset: 0 30% 0 0; /* sisi kanan transparan, panel masuk kiri */
+  transform: translateX(-100%);
+  transition: transform 220ms ease;
+  z-index: 60;
+}
+.sidebar-panel.open {
+  transform: translateX(0%);
+}
+
+/* Logo */
+.logo {
+  display: block;
+  margin: 16px auto 8px;
+  width: 72%;
+  max-width: 172px;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.35));
+}
+
+/* Tombol hamburger */
+.hamburger-btn {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 32px;
+  height: 24px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: white;
+}
+.hamburger-btn:hover {
+  background: #f8fafc;
+}
+.hamburger-bar {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: #0f172a;
+  border-radius: 10px;
+}
+
+/* Tombol close panel */
+.close-btn {
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Link menu default */
+nav a,
+nav button {
+  color: #e7eefc;
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+  border-radius: 8px;
+}
+nav a:hover,
+nav button:hover {
+  color: #ffffff;
+}
+nav .active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Tombol keluar */
+.logout-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.1), rgba(255,255,255,0.06));
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.22);
+  padding: 10px 12px;
+  border-radius: 12px;
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.logout-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.2);
+  background: linear-gradient(90deg, rgba(255,255,255,0.2), rgba(255,255,255,0.12));
+}
+.logout-icon {
+  opacity: 0.9;
+}
+
+/* ==========================
+   Custom Scroll + Edge Glow
+   ========================== */
+
+/* Custom scrollbar (webkit) */
+.custom-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #60a5fa, #a78bfa);
+  border-radius: 9999px;
+  border: 2px solid rgba(15, 23, 42, 0.15);
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 9999px;
+}
+
+/* Baseline: edge glow container */
+.custom-scroll {
+  position: relative;
+  /* CSS variables default */
+  --glowTopOpacity: 0.0;
+  --glowBottomOpacity: 0.0;
+  --glowHueTop: 220;     /* biru */
+  --glowHueBottom: 280;  /* ungu */
+  --glowSat: 95%;
+  --glowLight: 60%;
+}
+
+/* Glow atas */
+.custom-scroll::before,
+.custom-scroll::after {
+  content: "";
+  position: sticky;
+  left: 0;
+  right: 0;
+  height: 18px;
+  display: block;
+  pointer-events: none;
+  z-index: 2;
+}
+.custom-scroll::before {
+  top: 0;
+  background: linear-gradient(
+    180deg,
+    hsla(var(--glowHueTop), var(--glowSat), var(--glowLight), var(--glowTopOpacity)),
+    hsla(calc(var(--glowHueTop) + 30), var(--glowSat), calc(var(--glowLight) - 10%), calc(var(--glowTopOpacity) * 0.75)),
+    transparent 70%
+  );
+  transition: background 160ms ease, opacity 160ms ease;
+}
+/* Glow bawah */
+.custom-scroll::after {
+  bottom: 0;
+  background: linear-gradient(
+    0deg,
+    hsla(var(--glowHueBottom), var(--glowSat), var(--glowLight), var(--glowBottomOpacity)),
+    hsla(calc(var(--glowHueBottom) - 30), var(--glowSat), calc(var(--glowLight) - 10%), calc(var(--glowBottomOpacity) * 0.75)),
+    transparent 70%
+  );
+  transition: background 160ms ease, opacity 160ms ease;
+}
+
+/* Fokus item (ditambah via IO) */
+.custom-scroll .in-focus {
+  position: relative;
+  background: linear-gradient(90deg, rgba(255,255,255,0.06), transparent 60%);
+}
+.custom-scroll .in-focus::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 -4px;
+  pointer-events: none;
+  border-left: 3px solid hsl(var(--glowHueTop), var(--glowSat), var(--glowLight));
+  filter: drop-shadow(0 0 8px hsla(var(--glowHueTop), var(--glowSat), var(--glowLight), 0.55));
+}
+
+/* Nested list spacing */
+nav ul > li > a,
+nav ul > li > button {
+  border-radius: 8px;
+}
+
+/* Responsiveness tweaks */
+@media (min-width: 1024px) {
+  /* Desktop sidebar shadow */
+  .lg\\:flex.bg-blue-700 {
+    box-shadow: 6px 0 18px rgba(2, 6, 23, 0.3);
+  }
+}

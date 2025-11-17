@@ -1,0 +1,42 @@
+.finance-report {
+    padding: 20px;
+  }
+  
+  .table-finance {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .table-finance th, .table-finance td {
+    padding: 10px;
+    border: 1px solid #ccc;
+    text-align: left;
+  }
+  
+  .btn-export, .btn-edit, .btn-delete {
+    margin: 5px;
+    padding: 8px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .input-filter {
+    padding: 10px;
+    margin-bottom: 20px;
+    width: 100%;
+  }
+  
+  .form-add {
+    margin-top: 20px;
+  }
+  
+  .btn-submit {
+    margin-top: 10px;
+    background-color: green;
+    color: white;
+    padding: 10px;
+    cursor: pointer;
+  }
+  

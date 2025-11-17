@@ -1,0 +1,77 @@
+/* Background full screen */
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: linear-gradient(135deg, #4facfe, #00f2fe);
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  }
+  
+  /* Kotak login */
+  .login-box {
+    background: white;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    width: 100%;
+    max-width: 350px;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Judul */
+  .login-title {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #333;
+  }
+  
+  /* Label */
+  .login-box label {
+    margin: 8px 0 4px;
+    font-weight: bold;
+    font-size: 14px;
+  }
+  
+  /* Input & Select */
+  .login-box input,
+  .login-box select {
+    padding: 10px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    outline: none;
+    font-size: 14px;
+  }
+  
+  .login-box input:focus,
+  .login-box select:focus {
+    border-color: #4facfe;
+  }
+  
+  /* Tombol login */
+  .btn-login {
+    background: #4facfe;
+    color: white;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: bold;
+    transition: 0.3s;
+  }
+  
+  .btn-login:hover {
+    background: #3a8edb;
+  }
+  
+  /* Responsif */
+  @media (max-width: 480px) {
+    .login-box {
+      padding: 25px;
+      max-width: 90%;
+    }
+  }
+  
