@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
   Route,
@@ -8,36 +8,42 @@ import {
   useParams,
 } from "react-router-dom";
 
+/* Layout Components */
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
 
 /* Pages */
 import Dashboard from "./pages/Dashboard";
 import DashboardToko from "./pages/DashboardToko";
+
 import Products from "./pages/Products";
 import SalesReport from "./pages/Reports/SalesReport";
 import InventoryReport from "./pages/Reports/InventoryReport";
 import UserManagement from "./pages/UserManagement";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+
 import ServiceHandphone from "./pages/ServiceHandphone";
 import ServiceMotorListrik from "./pages/ServiceMotorListrik";
+
 import PenjualanHandphone from "./pages/PenjualanHandphone";
 import PenjualanMotorListrik from "./pages/PenjualanMotorListrik";
 import PenjualanAccessories from "./pages/PenjualanAccessories";
+
 import DataManagement from "./pages/DataManagement";
 import TransferBarangPusat from "./pages/Reports/TransferBarangPusat";
-import PembelianProdukPusat from "./pages/PembelianProdukPusat";
+// import PembelianProdukPusat from "./pages/Reports/PembelianProdukPusat";
 
-/* Stock pages (pusat & per toko) */
+/* Stock pages */
 import StockAccessories from "./pages/stock/StockAccessories";
 import StockHandphone from "./pages/stock/StockHandphone";
 import StockMotorListrik from "./pages/stock/StockMotorListrik";
+
 import StockAccessoriesPusat from "./pages/stock/StockAccessoriesPusat";
 import StockHandphonePusat from "./pages/stock/StockHandphonePusat";
 import StockMotorListrikPusat from "./pages/stock/StockMotorListrikPusat";
 
-/* Transaksi / Dokumen */
+/* Transaksi */
 import InputPenjualan from "./pages/InputPenjualan";
 import StrukPenjualan from "./pages/StrukPenjualan";
 import StrukPenjualanIMEI from "./pages/StrukPenjualanIMEI";
@@ -57,20 +63,55 @@ import ProtectedRoute from "./components/ProtectedRoute";
 /* Default users */
 import defaultUsers from "./data/UserManagementRole";
 
-/* ===== Util: Ambil toko-id yang diperbolehkan untuk PIC ===== */
+/* ============================================
+   UTILITY: menentukan toko yang boleh untuk PIC
+============================================ */
 function getAllowedTokoIdFromUser(u) {
   if (!u) return null;
-  if (u.role === "superadmin" || u.role === "admin") return null; // bebas
+
+  if (u.role === "superadmin" || u.role === "admin") return null;
+
   if (u.role?.startsWith("pic_toko")) {
-    const fromRole = Number(String(u.role).replace("pic_toko", "")) || null;
-    const fromField = Number(u.toko) || null;
-    return fromField ?? fromRole ?? 1;
+    const roleId = Number(String(u.role).replace("pic_toko", "")) || null;
+    const fieldId = Number(u.toko) || null;
+    return fieldId ?? roleId ?? 1;
   }
+
   return null;
 }
 
+/* ============================================
+    WRAPPER ROUTE UNTUK DASHBOARD TOKO PER ID
+============================================ */
+function TokoWrapper({ user }) {
+  const { id } = useParams();
+  const tokoId = Number(id);
+
+  // Superadmin & admin bebas akses toko mana saja
+  if (user.role === "superadmin" || user.role === "admin") {
+    return <DashboardToko tokoId={tokoId} user={user} />;
+  }
+
+  // PIC Toko hanya bisa buka tokonya sendiri
+  if (user.role?.startsWith("pic_toko")) {
+    const allowed = getAllowedTokoIdFromUser(user) ?? 1;
+
+    if (allowed !== tokoId) {
+      return <Navigate to={`/toko/${allowed}`} replace />;
+    }
+
+    return <DashboardToko tokoId={tokoId} user={user} />;
+  }
+
+  // selain itu diarahkan ke dashboard pusat
+  return <Navigate to="/dashboard" replace />;
+}
+
+/* ============================================
+    MAIN APP
+============================================ */
 export default function App() {
-  /* ===== Session user ===== */
+  /* Session Login */
   const [user, setUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("user"));
@@ -87,11 +128,11 @@ export default function App() {
   const handleLogin = (u) => setUser(u);
   const handleLogout = () => setUser(null);
 
-  /* ===== Sumber data user ===== */
+  /* User Database */
   const [users, setUsers] = useState(() => {
     try {
-      const ls = JSON.parse(localStorage.getItem("users"));
-      return Array.isArray(ls) && ls.length ? ls : defaultUsers;
+      const saved = JSON.parse(localStorage.getItem("users"));
+      return Array.isArray(saved) && saved.length ? saved : defaultUsers;
     } catch {
       return defaultUsers;
     }
@@ -108,54 +149,36 @@ export default function App() {
     });
   };
 
-  /* ===== Guard untuk Dashboard Toko (akses per toko) ===== */
-  const TokoGuard = ({ id }) => {
-    const tokoId = Number(id);
-
-    // Superadmin/admin bebas
-    if (user?.role === "superadmin" || user?.role === "admin") {
-      return <DashboardToko user={user} tokoId={tokoId} />;
-    }
-
-    // PIC toko hanya bisa ke tokonya sendiri
-    if (user?.role?.startsWith("pic_toko")) {
-      const allowed = getAllowedTokoIdFromUser(user) ?? 1;
-      if (allowed !== tokoId)
-        return <Navigate to={`/toko/${allowed}`} replace />;
-      return <DashboardToko user={user} tokoId={tokoId} />;
-    }
-
-    // Selainnya diarahkan ke dashboard utama
-    return <Navigate to="/dashboard" replace />;
-  };
-
-  const TokoRoute = () => {
-    const { id } = useParams();
-    return <TokoGuard id={id} />;
-  };
-
-  /* ===== Layout utama dengan sidebar dan navbar ===== */
+  /* ============================================
+      RENDERING
+  ============================================= */
   return (
     <Router>
       {!user ? (
-        /* ===== Belum login ===== */
+        /* ================================
+           BELUM LOGIN
+        ================================= */
         <Routes>
           <Route path="/" element={<Login onLogin={handleLogin} users={users} />} />
           <Route path="/register" element={<Register addUser={addUser} />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       ) : (
-        /* ===== Sudah login ===== */
+        /* ================================
+           SUDAH LOGIN
+        ================================= */
         <div className="flex h-screen overflow-hidden">
           <Sidebar role={user.role} toko={user.toko} onLogout={handleLogout} />
-          <div className="flex-1 min-w-0 flex flex-col">
+
+          <div className="flex-1 flex flex-col min-w-0">
             <Navbar user={user} onLogout={handleLogout} />
-            <main className="flex-1 min-w-0 overflow-y-auto p-4">
+
+            <main className="flex-1 overflow-y-auto p-4">
               <Routes>
-                {/* Redirect default */}
+                {/* Default redirect */}
                 <Route path="/" element={<Navigate to="/dashboard" />} />
 
-                {/* Dashboard utama (pusat) */}
+                {/* Dashboard pusat (sekarang sudah ada Pilih Toko di dalamnya) */}
                 <Route
                   path="/dashboard"
                   element={
@@ -165,31 +188,21 @@ export default function App() {
                   }
                 />
 
-                {/* Dashboard toko (umum: daftar semua toko) */}
-                <Route
-                  path="/dashboard-toko"
-                  element={
-                    <ProtectedRoute allowedRoles={["superadmin", "admin", "pic_toko"]}>
-                      <DashboardToko user={user} />
-                    </ProtectedRoute>
-                  }
-                />
-
                 {/* Dashboard toko per id */}
                 <Route
                   path="/toko/:id"
                   element={
                     <ProtectedRoute allowedRoles={["superadmin", "admin", "pic_toko"]}>
-                      <TokoRoute />
+                      <TokoWrapper user={user} />
                     </ProtectedRoute>
                   }
                 />
 
-                {/* Modul lainnya tetap sama */}
+                {/* ---- Modules lainnya tetap sama ---- */}
                 <Route path="/user-management" element={<UserManagement />} />
                 <Route path="/sales-report" element={<SalesReport />} />
                 <Route path="/inventory-report" element={<InventoryReport />} />
-                <Route path="/pembelian-produk-pusat" element={<PembelianProdukPusat />} />
+                {/* <Route path="/pembelian-produk-pusat" element={<PembelianProdukPusat />} /> */}
                 <Route path="/finance-report" element={<FinanceReport />} />
                 <Route path="/finance-report-monthly" element={<FinanceReportMonthly />} />
                 <Route path="/products" element={<Products />} />
