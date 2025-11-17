@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import defaultUsersRaw from "../data/UserManagementRole";
 
-// Normalisasi default users agar selalu array
+// Normalisasi default user list
 const normalizeDefaultUsers = () => {
   if (Array.isArray(defaultUsersRaw)) return defaultUsersRaw;
   if (defaultUsersRaw && typeof defaultUsersRaw === "object")
@@ -17,12 +17,16 @@ export default function Login({ onLogin, users: usersProp }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
+  /* ============================
+       LOAD USER LIST
+  ============================ */
   const defaultUsers = useMemo(() => normalizeDefaultUsers(), []);
 
-  // Sumber users → props → localStorage → default
   const users = useMemo(() => {
+    // 1. dari props App.jsx
     if (Array.isArray(usersProp) && usersProp.length) return usersProp;
 
+    // 2. dari localStorage
     try {
       const ls = JSON.parse(localStorage.getItem("users"));
       return Array.isArray(ls) && ls.length ? ls : defaultUsers;
@@ -31,10 +35,14 @@ export default function Login({ onLogin, users: usersProp }) {
     }
   }, [usersProp, defaultUsers]);
 
+  // selalu simpan user list
   useEffect(() => {
     localStorage.setItem("users", JSON.stringify(users));
   }, [users]);
 
+  /* ============================
+          SUBMIT LOGIN
+  ============================ */
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -45,25 +53,31 @@ export default function Login({ onLogin, users: usersProp }) {
     );
 
     if (!u) {
-      alert("Username/Password salah.");
+      alert("Username atau password salah.");
       return;
     }
 
-    // Normalisasi role & toko
+    // ============================
+    // NORMALISASI ROLE DAN TOKO
+    // ============================
     let role = u.role;
     let tokoId = u.toko;
 
+    // contoh: role = "pic_toko3"
     if (String(role).startsWith("pic_toko")) {
-      const fixed = Number(String(role).replace("pic_toko", "")) || Number(tokoId);
-      if (Number.isFinite(fixed)) {
-        role = `pic_toko${fixed}`;
-        tokoId = fixed;
+      const parsed = Number(String(role).replace("pic_toko", ""));
+      const finalId = parsed || Number(tokoId);
+
+      if (Number.isFinite(finalId)) {
+        tokoId = finalId;
+        role = `pic_toko${finalId}`;
       }
     }
 
+    // data user login lengkap
     const logged = {
       username: u.username,
-      name: u.name || u.nama || u.username,
+      name: u.name || u.username,
       role,
       toko: tokoId,
     };
@@ -71,21 +85,26 @@ export default function Login({ onLogin, users: usersProp }) {
     localStorage.setItem("user", JSON.stringify(logged));
     if (typeof onLogin === "function") onLogin(logged);
 
-    // 🚀 AUTO REDIRECT sesuai role
+    // ============================
+    // AUTO REDIRECT SESUAI ROLE
+    // ============================
     if (role === "superadmin" || role === "admin") {
       navigate("/dashboard", { replace: true });
       return;
     }
 
-    if (String(role).startsWith("pic_toko") && Number(tokoId)) {
+    if (role.startsWith("pic_toko") && Number(tokoId)) {
       navigate(`/toko/${tokoId}`, { replace: true });
       return;
     }
 
-    // Jika ada kesalahan role → fallback
+    // fallback jika error
     navigate("/dashboard", { replace: true });
   };
 
+  /* ============================
+            UI LOGIN
+  ============================ */
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-indigo-50 p-4">
       <div className="w-full max-w-md">

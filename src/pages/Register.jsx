@@ -1,7 +1,6 @@
 // src/pages/Register.jsx
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import userRoles from "../data/UserManagementRole";
 import TOKO_LABELS from "../data/TokoLabels";
 
 // Mapping Nama Toko → ID
@@ -13,22 +12,23 @@ const NAME_TO_ID = Object.fromEntries(
 );
 
 export default function Register({ addUser }) {
-  // Ambil nama toko dari TokoLabels saja (lebih stabil)
-  const tokoNames = useMemo(() => {
-    return Object.values(TOKO_LABELS);
-  }, []);
+  // Ambil daftar nama toko
+  const tokoNames = useMemo(() => Object.values(TOKO_LABELS), []);
 
   const [form, setForm] = useState({
     name: "",
     username: "",
     password: "",
-    role: "pic_toko", // default pilihan
+    role: "pic_toko", // default
     tokoName: tokoNames[0] || "",
   });
 
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
+  /* =============================
+        SUBMIT REGISTER
+  ============================== */
   const handleSubmit = () => {
     setError("");
     const { username, password, role, tokoName, name } = form;
@@ -42,19 +42,26 @@ export default function Register({ addUser }) {
     let tokoId = null;
     let finalTokoName = "ALL";
 
+    // =============================
+    //       SUPERADMIN
+    // =============================
     if (role === "superadmin") {
       finalRole = "superadmin";
       tokoId = null;
       finalTokoName = "ALL";
-    } else {
-      // PIC TOKO
+    }
+
+    // =============================
+    //            PIC TOKO
+    // =============================
+    else {
       const id = NAME_TO_ID[(tokoName || "").toUpperCase()];
       if (!id) {
-        setError("Nama toko tidak valid. Pastikan sesuai TokoLabels.");
+        setError("Nama toko tidak valid. Pastikan sesuai daftar.");
         return;
       }
       tokoId = id;
-      finalRole = `pic_toko${id}`; // otomatis generate role
+      finalRole = `pic_toko${id}`;
       finalTokoName = tokoName;
     }
 
@@ -69,16 +76,17 @@ export default function Register({ addUser }) {
       nama: name?.trim() || username.trim(),
     };
 
-    // Simpan ke localStorage
+    // =============================
+    //      SIMPAN LOCAL STORAGE
+    // =============================
     try {
       const ls = JSON.parse(localStorage.getItem("users")) || [];
-      if (
-        ls.some(
-          (u) =>
-            (u.username || "").trim().toLowerCase() ===
-            newUser.username.toLowerCase()
-        )
-      ) {
+      const exists = ls.some(
+        (u) =>
+          (u.username || "").trim().toLowerCase() ===
+          newUser.username.toLowerCase()
+      );
+      if (exists) {
         setError("Username sudah dipakai.");
         return;
       }
@@ -94,6 +102,9 @@ export default function Register({ addUser }) {
     navigate("/", { replace: true });
   };
 
+  /* =============================
+            UI START
+  ============================== */
   return (
     <div className="flex h-screen items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-xl shadow-lg w-[28rem]">
@@ -140,28 +151,26 @@ export default function Register({ addUser }) {
             />
           </div>
 
-          {/* PILIH ROLE – TIDAK DISSEMBUNYIKAN */}
+          {/* Role */}
           <div>
             <label className="text-xs text-slate-600">Role</label>
             <select
               className="w-full border p-2 rounded"
               value={form.role}
-              onChange={(e) =>
-                setForm({ ...form, role: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
             >
               <option value="superadmin">superadmin</option>
               <option value="pic_toko">pic_toko</option>
             </select>
           </div>
 
-          {/* PILIH TOKO — SELALU DITAMPILKAN */}
+          {/* Toko */}
           <div>
             <label className="text-xs text-slate-600">Toko</label>
             <select
               className="w-full border p-2 rounded"
               value={form.tokoName}
-              disabled={form.role === "superadmin"} // superadmin tampil tapi disable
+              disabled={form.role === "superadmin"}
               onChange={(e) => setForm({ ...form, tokoName: e.target.value })}
             >
               {tokoNames.map((nama) => (
@@ -173,7 +182,7 @@ export default function Register({ addUser }) {
 
             {form.role === "superadmin" && (
               <p className="text-[10px] text-gray-500 mt-1">
-                Superadmin tidak terikat toko, tapi tetap ditampilkan untuk konsistensi.
+                Superadmin tidak terikat toko.
               </p>
             )}
           </div>

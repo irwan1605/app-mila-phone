@@ -13,16 +13,18 @@ import {
   FaStore,
   FaUsers,
   FaShoppingCart,
-  FaCartPlus,
   FaMoneyCheckAlt,
-  FaCashRegister,
   FaCogs,
 } from "react-icons/fa";
-import { AiFillPhone, AiOutlineDatabase } from "react-icons/ai";
-import { BsGraphUp, BsTagsFill, BsFileEarmarkText } from "react-icons/bs";
-import { MdBuild } from "react-icons/md";
-import { FiBox } from "react-icons/fi";
 
+import { BsGraphUp, BsTagsFill, BsFileEarmarkText } from "react-icons/bs";
+import { AiOutlineDatabase } from "react-icons/ai";
+import { MdBuild } from "react-icons/md";
+
+// =======================================
+// FIX: Daftar toko lengkap (1–10)
+// Sama seperti Dashboard.jsx & Firebase
+// =======================================
 const TOKO_LABELS = {
   1: "CILANGKAP",
   2: "KONTEN LIVE",
@@ -33,30 +35,31 @@ const TOKO_LABELS = {
   7: "METLAND 2",
   8: "PITARA",
   9: "KOTA WISATA",
+  10: "SAWANGAN",
 };
-const ALL_TOKO_IDS = Object.keys(TOKO_LABELS).map(Number);
+
+// Generate otomatis semua ID toko
+const ALL_TOKO_IDS = Object.keys(TOKO_LABELS).map((n) => Number(n));
 
 const Sidebar = ({ role, toko, onLogout }) => {
   const location = useLocation();
 
   const isSuperLike = role === "superadmin" || role === "admin";
+
   const picMatch = /^pic_toko(\d+)$/i.exec(role || "");
-  const picTokoId = picMatch ? Number(picMatch[1]) : toko ? Number(toko) : null;
+  const picTokoId = picMatch
+    ? Number(picMatch[1])
+    : toko
+    ? Number(toko)
+    : null;
 
   const [showSubMenuDashboardToko, setShowSubMenuDashboardToko] = useState(false);
-  const [showSubMenuService, setShowSubMenuService] = useState(false);
   const [showSubMenulaporan, setShowSubMenulaporan] = useState(false);
   const [showSubMenuPenjualan, setShowSubMenuPenjualan] = useState(false);
-  const [showSubMenuPembelian, setShowSubMenuPembelian] = useState(false);
-  const [showSubMenuStock, setShowSubMenuStock] = useState(false);
-  const [showSubMenuStruk, setShowSubMenuStruk] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const panelRef = useRef(null);
-  const scrollRefDesktop = useRef(null);
-  const listRefDesktop = useRef(null);
 
-  // Logout handler
   const handleLogout = () => {
     try {
       localStorage.removeItem("user");
@@ -66,14 +69,15 @@ const Sidebar = ({ role, toko, onLogout }) => {
   };
 
   const visibleTokoIds = isSuperLike ? ALL_TOKO_IDS : picTokoId ? [picTokoId] : [];
-
   const activePath = location.pathname;
 
   const SidebarBody = () => (
     <>
       <img src="/logoMMT.png" alt="Logo" className="logo mb-1" />
+
       <div className="font-bold p-1 text-center">
         <h2 className="text-gray-200 text-xs">PT. MILA MEDIA TELEKOMUNIKASI</h2>
+
         {picTokoId && (
           <div className="text-yellow-300 text-xs mt-1">
             {TOKO_LABELS[picTokoId]}
@@ -95,13 +99,17 @@ const Sidebar = ({ role, toko, onLogout }) => {
               <span className="ml-2">DASHBOARD PUSAT</span>
             </Link>
 
+            {/* DASHBOARD TOKO */}
             <button
-              onClick={() => setShowSubMenuDashboardToko(!showSubMenuDashboardToko)}
+              onClick={() =>
+                setShowSubMenuDashboardToko(!showSubMenuDashboardToko)
+              }
               className="w-full flex items-center p-3 hover:bg-blue-500 text-left"
             >
               <FaStore className="text-xl" />
               <span className="ml-2">DASHBOARD TOKO</span>
             </button>
+
             {showSubMenuDashboardToko && (
               <ul className="pl-6">
                 {visibleTokoIds.map((id) => (
@@ -128,6 +136,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
               <BsFileEarmarkText className="text-xl" />
               <span className="ml-2">LAPORAN</span>
             </button>
+
             {showSubMenulaporan && (
               <ul className="pl-6">
                 <li>
@@ -141,6 +150,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     <span className="ml-2">Penjualan</span>
                   </Link>
                 </li>
+
                 <li>
                   <Link
                     to="/inventory-report"
@@ -152,6 +162,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     <span className="ml-2">Persediaan</span>
                   </Link>
                 </li>
+
                 <li>
                   <Link
                     to="/finance-report"
@@ -168,12 +179,15 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
             {/* PENJUALAN */}
             <button
-              onClick={() => setShowSubMenuPenjualan(!showSubMenuPenjualan)}
+              onClick={() =>
+                setShowSubMenuPenjualan(!showSubMenuPenjualan)
+              }
               className="w-full flex items-center p-3 hover:bg-blue-500 text-left"
             >
               <FaShoppingCart className="text-xl" />
               <span className="ml-2">PENJUALAN</span>
             </button>
+
             {showSubMenuPenjualan && (
               <ul className="pl-6">
                 <li>
@@ -187,6 +201,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     <span className="ml-2">Input Penjualan</span>
                   </Link>
                 </li>
+
                 <li>
                   <Link
                     to="/penjualan-handphone"
@@ -198,11 +213,14 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     <span className="ml-2">Handphone</span>
                   </Link>
                 </li>
+
                 <li>
                   <Link
                     to="/penjualan-motor-listrik"
                     className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/penjualan-motor-listrik" ? "bg-blue-600" : ""
+                      activePath === "/penjualan-motor-listrik"
+                        ? "bg-blue-600"
+                        : ""
                     }`}
                   >
                     <FaMotorcycle className="text-lg" />
@@ -246,15 +264,18 @@ const Sidebar = ({ role, toko, onLogout }) => {
             </Link>
           </>
         ) : (
-          // ===== PIC TOKO =====
           <>
+            {/* PIC TOKO */}
             <button
-              onClick={() => setShowSubMenuDashboardToko(!showSubMenuDashboardToko)}
+              onClick={() =>
+                setShowSubMenuDashboardToko(!showSubMenuDashboardToko)
+              }
               className="w-full flex items-center p-3 hover:bg-blue-500 text-left"
             >
               <FaStore className="text-xl" />
               <span className="ml-2">DASHBOARD TOKO</span>
             </button>
+
             {showSubMenuDashboardToko && (
               <ul className="pl-6">
                 {visibleTokoIds.length === 1 ? (
@@ -262,18 +283,26 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     <Link
                       to={`/toko/${visibleTokoIds[0]}`}
                       className={`flex items-center p-2 hover:bg-blue-500 ${
-                        activePath === `/toko/${visibleTokoIds[0]}` ? "bg-blue-600" : ""
+                        activePath === `/toko/${visibleTokoIds[0]}`
+                          ? "bg-blue-600"
+                          : ""
                       }`}
                     >
                       <FaStore className="text-sm" />
-                      <span className="ml-2">{TOKO_LABELS[visibleTokoIds[0]]}</span>
+                      <span className="ml-2">
+                        {TOKO_LABELS[visibleTokoIds[0]]}
+                      </span>
                     </Link>
                   </li>
                 ) : (
-                  <li className="text-xs text-yellow-200 p-2">Akun PIC belum terhubung</li>
+                  <li className="text-xs text-yellow-200 p-2">
+                    Akun PIC belum terhubung
+                  </li>
                 )}
               </ul>
             )}
+
+            {/* SERVICE */}
             <Link
               to="/service-handphone"
               className={`flex items-center p-3 hover:bg-blue-500 ${
@@ -283,6 +312,8 @@ const Sidebar = ({ role, toko, onLogout }) => {
               <MdBuild className="text-xl" />
               <span className="ml-2">SERVICE</span>
             </Link>
+
+            {/* SPAREPART */}
             <Link
               to="/modul-sparepart"
               className={`flex items-center p-3 hover:bg-blue-500 ${
@@ -324,8 +355,12 @@ const Sidebar = ({ role, toko, onLogout }) => {
         </div>
       </div>
 
-      {/* OVERLAY */}
-      {mobileOpen && <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} />}
+      {mobileOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
 
       {/* SIDEBAR MOBILE */}
       <aside
@@ -337,20 +372,17 @@ const Sidebar = ({ role, toko, onLogout }) => {
             <span>Menu</span>
             <button onClick={() => setMobileOpen(false)}>✕</button>
           </div>
-          <div ref={scrollRefDesktop} className="custom-scroll overflow-y-auto flex-1">
-            <div ref={listRefDesktop}>
-              <SidebarBody />
-            </div>
+
+          <div className="custom-scroll overflow-y-auto flex-1">
+            <SidebarBody />
           </div>
         </div>
       </aside>
 
       {/* SIDEBAR DESKTOP */}
       <aside className="hidden lg:flex bg-blue-700 w-64 h-screen sticky top-0 text-white">
-        <div ref={scrollRefDesktop} className="custom-scroll overflow-y-auto flex-1">
-          <div ref={listRefDesktop}>
-            <SidebarBody />
-          </div>
+        <div className="custom-scroll overflow-y-auto flex-1">
+          <SidebarBody />
         </div>
       </aside>
     </>

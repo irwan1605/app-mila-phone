@@ -1,9 +1,8 @@
+// src/pages/Dashboard.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  getAllData,
-  getAllToko,
-  getDropdownOptions,
-} from "../data/database";
+import { db } from "../firebase";
+import { ref, onValue } from "firebase/database";
+
 import {
   FaFileExcel,
   FaFilePdf,
@@ -31,7 +30,20 @@ import {
 } from "recharts";
 
 export default function Dashboard() {
-  const tokoList = getAllToko();
+  // fixed toko list sesuai request user (dipertahankan UI)
+  const tokoList = [
+    "CILANGKAP",
+    "KONTEN LIVE",
+    "GAS ALAM",
+    "CITEUREUP",
+    "CIRACAS",
+    "METLAND 1",
+    "METLAND 2",
+    "PITARA",
+    "KOTA WISATA",
+    "SAWANGAN",
+  ];
+
   const [data, setData] = useState([]);
   const [filterType, setFilterType] = useState("semua");
   const [filterValue, setFilterValue] = useState("");
@@ -41,12 +53,66 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
+  // Load realtime data from Firebase 'toko' node
   useEffect(() => {
-    const all = getAllData();
-    setData(all);
-    const opts = getDropdownOptions();
-    setSalesList(opts.NAMA_SALES || []);
-  }, []);
+    const tokoRef = ref(db, "toko");
+    const unsub = onValue(tokoRef, (snapshot) => {
+      const obj = snapshot.val() || {};
+      const merged = [];
+
+      // collect sales names set
+      const salesSet = new Set();
+
+      // iterate toko nodes (key should be numeric 1..10)
+      Object.entries(obj).forEach(([tokoId, tokoNode]) => {
+        const tokoNameFromDb = tokoNode?.nama || null;
+        // determine toko name: prefer nama in db, else map from fixed tokoList by id
+        const tokoName =
+          tokoNameFromDb ||
+          (Number(tokoId) >= 1 && Number(tokoId) <= tokoList.length
+            ? tokoList[Number(tokoId) - 1]
+            : `Toko ${tokoId}`);
+
+        const transaksi = tokoNode?.transaksi || {};
+        Object.entries(transaksi).forEach(([txId, tx]) => {
+          // normalize fields to match original UI expectations
+          const record = {
+            // keep original id for edit/delete if needed
+            id: txId,
+            TANGGAL: tx?.TANGGAL || tx?.tanggal || tx?.Tanggal || "",
+            TOKO: tx?.TOKO || tokoName,
+            NAMA_SALES: tx?.NAMA_SALES || tx?.nama_sales || tx?.sales || "-",
+            BRAND: tx?.BRAND || tx?.brand || "-",
+            IMEI: tx?.IMEI || tx?.imei || tx?.Imei || "",
+            NO_MESIN: tx?.NO_MESIN || tx?.no_mesin || tx?.NO_MESIN || "",
+            QTY: Number(tx?.QTY ?? tx?.qty ?? tx?.Qty ?? 0),
+            HARGA: Number(tx?.HARGA ?? tx?.harga ?? tx?.Penjualan ?? 0),
+            // keep raw tx for debugging if needed
+            __raw: tx,
+          };
+
+          if (record.NAMA_SALES && record.NAMA_SALES !== "-") salesSet.add(record.NAMA_SALES);
+
+          merged.push(record);
+        });
+      });
+
+      // sort merged by date desc (most recent first)
+      merged.sort((a, b) => {
+        const da = a.TANGGAL ? new Date(a.TANGGAL) : new Date(0);
+        const dbd = b.TANGGAL ? new Date(b.TANGGAL) : new Date(0);
+        return dbd - da;
+      });
+
+      setData(merged);
+      setSalesList(Array.from(salesSet).sort());
+      // reset page when data changes
+      setCurrentPage(1);
+    });
+
+    return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once, listener handles updates
 
   // === FILTER DATA ===
   const filteredData = useMemo(() => {
@@ -135,7 +201,7 @@ export default function Dashboard() {
   }, [filteredData]);
 
   // === PAGINATION ===
-  const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / rowsPerPage));
   const paginatedData = filteredData.slice(
     (currentPage - 1) * rowsPerPage,
     currentPage * rowsPerPage

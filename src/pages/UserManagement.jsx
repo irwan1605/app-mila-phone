@@ -56,12 +56,26 @@ export default function UserManagement() {
         (u.username || "").toLowerCase().includes(q) ||
         (u.name || "").toLowerCase().includes(q)
       )
-      .filter((u) =>
-        roleFilter === "ALL" ? true : String(u.role).includes(roleFilter)
-      )
-      .filter((u) =>
-        tokoFilter === "ALL" ? true : String(u.toko) === String(tokoFilter)
-      );
+      .filter((u) => {
+        // Filter role
+        if (roleFilter === "ALL") return true;
+        if (roleFilter === "superadmin") return u.role === "superadmin";
+        if (roleFilter === "pic_toko") return u.role.startsWith("pic_toko");
+        return true;
+      })
+      .filter((u) => {
+        // Filter toko
+        if (tokoFilter === "ALL") return true;
+
+        // PIC Role format → pic_toko3
+        if (String(u.role).startsWith("pic_toko")) {
+          const roleTokoId = u.role.replace("pic_toko", "");
+          return String(roleTokoId) === String(tokoFilter);
+        }
+
+        // Manual toko field
+        return String(u.toko) === String(tokoFilter);
+      });
   }, [search, roleFilter, tokoFilter, users]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -132,15 +146,35 @@ export default function UserManagement() {
   };
 
   /* =========================
+      HELPER DISPLAY
+  ========================== */
+  const displayRole = (role, toko) => {
+    if (role === "superadmin") return "Superadmin";
+
+    if (role.startsWith("pic_toko")) {
+      const id = role.replace("pic_toko", "");
+      return `PIC Toko ${TOKO_LABELS[id] || "-"}`;
+    }
+
+    return role;
+  };
+
+  const displayToko = (role, toko) => {
+    if (role.startsWith("pic_toko")) {
+      const id = role.replace("pic_toko", "");
+      return TOKO_LABELS[id] || "-";
+    }
+    return toko ? TOKO_LABELS[toko] : "-";
+  };
+
+  /* =========================
       RENDER
   ========================== */
   return (
     <div className="p-4 space-y-6">
       <h2 className="text-xl md:text-2xl font-bold">User Management</h2>
 
-      {/* ==========================================================
-          FORM TAMBAH USER
-      ========================================================== */}
+      {/* FORM TAMBAH USER */}
       <div className="bg-white shadow rounded p-4 grid md:grid-cols-4 gap-4">
         <div>
           <label className="text-xs">Nama Lengkap</label>
@@ -213,9 +247,7 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* ==========================================================
-          FILTER & SEARCH
-      ========================================================== */}
+      {/* FILTER & SEARCH */}
       <div className="flex gap-3 flex-wrap">
         <input
           className="border p-2 rounded"
@@ -257,9 +289,7 @@ export default function UserManagement() {
         </select>
       </div>
 
-      {/* ==========================================================
-          TABEL USER
-      ========================================================== */}
+      {/* TABLE */}
       <div className="bg-white shadow rounded overflow-auto">
         <table className="min-w-[800px] w-full">
           <thead className="bg-gray-50">
@@ -277,10 +307,8 @@ export default function UserManagement() {
               <tr key={i} className="border-t">
                 <td className="p-2">{u.username}</td>
                 <td className="p-2">{u.name}</td>
-                <td className="p-2">{u.role}</td>
-                <td className="p-2">
-                  {u.toko ? TOKO_LABELS[u.toko] || "-" : "-"}
-                </td>
+                <td className="p-2">{displayRole(u.role, u.toko)}</td>
+                <td className="p-2">{displayToko(u.role, u.toko)}</td>
                 <td className="p-2">
                   <button
                     className="px-3 py-1 bg-red-600 text-white text-sm rounded"
@@ -303,9 +331,7 @@ export default function UserManagement() {
         </table>
       </div>
 
-      {/* ==========================================================
-          PAGINATION
-      ========================================================== */}
+      {/* PAGINATION */}
       <div className="flex justify-between mt-3">
         <div>
           Halaman {page} / {totalPages}
