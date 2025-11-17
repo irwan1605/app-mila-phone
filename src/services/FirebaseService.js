@@ -1,57 +1,93 @@
-import { db } from "../firebase";
+import { initializeApp } from "firebase/app";
 import {
+  getDatabase,
   ref,
   push,
+  set,
   update,
   remove,
   onValue,
-  get
+  get,
 } from "firebase/database";
 
-// ==========================================
-// 1. Realtime Listener Data Per Toko
-// ==========================================
-export function listenTransaksiByToko(tokoId, callback) {
-  const transaksiRef = ref(db, `toko/${tokoId}/transaksi`);
-  return onValue(transaksiRef, (snapshot) => {
-    const data = snapshot.val() || {};
-    const result = Object.keys(data).map((id) => ({
-      id,
-      ...data[id]
-    }));
-    callback(result);
+const firebaseConfig = {
+  apiKey: "AIzaSyChHAGbs6yBJ04Pe_1XTyDTcWSOW04Yl0M",
+  authDomain: "mila-phone-realtime.firebaseapp.com",
+  databaseURL: "https://mila-phone-realtime-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "mila-phone-realtime",
+  storageBucket: "mila-phone-realtime.firebasestorage.app",
+  messagingSenderId: "283562738302",
+  appId: "1:283562738302:web:0238792f8da3a3ffc3ce2f",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// Get toko name
+export const getTokoName = async (tokoId) => {
+  try {
+    const snap = await get(ref(db, `toko/${tokoId}/info/name`));
+    return snap.exists() ? snap.val() : null;
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+};
+
+// Listen transactions per toko (realtime)
+export const listenTransaksiByToko = (tokoId, callback) => {
+  const r = ref(db, `toko/${tokoId}/transaksi`);
+  const unsub = onValue(r, (snap) => {
+    const raw = snap.val() || {};
+    const list = Object.entries(raw).map(([id, item]) => ({ id, ...item }));
+    callback(list);
   });
-}
+  return () => unsub && unsub();
+};
 
-// ==========================================
-// 2. Tambah transaksi
-// ==========================================
-export function addTransaksi(tokoId, data) {
-  const transaksiRef = ref(db, `toko/${tokoId}/transaksi`);
-  return push(transaksiRef, data);
-}
+export const addTransaksi = (tokoId, data) => {
+  const r = push(ref(db, `toko/${tokoId}/transaksi`));
+  return set(r, data);
+};
+export const updateTransaksi = (tokoId, id, data) => {
+  return update(ref(db, `toko/${tokoId}/transaksi/${id}`), data);
+};
+export const deleteTransaksi = (tokoId, id) => {
+  return remove(ref(db, `toko/${tokoId}/transaksi/${id}`));
+};
 
-// ==========================================
-// 3. Edit transaksi
-// ==========================================
-export function updateTransaksi(tokoId, id, data) {
-  const transaksiRef = ref(db, `toko/${tokoId}/transaksi/${id}`);
-  return update(transaksiRef, data);
-}
-
-// ==========================================
-// 4. Hapus transaksi
-// ==========================================
-export function deleteTransaksi(tokoId, id) {
-  const transaksiRef = ref(db, `toko/${tokoId}/transaksi/${id}`);
-  return remove(transaksiRef);
-}
-
-// ==========================================
-// 5. Ambil nama toko
-// ==========================================
-export async function getTokoName(tokoId) {
-  const tokoRef = ref(db, `toko/${tokoId}/nama`);
-  const snap = await get(tokoRef);
-  return snap.exists() ? snap.val() : `Toko ${tokoId}`;
-}
+// listen all toko transactions (for dashboard pusat)
+export const listenAllTransaksi = (callback) => {
+  const r = ref(db, "toko");
+  const unsub = onValue(r, (snap) => {
+    const raw = snap.val() || {};
+    const merged = [];
+    Object.entries(raw).forEach(([tokoId, tokoData]) => {
+      const tokoName = tokoData.info?.name || `TOKO ${tokoId}`;
+      if (tokoData.transaksi) {
+        Object.entries(tokoData.transaksi).forEach(([id, row]) => {
+          merged.push({
+            id,
+            tokoId,
+            TANGGAL: row.TANGGAL || "",
+            BRAND: row.BRAND || "",
+            IMEI: row.IMEI || "",
+            NO_MESIN: row.NO_MESIN || "",
+            QTY: typeof row.QTY !== "undefined" ? Number(row.QTY) : 0,
+            HARGA: typeof row.HARGA !== "undefined" ? Number(row.HARGA) : 0,
+            NAMA_SALES: row.NAMA_SALES || "",
+            TOKO: tokoName,
+          });
+        });
+      }
+    });
+    // sort by date desc
+    merged.sort((a,b) => {
+      const da = a.TANGGAL ? new Date(a.TANGGAL) : new Date(0);
+      const dbd = b.TANGGAL ? new Date(b.TANGGAL) : new Date(0);
+      return dbd - da;
+    });
+    callback(merged);
+  });
+  return () => unsub && unsub();
+};

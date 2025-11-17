@@ -1,0 +1,64 @@
+{
+  "toko": {
+    "1": {
+      "info": {
+        "name": "CILANGKAP"
+      },
+      "transaksi": {}
+    },
+    "2": {
+      "info": {
+        "name": "KONTEN LIVE"
+      },
+      "transaksi": {}
+    },
+    "3": {
+      "info": {
+        "name": "GAS ALAM"
+      },
+      "transaksi": {}
+    },
+    "4": {
+      "info": {
+        "name": "CITEUREUP"
+      },
+      "transaksi": {}
+    },
+    "5": {
+      "info": {
+        "name": "CIRACAS"
+      },
+      "transaksi": {}
+    },
+    "6": {
+      "info": {
+        "name": "METLAND 1"
+      },
+      "transaksi": {}
+    },
+    "7": {
+      "info": {
+        "name": "METLAND 2"
+      },
+      "transaksi": {}
+    },
+    "8": {
+      "info": {
+        "name": "PITARA"
+      },
+      "transaksi": {}
+    },
+    "9": {
+      "info": {
+        "name": "KOTA WISATA"
+      },
+      "transaksi": {}
+    },
+    "10": {
+      "info": {
+        "name": "SAWANGAN"
+      },
+      "transaksi": {}
+    }
+  }
+}
