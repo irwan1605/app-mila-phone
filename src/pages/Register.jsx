@@ -159,7 +159,7 @@ export default function Register({ addUser }) {
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}
             >
-              <option value="superadmin">superadmin</option>
+              {/* <option value="superadmin">superadmin</option> */}
               <option value="pic_toko">pic_toko</option>
             </select>
           </div>
