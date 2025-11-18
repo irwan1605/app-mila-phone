@@ -33,7 +33,7 @@ import jsPDF from "jspdf";
 /* === fallback toko names (same used in DashboardToko) === */
 const fallbackTokoNames = [
   "CILANGKAP",
-  "KONTEN LIVE",
+  "CIBINONG",
   "GAS ALAM",
   "CITEUREUP",
   "CIRACAS",

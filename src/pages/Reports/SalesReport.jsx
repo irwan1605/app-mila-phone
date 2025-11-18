@@ -24,7 +24,7 @@ import {
 /* fallback toko names (same list used across app) */
 const fallbackTokoNames = [
   "CILANGKAP",
-  "KONTEN LIVE",
+  "CIBINONG",
   "GAS ALAM",
   "CITEUREUP",
   "CIRACAS",

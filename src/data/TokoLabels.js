@@ -3,7 +3,7 @@
 
 const TOKO_LABELS = {
   1: "CILANGKAP",
-  2: "KONTEN LIVE",
+  2: "CIBINONG",
   3: "GAS ALAM",
   4: "CITEUREUP",
   5: "CIRACAS",

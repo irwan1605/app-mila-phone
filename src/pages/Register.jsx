@@ -41,12 +41,25 @@ export default function Register({ addUser }) {
       return;
     }
 
+    // Ambil semua user
     const existingUsers = await getAllUsersOnce();
 
+    // Batasi Superadmin hanya 3
+    const superadminCount = existingUsers.filter(
+      (u) => (u.role || "").toLowerCase() === "superadmin"
+    ).length;
+
+    if (role === "superadmin" && superadminCount >= 5) {
+      setError("Jumlah superadmin sudah mencapai batas (5). Tidak dapat menambah lagi.");
+      return;
+    }
+
+    // Cek username sudah dipakai
     if (
       existingUsers.some(
         (u) =>
-          (u.username || "").trim().toLowerCase() === username.trim().toLowerCase()
+          (u.username || "").trim().toLowerCase() ===
+          username.trim().toLowerCase()
       )
     ) {
       setError("Username sudah digunakan.");
@@ -96,8 +109,9 @@ export default function Register({ addUser }) {
   };
 
   /* ============================================================
-      UI — SAMA PERSIS GAYA LOGIN (Modern, Tailwind, Logo)
+      UI — TIDAK ADA YANG DIUBAH
   ============================================================ */
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-indigo-50 p-4">
       <div className="w-full max-w-md">
@@ -169,9 +183,7 @@ export default function Register({ addUser }) {
               <select
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
                 value={form.role}
-                onChange={(e) =>
-                  setForm({ ...form, role: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, role: e.target.value })}
               >
                 <option value="superadmin">superadmin</option>
                 <option value="pic_toko">pic_toko</option>
@@ -203,7 +215,7 @@ export default function Register({ addUser }) {
               )}
             </div>
 
-            {/* SUBMIT */}
+            {/* Submit */}
             <button
               onClick={handleSubmit}
               className="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg font-semibold transition shadow-md"
@@ -212,10 +224,12 @@ export default function Register({ addUser }) {
             </button>
           </div>
 
-          {/* Link ke Login */}
           <div className="mt-4 text-center text-sm text-slate-600">
             Sudah punya akun?{" "}
-            <a href="/" className="text-indigo-600 hover:text-indigo-700 font-medium">
+            <a
+              href="/"
+              className="text-indigo-600 hover:text-indigo-700 font-medium"
+            >
               Login
             </a>
           </div>

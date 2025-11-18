@@ -23,7 +23,7 @@ const userRoles = [
       username: "MICHAEL PRATAMA",
       password: "123",
       role: "pic_tokoKONTEN_LIVE",
-      toko: "KONTEN LIVE",
+      toko: "CIBINONG",
       nama: "MICHAEL PRATAMA",
     },
     {

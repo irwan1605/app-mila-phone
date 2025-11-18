@@ -20,7 +20,7 @@ import {
 const fallbackTokoNames = [
   "PUSAT",
   "CILANGKAP",
-  "KONTEN LIVE",
+  "CIBINONG",
   "GAS ALAM",
   "CITEUREUP",
   "CIRACAS",

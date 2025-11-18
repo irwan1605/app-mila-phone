@@ -30,7 +30,7 @@ const initialData = [
     {
       id: 2,
       TANGGAL: "2025-11-02",
-      TOKO: "KONTEN LIVE",
+      TOKO: "CIBINONG",
       BRAND: "iPhone",
       IMEI: "352001882456123",
       NO_MESIN: "ENG-65432",
@@ -72,7 +72,7 @@ const initialData = [
   // === Nama Toko (10 Toko) ===
   export const tokoList = [
     "CILANGKAP",
-    "KONTEN LIVE",
+    "CIBINONG",
     "GAS ALAM",
     "CITEUREUP",
     "CIRACAS",

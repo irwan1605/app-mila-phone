@@ -34,7 +34,7 @@ export default function Dashboard() {
   // ==== SAMA DENGAN DashboardToko ====
   const fallbackTokoNames = [
     "CILANGKAP",
-    "KONTEN LIVE",
+    "CIBINONG",
     "GAS ALAM",
     "CITEUREUP",
     "CIRACAS",

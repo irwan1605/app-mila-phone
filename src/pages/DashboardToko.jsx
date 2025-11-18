@@ -39,7 +39,7 @@ import {
 export default function DashboardToko({ tokoId }) {
   const fallbackTokoNames = [
     "CILANGKAP",
-    "KONTEN LIVE",
+    "CIBINONG",
     "GAS ALAM",
     "CITEUREUP",
     "CIRACAS",
@@ -169,7 +169,9 @@ export default function DashboardToko({ tokoId }) {
       return;
     }
 
-    const nomor = detectNomor(form.NOMOR_UNIK || form.IMEI || form.NO_DINAMO || form.NO_RANGKA || "");
+    const nomor = detectNomor(
+      form.NOMOR_UNIK || form.IMEI || form.NO_DINAMO || form.NO_RANGKA || ""
+    );
     const invoice = form.NO_INVOICE || generateInvoice();
     const qty = Number(form.QTY || 0);
     const total = qty * hargaUnit;
@@ -361,12 +363,13 @@ export default function DashboardToko({ tokoId }) {
   // ======================================================
   return (
     <div className="p-4 bg-gray-100 rounded-xl shadow-md">
-      <h2 className="text-xl font-bold mb-3">Dashboard Penjualan Toko – {tokoName}</h2>
+      <h2 className="text-xl font-bold mb-3">
+        Dashboard Penjualan Toko – {tokoName}
+      </h2>
 
       {/* ===================== FORM ===================== */}
       <div className="bg-white p-4 rounded shadow mb-6">
         <div className="grid grid-cols-3 gap-3">
-
           <div>
             <label>Tanggal Transaksi</label>
             <input
@@ -630,7 +633,6 @@ export default function DashboardToko({ tokoId }) {
               <option value="Rejected">Rejected</option>
             </select>
           </div>
-
         </div>
 
         <button
@@ -717,9 +719,13 @@ export default function DashboardToko({ tokoId }) {
                   <td className="p-2 border">{r.NAMA_BARANG}</td>
                   <td className="p-2 border text-center">{r.QTY}</td>
                   <td className="p-2 border">{r.NOMOR_UNIK}</td>
-                  <td className="p-2 border text-right">{Number(r.HARGA_UNIT || 0).toLocaleString()}</td>
+                  <td className="p-2 border text-right">
+                    {Number(r.HARGA_UNIT || 0).toLocaleString()}
+                  </td>
                   <td className="p-2 border">{r.PAYMENT_METODE}</td>
-                  <td className="p-2 border text-right">{total.toLocaleString()}</td>
+                  <td className="p-2 border text-right">
+                    {total.toLocaleString()}
+                  </td>
                   <td className="p-2 border">{r.STATUS}</td>
 
                   <td className="p-2 border text-center space-x-2">
@@ -788,7 +794,9 @@ export default function DashboardToko({ tokoId }) {
       <div className="grid grid-cols-2 gap-4 mt-6">
         {/* BAR CHART */}
         <div className="bg-white p-4 rounded shadow">
-          <h3 className="font-semibold mb-3 text-center">Diagram Batang Omzet</h3>
+          <h3 className="font-semibold mb-3 text-center">
+            Diagram Batang Omzet
+          </h3>
 
           <ResponsiveContainer width="100%" height={300}>
             <BarChart
@@ -827,7 +835,11 @@ export default function DashboardToko({ tokoId }) {
                 {filteredData.map((_, i) => (
                   <Cell
                     key={i}
-                    fill={["#4F46E5", "#10B981", "#F59E0B", "#EF4444", "#3B82F6"][i % 5]}
+                    fill={
+                      ["#4F46E5", "#10B981", "#F59E0B", "#EF4444", "#3B82F6"][
+                        i % 5
+                      ]
+                    }
                   />
                 ))}
               </Pie>
@@ -856,7 +868,9 @@ export default function DashboardToko({ tokoId }) {
                   if (key === "id") return null;
                   return (
                     <tr key={key} className="border-b">
-                      <td className="p-2 font-semibold w-1/3">{key.replace(/_/g, " ")}</td>
+                      <td className="p-2 font-semibold w-1/3">
+                        {key.replace(/_/g, " ")}
+                      </td>
                       <td className="p-2">{String(value ?? "")}</td>
                     </tr>
                   );
