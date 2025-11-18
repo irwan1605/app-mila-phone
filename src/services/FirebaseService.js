@@ -38,7 +38,9 @@ const safeValToList = (snap) => {
   // if object map keyed by id -> return array of values with id property
   if (typeof v === "object" && !Array.isArray(v)) {
     return Object.entries(v).map(([k, item]) =>
-      item && typeof item === "object" ? { id: k, ...item } : { id: k, value: item }
+      item && typeof item === "object"
+        ? { id: k, ...item }
+        : { id: k, value: item }
     );
   }
   if (Array.isArray(v)) return v;
@@ -142,7 +144,8 @@ export const listenAllTransaksi = (callback) => {
       const raw = snap.val() || {};
       const merged = [];
       Object.entries(raw).forEach(([tokoId, tokoData]) => {
-        const tokoName = tokoData?.info?.name || tokoData?.name || `TOKO ${tokoId}`;
+        const tokoName =
+          tokoData?.info?.name || tokoData?.name || `TOKO ${tokoId}`;
         if (tokoData?.transaksi) {
           Object.entries(tokoData.transaksi).forEach(([id, row]) => {
             merged.push({

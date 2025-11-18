@@ -15,7 +15,11 @@ import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
-import { listenAllTransaksi, updateTransaksi, deleteTransaksi } from "../../services/FirebaseService";
+import {
+  listenAllTransaksi,
+  updateTransaksi,
+  deleteTransaksi,
+} from "../../services/FirebaseService";
 
 /* fallback toko names (same list used across app) */
 const fallbackTokoNames = [
@@ -52,7 +56,11 @@ export default function SalesReport() {
       const unsub = listenAllTransaksi((items = []) => {
         const normalized = (items || []).map((r) => normalizeRecord(r));
         // sort by date desc
-        normalized.sort((a, b) => new Date(b.TANGGAL_TRANSAKSI || b.TANGGAL || 0) - new Date(a.TANGGAL_TRANSAKSI || a.TANGGAL || 0));
+        normalized.sort(
+          (a, b) =>
+            new Date(b.TANGGAL_TRANSAKSI || b.TANGGAL || 0) -
+            new Date(a.TANGGAL_TRANSAKSI || a.TANGGAL || 0)
+        );
         setAllData(normalized);
         setCurrentPage(1);
       });
@@ -96,14 +104,19 @@ export default function SalesReport() {
       REQUEST_DP_TALANGAN: Number(r.REQUEST_DP_TALANGAN || 0),
       KETERANGAN: r.KETERANGAN || "",
       STATUS: r.STATUS || "Pending",
-      TOTAL: Number(r.TOTAL) || Number(r.QTY || 0) * Number(r.HARGA_UNIT || r.HARGA || 0) || 0,
+      TOTAL:
+        Number(r.TOTAL) ||
+        Number(r.QTY || 0) * Number(r.HARGA_UNIT || r.HARGA || 0) ||
+        0,
       _raw: r,
     };
   };
 
   // derive lists for selects
   const tokoOptions = useMemo(() => {
-    const names = [...new Set(allData.map((r) => r.NAMA_TOKO || r.TOKO).filter(Boolean))];
+    const names = [
+      ...new Set(allData.map((r) => r.NAMA_TOKO || r.TOKO).filter(Boolean)),
+    ];
     return names.length ? names : fallbackTokoNames;
   }, [allData]);
 
@@ -119,7 +132,8 @@ export default function SalesReport() {
   const filteredData = useMemo(() => {
     return allData.filter((r) => {
       let ok = true;
-      if (filterToko !== "semua") ok = ok && (r.NAMA_TOKO || r.TOKO) === filterToko;
+      if (filterToko !== "semua")
+        ok = ok && (r.NAMA_TOKO || r.TOKO) === filterToko;
       if (filterSales !== "semua") ok = ok && r.NAMA_SALES === filterSales;
       if (filterBrand !== "semua") ok = ok && r.NAMA_BRAND === filterBrand;
       if (filterStatus !== "semua") ok = ok && r.STATUS === filterStatus;
@@ -137,16 +151,31 @@ export default function SalesReport() {
         const s = search.trim().toLowerCase();
         ok =
           ok &&
-          (
-            String(r.NO_INVOICE || "").toLowerCase().includes(s) ||
-            String(r.NAMA_USER || "").toLowerCase().includes(s) ||
-            String(r.NOMOR_UNIK || "").toLowerCase().includes(s) ||
-            String(r.NAMA_BARANG || "").toLowerCase().includes(s)
-          );
+          (String(r.NO_INVOICE || "")
+            .toLowerCase()
+            .includes(s) ||
+            String(r.NAMA_USER || "")
+              .toLowerCase()
+              .includes(s) ||
+            String(r.NOMOR_UNIK || "")
+              .toLowerCase()
+              .includes(s) ||
+            String(r.NAMA_BARANG || "")
+              .toLowerCase()
+              .includes(s));
       }
       return ok;
     });
-  }, [allData, filterToko, filterSales, filterBrand, filterStatus, filterStart, filterEnd, search]);
+  }, [
+    allData,
+    filterToko,
+    filterSales,
+    filterBrand,
+    filterStatus,
+    filterStart,
+    filterEnd,
+    search,
+  ]);
 
   // totals
   const totalOmzet = useMemo(() => {
@@ -158,7 +187,10 @@ export default function SalesReport() {
   }, [filteredData]);
 
   // pagination
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(filteredData.length / rowsPerPage)), [filteredData.length]);
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredData.length / rowsPerPage)),
+    [filteredData.length]
+  );
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [totalPages, currentPage]);
@@ -169,7 +201,8 @@ export default function SalesReport() {
   }, [filteredData, currentPage]);
 
   const prevPage = () => currentPage > 1 && setCurrentPage((p) => p - 1);
-  const nextPage = () => currentPage < totalPages && setCurrentPage((p) => p + 1);
+  const nextPage = () =>
+    currentPage < totalPages && setCurrentPage((p) => p + 1);
 
   // export excel
   const handleExportExcel = (rows = filteredData) => {
@@ -177,7 +210,10 @@ export default function SalesReport() {
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "SalesReport");
-      XLSX.writeFile(wb, `SalesReport_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      XLSX.writeFile(
+        wb,
+        `SalesReport_${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
     } catch (e) {
       console.error("Export Excel failed", e);
       alert("Gagal export Excel");
@@ -209,7 +245,10 @@ export default function SalesReport() {
   const handleApproval = async (row, status) => {
     try {
       const tokoName = row.NAMA_TOKO || row.TOKO || "";
-      const tokoId = fallbackTokoNames.findIndex((t) => String(t).toUpperCase() === String(tokoName).toUpperCase()) + 1;
+      const tokoId =
+        fallbackTokoNames.findIndex(
+          (t) => String(t).toUpperCase() === String(tokoName).toUpperCase()
+        ) + 1;
       if (!tokoId) {
         alert("Gagal: toko tidak dikenali.");
         return;
@@ -219,7 +258,9 @@ export default function SalesReport() {
       } else {
         console.warn("updateTransaksi not found");
       }
-      setAllData((d) => d.map((x) => (x.id === row.id ? { ...x, STATUS: status } : x)));
+      setAllData((d) =>
+        d.map((x) => (x.id === row.id ? { ...x, STATUS: status } : x))
+      );
     } catch (err) {
       console.error("Approval error:", err);
       alert("Gagal mengubah status.");
@@ -230,7 +271,10 @@ export default function SalesReport() {
     if (!window.confirm("Yakin menghapus transaksi ini?")) return;
     try {
       const tokoName = row.NAMA_TOKO || row.TOKO || "";
-      const tokoId = fallbackTokoNames.findIndex((t) => String(t).toUpperCase() === String(tokoName).toUpperCase()) + 1;
+      const tokoId =
+        fallbackTokoNames.findIndex(
+          (t) => String(t).toUpperCase() === String(tokoName).toUpperCase()
+        ) + 1;
       if (!tokoId) {
         alert("Gagal: toko tidak dikenali.");
         return;
@@ -270,13 +314,20 @@ export default function SalesReport() {
 
   return (
     <div className="p-4 bg-gray-100 rounded-xl shadow-md">
-      <h2 className="text-2xl font-semibold mb-4 text-gray-800">Sales Report — Pusat (Realtime)</h2>
-
+      <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-lg shadow mb-4">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-800">
+          Sales Report — Pusat (Realtime)
+        </h2>
+      </div>
       {/* filters */}
       <div className="bg-white p-3 rounded shadow mb-4 flex flex-wrap gap-3 items-center">
         <FaFilter className="text-gray-600" />
 
-        <select value={filterToko} onChange={(e) => setFilterToko(e.target.value)} className="p-2 border rounded">
+        <select
+          value={filterToko}
+          onChange={(e) => setFilterToko(e.target.value)}
+          className="p-2 border rounded"
+        >
           <option value="semua">Semua Toko</option>
           {tokoOptions.map((t) => (
             <option key={t} value={t}>
@@ -285,7 +336,11 @@ export default function SalesReport() {
           ))}
         </select>
 
-        <select value={filterSales} onChange={(e) => setFilterSales(e.target.value)} className="p-2 border rounded">
+        <select
+          value={filterSales}
+          onChange={(e) => setFilterSales(e.target.value)}
+          className="p-2 border rounded"
+        >
           <option value="semua">Semua Sales</option>
           {salesOptions.map((s) => (
             <option key={s} value={s}>
@@ -294,7 +349,11 @@ export default function SalesReport() {
           ))}
         </select>
 
-        <select value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)} className="p-2 border rounded">
+        <select
+          value={filterBrand}
+          onChange={(e) => setFilterBrand(e.target.value)}
+          className="p-2 border rounded"
+        >
           <option value="semua">Semua Brand</option>
           {brandOptions.map((b) => (
             <option key={b} value={b}>
@@ -303,7 +362,11 @@ export default function SalesReport() {
           ))}
         </select>
 
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="p-2 border rounded">
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="p-2 border rounded"
+        >
           <option value="semua">Semua Status</option>
           <option value="Pending">Pending</option>
           <option value="Approved">Approved</option>
@@ -311,10 +374,20 @@ export default function SalesReport() {
         </select>
 
         <label className="text-sm">Dari:</label>
-        <input type="date" value={filterStart} onChange={(e) => setFilterStart(e.target.value)} className="p-2 border rounded" />
+        <input
+          type="date"
+          value={filterStart}
+          onChange={(e) => setFilterStart(e.target.value)}
+          className="p-2 border rounded"
+        />
 
         <label className="text-sm">Sampai:</label>
-        <input type="date" value={filterEnd} onChange={(e) => setFilterEnd(e.target.value)} className="p-2 border rounded" />
+        <input
+          type="date"
+          value={filterEnd}
+          onChange={(e) => setFilterEnd(e.target.value)}
+          className="p-2 border rounded"
+        />
 
         <div className="ml-auto flex items-center space-x-2">
           <div className="flex items-center border rounded p-1">
@@ -327,11 +400,17 @@ export default function SalesReport() {
             />
           </div>
 
-          <button onClick={() => handleExportExcel()} className="px-3 py-1 bg-green-600 text-white rounded flex items-center">
+          <button
+            onClick={() => handleExportExcel()}
+            className="px-3 py-1 bg-green-600 text-white rounded flex items-center"
+          >
             <FaFileExcel className="mr-2" /> Excel
           </button>
 
-          <button onClick={() => handleExportPDF()} className="px-3 py-1 bg-red-600 text-white rounded flex items-center">
+          <button
+            onClick={() => handleExportPDF()}
+            className="px-3 py-1 bg-red-600 text-white rounded flex items-center"
+          >
             <FaFilePdf className="mr-2" /> PDF
           </button>
         </div>
@@ -351,7 +430,9 @@ export default function SalesReport() {
 
         <div className="bg-white p-3 rounded shadow text-center">
           <div className="text-sm text-gray-600">Total Omzet</div>
-          <div className="text-2xl font-bold text-green-600">Rp {fmt(totalOmzet)}</div>
+          <div className="text-2xl font-bold text-green-600">
+            Rp {fmt(totalOmzet)}
+          </div>
         </div>
       </div>
 
@@ -371,7 +452,7 @@ export default function SalesReport() {
               <th className="p-2 border">Brand</th>
               <th className="p-2 border">Barang</th>
               <th className="p-2 border">Qty</th>
-              <th className="p-2 border">No Unik</th>
+              <th className="p-2 border">No EMEI</th>
               <th className="p-2 border">Harga Unit</th>
               <th className="p-2 border">Total</th>
               <th className="p-2 border">Status</th>
@@ -396,7 +477,15 @@ export default function SalesReport() {
                 <td className="p-2 border">{r.NOMOR_UNIK}</td>
                 <td className="p-2 border text-right">{fmt(r.HARGA_UNIT)}</td>
                 <td className="p-2 border text-right">{fmt(r.TOTAL)}</td>
-                <td className={`p-2 border font-semibold ${r.STATUS === "Approved" ? "text-green-600" : r.STATUS === "Rejected" ? "text-red-600" : "text-yellow-600"}`}>
+                <td
+                  className={`p-2 border font-semibold ${
+                    r.STATUS === "Approved"
+                      ? "text-green-600"
+                      : r.STATUS === "Rejected"
+                      ? "text-red-600"
+                      : "text-yellow-600"
+                  }`}
+                >
                   {r.STATUS}
                 </td>
 
@@ -439,10 +528,18 @@ export default function SalesReport() {
         </span>
 
         <div>
-          <button onClick={prevPage} disabled={currentPage === 1} className="px-2 py-1 border rounded mr-2 disabled:opacity-40">
+          <button
+            onClick={prevPage}
+            disabled={currentPage === 1}
+            className="px-2 py-1 border rounded mr-2 disabled:opacity-40"
+          >
             <FaChevronLeft />
           </button>
-          <button onClick={nextPage} disabled={currentPage === totalPages} className="px-2 py-1 border rounded disabled:opacity-40">
+          <button
+            onClick={nextPage}
+            disabled={currentPage === totalPages}
+            className="px-2 py-1 border rounded disabled:opacity-40"
+          >
             <FaChevronRight />
           </button>
         </div>
