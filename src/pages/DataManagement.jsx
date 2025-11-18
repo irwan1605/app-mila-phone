@@ -466,7 +466,7 @@ export default function DataManagement() {
               <th className="p-2 border">Brand</th>
               <th className="p-2 border">Barang</th>
               <th className="p-2 border">Qty</th>
-              <th className="p-2 border">No Unik</th>
+              <th className="p-2 border">No IMEI</th>
               <th className="p-2 border">Harga Unit</th>
               <th className="p-2 border">Total</th>
               <th className="p-2 border">Status</th>
