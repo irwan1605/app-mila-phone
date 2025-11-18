@@ -75,7 +75,7 @@ export default function InventoryReport() {
     NO_INVOICE: r.NO_INVOICE || "",
     NAMA_USER: r.NAMA_USER || "",
     NO_HP_USER: r.NO_HP_USER || "",
-    NAMA_SALES_TOKO: r.NAMA_SALES_TOKO || "",
+    NAMA_PIC_TOKO: r.NAMA_PIC_TOKO || "",
     NAMA_SALES: r.NAMA_SALES || "",
     TITIPAN_REFERENSI: r.TITIPAN_REFERENSI || "",
     NAMA_TOKO: (r.NAMA_TOKO || r.TOKO || "").toString(),
@@ -541,7 +541,7 @@ export default function InventoryReport() {
                     <th className="p-2 border">Invoice</th>
                     <th className="p-2 border">User</th>
                     <th className="p-2 border">No HP</th>
-                    <th className="p-2 border">Sales Toko</th>
+                    <th className="p-2 border">PIC Toko</th>
                     <th className="p-2 border">Sales</th>
                     <th className="p-2 border">Referensi</th>
                     <th className="p-2 border">Toko</th>
@@ -573,7 +573,7 @@ export default function InventoryReport() {
                       <td className="p-2 border">{tx.NO_INVOICE}</td>
                       <td className="p-2 border">{tx.NAMA_USER}</td>
                       <td className="p-2 border">{tx.NO_HP_USER}</td>
-                      <td className="p-2 border">{tx.NAMA_SALES_TOKO}</td>
+                      <td className="p-2 border">{tx.NAMA_PIC_TOKO}</td>
                       <td className="p-2 border">{tx.NAMA_SALES}</td>
                       <td className="p-2 border">{tx.TITIPAN_REFERENSI}</td>
                       <td className="p-2 border">{tx.NAMA_TOKO}</td>

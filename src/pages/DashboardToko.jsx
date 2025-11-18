@@ -183,7 +183,7 @@ export default function DashboardToko({ tokoId }) {
       NO_INVOICE: invoice,
       NAMA_USER: form.NAMA_USER || "",
       NO_HP_USER: form.NO_HP_USER || "",
-      NAMA_SALES_TOKO: form.NAMA_SALES_TOKO || "",
+      NAMA_PIC_TOKO: form.NAMA_PIC_TOKO || "",
       NAMA_SALES: form.NAMA_SALES || "",
       TITIPAN_REFERENSI: form.TITIPAN_REFERENSI || "",
 
@@ -413,10 +413,10 @@ export default function DashboardToko({ tokoId }) {
           </div>
 
           <div>
-            <label>Nama Sales Toko</label>
+            <label>Nama PIC Toko</label>
             <input
-              name="NAMA_SALES_TOKO"
-              value={form.NAMA_SALES_TOKO || ""}
+              name="NAMA_PIC_TOKO"
+              value={form.NAMA_PIC_TOKO || ""}
               onChange={handleChange}
               className="w-full p-2 border rounded"
             />

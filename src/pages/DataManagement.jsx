@@ -112,7 +112,7 @@ export default function DataManagement() {
       NO_INVOICE: r.NO_INVOICE || "",
       NAMA_USER: r.NAMA_USER || "",
       NO_HP_USER: r.NO_HP_USER || "",
-      NAMA_SALES_TOKO: r.NAMA_SALES_TOKO || "",
+      NAMA_PIC_TOKO: r.NAMA_PIC_TOKO || "",
       NAMA_SALES: r.NAMA_SALES || "",
       TITIPAN_REFERENSI: r.TITIPAN_REFERENSI || "",
       NAMA_TOKO: r.NAMA_TOKO || r.TOKO || tokoName,
@@ -394,7 +394,7 @@ export default function DataManagement() {
           <Field label="No Invoice" name="NO_INVOICE" form={form} onChange={handleChange} placeholder="INV-YYYY-00001" />
           <Field label="Nama User" name="NAMA_USER" form={form} onChange={handleChange} />
           <Field label="No HP User" name="NO_HP_USER" form={form} onChange={handleChange} />
-          <Field label="Nama Sales Toko" name="NAMA_SALES_TOKO" form={form} onChange={handleChange} />
+          <Field label="Nama PIC Toko" name="NAMA_PIC_TOKO" form={form} onChange={handleChange} />
           <Field label="Nama Sales" name="NAMA_SALES" form={form} onChange={handleChange} />
           <Field label="Titipan / Referensi" name="TITIPAN_REFERENSI" form={form} onChange={handleChange} />
           <Field label="Nama Toko" name="NAMA_TOKO" form={form} onChange={handleChange} type="select" options={fallbackTokoNames} />
@@ -459,7 +459,7 @@ export default function DataManagement() {
               <th className="p-2 border">Invoice</th>
               <th className="p-2 border">User</th>
               <th className="p-2 border">HP</th>
-              <th className="p-2 border">Sales Toko</th>
+              <th className="p-2 border">PIC Toko</th>
               <th className="p-2 border">Sales</th>
               <th className="p-2 border">Referensi</th>
               <th className="p-2 border">Toko</th>
@@ -480,7 +480,7 @@ export default function DataManagement() {
                 <td className="p-2 border">{r.NO_INVOICE}</td>
                 <td className="p-2 border">{r.NAMA_USER}</td>
                 <td className="p-2 border">{r.NO_HP_USER}</td>
-                <td className="p-2 border">{r.NAMA_SALES_TOKO}</td>
+                <td className="p-2 border">{r.NAMA_PIC_TOKO}</td>
                 <td className="p-2 border">{r.NAMA_SALES}</td>
                 <td className="p-2 border">{r.TITIPAN_REFERENSI}</td>
                 <td className="p-2 border">{r.NAMA_TOKO}</td>
