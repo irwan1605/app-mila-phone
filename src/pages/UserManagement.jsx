@@ -1,17 +1,15 @@
 // src/pages/UserManagement.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import TOKO_LABELS from "../data/TokoLabels";
+
+// Firebase user functions
 import {
   listenUsers,
   saveUserOnline,
   deleteUserOnline,
-  getAllUsersOnce,
 } from "../services/FirebaseService";
 
 export default function UserManagement() {
-  /* =========================
-      STATE
-  ========================== */
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
@@ -28,23 +26,23 @@ export default function UserManagement() {
     name: "",
   });
 
-  /* =========================
-      REALTIME LIST USER
-  ========================== */
+  /* =====================================================
+     LISTEN USERS REALTIME DARI FIREBASE
+  ===================================================== */
   useEffect(() => {
     const unsub = listenUsers((list) => {
       setUsers(Array.isArray(list) ? list : []);
     });
-    return () => unsub && unsub();
+    return () => unsub();
   }, []);
 
-  /* =========================
-      FILTERING + SEARCH
-  ========================== */
+  /* =====================================================
+     FILTERING
+  ===================================================== */
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
 
-    return users
+    return (Array.isArray(users) ? users : [])
       .filter(
         (u) =>
           (u.username || "").toLowerCase().includes(q) ||
@@ -58,37 +56,31 @@ export default function UserManagement() {
       })
       .filter((u) => {
         if (tokoFilter === "ALL") return true;
+        const tokoId = String(tokoFilter);
 
-        if (String(u.role).startsWith("pic_toko")) {
-          const roleTokoId = u.role.replace("pic_toko", "");
-          return String(roleTokoId) === String(tokoFilter);
+        if (u.role.startsWith("pic_toko")) {
+          const rid = u.role.replace("pic_toko", "");
+          return rid === tokoId;
         }
 
-        return String(u.toko) === String(tokoFilter);
+        return String(u.toko) === tokoId;
       });
-  }, [users, search, roleFilter, tokoFilter]);
+  }, [search, roleFilter, tokoFilter, users]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  /* =========================
-      ADD USER (ONLINE)
-  ========================== */
+  /* =====================================================
+     ADD USER → Realtime Firebase
+  ===================================================== */
   const addUser = async () => {
     if (!form.username || !form.password) {
       alert("Username & Password wajib diisi.");
       return;
     }
 
-    const existing = await getAllUsersOnce();
-
-    if (
-      existing.some(
-        (u) =>
-          (u.username || "").trim().toLowerCase() ===
-          form.username.trim().toLowerCase()
-      )
-    ) {
+    // Cek duplicate
+    if (users.some((u) => u.username === form.username)) {
       alert("Username sudah digunakan.");
       return;
     }
@@ -107,21 +99,14 @@ export default function UserManagement() {
     }
 
     const newUser = {
-      username: form.username.trim(),
+      username: form.username,
       password: form.password,
       role,
       toko,
       name: form.name || form.username,
-      tokoName: toko ? TOKO_LABELS[toko] : "ALL",
     };
 
-    try {
-      await saveUserOnline(newUser);
-      alert("User berhasil ditambahkan!");
-    } catch (err) {
-      console.error(err);
-      alert("Gagal menyimpan user ke server.");
-    }
+    await saveUserOnline(newUser);
 
     setForm({
       username: "",
@@ -130,34 +115,27 @@ export default function UserManagement() {
       toko: "",
       name: "",
     });
+
+    alert("User berhasil ditambahkan.");
   };
 
-  /* =========================
-      DELETE USER (ONLINE)
-  ========================== */
-  const deleteUser = async (username) => {
+  /* =====================================================
+     DELETE USER → Realtime Firebase
+  ===================================================== */
+  const handleDelete = async (username) => {
     if (!window.confirm("Hapus user ini?")) return;
-
-    try {
-      await deleteUserOnline(username);
-      alert("User berhasil dihapus!");
-    } catch (err) {
-      console.error(err);
-      alert("Gagal menghapus user.");
-    }
+    await deleteUserOnline(username);
   };
 
-  /* =========================
-      HELPER DISPLAY
-  ========================== */
+  /* =====================================================
+     HELPER DISPLAY
+  ===================================================== */
   const displayRole = (role) => {
     if (role === "superadmin") return "Superadmin";
-
     if (role.startsWith("pic_toko")) {
       const id = role.replace("pic_toko", "");
-      return `PIC Toko ${TOKO_LABELS[id] || "-"}`;
+      return `PIC Toko ${TOKO_LABELS[id]}`;
     }
-
     return role;
   };
 
@@ -169,9 +147,9 @@ export default function UserManagement() {
     return toko ? TOKO_LABELS[toko] : "-";
   };
 
-  /* =========================
-      UI — TIDAK DIUBAH
-  ========================== */
+  /* =====================================================
+     UI (TIDAK DIUBAH)
+  ===================================================== */
   return (
     <div className="p-4 space-y-6">
       <h2 className="text-xl md:text-2xl font-bold">User Management</h2>
@@ -249,7 +227,7 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* FILTER & SEARCH */}
+      {/* FILTER */}
       <div className="flex gap-3 flex-wrap">
         <input
           className="border p-2 rounded"
@@ -291,7 +269,7 @@ export default function UserManagement() {
         </select>
       </div>
 
-      {/* TABEL USER */}
+      {/* TABLE */}
       <div className="bg-white shadow rounded overflow-auto">
         <table className="min-w-[800px] w-full">
           <thead className="bg-gray-50">
@@ -314,7 +292,7 @@ export default function UserManagement() {
                 <td className="p-2">
                   <button
                     className="px-3 py-1 bg-red-600 text-white text-sm rounded"
-                    onClick={() => deleteUser(u.username)}
+                    onClick={() => handleDelete(u.username)}
                   >
                     Hapus
                   </button>

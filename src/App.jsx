@@ -8,70 +8,55 @@ import {
   useParams,
 } from "react-router-dom";
 
-/* Layout Components */
+/* Layout */
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
 
 /* Pages */
 import Dashboard from "./pages/Dashboard";
 import DashboardToko from "./pages/DashboardToko";
-
 import Products from "./pages/Products";
 import SalesReport from "./pages/Reports/SalesReport";
 import InventoryReport from "./pages/Reports/InventoryReport";
 import UserManagement from "./pages/UserManagement";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-
 import ServiceHandphone from "./pages/ServiceHandphone";
 import ServiceMotorListrik from "./pages/ServiceMotorListrik";
-
 import PenjualanHandphone from "./pages/PenjualanHandphone";
 import PenjualanMotorListrik from "./pages/PenjualanMotorListrik";
 import PenjualanAccessories from "./pages/PenjualanAccessories";
-
 import DataManagement from "./pages/DataManagement";
 import TransferBarangPusat from "./pages/Reports/TransferBarangPusat";
-
-/* Stock pages */
 import StockAccessories from "./pages/stock/StockAccessories";
 import StockHandphone from "./pages/stock/StockHandphone";
 import StockMotorListrik from "./pages/stock/StockMotorListrik";
-
 import StockAccessoriesPusat from "./pages/stock/StockAccessoriesPusat";
 import StockHandphonePusat from "./pages/stock/StockHandphonePusat";
 import StockMotorListrikPusat from "./pages/stock/StockMotorListrikPusat";
-
-/* Transaksi */
 import InputPenjualan from "./pages/InputPenjualan";
 import StrukPenjualan from "./pages/StrukPenjualan";
 import StrukPenjualanIMEI from "./pages/StrukPenjualanIMEI";
 import SuratJalan from "./pages/SuratJalan";
 import Invoice from "./pages/Invoice";
-
 import FinanceReportMonthly from "./pages/Reports/FinanceReportMonthly";
 import FinanceReport from "./pages/Reports/FinanceReport";
-
-/* Others */
 import Sperpar from "./pages/Sperpar";
 
 /* Guards */
 import ProtectedRoute from "./components/ProtectedRoute";
 
-/* Firebase Services */
-import {
-  listenUsers,
-  saveUserOnline,
-  deleteUserOnline,
-  getAllUsersOnce,
-} from "./services/FirebaseService";
+/* Firebase sync (Mode 3 Penjualan realtime) */
+import { listenUsers, getAllUsersOnce } from "./services/FirebaseService";
 
-/* ============================================
-      ROLE TOKO VALIDATION
-============================================ */
+/* Default local users (fallback login offline) */
+import defaultUsers from "./data/UserManagementRole";
+
+/* ===========================
+    Utility role → toko
+=========================== */
 function getAllowedTokoIdFromUser(u) {
   if (!u) return null;
-
   if (u.role === "superadmin" || u.role === "admin") return null;
 
   if (u.role?.startsWith("pic_toko")) {
@@ -79,41 +64,34 @@ function getAllowedTokoIdFromUser(u) {
     const fieldId = Number(u.toko) || null;
     return fieldId ?? roleId ?? 1;
   }
-
   return null;
 }
 
-/* ============================================
-    WRAPPER ROUTE UNTUK DASHBOARD TOKO PER ID
-============================================ */
+/* ===========================
+   Wrapper Dashboard Toko
+=========================== */
 function TokoWrapper({ user }) {
   const { id } = useParams();
   const tokoId = Number(id);
 
-  if (user.role === "superadmin" || user.role === "admin") {
+  if (user.role === "superadmin" || user.role === "admin")
     return <DashboardToko tokoId={tokoId} user={user} />;
-  }
 
   if (user.role?.startsWith("pic_toko")) {
     const allowed = getAllowedTokoIdFromUser(user) ?? 1;
-
-    if (allowed !== tokoId) {
+    if (allowed !== tokoId)
       return <Navigate to={`/toko/${allowed}`} replace />;
-    }
-
     return <DashboardToko tokoId={tokoId} user={user} />;
   }
 
   return <Navigate to="/dashboard" replace />;
 }
 
-/* ============================================
-    MAIN APP (Realtime Firebase)
-============================================ */
+/* ===========================
+            MAIN APP
+=========================== */
 export default function App() {
-  /* =============================
-      SESSION LOGIN
-  ============================= */
+  /* Session user */
   const [user, setUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("user"));
@@ -122,6 +100,22 @@ export default function App() {
     }
   });
 
+  /* Realtime Firebase Users (Mode 3 only updates penjualan; login tetap lokal) */
+  const [users, setUsers] = useState(defaultUsers);
+
+  useEffect(() => {
+    getAllUsersOnce().then((u) => {
+      if (u?.length) setUsers(u);
+    });
+
+    const unsub = listenUsers((list) => {
+      if (list?.length) setUsers(list);
+    });
+
+    return () => unsub && unsub();
+  }, []);
+
+  /* persist login session */
   useEffect(() => {
     if (user) localStorage.setItem("user", JSON.stringify(user));
     else localStorage.removeItem("user");
@@ -130,49 +124,24 @@ export default function App() {
   const handleLogin = (u) => setUser(u);
   const handleLogout = () => setUser(null);
 
-  /* =============================
-      USER LIST (Realtime)
-  ============================= */
-  const [users, setUsers] = useState([]);
-
-  // Listen realtime user list
-  useEffect(() => {
-    const unsub = listenUsers((list) => {
-      setUsers(list || []);
-    });
-    return () => unsub && unsub();
-  }, []);
-
-  // Add user online
-  const addUser = async (data) => {
-    try {
-      await saveUserOnline(data);
-    } catch (err) {
-      console.error("Gagal menambahkan user:", err);
-    }
-  };
-
-  /* ============================================
-      RENDER
-  ============================================= */
   return (
     <Router>
       {!user ? (
-        /* ===============================
-            BELUM LOGIN
-        =============================== */
+        /* ========================
+            LOGIN MODE
+        ========================= */
         <Routes>
           <Route
             path="/"
             element={<Login onLogin={handleLogin} users={users} />}
           />
-          <Route path="/register" element={<Register addUser={addUser} />} />
+          <Route path="/register" element={<Register />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       ) : (
-        /* ===============================
-            SUDAH LOGIN
-        =============================== */
+        /* ========================
+             LOGGED IN MODE
+        ========================= */
         <div className="flex h-screen overflow-hidden">
           <Sidebar role={user.role} toko={user.toko} onLogout={handleLogout} />
 
@@ -183,7 +152,7 @@ export default function App() {
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" />} />
 
-                {/* DASHBOARD PUSAT */}
+                {/* Dashboard pusat realtime */}
                 <Route
                   path="/dashboard"
                   element={
@@ -193,7 +162,7 @@ export default function App() {
                   }
                 />
 
-                {/* DASHBOARD TOKO */}
+                {/* Dashboard Toko - Realtime per toko */}
                 <Route
                   path="/toko/:id"
                   element={
@@ -203,8 +172,10 @@ export default function App() {
                   }
                 />
 
-                {/* MODULES */}
+                {/* Manajemen User */}
                 <Route path="/user-management" element={<UserManagement />} />
+
+                {/* Laporan */}
                 <Route path="/sales-report" element={<SalesReport />} />
                 <Route path="/inventory-report" element={<InventoryReport />} />
                 <Route path="/finance-report" element={<FinanceReport />} />
@@ -213,48 +184,44 @@ export default function App() {
                   element={<FinanceReportMonthly />}
                 />
 
+                {/* Produk */}
                 <Route path="/products" element={<Products />} />
+
+                {/* MASTER DATA (Mode 3 Sync Penjualan + Local for Master) */}
                 <Route path="/data-management" element={<DataManagement />} />
-                <Route
-                  path="/transfer-barang-pusat"
-                  element={<TransferBarangPusat />}
-                />
 
-                <Route
-                  path="/service-handphone"
-                  element={<ServiceHandphone user={user} />}
-                />
-                <Route
-                  path="/service-motor-listrik"
-                  element={<ServiceMotorListrik user={user} />}
-                />
+                {/* Transfer Barang Pusat */}
+                <Route path="/transfer-barang-pusat" element={<TransferBarangPusat />} />
 
+                {/* Service */}
+                <Route path="/service-handphone" element={<ServiceHandphone user={user} />} />
+                <Route path="/service-motor-listrik" element={<ServiceMotorListrik user={user} />} />
+
+                {/* Surat Jalan, Invoice, Struk */}
                 <Route path="/surat-jalan" element={<SuratJalan />} />
                 <Route path="/invoice" element={<Invoice />} />
                 <Route path="/struk-penjualan" element={<StrukPenjualan />} />
-                <Route
-                  path="/struk-penjualan-imei"
-                  element={<StrukPenjualanIMEI />}
-                />
+                <Route path="/struk-penjualan-imei" element={<StrukPenjualanIMEI />} />
 
-                <Route
-                  path="/penjualan-handphone"
-                  element={<PenjualanHandphone />}
-                />
-                <Route
-                  path="/penjualan-motor-listrik"
-                  element={<PenjualanMotorListrik />}
-                />
-                <Route path="/input-penjualan" element={<InputPenjualan />} />
+                {/* Penjualan */}
+                <Route path="/penjualan-handphone" element={<PenjualanHandphone />} />
+                <Route path="/penjualan-motor-listrik" element={<PenjualanMotorListrik />} />
                 <Route path="/accessories" element={<PenjualanAccessories />} />
+                <Route path="/input-penjualan" element={<InputPenjualan />} />
 
+                {/* Sparepart */}
                 <Route path="/modul-sparepart" element={<Sperpar />} />
 
+                {/* Stock */}
+                <Route path="/stock-accessories" element={<StockAccessories />} />
+                <Route path="/stock-handphone" element={<StockHandphone />} />
+                <Route path="/stock-motor-listrik" element={<StockMotorListrik />} />
+                <Route path="/stock-accessories-pusat" element={<StockAccessoriesPusat />} />
+                <Route path="/stock-handphone-pusat" element={<StockHandphonePusat />} />
+                <Route path="/stock-motor-listrik-pusat" element={<StockMotorListrikPusat />} />
+
                 {/* Fallback */}
-                <Route
-                  path="*"
-                  element={<Navigate to="/dashboard" replace />}
-                />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </main>
           </div>
