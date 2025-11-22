@@ -2,84 +2,49 @@
 import { db } from "../FirebaseInit";
 import {
   ref,
-  push,
-  set,
-  update,
-  remove,
   onValue,
   get,
-  child,
+  set,
+  update,
+  push,
+  remove,
+  runTransaction,
 } from "firebase/database";
 
-/**
- * FirebaseService.js
- * - wrapper kecil untuk Realtime Database (Firebase v9 modular)
- * - semua fungsi mengembalikan Promise (atau unsubscribe function untuk listener)
- *
- * Struktur DB yang diasumsikan (toleran):
- *  /toko/{tokoId}/transaksi/{txId}         -> transaksi per toko (dipakai DashboardToko)
- *  /toko/{tokoId}/info/name                 -> nama toko (fallback)
- *  /dataManagement/tokoLabels/{id}          -> label toko (fallback)
- *
- *  /users/{username}                         -> data user (Login/Register/UserManagement)
- *
- *  /penjualan/{generatedId}                  -> master penjualan (dipakai DataManagement, realtime)
- *
- *  /dataManagement/masterHarga, /dataManagement/masterKatalog, /dataManagement/sales, ...
- *                                            -> master datasets (optional)
- */
-
-/* -------------------------
+/* ============================================================
    HELPERS
-   ------------------------- */
+============================================================ */
 const safeValToList = (snap) => {
   const v = snap.val();
   if (!v) return [];
-  // if object map keyed by id -> return array of values with id property
   if (typeof v === "object" && !Array.isArray(v)) {
-    return Object.entries(v).map(([k, item]) =>
-      item && typeof item === "object"
-        ? { id: k, ...item }
-        : { id: k, value: item }
+    return Object.entries(v).map(([id, item]) =>
+      typeof item === "object" ? { id, ...item } : { id, value: item }
     );
   }
-  if (Array.isArray(v)) return v;
-  return [v];
+  return Array.isArray(v) ? v : [v];
 };
 
-/* -------------------------
-   TOKO helpers
-   ------------------------- */
-
-/**
- * Try to read toko name from a couple of common places:
- *  - /toko/{tokoId}/info/name
- *  - /dataManagement/tokoLabels/{tokoId}
- *  - /toko/{tokoId}/name
- *
- * Returns string or null
- */
+/* ============================================================
+   TOKO HELPERS
+============================================================ */
 export const getTokoName = async (tokoId) => {
   try {
     if (!tokoId && tokoId !== 0) return null;
+
     const paths = [
       `toko/${tokoId}/info/name`,
       `toko/${tokoId}/name`,
       `dataManagement/tokoLabels/${tokoId}`,
       `toko/${tokoId}/info/nama`,
     ];
+
     for (const p of paths) {
-      const s = await get(ref(db, p));
-      if (s.exists()) {
-        const val = s.val();
-        // if object, try common properties
-        if (typeof val === "object") {
-          if (val.name) return val.name;
-          if (val.nama) return val.nama;
-          // fallback to JSON
-          return JSON.stringify(val);
-        }
-        return String(val);
+      const snap = await get(ref(db, p));
+      if (snap.exists()) {
+        const v = snap.val();
+        if (typeof v === "object") return v.name || v.nama || JSON.stringify(v);
+        return String(v);
       }
     }
     return null;
@@ -89,12 +54,9 @@ export const getTokoName = async (tokoId) => {
   }
 };
 
-/**
- * listenTransaksiByToko(tokoId, callback)
- * - listens to /toko/{tokoId}/transaksi
- * - callback receives array of { id, ...data }
- * - returns unsubscribe function
- */
+/* ============================================================
+   TRANSAKSI PER TOKO
+============================================================ */
 export const listenTransaksiByToko = (tokoId, callback) => {
   const r = ref(db, `toko/${tokoId}/transaksi`);
   const unsub = onValue(
@@ -109,15 +71,9 @@ export const listenTransaksiByToko = (tokoId, callback) => {
       callback([]);
     }
   );
-  // onValue returns an unsubscribe function when invoked, but modular SDK returns the listener itself.
-  // Returning a cleanup function for caller convenience:
   return () => unsub && unsub();
 };
 
-/**
- * addTransaksi(tokoId, data) / updateTransaksi / deleteTransaksi
- * These helpers match the original shape expected by DashboardToko
- */
 export const addTransaksi = (tokoId, data) => {
   const r = push(ref(db, `toko/${tokoId}/transaksi`));
   return set(r, data);
@@ -131,11 +87,6 @@ export const deleteTransaksi = (tokoId, id) => {
   return remove(ref(db, `toko/${tokoId}/transaksi/${id}`));
 };
 
-/**
- * listenAllTransaksi(callback)
- * - listens to /toko and collects semua transaksi tiap toko lalu mengirimkan
- *   array merged of rows with { id, tokoId, TOKO, ...fields }
- */
 export const listenAllTransaksi = (callback) => {
   const r = ref(db, "toko");
   const unsub = onValue(
@@ -143,26 +94,22 @@ export const listenAllTransaksi = (callback) => {
     (snap) => {
       const raw = snap.val() || {};
       const merged = [];
+
       Object.entries(raw).forEach(([tokoId, tokoData]) => {
         const tokoName =
           tokoData?.info?.name || tokoData?.name || `TOKO ${tokoId}`;
+
         if (tokoData?.transaksi) {
           Object.entries(tokoData.transaksi).forEach(([id, row]) => {
-            merged.push({
-              id,
-              tokoId,
-              ...row,
-              TOKO: tokoName,
-            });
+            merged.push({ id, tokoId, TOKO: tokoName, ...row });
           });
         }
       });
-      // try to sort by TANGGAL desc (if present)
-      merged.sort((a, b) => {
-        const da = a.TANGGAL ? new Date(a.TANGGAL) : new Date(0);
-        const dbd = b.TANGGAL ? new Date(b.TANGGAL) : new Date(0);
-        return dbd - da;
-      });
+
+      merged.sort((a, b) =>
+        new Date(b.TANGGAL || 0) - new Date(a.TANGGAL || 0)
+      );
+
       callback(merged);
     },
     (err) => {
@@ -174,34 +121,30 @@ export const listenAllTransaksi = (callback) => {
   return () => unsub && unsub();
 };
 
-/* -------------------------
-   USERS helpers
-   ------------------------- */
-
-/**
- * saveUserOnline(user)
- * - save user under /users/{username}
- */
-export function saveUserOnline(user) {
-  if (!user || !user.username) return Promise.reject(new Error("Invalid user"));
+/* ============================================================
+   USERS MANAGEMENT
+============================================================ */
+export const saveUserOnline = (user) => {
+  if (!user?.username) return Promise.reject("Invalid User");
   return set(ref(db, `users/${user.username}`), user);
-}
+};
 
-/** deleteUserOnline(username) */
-export function deleteUserOnline(username) {
-  if (!username) return Promise.reject(new Error("Invalid username"));
+export const deleteUserOnline = (username) => {
   return remove(ref(db, `users/${username}`));
-}
+};
 
-/** listenUsers(callback) -> realtime list of users (array) */
-export function listenUsers(callback) {
+export const listenUsers = (callback) => {
   const r = ref(db, "users");
   const unsub = onValue(
     r,
     (snap) => {
-      const val = snap.val() || {};
-      const list = Object.entries(val).map(([k, v]) => ({ username: k, ...v }));
-      callback(list);
+      const raw = snap.val() || {};
+      callback(
+        Object.entries(raw).map(([username, data]) => ({
+          username,
+          ...data,
+        }))
+      );
     },
     (err) => {
       console.error("listenUsers error:", err);
@@ -209,58 +152,51 @@ export function listenUsers(callback) {
     }
   );
   return () => unsub && unsub();
-}
+};
 
-/** getAllUsersOnce() -> Promise<array> */
-export async function getAllUsersOnce() {
+export const getAllUsersOnce = async () => {
   try {
     const snap = await get(ref(db, "users"));
-    const data = snap.val() || {};
-    return Object.entries(data).map(([k, v]) => ({ username: k, ...v }));
-  } catch (err) {
-    console.error("getAllUsersOnce error:", err);
+    const v = snap.val() || {};
+    return Object.entries(v).map(([username, data]) => ({
+      username,
+      ...data,
+    }));
+  } catch {
     return [];
   }
-}
+};
 
-/* -------------------------
-   PENJUALAN helpers (DataManagement) - core for "Mode 3 (only penjualan realtime)"
-   - path: /penjualan
-   ------------------------- */
-
-/** addPenjualan(data) -> push new penjualan under /penjualan */
+/* ============================================================
+   PENJUALAN (DataManagement)
+============================================================ */
 export const addPenjualan = (data) => {
   const r = push(ref(db, "penjualan"));
   return set(r, data);
 };
 
-/** updatePenjualan(id, data) -> update /penjualan/{id} */
 export const updatePenjualan = (id, data) => {
   return update(ref(db, `penjualan/${id}`), data);
 };
 
-/** deletePenjualan(id) -> remove /penjualan/{id} */
 export const deletePenjualan = (id) => {
   return remove(ref(db, `penjualan/${id}`));
 };
 
-/**
- * listenPenjualan(callback) -> realtime listener for /penjualan
- * callback receives array of { id, ...data } sorted by date desc if TANGGAL available
- */
 export const listenPenjualan = (callback) => {
   const r = ref(db, "penjualan");
+
   const unsub = onValue(
     r,
     (snap) => {
       const raw = snap.val() || {};
       const list = Object.entries(raw).map(([id, item]) => ({ id, ...item }));
-      // try sort by TANGGAL desc
-      list.sort((a, b) => {
-        const da = a.TANGGAL ? new Date(a.TANGGAL) : new Date(0);
-        const dbd = b.TANGGAL ? new Date(b.TANGGAL) : new Date(0);
-        return dbd - da;
-      });
+
+      list.sort((a, b) =>
+        new Date(b.TANGGAL_TRANSAKSI || 0) -
+        new Date(a.TANGGAL_TRANSAKSI || 0)
+      );
+
       callback(list);
     },
     (err) => {
@@ -271,56 +207,208 @@ export const listenPenjualan = (callback) => {
   return () => unsub && unsub();
 };
 
-/** getAllPenjualanOnce() -> Promise<array> */
-export const getAllPenjualanOnce = async () => {
+/* ============================================================
+   STOCK MANAGEMENT + TRANSFER STOCK
+============================================================ */
+
+// Listen seluruh stok
+export const listenStockAll = (callback) => {
+  const r = ref(db, "stock");
+  const unsub = onValue(
+    r,
+    (snap) => callback(snap.val() || {}),
+    (err) => {
+      console.error("listenStockAll error:", err);
+      callback({});
+    }
+  );
+  return () => unsub && unsub();
+};
+
+// Ambil stok per toko per SKU
+export const getStockForToko = async (tokoName, sku) => {
+  const snap = await get(ref(db, `stock/${tokoName}/${sku}`));
+  return snap.exists() ? snap.val() : null;
+};
+
+// Tambah stok
+export const addStock = (tokoName, sku, payload) => {
+  const r = ref(db, `stock/${tokoName}/${sku}`);
+  return runTransaction(r, (cur) => {
+    const curQty = Number(cur?.qty || 0);
+    return {
+      ...cur,
+      nama: payload.nama || cur?.nama || "",
+      imei: payload.imei || cur?.imei || "",
+      qty: curQty + Number(payload.qty || 0),
+      updatedAt: new Date().toISOString(),
+    };
+  });
+};
+
+// Kurangi stok
+export const reduceStock = async (tokoName, sku, qty) => {
+  const r = ref(db, `stock/${tokoName}/${sku}`);
+
+  const result = await runTransaction(r, (cur) => {
+    const curQty = Number(cur?.qty || 0);
+    const remaining = curQty - Number(qty);
+
+    if (remaining < 0) return; // abort
+
+    return {
+      ...cur,
+      qty: remaining,
+      updatedAt: new Date().toISOString(),
+    };
+  });
+
+  if (!result.committed) {
+    throw new Error("Insufficient stock");
+  }
+
+  return result.snapshot.val();
+};
+
+// Transfer stok antar toko
+export const transferStock = async ({
+  fromToko,
+  toToko,
+  sku,
+  qty,
+  nama = "",
+  imei = "",
+  keterangan = "",
+  performedBy = "",
+}) => {
+  if (!fromToko || !toToko || !sku) throw new Error("Missing parameters");
+  if (fromToko === toToko) throw new Error("From & To cannot be the same");
+
+  const timestamp = new Date().toISOString();
+
+  // 1. Kurangi
+  await reduceStock(fromToko, sku, qty);
+
+  // 2. Tambah ke tujuan
+  await addStock(toToko, sku, { nama, imei, qty });
+
+  // 3. Catat riwayat
+  const hist = push(ref(db, "transfer_history"));
+  await set(hist, {
+    from: fromToko,
+    to: toToko,
+    sku,
+    qty,
+    nama,
+    imei,
+    keterangan,
+    performedBy,
+    timestamp,
+  });
+
+  return true;
+};
+
+/* ============================================================
+   INVENTORY WRAPPER — untuk integrasi DataManagement & Dashboard
+============================================================ */
+
+/**
+ * Ambil item stok berdasarkan toko + sku
+ */
+export const getInventoryItem = async (tokoName, sku) => {
+  if (!tokoName || !sku) return null;
   try {
-    const snap = await get(ref(db, "penjualan"));
-    const data = snap.val() || {};
-    return Object.entries(data).map(([id, item]) => ({ id, ...item }));
+    const snap = await get(ref(db, `stock/${tokoName}/${sku}`));
+    return snap.exists() ? { id: sku, ...snap.val() } : null;
   } catch (err) {
-    console.error("getAllPenjualanOnce error:", err);
-    return [];
+    console.error("getInventoryItem error:", err);
+    return null;
   }
 };
 
-/* -------------------------
-   MASTER data helpers (optional convenience)
-   - paths under /dataManagement (masterHarga, masterKatalog, sales, mdrRules, tenorRules, tokoLabels, refs)
-   - these functions are not strictly required but useful for importing/exporting and UI sync
-   ------------------------- */
-
-export const getMasterHargaOnce = async () => {
+/**
+ * Update stok (langsung overwrite field yang diberikan)
+ */
+export const updateInventory = async (tokoName, sku, updates = {}) => {
+  if (!tokoName || !sku) return null;
   try {
-    const snap = await get(ref(db, "dataManagement/masterHarga"));
-    return snap.exists() ? Object.values(snap.val()) : [];
+    await update(ref(db, `stock/${tokoName}/${sku}`), {
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    });
   } catch (err) {
-    console.error("getMasterHargaOnce error:", err);
-    return [];
+    console.error("updateInventory error:", err);
   }
 };
 
-export const saveMasterHarga = (list) => {
-  // overwrite the masterHarga node
-  return set(ref(db, "dataManagement/masterHarga"), list || []);
-};
+/**
+ * Membuat stok baru jika belum ada
+ */
+export const createInventory = async (tokoName, sku, payload = {}) => {
+  if (!tokoName || !sku) return null;
 
-export const getDataManagementOnce = async () => {
   try {
-    const snap = await get(ref(db, "dataManagement"));
-    return snap.exists() ? snap.val() : {};
+    await set(ref(db, `stock/${tokoName}/${sku}`), {
+      nama: payload.nama || "",
+      imei: payload.imei || "",
+      qty: Number(payload.qty || 0),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
   } catch (err) {
-    console.error("getDataManagementOnce error:", err);
-    return {};
+    console.error("createInventory error:", err);
   }
 };
 
-export const saveDataManagement = (obj) => {
-  return set(ref(db, "dataManagement"), obj || {});
+/**
+ * Fungsi utama — aman dipanggil oleh DataManagement.jsx
+ * delta > 0  → menambah stok
+ * delta < 0  → mengurangi stok (akan abort kalau stok kurang)
+ */
+export const adjustInventoryStock = async (tokoName, sku, delta) => {
+  if (!tokoName || !sku || !delta) return;
+  try {
+    if (delta > 0) {
+      // menambah stok
+      await addStock(tokoName, sku, { qty: delta });
+    } else {
+      // mengurangi stok
+      await reduceStock(tokoName, sku, Math.abs(delta));
+    }
+  } catch (err) {
+    console.error("adjustInventoryStock error:", err);
+  }
 };
 
-/* -------------------------
-   Default export (grouped) - optional
-   ------------------------- */
+// buat transfer request (push ke "transfer_requests")
+export const createTransferRequest = (payload) => {
+  const r = push(ref(db, "transfer_requests"));
+  return set(r, { ...payload, id: r.key });
+};
+
+// listen transfer requests (for admin)
+export const listenTransferRequests = (callback) => {
+  const r = ref(db, "transfer_requests");
+  const unsub = onValue(r, (snap) => {
+    const raw = snap.val() || {};
+    const arr = Object.entries(raw).map(([id, v]) => ({ id, ...v }));
+    // only pending by default
+    callback(arr.filter(x => !x.status || x.status === "Pending"));
+  }, (err) => { console.error(err); callback([]); });
+  return () => unsub && unsub();
+};
+
+// update transfer request (approve / reject)
+export const updateTransferRequest = (id, data) => {
+  return update(ref(db, `transfer_requests/${id}`), data);
+};
+
+
+
+/* ============================================================
+   DEFAULT EXPORT
+============================================================ */
 const FirebaseService = {
   getTokoName,
   listenTransaksiByToko,
@@ -329,21 +417,21 @@ const FirebaseService = {
   deleteTransaksi,
   listenAllTransaksi,
 
+  addPenjualan,
+  updatePenjualan,
+  deletePenjualan,
+  listenPenjualan,
+
   saveUserOnline,
   deleteUserOnline,
   listenUsers,
   getAllUsersOnce,
 
-  addPenjualan,
-  updatePenjualan,
-  deletePenjualan,
-  listenPenjualan,
-  getAllPenjualanOnce,
-
-  getMasterHargaOnce,
-  saveMasterHarga,
-  getDataManagementOnce,
-  saveDataManagement,
+  listenStockAll,
+  getStockForToko,
+  addStock,
+  reduceStock,
+  transferStock,
 };
 
 export default FirebaseService;

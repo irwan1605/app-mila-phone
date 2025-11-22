@@ -42,6 +42,7 @@ import Invoice from "./pages/Invoice";
 import FinanceReportMonthly from "./pages/Reports/FinanceReportMonthly";
 import FinanceReport from "./pages/Reports/FinanceReport";
 import Sperpar from "./pages/Sperpar";
+import { GlobalSearchProvider } from "./context/GlobalSearchContext";
 
 /* Guards */
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -51,6 +52,11 @@ import { listenUsers, getAllUsersOnce } from "./services/FirebaseService";
 
 /* Default local users (fallback login offline) */
 import defaultUsers from "./data/UserManagementRole";
+
+import StockOpname from "./pages/StockOpname";
+
+/* ✨ Fitur Baru — Transfer Barang */
+import TransferBarang from "./pages/TransferBarang";
 
 /* ===========================
     Utility role → toko
@@ -79,8 +85,7 @@ function TokoWrapper({ user }) {
 
   if (user.role?.startsWith("pic_toko")) {
     const allowed = getAllowedTokoIdFromUser(user) ?? 1;
-    if (allowed !== tokoId)
-      return <Navigate to={`/toko/${allowed}`} replace />;
+    if (allowed !== tokoId) return <Navigate to={`/toko/${allowed}`} replace />;
     return <DashboardToko tokoId={tokoId} user={user} />;
   }
 
@@ -100,7 +105,7 @@ export default function App() {
     }
   });
 
-  /* Realtime Firebase Users (Mode 3 only updates penjualan; login tetap lokal) */
+  /* Realtime Firebase Users */
   const [users, setUsers] = useState(defaultUsers);
 
   useEffect(() => {
@@ -125,11 +130,10 @@ export default function App() {
   const handleLogout = () => setUser(null);
 
   return (
+    <GlobalSearchProvider>
     <Router>
       {!user ? (
-        /* ========================
-            LOGIN MODE
-        ========================= */
+        /* ======================== LOGIN MODE ========================= */
         <Routes>
           <Route
             path="/"
@@ -139,9 +143,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       ) : (
-        /* ========================
-             LOGGED IN MODE
-        ========================= */
+        /* ======================== LOGGED IN MODE ===================== */
         <div className="flex h-screen overflow-hidden">
           <Sidebar role={user.role} toko={user.toko} onLogout={handleLogout} />
 
@@ -172,36 +174,31 @@ export default function App() {
                   }
                 />
 
-                {/* Manajemen User */}
+                {/* Management User */}
                 <Route path="/user-management" element={<UserManagement />} />
 
-                {/* Laporan */}
+                {/* Reports */}
                 <Route path="/sales-report" element={<SalesReport />} />
                 <Route path="/inventory-report" element={<InventoryReport />} />
                 <Route path="/finance-report" element={<FinanceReport />} />
-                <Route
-                  path="/finance-report-monthly"
-                  element={<FinanceReportMonthly />}
-                />
+                <Route path="/finance-report-monthly" element={<FinanceReportMonthly />} />
+                <Route path="/stok-opname" element={<StockOpname />} />
 
                 {/* Produk */}
                 <Route path="/products" element={<Products />} />
 
-                {/* MASTER DATA (Mode 3 Sync Penjualan + Local for Master) */}
+                {/* Penjualan Sync */}
                 <Route path="/data-management" element={<DataManagement />} />
-
-                {/* Transfer Barang Pusat */}
-                <Route path="/transfer-barang-pusat" element={<TransferBarangPusat />} />
-
-                {/* Service */}
-                <Route path="/service-handphone" element={<ServiceHandphone user={user} />} />
-                <Route path="/service-motor-listrik" element={<ServiceMotorListrik user={user} />} />
 
                 {/* Surat Jalan, Invoice, Struk */}
                 <Route path="/surat-jalan" element={<SuratJalan />} />
                 <Route path="/invoice" element={<Invoice />} />
                 <Route path="/struk-penjualan" element={<StrukPenjualan />} />
                 <Route path="/struk-penjualan-imei" element={<StrukPenjualanIMEI />} />
+
+                {/* Service */}
+                <Route path="/service-handphone" element={<ServiceHandphone user={user} />} />
+                <Route path="/service-motor-listrik" element={<ServiceMotorListrik user={user} />} />
 
                 {/* Penjualan */}
                 <Route path="/penjualan-handphone" element={<PenjualanHandphone />} />
@@ -212,10 +209,23 @@ export default function App() {
                 {/* Sparepart */}
                 <Route path="/modul-sparepart" element={<Sperpar />} />
 
-                {/* Stock */}
+                {/* ============================
+                   ✨ Fitur Baru — Transfer Barang
+                ============================ */}
+                <Route
+                  path="/transfer-barang"
+                  element={
+                    <ProtectedRoute allowedRoles={["superadmin", "admin"]}>
+                      <TransferBarang />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Stok */}
                 <Route path="/stock-accessories" element={<StockAccessories />} />
                 <Route path="/stock-handphone" element={<StockHandphone />} />
                 <Route path="/stock-motor-listrik" element={<StockMotorListrik />} />
+
                 <Route path="/stock-accessories-pusat" element={<StockAccessoriesPusat />} />
                 <Route path="/stock-handphone-pusat" element={<StockHandphonePusat />} />
                 <Route path="/stock-motor-listrik-pusat" element={<StockMotorListrikPusat />} />
@@ -228,5 +238,6 @@ export default function App() {
         </div>
       )}
     </Router>
+    </GlobalSearchProvider>
   );
 }

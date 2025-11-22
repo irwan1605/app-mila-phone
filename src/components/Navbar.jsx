@@ -2,10 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import "./Navbar.css";
 import { LogOut } from "lucide-react";
+import { useGlobalSearch } from "../context/GlobalSearchContext";   // ⬅️ Tambahan penting
 
 const Navbar = ({ user, onLogout, isAuthenticated }) => {
   const [showWhatsAppDropdown, setShowWhatsAppDropdown] = useState(false);
   const dropdownRef = useRef(null);
+
+  const { keyword, setKeyword } = useGlobalSearch();   // ⬅️ Search Context
 
   const handleWhatsAppClick = (phoneNumber) => {
     window.open(`https://wa.me/${phoneNumber}`, "_blank");
@@ -21,9 +24,7 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
 
   const handleLogout = () => {
     localStorage.removeItem("user");
-    if (typeof onLogout === "function") onLogout(); // App.jsx akan setUser(null)
-    // Tidak perlu navigate(); ketika user null,
-    // App.jsx otomatis render branch login dan route "*" → "/"
+    if (typeof onLogout === "function") onLogout();
   };
 
   useEffect(() => {
@@ -46,23 +47,25 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
       </h1>
 
       <div className="flex items-center gap-2" ref={dropdownRef}>
-        {/* Search box */}
+
+        {/* 🔍 Global Search */}
         <input
           type="text"
-          placeholder="Search..."
+          placeholder="Search... (Global)"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}   // ⬅️ Kirim ke global search
           className="border border-gray-300 px-4 py-2 rounded"
         />
 
-        {/* Chat WhatsApp button */}
+        {/* Chat WhatsApp */}
         <div className="relative">
           <button
             onClick={() => setShowWhatsAppDropdown(!showWhatsAppDropdown)}
-            className="px-4 py-2 bg-green-500 text-white hover:bg-green-700 rounded-lg wa-btn "
+            className="px-4 py-2 bg-green-500 text-white hover:bg-green-700 rounded-lg wa-btn"
           >
             Chat WhatsApp
           </button>
 
-          {/* Dropdown WhatsApp PIC */}
           {showWhatsAppDropdown && (
             <div className="absolute right-0 mt-2 w-56 bg-white text-black border rounded-lg shadow-lg z-10">
               {picContacts.map((pic, index) => (
@@ -78,9 +81,10 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
           )}
         </div>
 
+        {/* Menu after login */}
         {isAuthenticated && user ? (
           <div className="flex gap-4 items-center">
-            {/* Menu untuk Superadmin */}
+
             {user.role === "superadmin" && (
               <>
                 <Link to="/dashboard">Dashboard</Link>
@@ -89,7 +93,6 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
               </>
             )}
 
-            {/* Menu untuk PIC */}
             {user.role === "pic" && (
               <>
                 <Link to="/dashboard">Dashboard</Link>
@@ -97,7 +100,6 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
               </>
             )}
 
-            {/* Menu untuk Staff */}
             {user.role === "staff" && (
               <>
                 <Link to={`/toko/${user.toko[0]}`}>Toko {user.toko[0]}</Link>
@@ -105,19 +107,15 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
             )}
           </div>
         ) : (
-          <div className="flex gap-4 ">
-            {/* ⬇️⬇️ Perubahan di sini: Login ke "/" (halaman login) */}
+          <div className="flex gap-4">
             <button
               type="button"
               onClick={handleLogout}
-              className="logout-btn "
+              className="logout-btn"
             >
-              <LogOut size={18} className="logout-icon " />
+              <LogOut size={18} className="logout-icon" />
               <span>Logout</span>
             </button>
-
-            {/* Register tetap ke "/register" */}
-           
           </div>
         )}
       </div>

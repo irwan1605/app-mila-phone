@@ -2,16 +2,11 @@
 // Requirements: ../services/FirebaseService must export:
 // listenTransaksiByToko(tokoId, callback), addTransaksi(tokoId, payload),
 // updateTransaksi(tokoId, id, payload), deleteTransaksi(tokoId, id), getTokoName(optional)
-// If any function missing, you'll see console warnings but UI fallbacks remain.
+// Optional inventory helpers (if available): adjustInventoryStock(tokoId, skuOrKey, delta)
+// If optional functions are missing the app will still work but won't update inventory.
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import {
-  listenTransaksiByToko,
-  addTransaksi,
-  updateTransaksi,
-  deleteTransaksi,
-  getTokoName,
-} from "../services/FirebaseService";
+import * as FirebaseService from "../services/FirebaseService";
 
 import {
   FaPlus,
@@ -45,7 +40,7 @@ const fallbackTokoNames = [
 ];
 
 export default function DataManagement() {
-  // selected tokoId (1-based). default null = pilih toko dulu
+  // selected tokoId (1-based). default 1
   const [tokoId, setTokoId] = useState(1);
   const [tokoName, setTokoName] = useState(fallbackTokoNames[0] || "Toko 1");
 
@@ -68,8 +63,8 @@ export default function DataManagement() {
     let unsub = null;
 
     // try to get toko display name via getTokoName if available
-    if (typeof getTokoName === "function") {
-      getTokoName(tokoId)
+    if (typeof FirebaseService.getTokoName === "function") {
+      FirebaseService.getTokoName(tokoId)
         .then((name) => {
           if (name) setTokoName(name);
           else setTokoName(fallbackTokoNames[tokoId - 1] || `Toko ${tokoId}`);
@@ -81,9 +76,9 @@ export default function DataManagement() {
       setTokoName(fallbackTokoNames[tokoId - 1] || `Toko ${tokoId}`);
     }
 
-    if (typeof listenTransaksiByToko === "function") {
+    if (typeof FirebaseService.listenTransaksiByToko === "function") {
       try {
-        unsub = listenTransaksiByToko(tokoId, (items = []) => {
+        unsub = FirebaseService.listenTransaksiByToko(tokoId, (items = []) => {
           const formatted = (items || []).map((r) => normalizeRecord(r));
           setData(formatted);
           setCurrentPage(1);
@@ -102,12 +97,26 @@ export default function DataManagement() {
         unsub && unsub();
       } catch (e) {}
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokoId]);
+
+  // Ensure form.NAMA_TOKO defaults to current tokoName when user switches toko
+  useEffect(() => {
+    setForm((f) => {
+      // do not override if user already typed NAMA_TOKO for editing/creating
+      if (f && f.NAMA_TOKO) return f;
+      return { ...f, NAMA_TOKO: tokoName };
+    });
+  }, [tokoName]);
 
   // Normalize record shape — ensure all expected fields exist
   const normalizeRecord = (r = {}) => {
     return {
-      id: r.id ?? r._id ?? r.key ?? (Date.now().toString() + Math.random().toString(36).slice(2)),
+      id:
+        r.id ??
+        r._id ??
+        r.key ??
+        (Date.now().toString() + Math.random().toString(36).slice(2)),
       TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || r.TANGGAL || "",
       NO_INVOICE: r.NO_INVOICE || "",
       NAMA_USER: r.NAMA_USER || "",
@@ -119,7 +128,8 @@ export default function DataManagement() {
       NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "",
       NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "",
       QTY: Number(r.QTY || 0),
-      NOMOR_UNIK: r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
+      NOMOR_UNIK:
+        r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
       IMEI: r.IMEI || "",
       NO_DINAMO: r.NO_DINAMO || "",
       NO_RANGKA: r.NO_RANGKA || "",
@@ -173,6 +183,35 @@ export default function DataManagement() {
     return { NOMOR_UNIK: s, IMEI: "", NO_DINAMO: s, NO_RANGKA: "" };
   };
 
+  // ---------------- helper: adjust inventory (safe call) ----------------
+  // skuOrKey: use NOMOR_UNIK if available, otherwise use combination brand+barang
+  const adjustInventory = async (targetTokoId, skuOrKey, delta) => {
+    try {
+      if (typeof FirebaseService.adjustInventoryStock === "function") {
+        // preferred function if available
+        await FirebaseService.adjustInventoryStock(targetTokoId, skuOrKey, delta);
+      } else if (typeof FirebaseService.updateInventory === "function" && typeof FirebaseService.getInventoryItem === "function") {
+        // fallback: try to fetch inventory item then update stock
+        const item = await FirebaseService.getInventoryItem(targetTokoId, skuOrKey);
+        if (item) {
+          const newStock = (Number(item.stock || 0) + Number(delta));
+          await FirebaseService.updateInventory(targetTokoId, item.id || item.key, { stock: newStock });
+        } else if (typeof FirebaseService.createInventory === "function") {
+          // create a new inventory record if none exists and delta is negative (we consume)
+          if (delta < 0) {
+            await FirebaseService.createInventory(targetTokoId, { sku: skuOrKey, stock: Math.max(0, delta * -1) });
+          }
+        } else {
+          console.warn("No inventory update function available (getInventoryItem/updateInventory/createInventory).");
+        }
+      } else {
+        console.warn("adjustInventoryStock or updateInventory/getInventoryItem not found in FirebaseService — inventory not updated.");
+      }
+    } catch (err) {
+      console.error("adjustInventory error:", err);
+    }
+  };
+
   // ---------------- handle form change ----------------
   const handleChange = (e) => {
     const { name, value, type } = e.target;
@@ -219,32 +258,57 @@ export default function DataManagement() {
       NAMA_TOKO: form.NAMA_TOKO || tokoName,
     };
 
-    // normalize
     const rec = normalizeRecord(payload);
 
     try {
+      const targetTokoName = rec.NAMA_TOKO || tokoName;
+      const targetTokoIndex = fallbackTokoNames.findIndex(
+        (n) => String(n).toUpperCase() === String(targetTokoName).toUpperCase()
+      );
+      const targetTokoId = targetTokoIndex >= 0 ? targetTokoIndex + 1 : tokoId;
+
       if (editId) {
-        // update per-toko
-        if (typeof updateTransaksi === "function") {
-          await updateTransaksi(tokoId, editId, rec);
+        // editing existing record: compute qty delta and adjust inventory accordingly
+        const old = data.find((x) => x.id === editId);
+        const oldQty = old ? Number(old.QTY || 0) : 0;
+        const newQty = Number(rec.QTY || 0);
+        const delta = newQty - oldQty; // positive => we need to reduce stock more; negative => we should increase stock (return)
+
+        // update transaction in backend
+        if (typeof FirebaseService.updateTransaksi === "function") {
+          await FirebaseService.updateTransaksi(targetTokoId, editId, rec);
         } else {
-          console.warn("updateTransaksi not found");
+          console.warn("updateTransaksi not found in FirebaseService");
         }
-        // local optimistic update
+
+        // optimistic local update
         setData((d) => d.map((x) => (x.id === editId ? rec : x)));
+
+        // adjust inventory: when delta > 0 means we consumed additional items -> decrease stock by delta
+        if (delta !== 0) {
+          const sku = rec.NOMOR_UNIK || `${rec.NAMA_BRAND}:${rec.NAMA_BARANG}`.trim();
+          // we want: transaction consuming qty reduces inventory => inventory delta = -delta
+          await adjustInventory(targetTokoId, sku, -delta);
+        }
       } else {
-        // create new: addTransaksi(tokoId, payload)
-        if (typeof addTransaksi === "function") {
-          const res = await addTransaksi(tokoId, rec);
-          // some implementations return id; if so, set it
+        // create new transaction
+        if (typeof FirebaseService.addTransaksi === "function") {
+          const res = await FirebaseService.addTransaksi(targetTokoId, rec);
+          // if backend returns id/key, set to rec.id for consistency
           if (res && (res.id || res.key)) rec.id = res.id || res.key;
         } else {
-          console.warn("addTransaksi not found");
+          console.warn("addTransaksi not found in FirebaseService");
         }
         setData((d) => [...d, rec]);
+
+        // adjust inventory: new transaction consumes qty -> reduce stock by qty
+        if (rec.QTY && rec.QTY > 0) {
+          const sku = rec.NOMOR_UNIK || `${rec.NAMA_BRAND}:${rec.NAMA_BARANG}`.trim();
+          await adjustInventory(targetTokoId, sku, -rec.QTY);
+        }
       }
 
-      // reset form state
+      // reset form
       setForm({});
       setEditId(null);
     } catch (err) {
@@ -257,19 +321,41 @@ export default function DataManagement() {
   const handleEdit = (row) => {
     setForm({ ...row });
     setEditId(row.id);
+
+    // switch selected toko to the record's toko so update/delete will target correct toko collection
+    const idx = fallbackTokoNames.findIndex(
+      (n) => String(n).toUpperCase() === String(row.NAMA_TOKO || "").toUpperCase()
+    );
+    if (idx >= 0) setTokoId(idx + 1);
+
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // ---------------- delete ----------------
-  const handleDelete = async (id) => {
+  // now accepts optional tokoName to ensure delete happens on correct toko collection
+  const handleDelete = async (id, recordTokoName) => {
     if (!window.confirm("Yakin hapus data ini?")) return;
     try {
-      if (typeof deleteTransaksi === "function") {
-        await deleteTransaksi(tokoId, id);
+      const targetTokoIndex = fallbackTokoNames.findIndex(
+        (n) => String(n).toUpperCase() === String(recordTokoName || "").toUpperCase()
+      );
+      const targetTokoId = targetTokoIndex >= 0 ? targetTokoIndex + 1 : tokoId;
+
+      const old = data.find((x) => x.id === id);
+      const oldQty = old ? Number(old.QTY || 0) : 0;
+
+      if (typeof FirebaseService.deleteTransaksi === "function") {
+        await FirebaseService.deleteTransaksi(targetTokoId, id);
       } else {
-        console.warn("deleteTransaksi not found");
+        console.warn("deleteTransaksi not found in FirebaseService");
       }
       setData((d) => d.filter((r) => r.id !== id));
+
+      // when deleting a transaction we should return items to stock -> increase inventory by oldQty
+      if (oldQty > 0) {
+        const sku = (old && (old.NOMOR_UNIK || `${old.NAMA_BRAND}:${old.NAMA_BARANG}`.trim())) || "";
+        await adjustInventory(targetTokoId, sku, oldQty);
+      }
     } catch (err) {
       console.error("delete error:", err);
       alert("Gagal menghapus data.");
@@ -277,11 +363,16 @@ export default function DataManagement() {
   };
 
   // ---------------- approve/reject (status update) ----------------
-  const handleApproval = async (id, status) => {
+  // accept optional recordTokoName so we update right toko collection
+  const handleApproval = async (id, status, recordTokoName) => {
     try {
-      // update per-toko
-      if (typeof updateTransaksi === "function") {
-        await updateTransaksi(tokoId, id, { STATUS: status });
+      const targetTokoIndex = fallbackTokoNames.findIndex(
+        (n) => String(n).toUpperCase() === String(recordTokoName || "").toUpperCase()
+      );
+      const targetTokoId = targetTokoIndex >= 0 ? targetTokoIndex + 1 : tokoId;
+
+      if (typeof FirebaseService.updateTransaksi === "function") {
+        await FirebaseService.updateTransaksi(targetTokoId, id, { STATUS: status });
       } else {
         console.warn("updateTransaksi not found");
       }
@@ -314,11 +405,17 @@ export default function DataManagement() {
   const totalPages = Math.max(1, Math.ceil(filteredData.length / rowsPerPage));
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalPages]);
 
-  const paginated = filteredData.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
-  const nextPage = () => currentPage < totalPages && setCurrentPage((p) => p + 1);
-  const prevPage = () => currentPage > 1 && setCurrentPage((p) => p - 1);
+  const paginated = filteredData.slice(
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
+  );
+  const nextPage = () =>
+    currentPage < totalPages && setCurrentPage((p) => p + 1);
+  const prevPage = () =>
+    currentPage > 1 && setCurrentPage((p) => p - 1);
 
   // ---------------- export Excel & PDF ----------------
   const exportExcel = (rows = filteredData) => {
@@ -378,10 +475,16 @@ export default function DataManagement() {
         </select>
 
         <div className="ml-auto flex items-center space-x-2">
-          <button onClick={() => exportExcel()} className="px-3 py-1 border rounded hover:bg-gray-200 text-sm">
+          <button
+            onClick={() => exportExcel()}
+            className="px-3 py-1 border rounded hover:bg-gray-200 text-sm"
+          >
             <FaFileExcel className="inline mr-2" /> Excel
           </button>
-          <button onClick={() => exportPDF()} className="px-3 py-1 border rounded hover:bg-gray-200 text-sm">
+          <button
+            onClick={() => exportPDF()}
+            className="px-3 py-1 border rounded hover:bg-gray-200 text-sm"
+          >
             <FaFilePdf className="inline mr-2" /> PDF
           </button>
         </div>
@@ -390,14 +493,43 @@ export default function DataManagement() {
       {/* form */}
       <div className="bg-white p-4 rounded shadow mb-6">
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Tanggal Transaksi" name="TANGGAL_TRANSAKSI" type="date" form={form} onChange={handleChange} />
-          <Field label="No Invoice" name="NO_INVOICE" form={form} onChange={handleChange} placeholder="INV-YYYY-00001" />
+          <Field
+            label="Tanggal Transaksi"
+            name="TANGGAL_TRANSAKSI"
+            type="date"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="No Invoice"
+            name="NO_INVOICE"
+            form={form}
+            onChange={handleChange}
+            placeholder="INV-YYYY-00001"
+          />
           <Field label="Nama User" name="NAMA_USER" form={form} onChange={handleChange} />
           <Field label="No HP User" name="NO_HP_USER" form={form} onChange={handleChange} />
           <Field label="Nama PIC Toko" name="NAMA_PIC_TOKO" form={form} onChange={handleChange} />
           <Field label="Nama Sales" name="NAMA_SALES" form={form} onChange={handleChange} />
           <Field label="Titipan / Referensi" name="TITIPAN_REFERENSI" form={form} onChange={handleChange} />
-          <Field label="Nama Toko" name="NAMA_TOKO" form={form} onChange={handleChange} type="select" options={fallbackTokoNames} />
+          {/* ensure default value shows tokoName when form empty */}
+          <div>
+            <label className="block text-sm mb-1">Nama Toko</label>
+            <select
+              name="NAMA_TOKO"
+              value={form.NAMA_TOKO ?? tokoName}
+              onChange={handleChange}
+              className="w-full p-2 border rounded"
+            >
+              <option value="">{tokoName}</option>
+              {fallbackTokoNames.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <Field label="Nama Brand" name="NAMA_BRAND" form={form} onChange={handleChange} />
           <Field label="Nama Barang" name="NAMA_BARANG" form={form} onChange={handleChange} />
           <Field label="Qty" name="QTY" type="number" form={form} onChange={handleChange} />
@@ -415,7 +547,12 @@ export default function DataManagement() {
           <Field label="Request DP Talangan" name="REQUEST_DP_TALANGAN" type="number" form={form} onChange={handleChange} />
           <div className="col-span-3">
             <label className="block text-sm mb-1">Keterangan</label>
-            <textarea name="KETERANGAN" value={form.KETERANGAN ?? ""} onChange={handleChange} className="w-full p-2 border rounded" />
+            <textarea
+              name="KETERANGAN"
+              value={form.KETERANGAN ?? ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded"
+            />
           </div>
 
           <div>
@@ -490,20 +627,28 @@ export default function DataManagement() {
                 <td className="p-2 border">{r.NOMOR_UNIK}</td>
                 <td className="p-2 border text-right">{Number(r.HARGA_UNIT || 0).toLocaleString()}</td>
                 <td className="p-2 border text-right">{Number(r.TOTAL || 0).toLocaleString()}</td>
-                <td className={`p-2 border font-semibold ${r.STATUS === "Approved" ? "text-green-600" : r.STATUS === "Rejected" ? "text-red-600" : "text-yellow-600"}`}>
+                <td
+                  className={`p-2 border font-semibold ${
+                    r.STATUS === "Approved"
+                      ? "text-green-600"
+                      : r.STATUS === "Rejected"
+                      ? "text-red-600"
+                      : "text-yellow-600"
+                  }`}
+                >
                   {r.STATUS}
                 </td>
                 <td className="p-2 border text-center space-x-2">
                   <button onClick={() => handleEdit(r)} className="text-blue-600 hover:text-blue-800" title="Edit">
                     <FaEdit />
                   </button>
-                  <button onClick={() => handleDelete(r.id)} className="text-red-600 hover:text-red-800" title="Hapus">
+                  <button onClick={() => handleDelete(r.id, r.NAMA_TOKO)} className="text-red-600 hover:text-red-800" title="Hapus">
                     <FaTrash />
                   </button>
-                  <button onClick={() => handleApproval(r.id, "Approved")} className="text-green-600 hover:text-green-800" title="Approve">
+                  <button onClick={() => handleApproval(r.id, "Approved", r.NAMA_TOKO)} className="text-green-600 hover:text-green-800" title="Approve">
                     <FaCheckCircle />
                   </button>
-                  <button onClick={() => handleApproval(r.id, "Rejected")} className="text-orange-600 hover:text-orange-800" title="Reject">
+                  <button onClick={() => handleApproval(r.id, "Rejected", r.NAMA_TOKO)} className="text-orange-600 hover:text-orange-800" title="Reject">
                     <FaTimesCircle />
                   </button>
                 </td>
@@ -533,7 +678,7 @@ export default function DataManagement() {
 }
 
 /* Simple reusable Field component */
-function Field({ label, name, form, onChange, type = "text", options = [] }) {
+function Field({ label, name, form, onChange, type = "text", options = [], placeholder }) {
   return (
     <div>
       <label className="block text-sm mb-1">{label}</label>
@@ -549,7 +694,7 @@ function Field({ label, name, form, onChange, type = "text", options = [] }) {
       ) : type === "textarea" ? (
         <textarea name={name} value={form[name] ?? ""} onChange={onChange} className="w-full p-2 border rounded" />
       ) : (
-        <input type={type} name={name} value={form[name] ?? ""} onChange={onChange} className="w-full p-2 border rounded" />
+        <input type={type} name={name} value={form[name] ?? ""} onChange={onChange} placeholder={placeholder} className="w-full p-2 border rounded" />
       )}
     </div>
   );

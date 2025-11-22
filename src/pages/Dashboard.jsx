@@ -276,7 +276,7 @@ export default function Dashboard() {
   // =======================================================
   return (
     <div className="p-4 bg-gray-100 rounded-xl shadow-md">
-      <h2 className="text-2xl font-bold mb-4">Dashboard Utama - PT Mila Media</h2>
+      <h2 className="text-2xl font-bold mb-4">Dashboard Utama - PT Mila Media Telekomunikasi</h2>
 
       {/* FILTER */}
       <div className="flex flex-wrap gap-2 items-center mb-4">
