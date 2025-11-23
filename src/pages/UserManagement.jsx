@@ -1,4 +1,3 @@
-// src/pages/UserManagement.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import TOKO_LABELS from "../data/TokoLabels";
 
@@ -26,9 +25,19 @@ export default function UserManagement() {
     name: "",
   });
 
-  /* =====================================================
-     LISTEN USERS REALTIME DARI FIREBASE
-  ===================================================== */
+  // ================================
+  // MODAL EDIT STATE
+  // ================================
+  const [showModal, setShowModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    username: "",
+    password: "",
+    role: "pic_toko",
+    toko: "",
+    name: "",
+  });
+
+  // Realtime listen from Firebase
   useEffect(() => {
     const unsub = listenUsers((list) => {
       setUsers(Array.isArray(list) ? list : []);
@@ -36,9 +45,9 @@ export default function UserManagement() {
     return () => unsub();
   }, []);
 
-  /* =====================================================
-     FILTERING
-  ===================================================== */
+  // ================================
+  // FILTERING
+  // ================================
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
 
@@ -70,9 +79,9 @@ export default function UserManagement() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  /* =====================================================
-     ADD USER → Realtime Firebase
-  ===================================================== */
+  // ================================
+  // ADD USER
+  // ================================
   const addUser = async () => {
     if (!form.username || !form.password) {
       alert("Username & Password wajib diisi.");
@@ -119,17 +128,72 @@ export default function UserManagement() {
     alert("User berhasil ditambahkan.");
   };
 
-  /* =====================================================
-     DELETE USER → Realtime Firebase
-  ===================================================== */
+  // ================================
+  // DELETE USER
+  // ================================
   const handleDelete = async (username) => {
     if (!window.confirm("Hapus user ini?")) return;
     await deleteUserOnline(username);
   };
 
-  /* =====================================================
-     HELPER DISPLAY
-  ===================================================== */
+  // ================================
+  // OPEN MODAL EDIT
+  // ================================
+  const handleEdit = (u) => {
+    let role = u.role;
+    let toko = u.toko;
+
+    if (role.startsWith("pic_toko")) {
+      toko = role.replace("pic_toko", "");
+      role = "pic_toko";
+    }
+
+    setEditForm({
+      username: u.username,
+      password: u.password,
+      role,
+      toko,
+      name: u.name,
+    });
+
+    setShowModal(true);
+  };
+
+  // ================================
+  // SAVE EDITED USER
+  // ================================
+  const updateUser = async () => {
+    let role = editForm.role;
+    let toko = editForm.toko || null;
+
+    if (role === "pic_toko") {
+      if (!toko) {
+        alert("Pilih toko untuk PIC Toko.");
+        return;
+      }
+      role = `pic_toko${toko}`;
+    } else {
+      toko = null;
+    }
+
+    const updatedUser = {
+      username: editForm.username,
+      password: editForm.password,
+      role,
+      toko,
+      name: editForm.name,
+    };
+
+    await saveUserOnline(updatedUser);
+
+    setShowModal(false);
+
+    alert("User berhasil diperbarui.");
+  };
+
+  // ================================
+  // DISPLAY HELPERS
+  // ================================
   const displayRole = (role) => {
     if (role === "superadmin") return "Superadmin";
     if (role.startsWith("pic_toko")) {
@@ -147,9 +211,9 @@ export default function UserManagement() {
     return toko ? TOKO_LABELS[toko] : "-";
   };
 
-  /* =====================================================
-     UI (TIDAK DIUBAH)
-  ===================================================== */
+  // ================================
+  // UI
+  // ================================
   return (
     <div className="p-4 space-y-6">
       <h2 className="text-xl md:text-2xl font-bold">User Management</h2>
@@ -289,7 +353,14 @@ export default function UserManagement() {
                 <td className="p-2">{u.name}</td>
                 <td className="p-2">{displayRole(u.role)}</td>
                 <td className="p-2">{displayToko(u.role, u.toko)}</td>
-                <td className="p-2">
+                <td className="p-2 flex gap-2">
+                  <button
+                    className="px-3 py-1 bg-yellow-500 text-white text-sm rounded"
+                    onClick={() => handleEdit(u)}
+                  >
+                    Edit
+                  </button>
+
                   <button
                     className="px-3 py-1 bg-red-600 text-white text-sm rounded"
                     onClick={() => handleDelete(u.username)}
@@ -335,6 +406,101 @@ export default function UserManagement() {
           </button>
         </div>
       </div>
+
+      {/* =======================================
+          MODAL EDIT USER
+      ======================================= */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white rounded shadow-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-bold mb-4">Edit User</h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs">Nama Lengkap</label>
+                <input
+                  className="border p-2 rounded w-full"
+                  value={editForm.name}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, name: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-xs">Username</label>
+                <input
+                  className="border p-2 rounded w-full bg-gray-100"
+                  value={editForm.username}
+                  readOnly
+                />
+              </div>
+
+              <div>
+                <label className="text-xs">Password</label>
+                <input
+                  className="border p-2 rounded w-full"
+                  value={editForm.password}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, password: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-xs">Role</label>
+                <select
+                  className="border p-2 rounded w-full"
+                  value={editForm.role}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, role: e.target.value })
+                  }
+                >
+                  <option value="superadmin">Superadmin</option>
+                  <option value="pic_toko">PIC Toko</option>
+                </select>
+              </div>
+
+              {editForm.role === "pic_toko" && (
+                <div>
+                  <label className="text-xs">Toko</label>
+                  <select
+                    className="border p-2 rounded w-full"
+                    value={editForm.toko}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, toko: e.target.value })
+                    }
+                  >
+                    <option value="">-- pilih toko --</option>
+                    {Object.entries(TOKO_LABELS).map(([id, name]) => (
+                      <option key={id} value={id}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-5">
+              <button
+                className="px-4 py-2 bg-gray-400 text-white rounded"
+                onClick={() => setShowModal(false)}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="px-4 py-2 bg-green-600 text-white rounded"
+                onClick={updateUser}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* END MODAL */}
     </div>
   );
 }

@@ -28,8 +28,7 @@ import { MdBuild } from "react-icons/md";
 // TOKO LIST (UPDATED + PUSAT)
 // =======================
 const TOKO_LABELS = {
-  0: "PUSAT",
-  1: "CILANGKAP",
+  1: "CILANGKAP PUSAT",
   2: "CIBINONG",
   3: "GAS ALAM",
   4: "CITEUREUP",
@@ -245,7 +244,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
               )}`}
             >
               <FaShoppingCart className="text-xl" />
-              <span className="ml-2">TRANSFER BARANG</span>
+              <span className="ml-2">TRANSFER GUDANG</span>
             </button>
 
             {showSubMenuTransferBarang && (
@@ -258,7 +257,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     }`}
                   >
                     <FaMotorcycle className="text-lg" />
-                    <span className="ml-2">Transfer Barang</span>
+                    <span className="ml-2">Transfer Gudang</span>
                   </Link>
                 </li>
               </ul>

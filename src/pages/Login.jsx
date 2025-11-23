@@ -2,9 +2,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import defaultUsersRaw from "../data/UserManagementRole";
-import { listenUsers, getAllUsersOnce } from "../services/FirebaseService";
+import { listenUsers } from "../services/FirebaseService";
 
-// --- Normalisasi user default (backup jika Firebase kosong) ---
+// --- Normalisasi user default ---
 const normalizeDefaultUsers = () => {
   if (Array.isArray(defaultUsersRaw)) return defaultUsersRaw;
   if (defaultUsersRaw && typeof defaultUsersRaw === "object")
@@ -18,7 +18,6 @@ export default function Login({ onLogin, users: usersProp }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  // realtime users
   const [onlineUsers, setOnlineUsers] = useState([]);
 
   const defaultUsers = useMemo(() => normalizeDefaultUsers(), []);
@@ -27,7 +26,6 @@ export default function Login({ onLogin, users: usersProp }) {
         1. LOAD USERS DARI FIREBASE (REALTIME)
   ====================================================== */
   useEffect(() => {
-    // Realtime listener users
     const unsub = listenUsers((list) => {
       setOnlineUsers(list || []);
       localStorage.setItem("users", JSON.stringify(list || []));
@@ -40,19 +38,15 @@ export default function Login({ onLogin, users: usersProp }) {
         2. PRIORITAS PEMILIHAN LIST USER
   ====================================================== */
   const users = useMemo(() => {
-    // 1. Jika ada dari props App.jsx
     if (Array.isArray(usersProp) && usersProp.length) return usersProp;
 
-    // 2. Jika sudah terupdate dari Firebase realtime
     if (Array.isArray(onlineUsers) && onlineUsers.length) return onlineUsers;
 
-    // 3. Cek localStorage
     try {
       const ls = JSON.parse(localStorage.getItem("users"));
       if (Array.isArray(ls) && ls.length) return ls;
     } catch {}
 
-    // 4. Default fallback
     return defaultUsers;
   }, [usersProp, onlineUsers, defaultUsers]);
 
@@ -73,7 +67,6 @@ export default function Login({ onLogin, users: usersProp }) {
       return;
     }
 
-    // ===== NORMALISASI ROLE & TOKO =====
     let role = u.role;
     let tokoId = u.toko;
 
@@ -87,7 +80,7 @@ export default function Login({ onLogin, users: usersProp }) {
       }
     }
 
-    // Data login lengkap
+    // simpan data login
     const logged = {
       username: u.username,
       name: u.name || u.username,
@@ -98,7 +91,7 @@ export default function Login({ onLogin, users: usersProp }) {
     localStorage.setItem("user", JSON.stringify(logged));
     if (typeof onLogin === "function") onLogin(logged);
 
-    // ===== REDIRECT OTOMATIS =====
+    // redirect role
     if (role === "superadmin" || role === "admin") {
       navigate("/dashboard", { replace: true });
       return;
@@ -109,15 +102,19 @@ export default function Login({ onLogin, users: usersProp }) {
       return;
     }
 
-    // fallback
     navigate("/dashboard", { replace: true });
   };
 
   /* ======================================================
-        4. USER INTERFACE (TIDAK DIUBAH)
+        4. USER INTERFACE (TIDAK DIUBAH, hanya background)
   ====================================================== */
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-indigo-50 p-4">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat"
+      style={{
+        backgroundImage: `url('/bg-login-mmt.png')`,
+      }}
+    >
       <div className="w-full max-w-md">
         <div className="bg-white/80 backdrop-blur rounded-2xl shadow-xl p-6">
           <div className="text-center mb-6">
@@ -157,17 +154,10 @@ export default function Login({ onLogin, users: usersProp }) {
               Masuk
             </button>
           </form>
-
-          <div className="mt-4 text-center text-sm text-slate-600">
-            Belum punya akun?{" "}
-            <Link className="text-indigo-600 hover:text-indigo-700 font-medium" to="/register">
-              Daftar
-            </Link>
-          </div>
         </div>
 
         <p className="mt-3 text-center text-xs text-slate-500">
-          Versi UI Tailwind — konsisten dengan komponen lain.
+          Untuk Daftar — Silahkan Hubungi Admin Anda.
         </p>
       </div>
     </div>
