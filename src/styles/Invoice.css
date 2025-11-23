@@ -1,0 +1,236 @@
+/* ================================
+   INVOICE PRO MAX — FULL DESIGN
+   ================================ */
+
+/* GLOBAL PRINT SETUP */
+@media print {
+    body {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  
+    .no-print {
+      display: none !important;
+    }
+  }
+  
+  /* MAIN CONTAINER */
+  .invoice-container {
+    background: white;
+    padding: 25px 35px;
+    border-radius: 10px;
+    position: relative;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    color: #222;
+    overflow: hidden;
+  }
+  
+  /* WATERMARK */
+  .invoice-container::before {
+    content: "";
+    background: url("/logoMMT.png") center no-repeat;
+    background-size: 55%;
+    opacity: 0.08;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+  }
+  
+  /* HEADER */
+  .invoice-header {
+    text-align: center;
+    margin-bottom: 18px;
+    position: relative;
+  }
+  
+  .invoice-logo {
+    width: 110px;
+    display: block;
+    margin: 0 auto;
+  }
+  
+  .invoice-title {
+    font-size: 26px;
+    font-weight: 900;
+    margin-top: 5px;
+    color: #1f3a93;
+    letter-spacing: 1px;
+  }
+  
+  .company-name {
+    font-size: 14px;
+    font-weight: bold;
+    margin-top: 5px;
+  }
+  
+  .company-sub {
+    font-size: 11px;
+    color: #444;
+    margin: 2px 0;
+  }
+  
+  /* BORDER SEPARATOR */
+  .invoice-border {
+    height: 3px;
+    background: linear-gradient(to right, #1f3a93, #6dd5fa, #1f3a93);
+    margin: 10px 0 20px 0;
+    border-radius: 5px;
+  }
+  
+  /* INFO GRID */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 140px;
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .info-card {
+    background: #f8f8f8;
+    border-left: 4px solid #1f3a93;
+    padding: 12px;
+    border-radius: 5px;
+    font-size: 13px;
+  }
+  
+  .info-label {
+    font-weight: 600;
+    color: #555;
+  }
+  
+  .info-value {
+    font-weight: bold;
+    color: #222;
+  }
+  
+  .qr-section {
+    text-align: center;
+  }
+  
+  .qr-code {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .qr-label {
+    font-size: 11px;
+    margin-top: 4px;
+    opacity: 0.7;
+  }
+  
+  /* TABLE */
+  .invoice-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 10px;
+    background: white;
+  }
+  
+  .invoice-table th {
+    background: #1f3a93;
+    color: white;
+    padding: 8px;
+    border: 1px solid #ddd;
+    font-weight: bold;
+  }
+  
+  .invoice-table td {
+    padding: 8px;
+    border: 1px solid #ddd;
+  }
+  
+  /* SUMMARY SECTION */
+  .summary-section {
+    margin-top: 20px;
+    width: 100%;
+    background: #f9fbff;
+    padding: 15px;
+    border-radius: 8px;
+  }
+  
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 14px;
+  }
+  
+  .summary-label {
+    font-weight: 600;
+  }
+  
+  .summary-value {
+    font-weight: bold;
+  }
+  
+  .summary-divider {
+    height: 2px;
+    background: #1f3a93;
+    opacity: 0.5;
+    margin: 8px 0;
+  }
+  
+  .summary-row.total {
+    font-size: 17px;
+    color: #1f3a93;
+  }
+  
+  /* FOOTER */
+  .footer-section {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 35px;
+  }
+  
+  .footer-title {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 13px;
+  }
+  
+  .footer-note {
+    font-size: 12px;
+    width: 280px;
+    line-height: 1.3;
+  }
+  
+  .signature-box {
+    height: 60px;
+    border-bottom: 1px solid #222;
+    margin-bottom: 5px;
+  }
+  
+  .footer-signed {
+    font-size: 12px;
+    text-align: center;
+    opacity: 0.7;
+  }
+  
+  /* APPROVED STAMP */
+  .approved-stamp {
+    position: absolute;
+    width: 160px;
+    right: 20px;
+    top: 50%;
+    transform: rotate(-15deg);
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  
+  /* PRINT OPTIMIZATION */
+  @media print {
+    .invoice-container {
+      box-shadow: none !important;
+      margin: 0;
+      padding: 20px;
+    }
+  
+    .approved-stamp {
+      opacity: 0.4 !important;
+    }
+  }
+  

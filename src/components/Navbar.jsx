@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "./Navbar.css";
 import { LogOut } from "lucide-react";
-import { useGlobalSearch } from "../context/GlobalSearchContext";   // ⬅️ Tambahan penting
+import { useGlobalSearch } from "../context/GlobalSearchContext";   // GLOBAL SEARCH PRO MAX
 
 const Navbar = ({ user, onLogout, isAuthenticated }) => {
   const [showWhatsAppDropdown, setShowWhatsAppDropdown] = useState(false);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
 
-  const { keyword, setKeyword } = useGlobalSearch();   // ⬅️ Search Context
+  // ✅ SEARCH PRO MAX: keyword dari Global Search Context
+  const { keyword, setKeyword, setTriggerSearch } = useGlobalSearch();
 
   const handleWhatsAppClick = (phoneNumber) => {
     window.open(`https://wa.me/${phoneNumber}`, "_blank");
@@ -27,6 +29,7 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
     if (typeof onLogout === "function") onLogout();
   };
 
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleOutsideClick = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -40,6 +43,32 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
     };
   }, []);
 
+  // 🚀 SEARCH PRO MAX — Enter key to trigger deep search
+  const handleSearchKey = (e) => {
+    if (e.key === "Enter") {
+      setTriggerSearch(Date.now());     // 🔥 trigger global search refresh
+
+      // 🔍 Smart redirect to pages if keyword matches
+      const q = keyword.toLowerCase();
+
+      if (q.includes("transfer") || q.includes("kirim") || q.includes("antar")) {
+        navigate("/transfer-barang");
+      }
+
+      if (q.includes("inventory") || q.includes("stok") || q.includes("persediaan")) {
+        navigate("/inventory-report");
+      }
+
+      if (q.includes("opname")) {
+        navigate("/stok-opname");
+      }
+
+      if (q.includes("penjualan") || q.includes("sales") || q.includes("laporan")) {
+        navigate("/data-management");
+      }
+    }
+  };
+
   return (
     <nav className="bg-white shadow-md py-4 px-6 flex justify-between items-center">
       <h1 className="text-2xl font-bold">
@@ -48,13 +77,16 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
 
       <div className="flex items-center gap-2" ref={dropdownRef}>
 
-        {/* 🔍 Global Search */}
+        {/* ========================================= */}
+        {/*     🔍 SEARCH PRO MAX FIELD (GLOBAL)       */}
+        {/* ========================================= */}
         <input
           type="text"
-          placeholder="Search... (Global)"
+          placeholder="Search Global... (Barang, SKU, Menu, Toko)"
           value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}   // ⬅️ Kirim ke global search
-          className="border border-gray-300 px-4 py-2 rounded"
+          onChange={(e) => setKeyword(e.target.value)}   // kirim ke global context
+          onKeyDown={handleSearchKey}
+          className="border border-gray-300 px-4 py-2 rounded w-72"
         />
 
         {/* Chat WhatsApp */}

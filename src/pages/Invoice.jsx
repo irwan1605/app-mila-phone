@@ -1,92 +1,350 @@
-import React, { useState } from "react";
+// =========================================
+// Invoice.jsx — PRO MAX (Full Profesional)
+// =========================================
 
-const Invoice = () => {
-  const [formData, setFormData] = useState({
-    noInvoice: "",
-    customer: "",
-    produk: "",
-    qty: "",
-    harga: "",
-  });
+import React, { useState, useEffect, useRef } from "react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import QRCode from "qrcode";
+import {
+  listenPenjualan,
+  addPenjualan,
+  updatePenjualan,
+  deletePenjualan,
+} from "../services/FirebaseService";
 
-  const [dataList, setDataList] = useState([]);
-  const [showStruk, setShowStruk] = useState(false);
+import "./Invoice.css";
 
-  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+export default function Invoice() {
+  const [allData, setAllData] = useState([]);
+  const [form, setForm] = useState({});
+  const [preview, setPreview] = useState(false);
+  const invoiceRef = useRef(null);
 
-  const handleAdd = () => {
-    setDataList([...dataList, { ...formData, id: Date.now() }]);
-    setFormData({ noInvoice: "", customer: "", produk: "", qty: "", harga: "" });
+  // ============================
+  // AUTO BACA DATA PENJUALAN
+  // ============================
+  useEffect(() => {
+    const unsub = listenPenjualan((items) => {
+      setAllData(items || []);
+    });
+    return () => unsub && unsub();
+  }, []);
+
+  // ============================
+  // AUTO GENERATE INVOICE NUMBER
+  // ============================
+  const generateInvoiceNumber = () => {
+    const year = new Date().getFullYear();
+    const seq = String(Math.floor(Math.random() * 99999)).padStart(5, "0");
+    return `INV-${year}-${seq}`;
   };
 
-  const handleDelete = (id) => setDataList(dataList.filter((item) => item.id !== id));
+  useEffect(() => {
+    if (!form.NO_INVOICE) {
+      setForm((f) => ({
+        ...f,
+        NO_INVOICE: generateInvoiceNumber(),
+        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+      }));
+    }
+  }, []);
+
+  // ============================
+  // HANDLE INPUT FORM
+  // ============================
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
+  };
+
+  // ============================
+  // SIMPAN INVOICE KE DATABASE
+  // ============================
+  const handleSave = async () => {
+    if (!form.NO_INVOICE || !form.NAMA_USER || !form.HARGA_UNIT) {
+      alert("Isi semua field wajib!");
+      return;
+    }
+
+    await addPenjualan(form);
+    alert("Invoice berhasil disimpan!");
+  };
+
+  // ============================
+  // QR CODE GENERATION
+  // ============================
+  const [qrUrl, setQrUrl] = useState("");
+
+  useEffect(() => {
+    if (form.NO_INVOICE) {
+      QRCode.toDataURL(
+        `Invoice:${form.NO_INVOICE}`,
+        { width: 200 },
+        (err, url) => {
+          if (!err) setQrUrl(url);
+        }
+      );
+    }
+  }, [form.NO_INVOICE]);
+
+  // ============================
+  // EXPORT PDF PROFESSIONAL
+  // ============================
+  const exportPDF = async () => {
+    const element = invoiceRef.current;
+    if (!element) return;
+
+    const canvas = await html2canvas(element, { scale: 3 });
+    const img = canvas.toDataURL("image/png");
+
+    const pdf = new jsPDF("p", "mm", "a4");
+    const width = pdf.internal.pageSize.getWidth();
+    const height = (canvas.height * width) / canvas.width;
+
+    pdf.addImage(img, "PNG", 0, 0, width, height);
+    pdf.save(`${form.NO_INVOICE}.pdf`);
+  };
 
   return (
-    <div className="p-6">
-      <h1 className="text-xl font-bold mb-4">Invoice Mila Phone</h1>
+    <div className="p-4">
 
-      {/* Form Input */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <input name="noInvoice" value={formData.noInvoice} onChange={handleChange} placeholder="No Invoice" className="border p-2 rounded" />
-        <input name="customer" value={formData.customer} onChange={handleChange} placeholder="Customer" className="border p-2 rounded" />
-        <input name="produk" value={formData.produk} onChange={handleChange} placeholder="Produk" className="border p-2 rounded" />
-        <input name="qty" value={formData.qty} onChange={handleChange} placeholder="Qty" className="border p-2 rounded" />
-        <input name="harga" value={formData.harga} onChange={handleChange} placeholder="Harga" className="border p-2 rounded" />
+      {/* ===================== HEADER ===================== */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-400 text-white p-4 rounded shadow mb-4">
+        <h1 className="text-2xl font-bold">Cetak Invoice — PRO MAX</h1>
+        <p className="text-sm opacity-80">Profesional, Rapi, Siap Cetak A4</p>
       </div>
-      <button onClick={handleAdd} className="bg-green-500 text-white px-4 py-2 rounded">Tambah</button>
 
-      {/* Tabel Data */}
-      <table className="w-full mt-6 border">
-        <thead>
-          <tr className="bg-gray-200">
-            <th className="border px-2">No Invoice</th>
-            <th className="border px-2">Customer</th>
-            <th className="border px-2">Produk</th>
-            <th className="border px-2">Qty</th>
-            <th className="border px-2">Harga</th>
-            <th className="border px-2">Aksi</th>
-          </tr>
-        </thead>
-        <tbody>
-          {dataList.map((item) => (
-            <tr key={item.id}>
-              <td className="border px-2">{item.noInvoice}</td>
-              <td className="border px-2">{item.customer}</td>
-              <td className="border px-2">{item.produk}</td>
-              <td className="border px-2">{item.qty}</td>
-              <td className="border px-2">{item.harga}</td>
-              <td className="border px-2">
-                <button className="bg-blue-500 text-white px-2 py-1 rounded mr-2">Edit</button>
-                <button onClick={() => handleDelete(item.id)} className="bg-red-500 text-white px-2 py-1 rounded">Hapus</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* ===================== FORM INPUT ===================== */}
+      <div className="bg-white rounded p-4 shadow mb-4">
+        <h2 className="font-bold mb-3">Form Invoice</h2>
 
-      {/* Tombol Review Cetak */}
-      <button onClick={() => setShowStruk(true)} className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded">Review Cetak</button>
+        <div className="grid grid-cols-3 gap-3">
 
-      {/* Preview Struk */}
-      {showStruk && (
-        <div className="mt-6 border p-4 w-80">
-          <h2 className="text-center font-bold">INVOICE</h2>
-          <h3 className="text-center mb-4">MILAPHONE TAPOS</h3>
-          {dataList.map((item) => (
-            <div key={item.id} className="mb-4 text-sm">
-              <p>No Invoice: {item.noInvoice}</p>
-              <p>Customer: {item.customer}</p>
-              <p>Produk: {item.produk}</p>
-              <p>Qty: {item.qty}</p>
-              <p>Harga: {item.harga}</p>
-              <p>Total: {item.qty * item.harga}</p>
-              <hr className="my-2" />
+          <div>
+            <label>No Invoice</label>
+            <input
+              name="NO_INVOICE"
+              className="input"
+              value={form.NO_INVOICE || ""}
+              readOnly
+            />
+          </div>
+
+          <div>
+            <label>Tanggal</label>
+            <input
+              type="date"
+              name="TANGGAL_TRANSAKSI"
+              className="input"
+              value={form.TANGGAL_TRANSAKSI || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div>
+            <label>Nama User</label>
+            <input
+              name="NAMA_USER"
+              className="input"
+              value={form.NAMA_USER || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div>
+            <label>No HP User</label>
+            <input
+              name="NO_HP_USER"
+              className="input"
+              value={form.NO_HP_USER || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div>
+            <label>Nama Toko</label>
+            <input
+              name="NAMA_TOKO"
+              className="input"
+              value={form.NAMA_TOKO || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div>
+            <label>Nama Brand</label>
+            <input
+              name="NAMA_BRAND"
+              className="input"
+              value={form.NAMA_BRAND || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div>
+            <label>Nama Barang</label>
+            <input
+              name="NAMA_BARANG"
+              className="input"
+              value={form.NAMA_BARANG || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div>
+            <label>Qty</label>
+            <input
+              type="number"
+              name="QTY"
+              className="input"
+              value={form.QTY || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div>
+            <label>Harga Unit</label>
+            <input
+              type="number"
+              name="HARGA_UNIT"
+              className="input"
+              value={form.HARGA_UNIT || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div>
+            <label>IMEI / Nomor Unik</label>
+            <input
+              name="NOMOR_UNIK"
+              className="input"
+              value={form.NOMOR_UNIK || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div>
+            <label>Payment Metode</label>
+            <input
+              name="PAYMENT_METODE"
+              className="input"
+              value={form.PAYMENT_METODE || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div>
+            <label>Keterangan</label>
+            <input
+              name="KETERANGAN"
+              className="input"
+              value={form.KETERANGAN || ""}
+              onChange={handleChange}
+            />
+          </div>
+
+        </div>
+
+        <button
+          onClick={handleSave}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded"
+        >
+          Simpan Invoice
+        </button>
+
+        <button
+          onClick={() => setPreview(true)}
+          className="mt-4 ml-2 px-4 py-2 bg-green-600 text-white rounded"
+        >
+          Preview Invoice
+        </button>
+      </div>
+
+      {/* ===================== PREVIEW INVOICE ===================== */}
+      {preview && (
+        <div className="bg-white p-4 rounded shadow">
+          <div ref={invoiceRef} className="invoice-a4 shadow p-6">
+
+            {/* HEADER */}
+            <div className="flex justify-between items-center border-b pb-4 mb-4">
+              <div>
+                <img src="/logoMMT.png" alt="logo" className="h-16" />
+                <h2 className="font-bold text-lg mt-2">PT. Mila Media Telekomunikasi</h2>
+              </div>
+
+              <div className="text-right">
+                <h1 className="text-2xl font-bold">INVOICE</h1>
+                <p>No: {form.NO_INVOICE}</p>
+                <p>Tanggal: {form.TANGGAL_TRANSAKSI}</p>
+              </div>
             </div>
-          ))}
+
+            {/* IDENTITAS */}
+            <div className="grid grid-cols-2 mb-4">
+              <div>
+                <h3 className="font-bold">Kepada:</h3>
+                <p>{form.NAMA_USER}</p>
+                <p>{form.NO_HP_USER}</p>
+              </div>
+
+              <div>
+                <h3 className="font-bold">Toko:</h3>
+                <p>{form.NAMA_TOKO}</p>
+              </div>
+            </div>
+
+            {/* TABEL BARANG */}
+            <table className="w-full border-collapse mb-4">
+              <thead>
+                <tr className="bg-gray-200">
+                  <th className="p-2 border">Barang</th>
+                  <th className="p-2 border">Brand</th>
+                  <th className="p-2 border">IMEI</th>
+                  <th className="p-2 border">Qty</th>
+                  <th className="p-2 border">Harga Unit</th>
+                  <th className="p-2 border">Total</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                <tr>
+                  <td className="p-2 border">{form.NAMA_BARANG}</td>
+                  <td className="p-2 border">{form.NAMA_BRAND}</td>
+                  <td className="p-2 border">{form.NOMOR_UNIK}</td>
+                  <td className="p-2 border">{form.QTY}</td>
+                  <td className="p-2 border">Rp {Number(form.HARGA_UNIT || 0).toLocaleString()}</td>
+                  <td className="p-2 border">
+                    Rp {((form.QTY || 0) * (form.HARGA_UNIT || 0)).toLocaleString()}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* QR CODE */}
+            <div className="mt-6 flex justify-end">
+              {qrUrl && <img src={qrUrl} alt="QR" className="h-24" />}
+            </div>
+          </div>
+
+          {/* BUTTONS */}
+          <div className="mt-4 flex gap-3">
+            <button
+              onClick={exportPDF}
+              className="px-4 py-2 bg-red-600 text-white rounded"
+            >
+              Export PDF
+            </button>
+
+            <button
+              onClick={() => setPreview(false)}
+              className="px-4 py-2 bg-gray-300 rounded"
+            >
+              Tutup Preview
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
-};
-
-export default Invoice;
+}

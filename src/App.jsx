@@ -44,6 +44,14 @@ import FinanceReport from "./pages/Reports/FinanceReport";
 import Sperpar from "./pages/Sperpar";
 import { GlobalSearchProvider } from "./context/GlobalSearchContext";
 
+import StockOpname from "./pages/StockOpname";
+
+/* ✨ Fitur Baru — Transfer Barang */
+import TransferBarang from "./pages/TransferBarang";
+
+/* ✨ Halaman Baru — Cetak Faktur */
+import CetakFaktur from "./pages/CetakFaktur";
+
 /* Guards */
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -52,11 +60,6 @@ import { listenUsers, getAllUsersOnce } from "./services/FirebaseService";
 
 /* Default local users (fallback login offline) */
 import defaultUsers from "./data/UserManagementRole";
-
-import StockOpname from "./pages/StockOpname";
-
-/* ✨ Fitur Baru — Transfer Barang */
-import TransferBarang from "./pages/TransferBarang";
 
 /* ===========================
     Utility role → toko
@@ -131,113 +134,157 @@ export default function App() {
 
   return (
     <GlobalSearchProvider>
-    <Router>
-      {!user ? (
-        /* ======================== LOGIN MODE ========================= */
-        <Routes>
-          <Route
-            path="/"
-            element={<Login onLogin={handleLogin} users={users} />}
-          />
-          <Route path="/register" element={<Register />} />
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      ) : (
-        /* ======================== LOGGED IN MODE ===================== */
-        <div className="flex h-screen overflow-hidden">
-          <Sidebar role={user.role} toko={user.toko} onLogout={handleLogout} />
+      <Router>
+        {!user ? (
+          /* ======================== LOGIN MODE ========================= */
+          <Routes>
+            <Route
+              path="/"
+              element={<Login onLogin={handleLogin} users={users} />}
+            />
+            <Route path="/register" element={<Register />} />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        ) : (
+          /* ======================== LOGGED IN MODE ===================== */
+          <div className="flex h-screen overflow-hidden">
+            <Sidebar role={user.role} toko={user.toko} onLogout={handleLogout} />
 
-          <div className="flex-1 flex flex-col min-w-0">
-            <Navbar user={user} onLogout={handleLogout} />
+            <div className="flex-1 flex flex-col min-w-0">
+              <Navbar user={user} onLogout={handleLogout} />
 
-            <main className="flex-1 overflow-y-auto p-4">
-              <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" />} />
+              <main className="flex-1 overflow-y-auto p-4">
+                <Routes>
+                  <Route path="/" element={<Navigate to="/dashboard" />} />
 
-                {/* Dashboard pusat realtime */}
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute allowedRoles={["superadmin", "admin", "pic_toko"]}>
-                      <Dashboard user={user} />
-                    </ProtectedRoute>
-                  }
-                />
+                  {/* Dashboard pusat realtime */}
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute allowedRoles={["superadmin", "admin", "pic_toko"]}>
+                        <Dashboard user={user} />
+                      </ProtectedRoute>
+                    }
+                  />
 
-                {/* Dashboard Toko - Realtime per toko */}
-                <Route
-                  path="/toko/:id"
-                  element={
-                    <ProtectedRoute allowedRoles={["superadmin", "admin", "pic_toko"]}>
-                      <TokoWrapper user={user} />
-                    </ProtectedRoute>
-                  }
-                />
+                  {/* Dashboard Toko - Realtime per toko */}
+                  <Route
+                    path="/toko/:id"
+                    element={
+                      <ProtectedRoute allowedRoles={["superadmin", "admin", "pic_toko"]}>
+                        <TokoWrapper user={user} />
+                      </ProtectedRoute>
+                    }
+                  />
 
-                {/* Management User */}
-                <Route path="/user-management" element={<UserManagement />} />
+                  {/* Management User */}
+                  <Route path="/user-management" element={<UserManagement />} />
 
-                {/* Reports */}
-                <Route path="/sales-report" element={<SalesReport />} />
-                <Route path="/inventory-report" element={<InventoryReport />} />
-                <Route path="/finance-report" element={<FinanceReport />} />
-                <Route path="/finance-report-monthly" element={<FinanceReportMonthly />} />
-                <Route path="/stok-opname" element={<StockOpname />} />
+                  {/* Reports */}
+                  <Route path="/sales-report" element={<SalesReport />} />
+                  <Route path="/inventory-report" element={<InventoryReport />} />
+                  <Route path="/finance-report" element={<FinanceReport />} />
+                  <Route
+                    path="/finance-report-monthly"
+                    element={<FinanceReportMonthly />}
+                  />
+                  <Route path="/stok-opname" element={<StockOpname />} />
 
-                {/* Produk */}
-                <Route path="/products" element={<Products />} />
+                  {/* Produk */}
+                  <Route path="/products" element={<Products />} />
 
-                {/* Penjualan Sync */}
-                <Route path="/data-management" element={<DataManagement />} />
+                  {/* Penjualan Sync */}
+                  <Route path="/data-management" element={<DataManagement />} />
 
-                {/* Surat Jalan, Invoice, Struk */}
-                <Route path="/surat-jalan" element={<SuratJalan />} />
-                <Route path="/invoice" element={<Invoice />} />
-                <Route path="/struk-penjualan" element={<StrukPenjualan />} />
-                <Route path="/struk-penjualan-imei" element={<StrukPenjualanIMEI />} />
+                  {/* Surat Jalan, Faktur, Invoice, Struk */}
+                  <Route path="/surat-jalan" element={<SuratJalan />} />
 
-                {/* Service */}
-                <Route path="/service-handphone" element={<ServiceHandphone user={user} />} />
-                <Route path="/service-motor-listrik" element={<ServiceMotorListrik user={user} />} />
+                  {/* Cetak Faktur PRO MAX (halaman khusus) */}
+                  <Route path="/cetak-faktur" element={<CetakFaktur />} />
 
-                {/* Penjualan */}
-                <Route path="/penjualan-handphone" element={<PenjualanHandphone />} />
-                <Route path="/penjualan-motor-listrik" element={<PenjualanMotorListrik />} />
-                <Route path="/accessories" element={<PenjualanAccessories />} />
-                <Route path="/input-penjualan" element={<InputPenjualan />} />
+                  {/* Invoice PRO MAX (utama) */}
+                  <Route path="/invoice" element={<Invoice />} />
 
-                {/* Sparepart */}
-                <Route path="/modul-sparepart" element={<Sperpar />} />
+                  {/* Alias tambahan untuk mode PRO & Preview */}
+                  <Route path="/invoice-pro" element={<Invoice />} />
+                  <Route path="/invoice-preview" element={<Invoice />} />
 
-                {/* ============================
-                   ✨ Fitur Baru — Transfer Barang
-                ============================ */}
-                <Route
-                  path="/transfer-barang"
-                  element={
-                    <ProtectedRoute allowedRoles={["superadmin", "admin"]}>
-                      <TransferBarang />
-                    </ProtectedRoute>
-                  }
-                />
+                  <Route path="/struk-penjualan" element={<StrukPenjualan />} />
+                  <Route
+                    path="/struk-penjualan-imei"
+                    element={<StrukPenjualanIMEI />}
+                  />
 
-                {/* Stok */}
-                <Route path="/stock-accessories" element={<StockAccessories />} />
-                <Route path="/stock-handphone" element={<StockHandphone />} />
-                <Route path="/stock-motor-listrik" element={<StockMotorListrik />} />
+                  {/* Service */}
+                  <Route
+                    path="/service-handphone"
+                    element={<ServiceHandphone user={user} />}
+                  />
+                  <Route
+                    path="/service-motor-listrik"
+                    element={<ServiceMotorListrik user={user} />}
+                  />
 
-                <Route path="/stock-accessories-pusat" element={<StockAccessoriesPusat />} />
-                <Route path="/stock-handphone-pusat" element={<StockHandphonePusat />} />
-                <Route path="/stock-motor-listrik-pusat" element={<StockMotorListrikPusat />} />
+                  {/* Penjualan */}
+                  <Route
+                    path="/penjualan-handphone"
+                    element={<PenjualanHandphone />}
+                  />
+                  <Route
+                    path="/penjualan-motor-listrik"
+                    element={<PenjualanMotorListrik />}
+                  />
+                  <Route path="/accessories" element={<PenjualanAccessories />} />
+                  <Route path="/input-penjualan" element={<InputPenjualan />} />
 
-                {/* Fallback */}
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              </Routes>
-            </main>
+                  {/* Sparepart */}
+                  <Route path="/modul-sparepart" element={<Sperpar />} />
+
+                  {/* ✨ Fitur Baru — Transfer Barang */}
+                  <Route
+                    path="/transfer-barang"
+                    element={
+                      <ProtectedRoute allowedRoles={["superadmin", "admin"]}>
+                        <TransferBarang />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Stok */}
+                  <Route
+                    path="/stock-accessories"
+                    element={<StockAccessories />}
+                  />
+                  <Route path="/stock-handphone" element={<StockHandphone />} />
+                  <Route
+                    path="/stock-motor-listrik"
+                    element={<StockMotorListrik />}
+                  />
+
+                  <Route
+                    path="/stock-accessories-pusat"
+                    element={<StockAccessoriesPusat />}
+                  />
+                  <Route
+                    path="/stock-handphone-pusat"
+                    element={<StockHandphonePusat />}
+                  />
+                  <Route
+                    path="/stock-motor-listrik-pusat"
+                    element={<StockMotorListrikPusat />}
+                  />
+
+                  {/* Fallback */}
+                  <Route
+                    path="*"
+                    element={<Navigate to="/dashboard" replace />}
+                  />
+                </Routes>
+              </main>
+            </div>
           </div>
-        </div>
-      )}
-    </Router>
+        )}
+      </Router>
     </GlobalSearchProvider>
   );
 }

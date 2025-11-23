@@ -1,10 +1,12 @@
-// Sidebar.jsx — FINAL FIXED (Transfer Barang Working)
-
-import React, { useRef, useState } from "react";
+// =======================
+// SIDEBAR.JSX — FINAL PRO MAX
+// =======================
+import React, { useRef, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import "./Sidebar.css";
 import { useGlobalSearch } from "../context/GlobalSearchContext";
+
 import {
   FaHome,
   FaMobileAlt,
@@ -15,12 +17,18 @@ import {
   FaShoppingCart,
   FaMoneyCheckAlt,
   FaCogs,
+  FaFileInvoice,
+  FaFileAlt,
 } from "react-icons/fa";
 import { BsGraphUp, BsTagsFill, BsFileEarmarkText } from "react-icons/bs";
 import { AiOutlineDatabase } from "react-icons/ai";
 import { MdBuild } from "react-icons/md";
 
+// =======================
+// TOKO LIST (UPDATED + PUSAT)
+// =======================
 const TOKO_LABELS = {
+  0: "PUSAT",
   1: "CILANGKAP",
   2: "CIBINONG",
   3: "GAS ALAM",
@@ -32,28 +40,71 @@ const TOKO_LABELS = {
   9: "KOTA WISATA",
   10: "SAWANGAN",
 };
-const ALL_TOKO_IDS = Object.keys(TOKO_LABELS).map(Number);
 
+const ALL_TOKO_IDS = Object.keys(TOKO_LABELS).map(Number);
 
 const Sidebar = ({ role, toko, onLogout }) => {
   const location = useLocation();
-  const isSuper = role === "superadmin" || role === "admin";
+  const activePath = location.pathname;
 
+  // =========================
+  // GLOBAL SEARCH CONTEXT
+  // =========================
+  const { searchQuery } = useGlobalSearch();
+
+  const isSuper = role === "superadmin" || role === "admin";
   const picMatch = /^pic_toko(\d+)$/i.exec(role || "");
   const picTokoId = picMatch ? Number(picMatch[1]) : toko ? Number(toko) : null;
 
-  // === FIXED VARIABLE NAME ===
-  const [showSubMenuDashboardToko, setShowSubMenuDashboardToko] =
-    useState(false);
+  const [showSubMenuDashboardToko, setShowSubMenuDashboardToko] = useState(false);
   const [showSubMenulaporan, setShowSubMenulaporan] = useState(false);
-
-  // FIXED: correct camelCase for setter
-  const [showSubMenuTransferBarang, setShowSubMenuTransferBarang] =
-    useState(false);
+  const [showSubMenuTransferBarang, setShowSubMenuTransferBarang] = useState(false);
+  const [showSubMenuCetak, setShowSubMenuCetak] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const panelRef = useRef(null);
-  const activePath = location.pathname;
+
+  const visibleTokoIds = isSuper ? ALL_TOKO_IDS : picTokoId ? [picTokoId] : [];
+
+  // =================================================================
+  // 🔎 AUTO EXPAND SUBMENU BERDASARKAN SEARCH QUERY
+  // =================================================================
+  useEffect(() => {
+    if (!searchQuery) return;
+
+    const q = searchQuery.toLowerCase();
+
+    // Expand Dashboard Toko
+    if (Object.values(TOKO_LABELS).some((t) => t.toLowerCase().includes(q))) {
+      setShowSubMenuDashboardToko(true);
+    }
+
+    // Expand laporan
+    if (
+      ["laporan", "inventory", "persediaan", "stok", "keuangan", "sales"].some((x) =>
+        q.includes(x)
+      )
+    ) {
+      setShowSubMenulaporan(true);
+    }
+
+    // Expand Transfer Barang
+    if (["transfer", "barang", "kirim"].some((x) => q.includes(x))) {
+      setShowSubMenuTransferBarang(true);
+    }
+
+    // Expand Cetak Faktur / Invoice
+    if (["invoice", "faktur", "print"].some((x) => q.includes(x))) {
+      setShowSubMenuCetak(true);
+    }
+  }, [searchQuery]);
+
+  const highlightIfMatch = (label) => {
+    if (!searchQuery) return "";
+    return label.toLowerCase().includes(searchQuery.toLowerCase())
+      ? "highlight-search"
+      : "";
+  };
 
   const handleLogout = () => {
     try {
@@ -63,23 +114,24 @@ const Sidebar = ({ role, toko, onLogout }) => {
     }
   };
 
-  const visibleTokoIds = isSuper ? ALL_TOKO_IDS : picTokoId ? [picTokoId] : [];
-
+  // ===========================
+  // SIDEBAR BODY
+  // ===========================
   const SidebarBody = () => (
     <>
+      {/* LOGO */}
       <img src="/logoMMT.png" alt="Logo" className="logo mb-1" />
+
       <div className="font-bold p-1 text-center">
-        <h2 className="text-gray-200 text-xs">
-          PT. MILA MEDIA TELEKOMUNIKASI
-        </h2>
-        {picTokoId && (
-          <div className="text-yellow-300 text-xs mt-1">
-            {TOKO_LABELS[picTokoId]}
-          </div>
+        <h2 className="text-gray-200 text-xs">PT. MILA MEDIA TELEKOMUNIKASI</h2>
+        {picTokoId !== null && TOKO_LABELS[picTokoId] && (
+          <div className="text-yellow-300 text-xs mt-1">{TOKO_LABELS[picTokoId]}</div>
         )}
       </div>
 
       <nav className="mt-2 font-bold">
+
+        {/* ======================= SUPER ADMIN ======================= */}
         {isSuper ? (
           <>
             {/* DASHBOARD PUSAT */}
@@ -87,7 +139,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
               to="/dashboard"
               className={`flex items-center p-3 hover:bg-blue-500 ${
                 activePath === "/dashboard" ? "bg-blue-600" : ""
-              }`}
+              } ${highlightIfMatch("dashboard pusat")}`}
             >
               <FaHome className="text-xl" />
               <span className="ml-2">DASHBOARD PUSAT</span>
@@ -96,7 +148,9 @@ const Sidebar = ({ role, toko, onLogout }) => {
             {/* DASHBOARD TOKO */}
             <button
               onClick={() => setShowSubMenuDashboardToko((s) => !s)}
-              className="w-full flex items-center p-3 hover:bg-blue-500 text-left"
+              className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${highlightIfMatch(
+                "dashboard toko"
+              )}`}
             >
               <FaStore className="text-xl" />
               <span className="ml-2">DASHBOARD TOKO</span>
@@ -110,7 +164,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                       to={`/toko/${id}`}
                       className={`flex items-center p-2 hover:bg-blue-500 ${
                         activePath === `/toko/${id}` ? "bg-blue-600" : ""
-                      }`}
+                      } ${highlightIfMatch(TOKO_LABELS[id])}`}
                     >
                       <FaStore className="text-sm" />
                       <span className="ml-2">{TOKO_LABELS[id]}</span>
@@ -123,7 +177,9 @@ const Sidebar = ({ role, toko, onLogout }) => {
             {/* LAPORAN */}
             <button
               onClick={() => setShowSubMenulaporan((s) => !s)}
-              className="w-full flex items-center p-3 hover:bg-blue-500 text-left"
+              className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${highlightIfMatch(
+                "laporan"
+              )}`}
             >
               <BsFileEarmarkText className="text-xl" />
               <span className="ml-2">LAPORAN</span>
@@ -147,9 +203,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                   <Link
                     to="/inventory-report"
                     className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/inventory-report"
-                        ? "bg-blue-600"
-                        : ""
+                      activePath === "/inventory-report" ? "bg-blue-600" : ""
                     }`}
                   >
                     <BsTagsFill className="text-lg" />
@@ -157,14 +211,11 @@ const Sidebar = ({ role, toko, onLogout }) => {
                   </Link>
                 </li>
 
-                {/* STOK OPNAME */}
                 <li>
                   <Link
                     to="/stok-opname"
                     className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/stok-opname"
-                        ? "bg-blue-600"
-                        : ""
+                      activePath === "/stok-opname" ? "bg-blue-600" : ""
                     }`}
                   >
                     <AiOutlineDatabase className="text-lg" />
@@ -176,9 +227,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                   <Link
                     to="/finance-report"
                     className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/finance-report"
-                        ? "bg-blue-600"
-                        : ""
+                      activePath === "/finance-report" ? "bg-blue-600" : ""
                     }`}
                   >
                     <FaMoneyCheckAlt className="text-lg" />
@@ -188,10 +237,12 @@ const Sidebar = ({ role, toko, onLogout }) => {
               </ul>
             )}
 
-            {/* TRANSFER BARANG — FIXED */}
+            {/* TRANSFER BARANG */}
             <button
               onClick={() => setShowSubMenuTransferBarang((s) => !s)}
-              className="w-full flex items-center p-3 hover:bg-blue-500 text-left"
+              className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${highlightIfMatch(
+                "transfer barang"
+              )}`}
             >
               <FaShoppingCart className="text-xl" />
               <span className="ml-2">TRANSFER BARANG</span>
@@ -203,13 +254,50 @@ const Sidebar = ({ role, toko, onLogout }) => {
                   <Link
                     to="/transfer-barang"
                     className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/transfer-barang"
-                        ? "bg-blue-600"
-                        : ""
+                      activePath === "/transfer-barang" ? "bg-blue-600" : ""
                     }`}
                   >
                     <FaMotorcycle className="text-lg" />
                     <span className="ml-2">Transfer Barang</span>
+                  </Link>
+                </li>
+              </ul>
+            )}
+
+            {/* CETAK FAKTUR & INVOICE */}
+            <button
+              onClick={() => setShowSubMenuCetak((s) => !s)}
+              className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${highlightIfMatch(
+                "cetak"
+              )}`}
+            >
+              <FaFileInvoice className="text-xl" />
+              <span className="ml-2">CETAK DOKUMEN</span>
+            </button>
+
+            {showSubMenuCetak && (
+              <ul className="pl-6">
+                <li>
+                  <Link
+                    to="/cetak-faktur"
+                    className={`flex items-center p-2 hover:bg-blue-500 ${
+                      activePath === "/cetak-faktur" ? "bg-blue-600" : ""
+                    }`}
+                  >
+                    <FaFileAlt className="text-lg" />
+                    <span className="ml-2">Cetak Faktur</span>
+                  </Link>
+                </li>
+
+                <li>
+                  <Link
+                    to="/invoice"
+                    className={`flex items-center p-2 hover:bg-blue-500 ${
+                      activePath === "/invoice" ? "bg-blue-600" : ""
+                    }`}
+                  >
+                    <FaFileInvoice className="text-lg" />
+                    <span className="ml-2">Cetak Invoice</span>
                   </Link>
                 </li>
               </ul>
@@ -230,9 +318,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
             <Link
               to="/user-management"
               className={`flex items-center p-3 hover:bg-blue-500 ${
-                activePath === "/user-management"
-                  ? "bg-blue-600"
-                  : ""
+                activePath === "/user-management" ? "bg-blue-600" : ""
               }`}
             >
               <FaUsers className="text-xl" />
@@ -243,9 +329,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
             <Link
               to="/data-management"
               className={`flex items-center p-3 hover:bg-blue-500 ${
-                activePath === "/data-management"
-                  ? "bg-blue-600"
-                  : ""
+                activePath === "/data-management" ? "bg-blue-600" : ""
               }`}
             >
               <AiOutlineDatabase className="text-xl" />
@@ -257,7 +341,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
             {/* PIC TOKO VIEW */}
             <button
               onClick={() => setShowSubMenuDashboardToko((s) => !s)}
-              className="w-full flex items-center p-3 hover:bg-blue-500 text-left"
+              className={`w-full flex items-center p-3 hover:bg-blue-500 text-left`}
             >
               <FaStore className="text-xl" />
               <span className="ml-2">DASHBOARD TOKO</span>
@@ -270,9 +354,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     <Link
                       to={`/toko/${visibleTokoIds[0]}`}
                       className={`flex items-center p-2 hover:bg-blue-500 ${
-                        activePath === `/toko/${visibleTokoIds[0]}`
-                          ? "bg-blue-600"
-                          : ""
+                        activePath === `/toko/${visibleTokoIds[0]}` ? "bg-blue-600" : ""
                       }`}
                     >
                       <FaStore className="text-sm" />
@@ -282,35 +364,20 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     </Link>
                   </li>
                 ) : (
-                  <li className="text-xs text-yellow-200 p-2">
-                    Akun PIC belum terhubung
-                  </li>
+                  <li className="text-xs p-2">Akun PIC belum terhubung</li>
                 )}
               </ul>
             )}
 
+            {/* SERVICE */}
             <Link
               to="/service-handphone"
               className={`flex items-center p-3 hover:bg-blue-500 ${
-                activePath === "/service-handphone"
-                  ? "bg-blue-600"
-                  : ""
+                activePath === "/service-handphone" ? "bg-blue-600" : ""
               }`}
             >
               <MdBuild className="text-xl" />
               <span className="ml-2">SERVICE</span>
-            </Link>
-
-            <Link
-              to="/modul-sparepart"
-              className={`flex items-center p-3 hover:bg-blue-500 ${
-                activePath === "/modul-sparepart"
-                  ? "bg-blue-600"
-                  : ""
-              }`}
-            >
-              <FaCogs className="text-xl" />
-              <span className="ml-2">SPAREPART</span>
             </Link>
           </>
         )}
@@ -327,7 +394,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
   return (
     <>
-      {/* MOBILE HEADER */}
+      {/* MOBILE */}
       <div className="lg:hidden sticky top-0 bg-white/70 backdrop-blur border-b z-50">
         <div className="h-12 flex items-center justify-between px-3">
           <button
@@ -339,39 +406,25 @@ const Sidebar = ({ role, toko, onLogout }) => {
             <span className="hamburger-bar" />
             <span className="hamburger-bar" />
           </button>
-          <div className="text-sm font-semibold text-slate-700">
-            Menu
-          </div>
+          <div className="text-sm font-semibold text-slate-700">Menu</div>
           <div className="w-8" />
         </div>
       </div>
 
       {mobileOpen && (
-        <div
-          className="sidebar-overlay"
-          onClick={() => setMobileOpen(false)}
-        />
+        <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* MOBILE SIDEBAR */}
       <aside
         ref={panelRef}
-        className={`sidebar-panel lg:hidden ${
-          mobileOpen ? "open" : ""
-        }`}
+        className={`sidebar-panel lg:hidden ${mobileOpen ? "open" : ""}`}
       >
         <div className="bg-blue-700 w-64 h-full text-white flex flex-col">
-          <div className="flex justify-between items-center p-3 border-b border-white/20">
-            <span>Menu</span>
-            <button onClick={() => setMobileOpen(false)}>✕</button>
-          </div>
-          <div className="custom-scroll overflow-y-auto flex-1">
-            <SidebarBody />
-          </div>
+          <SidebarBody />
         </div>
       </aside>
 
-      {/* DESKTOP SIDEBAR */}
+      {/* DESKTOP */}
       <aside className="hidden lg:flex bg-blue-700 w-64 h-screen sticky top-0 text-white">
         <div className="custom-scroll overflow-y-auto flex-1">
           <SidebarBody />
