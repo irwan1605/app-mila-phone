@@ -23,7 +23,7 @@ import {
 } from "react-icons/fa";
 
 const fallbackTokoNames = [
-  "CILANGKAP",
+  "CILANGKAP PUSAT",
   "CIBINONG",
   "GAS ALAM",
   "CITEUREUP",
@@ -33,7 +33,6 @@ const fallbackTokoNames = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
-  "PUSAT",
 ];
 
 const fmt = (n) => {

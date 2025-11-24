@@ -1,5 +1,10 @@
-// PART 1/4
-// src/pages/MasterBarang.jsx
+// MasterBarang.jsx FINAL + TANGGAL + KATEGORI BRAND + FILTER
+// Aturan:
+// - Jumlah IMEI harus sama dengan Stok Sistem (Qty).
+// - IMEI tidak boleh duplikat (input & antar SKU).
+// - Tanggal menggunakan field TANGGAL_TRANSAKSI (opsi A).
+// - Kategori Brand: SEPEDA LISTRIK, MOTOR LISTRIK, HANDPHONE, ACCESORIES.
+
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   listenAllTransaksi,
@@ -45,9 +50,20 @@ const fmt = (n) => {
   }
 };
 
+const KATEGORI_OPTIONS = [
+  "SEPEDA LISTRIK",
+  "MOTOR LISTRIK",
+  "HANDPHONE",
+  "ACCESORIES",
+];
+
 export default function MasterBarang() {
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [search, setSearch] = useState("");
+
+  // filter tambahan
+  const [filterTanggal, setFilterTanggal] = useState("");
+  const [filterKategori, setFilterKategori] = useState("");
 
   const [editData, setEditData] = useState(null);
   const [showModalEdit, setShowModalEdit] = useState(false);
@@ -62,11 +78,13 @@ export default function MasterBarang() {
     imeiList: "",
     namaToko: "PUSAT",
     noInvoice: "",
+    tanggal: new Date().toISOString().slice(0, 10),
+    kategoriBrand: "",
   });
 
   const tableRef = useRef(null);
 
-  // ===================== LISTENER FIREBASE =====================
+  // LISTENER FIREBASE
   useEffect(() => {
     const unsub =
       typeof listenAllTransaksi === "function"
@@ -78,7 +96,7 @@ export default function MasterBarang() {
     return () => unsub && unsub();
   }, []);
 
-  // ===================== GROUP SKU (per BRAND + BARANG) =====================
+  // GROUP SKU
   const groupedSku = useMemo(() => {
     const map = {};
 
@@ -98,6 +116,8 @@ export default function MasterBarang() {
           hargaUnit: Number(x.HARGA_UNIT || 0),
           totalQty: 0,
           noInvoiceSample: x.NO_INVOICE || "",
+          tanggalSample: x.TANGGAL_TRANSAKSI || "",
+          kategoriBrandSample: x.KATEGORI_BRAND || "",
         };
       }
 
@@ -107,18 +127,29 @@ export default function MasterBarang() {
         map[key].imeis.push(String(x.IMEI).trim());
       }
 
-      // gunakan harga terakhir sebagai sample
+      // ambil harga terakhir jika ada
       map[key].hargaSup = Number(x.HARGA_SUPLAYER || map[key].hargaSup || 0);
       map[key].hargaUnit = Number(x.HARGA_UNIT || map[key].hargaUnit || 0);
-      if (x.NO_INVOICE) {
-        map[key].noInvoiceSample = x.NO_INVOICE;
+      if (x.NO_INVOICE) map[key].noInvoiceSample = x.NO_INVOICE;
+
+      // tanggal sample → ambil yang paling awal
+      if (
+        x.TANGGAL_TRANSAKSI &&
+        (!map[key].tanggalSample ||
+          x.TANGGAL_TRANSAKSI < map[key].tanggalSample)
+      ) {
+        map[key].tanggalSample = x.TANGGAL_TRANSAKSI;
+      }
+
+      // kategori brand sample → jika belum ada dan x punya
+      if (x.KATEGORI_BRAND && !map[key].kategoriBrandSample) {
+        map[key].kategoriBrandSample = x.KATEGORI_BRAND;
       }
     });
 
     return map;
   }, [allTransaksi]);
 
-  // daftar brand untuk datalist
   const brandList = useMemo(
     () =>
       Array.from(
@@ -131,22 +162,35 @@ export default function MasterBarang() {
     [groupedSku]
   );
 
-  // ===================== FILTER SEARCH =====================
+  // FILTER (search + tanggal + kategori)
   const filteredSkuList = useMemo(() => {
+    let list = Object.values(groupedSku);
+
     const q = (search || "").toLowerCase();
+    if (q) {
+      list = list.filter((x) => {
+        return (
+          (x.brand || "").toLowerCase().includes(q) ||
+          (x.barang || "").toLowerCase().includes(q) ||
+          (x.noInvoiceSample || "").toLowerCase().includes(q) ||
+          (x.kategoriBrandSample || "").toLowerCase().includes(q) ||
+          (x.imeis || []).some((im) => im.toLowerCase().includes(q))
+        );
+      });
+    }
 
-    return Object.values(groupedSku).filter((x) => {
-      if (!q) return true;
-      return (
-        (x.brand || "").toLowerCase().includes(q) ||
-        (x.barang || "").toLowerCase().includes(q) ||
-        (x.noInvoiceSample || "").toLowerCase().includes(q) ||
-        (x.imeis || []).some((im) => im.toLowerCase().includes(q))
-      );
-    });
-  }, [groupedSku, search]);
+    if (filterTanggal) {
+      list = list.filter((x) => x.tanggalSample === filterTanggal);
+    }
 
-  // ===================== VALIDASI IMEI =====================
+    if (filterKategori) {
+      list = list.filter((x) => x.kategoriBrandSample === filterKategori);
+    }
+
+    return list;
+  }, [groupedSku, search, filterTanggal, filterKategori]);
+
+  // VALIDASI IMEI
   const validateImeis = (imeiLines, originalBrand = null, originalBarang = null) => {
     const errors = [];
     const seen = new Set();
@@ -160,7 +204,7 @@ export default function MasterBarang() {
       seen.add(im);
     }
 
-    // tabrakan dengan database (IMEI sudah dipakai SKU lain)
+    // konflik dengan database SKU lain
     for (const im of imeiLines) {
       const conflict = (allTransaksi || []).find((t) => {
         const tImei = String(t.IMEI || "").trim();
@@ -172,11 +216,10 @@ export default function MasterBarang() {
         if (
           originalBrand &&
           originalBarang &&
-          b === (originalBrand || "").trim() &&
-          brg === (originalBarang || "").trim()
+          b === originalBrand.trim() &&
+          brg === originalBarang.trim()
         ) {
-          // konflik di SKU yang sama saat edit → diizinkan
-          return false;
+          return false; // IMEI milik SKU ini sendiri → boleh
         }
 
         return true;
@@ -193,109 +236,13 @@ export default function MasterBarang() {
     return errors;
   };
 
-  // End PART 1: lanjut PART 2/4 untuk fungsi tambah/edit lengkap, adjust stok, render table, modal, dsb.
-  // ===================== HELPER: SESUAIKAN STOK SAAT EDIT =====================
-  const adjustStockForEdit = async (currentAll, skuKeyOriginal, oldQty, newQty) => {
-    const diff = Number(newQty) - Number(oldQty);
-    if (diff === 0) return { added: 0, removed: 0 };
+  // HELPER: toko index
+  const getTokoIndex = (r) =>
+    fallbackTokoNames.findIndex(
+      (t) => t.toUpperCase() === String(r.NAMA_TOKO || "PUSAT").toUpperCase()
+    ) + 1;
 
-    // ambil semua baris yang berhubungan dengan SKU ini
-    const skuRows = (currentAll || []).filter((r) => {
-      const key = `${(r.NAMA_BRAND || "").trim()}|${(r.NAMA_BARANG || "").trim()}`;
-      return key === skuKeyOriginal;
-    });
-
-    const getTokoIndex = (r) =>
-      fallbackTokoNames.findIndex(
-        (t) => t.toUpperCase() === String(r.NAMA_TOKO || "PUSAT").toUpperCase()
-      ) + 1;
-
-    // ===== TAMBAH STOK =====
-    if (diff > 0) {
-      let added = 0;
-      const template = skuRows[0] || {};
-      const namaToko = template.NAMA_TOKO || "PUSAT";
-      const tokoIndex = getTokoIndex(template) || 1;
-
-      for (let i = 0; i < diff; i++) {
-        const payload = {
-          TANGGAL_TRANSAKSI: template.TANGGAL_TRANSAKSI || new Date().toISOString().slice(0, 10),
-          NO_INVOICE: template.NO_INVOICE || `ADJ-${Date.now()}`,
-          NAMA_USER: template.NAMA_USER || "SYSTEM",
-          NAMA_TOKO: namaToko,
-          NAMA_BRAND: template.NAMA_BRAND || skuKeyOriginal.split("|")[0] || "UNKNOWN",
-          NAMA_BARANG: template.NAMA_BARANG || skuKeyOriginal.split("|")[1] || "UNKNOWN",
-          QTY: 1,
-          IMEI: "",
-          NOMOR_UNIK: `ADJ|${Date.now()}|${i}`,
-          HARGA_UNIT: Number(template.HARGA_UNIT || 0),
-          HARGA_SUPLAYER: Number(template.HARGA_SUPLAYER || 0),
-          TOTAL: Number(template.HARGA_UNIT || 0) * 1,
-          PAYMENT_METODE: "TAMBAH STOCK",
-          SYSTEM_PAYMENT: "SYSTEM",
-          KETERANGAN: "Penyesuaian stok (Tambah via Edit Master Barang)",
-          STATUS: "Approved",
-        };
-
-        try {
-          if (typeof addTransaksi === "function") {
-            await addTransaksi(tokoIndex, payload);
-          }
-          added++;
-        } catch (err) {
-          console.error("adjustStockForEdit addTransaksi error:", err);
-        }
-      }
-
-      return { added, removed: 0 };
-    }
-
-    // ===== KURANGI STOK =====
-    if (diff < 0) {
-      let toRemove = Math.abs(diff);
-      let removed = 0;
-
-      // prioritize removable rows: prefer PAYMENT_METODE "TAMBAH STOCK" non-IMEI first
-      const removable = (currentAll || []).filter((r) => {
-        const key = `${(r.NAMA_BRAND || "").trim()}|${(r.NAMA_BARANG || "").trim()}`;
-        return key === skuKeyOriginal && (r.PAYMENT_METODE || "").toUpperCase() === "TAMBAH STOCK";
-      });
-
-      const nonImei = removable.filter((r) => !r.IMEI || String(r.IMEI).trim() === "");
-      const withImei = removable.filter((r) => r.IMEI && String(r.IMEI).trim() !== "");
-
-      const tryDeleteList = async (list) => {
-        // delete from last (LIFO)
-        for (let i = list.length - 1; i >= 0 && toRemove > 0; i--) {
-          const r = list[i];
-          const tokoIndex = getTokoIndex(r) || 1;
-
-          try {
-            if (r.id && typeof deleteTransaksi === "function") {
-              await deleteTransaksi(tokoIndex, r.id);
-            }
-          } catch (err) {
-            console.error("adjustStockForEdit deleteTransaksi error:", err);
-          }
-
-          // also remove from currentAll reference (caller will re-fetch state)
-          toRemove--;
-          removed++;
-        }
-      };
-
-      await tryDeleteList(nonImei);
-      if (toRemove > 0) {
-        await tryDeleteList(withImei);
-      }
-
-      return { added: 0, removed };
-    }
-
-    return { added: 0, removed: 0 };
-  };
-
-  // ===================== OPEN EDIT (mengisi stokSistem & imeiList) =====================
+  // OPEN EDIT
   const openEdit = (data) => {
     setEditData({
       brand: data.brand,
@@ -307,82 +254,183 @@ export default function MasterBarang() {
       stokSistem: data.totalQty || 0,
       originalBrand: data.brand,
       originalBarang: data.barang,
+      tanggal: data.tanggalSample || new Date().toISOString().slice(0, 10),
+      kategoriBrand: data.kategoriBrandSample || "",
     });
     setShowModalEdit(true);
   };
 
-  // ===================== SAVE EDIT (fix final) =====================
+  // SAVE EDIT (Final, Qty == jumlah IMEI, IMEI unik, + tanggal & kategori)
   const saveEdit = async () => {
     if (!editData) return;
 
-    // parse imei lines
-    const imeiLines = String(editData.imeiList || "")
+    // 1. Ambil IMEI dari textarea
+    let rawImeis = String(editData.imeiList || "")
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean);
 
-    // validate imei conflicts
-    const errors = validateImeis(imeiLines, editData.originalBrand, editData.originalBarang);
-    if (errors.length) {
-      alert(errors.join("\n"));
+    // 2. Validasi duplikat & konflik DB (pakai rawImeis dulu)
+    const vErr = validateImeis(rawImeis, editData.originalBrand, editData.originalBarang);
+    if (vErr.length) {
+      alert(vErr.join("\n"));
       return;
     }
 
-    // find all transaksi rows that belong to original SKU
-    const skuKeyOriginal = `${(editData.originalBrand || "").trim()}|${(editData.originalBarang || "").trim()}`;
-    const skuRows = (allTransaksi || []).filter((r) => {
+    if (!editData.kategoriBrand) {
+      alert("Kategori Brand wajib dipilih.");
+      return;
+    }
+
+    const stokInput = Number(editData.stokSistem || 0);
+
+    // 3. Terapkan aturan A1 + B1
+    // - Jika stokInput > 0 dan stokInput < jumlah IMEI → potong IMEI dari bawah (A1)
+    // - Selain itu → Qty mengikuti jumlah IMEI (B1)
+    let finalImeis = [...rawImeis];
+    let newQty = 0;
+
+    if (stokInput > 0 && stokInput < finalImeis.length) {
+      finalImeis = finalImeis.slice(0, stokInput); // potong dari bawah
+      newQty = stokInput;
+    } else {
+      newQty = finalImeis.length; // Qty ikut jumlah IMEI
+    }
+
+    // Pastikan tetap konsisten
+    if (newQty !== finalImeis.length) {
+      alert("Terjadi ketidaksesuaian Qty dan IMEI. Mohon cek kembali.");
+      return;
+    }
+
+    const skuKeyOriginal = `${(editData.originalBrand || "").trim()}|${(
+      editData.originalBarang || ""
+    ).trim()}`;
+
+    // 4. Ambil semua row transaksi untuk SKU ini
+    const skuRows = allTransaksi.filter((r) => {
       const key = `${(r.NAMA_BRAND || "").trim()}|${(r.NAMA_BARANG || "").trim()}`;
       return key === skuKeyOriginal;
     });
+
+    if (skuRows.length === 0) {
+      alert("Data transaksi untuk SKU ini tidak ditemukan.");
+      return;
+    }
 
     const oldQty = skuRows.reduce((s, r) => s + Number(r.QTY || 0), 0);
-    const newQty = Number(editData.stokSistem || 0);
-    const diff = newQty - oldQty;
 
-    try {
-      // adjust stock (add / delete transactions)
-      await adjustStockForEdit(allTransaksi, skuKeyOriginal, oldQty, newQty);
-    } catch (err) {
-      console.error("saveEdit adjustStockForEdit error:", err);
-      alert("Gagal menyesuaikan stok. Cek console.");
-      return;
+    // 5. Update jumlah baris transaksi supaya sama dengan newQty
+    let updatedAll = [...allTransaksi];
+
+    // Helper untuk cari index di updatedAll
+    const getIndexInAll = (row) =>
+      updatedAll.findIndex(
+        (x) =>
+          x === row ||
+          (x.id && row.id && x.id === row.id) ||
+          (x.NOMOR_UNIK && row.NOMOR_UNIK && x.NOMOR_UNIK === row.NOMOR_UNIK)
+      );
+
+    // 5.a. Jika stok lama > stok baru → hapus baris dari belakang (A1)
+    if (oldQty > newQty) {
+      for (let i = skuRows.length - 1; i >= newQty; i--) {
+        const r = skuRows[i];
+        const tokoIndex = getTokoIndex(r) || 1;
+
+        try {
+          if (r.id && typeof deleteTransaksi === "function") {
+            await deleteTransaksi(tokoIndex, r.id);
+          }
+        } catch (err) {
+          console.error("deleteTransaksi (kurangi stok) error:", err);
+        }
+
+        // hapus juga dari state lokal
+        const idxInAll = getIndexInAll(r);
+        if (idxInAll !== -1) {
+          updatedAll.splice(idxInAll, 1);
+        }
+      }
     }
 
-    // after adjustment, re-read rows for this SKU from current state (we'll use setAllTransaksi after updates)
-    // Build updated list by mapping over current allTransaksi
-    let currentAll = [...allTransaksi];
-
-    // fetch fresh rows belonging to this SKU
-    const latestSkuRows = currentAll.filter((r) => {
-      const key = `${(r.NAMA_BRAND || "").trim()}|${(r.NAMA_BARANG || "").trim()}`;
-      return key === skuKeyOriginal || key === `${(editData.brand || "").trim()}|${(editData.barang || "").trim()}`;
-    });
-
-    // update rows metadata (brand, barang, harga, invoice, IMEI mapping)
-    // We'll map IMEIs to rows that have IMEI; if number of imeis equals number of rows, map 1:1; if one imei, set to all; otherwise keep existing where no mapping.
-    const rowsToUpdate = currentAll.filter((r) => {
+    // Rebuild skuRowsAfter (baris yang tersisa untuk di-update)
+    const skuRowsAfter = updatedAll.filter((r) => {
       const key = `${(r.NAMA_BRAND || "").trim()}|${(r.NAMA_BARANG || "").trim()}`;
       return key === skuKeyOriginal;
     });
 
-    // Determine mapping logic
-    for (let i = 0; i < rowsToUpdate.length; i++) {
-      const r = rowsToUpdate[i];
+    // 5.b. Jika stok baru > stok lama → tambah baris baru (QTY=1)
+    if (newQty > oldQty) {
+      const template = skuRowsAfter[0] || skuRows[0];
+
       const tokoIndex =
         fallbackTokoNames.findIndex(
-          (t) => t.toUpperCase() === String(r.NAMA_TOKO || "PUSAT").toUpperCase()
+          (t) => t.toUpperCase() === String(template.NAMA_TOKO || "PUSAT").toUpperCase()
         ) + 1;
 
-      let newImei = r.IMEI;
-      if (imeiLines.length === 1) {
-        newImei = imeiLines[0];
-      } else if (imeiLines.length === rowsToUpdate.length) {
-        // map by position if lengths match
-        newImei = imeiLines[i] || r.IMEI;
-      } else if (imeiLines.length > 1 && imeiLines.length < rowsToUpdate.length) {
-        newImei = imeiLines[i] || r.IMEI;
+      for (let i = oldQty; i < newQty; i++) {
+        const payload = {
+          TANGGAL_TRANSAKSI:
+            editData.tanggal ||
+            template.TANGGAL_TRANSAKSI ||
+            new Date().toISOString().slice(0, 10),
+          NO_INVOICE: editData.noInvoiceSample || template.NO_INVOICE || `ADJ-${Date.now()}`,
+          NAMA_USER: template.NAMA_USER || "SYSTEM",
+          NAMA_TOKO: template.NAMA_TOKO || "PUSAT",
+          NAMA_BRAND: editData.brand,
+          NAMA_BARANG: editData.barang,
+          QTY: 1,
+          IMEI: finalImeis[i] || "",
+          NOMOR_UNIK: `ADJ|EDIT|${Date.now()}|${i}`,
+          HARGA_UNIT: Number(editData.hargaUnit || template.HARGA_UNIT || 0),
+          HARGA_SUPLAYER: Number(editData.hargaSup || template.HARGA_SUPLAYER || 0),
+          TOTAL: Number(editData.hargaUnit || template.HARGA_UNIT || 0) * 1,
+          PAYMENT_METODE: template.PAYMENT_METODE || "TAMBAH STOCK",
+          SYSTEM_PAYMENT: template.SYSTEM_PAYMENT || "SYSTEM",
+          KETERANGAN: template.KETERANGAN || "Penyesuaian stok (Edit Master Barang)",
+          STATUS: template.STATUS || "Approved",
+          KATEGORI_BRAND: editData.kategoriBrand || template.KATEGORI_BRAND || "",
+        };
+
+        try {
+          if (typeof addTransaksi === "function") {
+            await addTransaksi(tokoIndex, payload);
+          }
+        } catch (err) {
+          console.error("addTransaksi (tambah stok) error:", err);
+        }
+
+        // tambahkan ke state lokal (tanpa id, nanti listener Firebase akan memperbaiki)
+        updatedAll.push(payload);
       }
-      // else keep existing IMEI for rows where present
+    }
+
+    // 6. Setelah jumlah baris sesuai, update metadata & IMEI
+    const finalSkuRows = updatedAll
+      .filter((r) => {
+        const key = `${(r.NAMA_BRAND || "").trim()}|${(r.NAMA_BARANG || "").trim()}`;
+        // cocokkan ke SKU lama (brand/barang original) ATAU SKU baru (brand/barang hasil edit)
+        return (
+          key === skuKeyOriginal ||
+          key === `${(editData.brand || "").trim()}|${(editData.barang || "").trim()}`
+        );
+      })
+      // pastikan urutan stabil
+      .sort((a, b) => {
+        const da = a.TANGGAL_TRANSAKSI || "";
+        const db = b.TANGGAL_TRANSAKSI || "";
+        if (da < db) return -1;
+        if (da > db) return 1;
+        return 0;
+      });
+
+    // Hanya ambil sebanyak newQty
+    const rowsToUpdate = finalSkuRows.slice(0, newQty);
+
+    for (let i = 0; i < rowsToUpdate.length; i++) {
+      const r = rowsToUpdate[i];
+      const tokoIndex = getTokoIndex(r) || 1;
 
       const newRow = {
         ...r,
@@ -392,7 +440,10 @@ export default function MasterBarang() {
         HARGA_SUPLAYER: Number(editData.hargaSup || r.HARGA_SUPLAYER || 0),
         HARGA_UNIT: Number(editData.hargaUnit || r.HARGA_UNIT || 0),
         TOTAL: Number(r.QTY || 0) * Number(editData.hargaUnit || r.HARGA_UNIT || 0),
-        IMEI: newImei,
+        IMEI: finalImeis[i] || "",
+        TANGGAL_TRANSAKSI:
+          editData.tanggal || r.TANGGAL_TRANSAKSI || new Date().toISOString().slice(0, 10),
+        KATEGORI_BRAND: editData.kategoriBrand || r.KATEGORI_BRAND || "",
       };
 
       try {
@@ -403,71 +454,82 @@ export default function MasterBarang() {
         console.error("saveEdit updateTransaksi error:", err);
       }
 
-      // mutate currentAll (so subsequent iterations see updated values)
-      currentAll = currentAll.map((x) => (x === r ? newRow : x));
+      // update state lokal
+      const idxInAll = getIndexInAll(r);
+      if (idxInAll !== -1) {
+        updatedAll[idxInAll] = newRow;
+      }
     }
 
-    // Finally update local state
-    setAllTransaksi(currentAll);
+    // 7. Set state dan tutup modal
+    setAllTransaksi(updatedAll);
     setShowModalEdit(false);
-    alert("Perubahan Master Barang & Stok Sistem berhasil disimpan.");
+    alert(
+      "Perubahan disimpan. Stok Sistem = jumlah IMEI, IMEI unik, Tanggal & Kategori tersimpan."
+    );
   };
-  // ===================== DELETE SKU =====================
-  const deleteSku = async (data) => {
-    if (!window.confirm(`Hapus semua transaksi untuk SKU ini?\n${data.brand} - ${data.barang}`))
-      return;
 
-    const rows = allTransaksi.filter(
-      (x) =>
-        `${(x.NAMA_BRAND || "").trim()}|${(x.NAMA_BARANG || "").trim()}` ===
-        `${(data.brand || "").trim()}|${(data.barang || "").trim()}`
+// DELETE SKU — PRO MAX REALTIME + PERMANENT DELETE + ANTI-REAPPEAR
+const deleteSku = async (data) => {
+  if (!window.confirm(`Hapus semua transaksi untuk SKU?\n${data.brand} - ${data.barang}`))
+    return;
+
+  // Ambil semua transaksi SKU berdasarkan brand+barang
+  const rows = allTransaksi.filter(
+    (x) =>
+      `${(x.NAMA_BRAND || "").trim()}|${(x.NAMA_BARANG || "").trim()}` ===
+      `${(data.brand || "").trim()}|${(data.barang || "").trim()}`
+  );
+
+  if (rows.length === 0) {
+    alert("Tidak ada transaksi SKU untuk dihapus.");
+    return;
+  }
+
+  try {
+    // 1. HAPUS SEMUA FIREBASE MENGGUNAKAN Promise.all
+    await Promise.all(
+      rows.map(async (r) => {
+        if (r.id) {
+          const tokoIndex = getTokoIndex(r) || 1;
+          return deleteTransaksi(tokoIndex, r.id);
+        }
+      })
     );
 
-    try {
-      for (const r of rows) {
-        const tokoIndex =
-          fallbackTokoNames.findIndex(
-            (t) => t.toUpperCase() === String(r.NAMA_TOKO || "").toUpperCase()
-          ) + 1;
+    // 2. UPDATE STATE LOCAL BERDASARKAN ID (PASTI HILANG REALTIME)
+    setAllTransaksi((prev) =>
+      prev.filter((x) => !rows.some((r) => r.id === x.id))
+    );
 
-        if (r.id && typeof deleteTransaksi === "function") {
-          await deleteTransaksi(tokoIndex, r.id);
-        }
-      }
+    alert("SKU berhasil dihapus. Realtime & permanen.");
 
-      setAllTransaksi((prev) =>
-        prev.filter(
-          (x) =>
-            !(
-              `${(x.NAMA_BRAND || "").trim()}|${(x.NAMA_BARANG || "").trim()}` ===
-              `${(data.brand || "").trim()}|${(data.barang || "").trim()}`
-            )
-        )
-      );
+  } catch (err) {
+    console.error("deleteSku PRO MAX error:", err);
+    alert("Gagal menghapus SKU. Silakan coba lagi.");
+  }
+};
 
-      alert("SKU berhasil dihapus.");
-    } catch (err) {
-      console.error("deleteSku error:", err);
-      alert("Gagal menghapus SKU.");
-    }
+
+
+
+  // TAMBAH STOCK
+  const openTambahModal = () => {
+    setTambahForm({
+      brand: "",
+      barang: "",
+      hargaSup: "",
+      hargaUnit: "",
+      qty: 1,
+      imeiList: "",
+      namaToko: "PUSAT",
+      noInvoice: "",
+      tanggal: new Date().toISOString().slice(0, 10),
+      kategoriBrand: "",
+    });
+    setShowModalTambah(true);
   };
 
-    // ===================== OPEN TAMBAH STOCK =====================
-    const openTambahModal = () => {
-      setTambahForm({
-        brand: "",
-        barang: "",
-        hargaSup: "",
-        hargaUnit: "",
-        qty: 1,
-        imeiList: "",
-        namaToko: "PUSAT",
-        noInvoice: "",
-      });
-      setShowModalTambah(true);
-    };
-
-      // ===================== SUBMIT TAMBAH STOCK =====================
   const submitTambahStock = async () => {
     const brand = tambahForm.brand.trim();
     const barang = tambahForm.barang.trim();
@@ -476,41 +538,42 @@ export default function MasterBarang() {
     const qty = Number(tambahForm.qty || 0);
     const invoice = tambahForm.noInvoice.trim() || `INV-${Date.now()}`;
     const namaToko = tambahForm.namaToko || "PUSAT";
+    const tanggal = tambahForm.tanggal || new Date().toISOString().slice(0, 10);
+    const kategoriBrand = tambahForm.kategoriBrand;
 
     if (!brand || !barang) {
       alert("Brand & Barang wajib diisi.");
       return;
     }
 
-    // IMEI parsing
+    if (!kategoriBrand) {
+      alert("Kategori Brand wajib dipilih.");
+      return;
+    }
+
     const imeiLines = String(tambahForm.imeiList || "")
       .split("\n")
       .map((x) => x.trim())
       .filter(Boolean);
 
-    // Validasi duplikat IMEI (di input + database)
     const err = validateImeis(imeiLines);
     if (err.length) {
       alert(err.join("\n"));
       return;
     }
 
-    // Tidak boleh jumlah IMEI > qty
-    if (imeiLines.length > qty) {
-      alert("Jumlah IMEI melebihi QTY yang ditulis.");
+    // IMEI wajib sama dengan Qty
+    if (imeiLines.length !== qty) {
+      alert("Jumlah IMEI / No MESIN harus sama dengan Qty.");
       return;
     }
 
-    // Temukan toko index
     const tokoIndex =
-      fallbackTokoNames.findIndex(
-        (t) => t.toUpperCase() === namaToko.toUpperCase()
-      ) + 1;
+      fallbackTokoNames.findIndex((t) => t.toUpperCase() === namaToko.toUpperCase()) + 1;
 
-    // Proses IMEI terlebih dahulu
     for (let i = 0; i < imeiLines.length; i++) {
       const payload = {
-        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+        TANGGAL_TRANSAKSI: tanggal,
         NO_INVOICE: invoice,
         NAMA_USER: "SYSTEM",
         NAMA_TOKO: namaToko,
@@ -521,37 +584,12 @@ export default function MasterBarang() {
         NOMOR_UNIK: `${Date.now()}|${i}`,
         HARGA_UNIT: hargaUnit,
         HARGA_SUPLAYER: hargaSup,
-        TOTAL: hargaUnit * 1,
+        TOTAL: hargaUnit,
         PAYMENT_METODE: "PEMBELIAN",
         SYSTEM_PAYMENT: "SYSTEM",
         KETERANGAN: "Tambah stok (IMEI)",
         STATUS: "Approved",
-      };
-
-      await addTransaksi(tokoIndex, payload);
-    }
-
-    // Sisa QTY tanpa IMEI
-    const sisa = qty - imeiLines.length;
-
-    for (let i = 0; i < sisa; i++) {
-      const payload = {
-        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
-        NO_INVOICE: invoice,
-        NAMA_USER: "SYSTEM",
-        NAMA_TOKO: namaToko,
-        NAMA_BRAND: brand,
-        NAMA_BARANG: barang,
-        QTY: 1,
-        IMEI: "",
-        NOMOR_UNIK: `${Date.now()}|NIMEI|${i}`,
-        HARGA_UNIT: hargaUnit,
-        HARGA_SUPLAYER: hargaSup,
-        TOTAL: hargaUnit * 1,
-        PAYMENT_METODE: "PEMBELIAN",
-        SYSTEM_PAYMENT: "SYSTEM",
-        KETERANGAN: "Tambah stok (NON-IMEI)",
-        STATUS: "Approved",
+        KATEGORI_BRAND: kategoriBrand,
       };
 
       await addTransaksi(tokoIndex, payload);
@@ -561,11 +599,11 @@ export default function MasterBarang() {
     setShowModalTambah(false);
   };
 
-  
-
-  // ===================== EXPORT EXCEL =====================
+  // EXPORT EXCEL
   const exportExcel = () => {
     const sheetData = filteredSkuList.map((x) => ({
+      Tanggal: x.tanggalSample,
+      Kategori_Brand: x.kategoriBrandSample,
       Brand: x.brand,
       Barang: x.barang,
       IMEI: (x.imeis || []).join(", "),
@@ -581,7 +619,7 @@ export default function MasterBarang() {
     XLSX.writeFile(wb, `MASTER_BARANG_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  // ===================== EXPORT PDF =====================
+  // EXPORT PDF
   const exportPDF = async () => {
     try {
       const element = tableRef.current;
@@ -605,7 +643,6 @@ export default function MasterBarang() {
     }
   };
 
-  // ===================== RENDER =====================
   return (
     <div className="p-4 space-y-4">
       <h2 className="text-xl font-bold">MASTER BARANG</h2>
@@ -616,14 +653,36 @@ export default function MasterBarang() {
           <FaSearch className="text-gray-500" />
           <input
             className="ml-2 flex-1 outline-none text-sm"
-            placeholder="Cari brand / barang / IMEI ..."
+            placeholder="Cari brand / barang / IMEI / kategori ..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
+        {/* FILTER TANGGAL */}
+        <input
+          type="date"
+          className="border rounded px-3 py-2 text-sm"
+          value={filterTanggal}
+          onChange={(e) => setFilterTanggal(e.target.value)}
+        />
+
+        {/* FILTER KATEGORI BRAND */}
+        <select
+          className="border rounded px-3 py-2 text-sm"
+          value={filterKategori}
+          onChange={(e) => setFilterKategori(e.target.value)}
+        >
+          <option value="">Semua Kategori</option>
+          {KATEGORI_OPTIONS.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+
         <button
-          onClick={() => openTambahModal()}
+          onClick={openTambahModal}
           className="px-3 py-2 bg-indigo-600 text-white rounded flex items-center text-sm"
         >
           <FaPlus className="mr-2" /> Tambah Stock Barang
@@ -650,6 +709,8 @@ export default function MasterBarang() {
           <thead className="bg-gray-100">
             <tr>
               <th className="border p-2">No</th>
+              <th className="border p-2">Tanggal</th>
+              <th className="border p-2">Kategori Brand</th>
               <th className="border p-2">Brand</th>
               <th className="border p-2">Barang</th>
               <th className="border p-2 whitespace-pre-wrap">IMEI / No MESIN</th>
@@ -663,7 +724,7 @@ export default function MasterBarang() {
           <tbody>
             {filteredSkuList.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-3 border text-center text-gray-500">
+                <td colSpan={10} className="p-3 border text-center text-gray-500">
                   Tidak ada data.
                 </td>
               </tr>
@@ -679,6 +740,12 @@ export default function MasterBarang() {
                 return (
                   <tr key={x.skuKey} className="hover:bg-gray-50">
                     <td className="border p-2 text-center">{idx + 1}</td>
+                    <td className="border p-2">
+                      {x.tanggalSample ? x.tanggalSample : "-"}
+                    </td>
+                    <td className="border p-2">
+                      {x.kategoriBrandSample || "-"}
+                    </td>
                     <td className="border p-2">{x.brand}</td>
                     <td className="border p-2">{x.barang}</td>
 
@@ -714,16 +781,14 @@ export default function MasterBarang() {
           </tbody>
         </table>
       </div>
-      {/* MODAL: TAMBAH STOCK */}
+
+      {/* MODAL TAMBAH STOCK */}
       {showModalTambah && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-start py-8 z-50 overflow-y-auto">
           <div className="bg-white w-full max-w-2xl rounded shadow p-5">
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-bold">TAMBAHKAN STOCK</h3>
-              <button
-                onClick={() => setShowModalTambah(false)}
-                className="text-gray-600"
-              >
+              <button onClick={() => setShowModalTambah(false)} className="text-gray-600">
                 <FaTimes />
               </button>
             </div>
@@ -736,7 +801,7 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded"
                   value={tambahForm.brand}
                   onChange={(e) =>
-                    setTambahForm((prev) => ({ ...prev, brand: e.target.value }))
+                    setTambahForm((p) => ({ ...p, brand: e.target.value }))
                   }
                 />
                 <datalist id="brand-list">
@@ -752,7 +817,7 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded"
                   value={tambahForm.barang}
                   onChange={(e) =>
-                    setTambahForm((prev) => ({ ...prev, barang: e.target.value }))
+                    setTambahForm((p) => ({ ...p, barang: e.target.value }))
                   }
                 />
               </div>
@@ -764,7 +829,7 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded"
                   value={tambahForm.hargaSup}
                   onChange={(e) =>
-                    setTambahForm((prev) => ({ ...prev, hargaSup: e.target.value }))
+                    setTambahForm((p) => ({ ...p, hargaSup: e.target.value }))
                   }
                 />
               </div>
@@ -776,20 +841,20 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded"
                   value={tambahForm.hargaUnit}
                   onChange={(e) =>
-                    setTambahForm((prev) => ({ ...prev, hargaUnit: e.target.value }))
+                    setTambahForm((p) => ({ ...p, hargaUnit: e.target.value }))
                   }
                 />
               </div>
 
               <div>
-                <label className="text-xs">Qty (Tanpa IMEI)</label>
+                <label className="text-xs">Qty</label>
                 <input
                   type="number"
-                  min={1}
+                  min={0}
                   className="w-full border p-2 rounded"
                   value={tambahForm.qty}
                   onChange={(e) =>
-                    setTambahForm((prev) => ({ ...prev, qty: e.target.value }))
+                    setTambahForm((p) => ({ ...p, qty: e.target.value }))
                   }
                 />
               </div>
@@ -800,22 +865,51 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded"
                   value={tambahForm.noInvoice}
                   onChange={(e) =>
-                    setTambahForm((prev) => ({ ...prev, noInvoice: e.target.value }))
+                    setTambahForm((p) => ({ ...p, noInvoice: e.target.value }))
                   }
                 />
               </div>
 
+              <div>
+                <label className="text-xs">Tanggal</label>
+                <input
+                  type="date"
+                  className="w-full border p-2 rounded text-sm"
+                  value={tambahForm.tanggal}
+                  onChange={(e) =>
+                    setTambahForm((p) => ({ ...p, tanggal: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-xs">Kategori Brand</label>
+                <select
+                  className="w-full border p-2 rounded text-sm"
+                  value={tambahForm.kategoriBrand}
+                  onChange={(e) =>
+                    setTambahForm((p) => ({ ...p, kategoriBrand: e.target.value }))
+                  }
+                >
+                  <option value="">- Pilih Kategori -</option>
+                  {KATEGORI_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="col-span-2">
                 <label className="text-xs">
-                  IMEI / No MESIN (1 per baris – opsional)
+                  IMEI / No MESIN (1 per baris – WAJIB sama dengan Qty)
                 </label>
                 <textarea
                   rows={5}
                   className="w-full border p-2 rounded text-xs font-mono"
-                  placeholder={`Contoh:\n6633849364\nABCD9983XYZ`}
                   value={tambahForm.imeiList}
                   onChange={(e) =>
-                    setTambahForm((prev) => ({ ...prev, imeiList: e.target.value }))
+                    setTambahForm((p) => ({ ...p, imeiList: e.target.value }))
                   }
                 />
               </div>
@@ -840,16 +934,13 @@ export default function MasterBarang() {
         </div>
       )}
 
-      {/* MODAL: EDIT MASTER BARANG */}
+      {/* MODAL EDIT MASTER */}
       {showModalEdit && editData && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
           <div className="bg-white w-full max-w-md rounded shadow p-5">
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-bold">Edit Master Barang</h3>
-              <button
-                onClick={() => setShowModalEdit(false)}
-                className="text-gray-600"
-              >
+              <button onClick={() => setShowModalEdit(false)} className="text-gray-600">
                 <FaTimes />
               </button>
             </div>
@@ -861,7 +952,7 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded text-sm"
                   value={editData.brand}
                   onChange={(e) =>
-                    setEditData((prev) => ({ ...prev, brand: e.target.value }))
+                    setEditData((p) => ({ ...p, brand: e.target.value }))
                   }
                 />
               </div>
@@ -872,7 +963,7 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded text-sm"
                   value={editData.barang}
                   onChange={(e) =>
-                    setEditData((prev) => ({ ...prev, barang: e.target.value }))
+                    setEditData((p) => ({ ...p, barang: e.target.value }))
                   }
                 />
               </div>
@@ -883,10 +974,7 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded text-sm"
                   value={editData.noInvoiceSample}
                   onChange={(e) =>
-                    setEditData((prev) => ({
-                      ...prev,
-                      noInvoiceSample: e.target.value,
-                    }))
+                    setEditData((p) => ({ ...p, noInvoiceSample: e.target.value }))
                   }
                 />
               </div>
@@ -898,7 +986,7 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded text-sm"
                   value={editData.hargaSup}
                   onChange={(e) =>
-                    setEditData((prev) => ({ ...prev, hargaSup: e.target.value }))
+                    setEditData((p) => ({ ...p, hargaSup: e.target.value }))
                   }
                 />
               </div>
@@ -908,14 +996,13 @@ export default function MasterBarang() {
                 <input
                   type="number"
                   className="w-full border p-2 rounded text-sm"
-                  value={editData.hhargaUnit}
+                  value={editData.hargaUnit}
                   onChange={(e) =>
-                    setEditData((prev) => ({ ...prev, hargaUnit: e.target.value }))
+                    setEditData((p) => ({ ...p, hargaUnit: e.target.value }))
                   }
                 />
               </div>
 
-              {/* FIELD STOK SISTEM */}
               <div>
                 <label className="text-xs">Stok Sistem</label>
                 <input
@@ -924,12 +1011,46 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded text-sm"
                   value={editData.stokSistem}
                   onChange={(e) =>
-                    setEditData((prev) => ({
-                      ...prev,
+                    setEditData((p) => ({
+                      ...p,
                       stokSistem: Number(e.target.value),
                     }))
                   }
                 />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Saat simpan: Stok Sistem akan otomatis disesuaikan dengan jumlah IMEI,
+                  atau IMEI akan dipotong dari bawah jika lebih banyak dari stok.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs">Tanggal</label>
+                <input
+                  type="date"
+                  className="w-full border p-2 rounded text-sm"
+                  value={editData.tanggal}
+                  onChange={(e) =>
+                    setEditData((p) => ({ ...p, tanggal: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-xs">Kategori Brand</label>
+                <select
+                  className="w-full border p-2 rounded text-sm"
+                  value={editData.kategoriBrand}
+                  onChange={(e) =>
+                    setEditData((p) => ({ ...p, kategoriBrand: e.target.value }))
+                  }
+                >
+                  <option value="">- Pilih Kategori -</option>
+                  {KATEGORI_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -939,9 +1060,13 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded text-xs font-mono"
                   value={editData.imeiList}
                   onChange={(e) =>
-                    setEditData((prev) => ({ ...prev, imeiList: e.target.value }))
+                    setEditData((p) => ({ ...p, imeiList: e.target.value }))
                   }
                 />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  • IMEI tidak boleh sama. • Jumlah IMEI akan disinkronkan dengan Stok Sistem
+                  sesuai aturan A1 & B1.
+                </p>
               </div>
             </div>
 
