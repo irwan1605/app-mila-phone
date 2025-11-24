@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import defaultUsersRaw from "../data/UserManagementRole";
 import { listenUsers } from "../services/FirebaseService";
 
-// --- Normalisasi user default ---
 const normalizeDefaultUsers = () => {
   if (Array.isArray(defaultUsersRaw)) return defaultUsersRaw;
   if (defaultUsersRaw && typeof defaultUsersRaw === "object")
@@ -17,14 +16,10 @@ export default function Login({ onLogin, users: usersProp }) {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-
   const [onlineUsers, setOnlineUsers] = useState([]);
 
   const defaultUsers = useMemo(() => normalizeDefaultUsers(), []);
 
-  /* ======================================================
-        1. LOAD USERS DARI FIREBASE (REALTIME)
-  ====================================================== */
   useEffect(() => {
     const unsub = listenUsers((list) => {
       setOnlineUsers(list || []);
@@ -34,12 +29,8 @@ export default function Login({ onLogin, users: usersProp }) {
     return () => unsub && unsub();
   }, []);
 
-  /* ======================================================
-        2. PRIORITAS PEMILIHAN LIST USER
-  ====================================================== */
   const users = useMemo(() => {
     if (Array.isArray(usersProp) && usersProp.length) return usersProp;
-
     if (Array.isArray(onlineUsers) && onlineUsers.length) return onlineUsers;
 
     try {
@@ -50,9 +41,6 @@ export default function Login({ onLogin, users: usersProp }) {
     return defaultUsers;
   }, [usersProp, onlineUsers, defaultUsers]);
 
-  /* ======================================================
-        3. HANDLE LOGIN
-  ====================================================== */
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -80,7 +68,6 @@ export default function Login({ onLogin, users: usersProp }) {
       }
     }
 
-    // simpan data login
     const logged = {
       username: u.username,
       name: u.name || u.username,
@@ -91,7 +78,6 @@ export default function Login({ onLogin, users: usersProp }) {
     localStorage.setItem("user", JSON.stringify(logged));
     if (typeof onLogin === "function") onLogin(logged);
 
-    // redirect role
     if (role === "superadmin" || role === "admin") {
       navigate("/dashboard", { replace: true });
       return;
@@ -105,16 +91,26 @@ export default function Login({ onLogin, users: usersProp }) {
     navigate("/dashboard", { replace: true });
   };
 
-  /* ======================================================
-        4. USER INTERFACE (TIDAK DIUBAH, hanya background)
-  ====================================================== */
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat"
       style={{
-        backgroundImage: `url('/bg-login-mmt.png')`,
+        backgroundImage: `url('/bg-login-desktop.png')`,
       }}
     >
+      {/* Media query CSS khusus mobile */}
+      <style>
+        {`
+          @media (max-width: 640px) {
+            div[style] {
+              background-image: url('/bg-login-mobile.png') !important;
+              background-size: cover !important;
+              background-position: center !important;
+            }
+          }
+        `}
+      </style>
+
       <div className="w-full max-w-md">
         <div className="bg-white/80 backdrop-blur rounded-2xl shadow-xl p-6">
           <div className="text-center mb-6">

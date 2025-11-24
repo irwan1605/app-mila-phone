@@ -55,10 +55,13 @@ const Sidebar = ({ role, toko, onLogout }) => {
   const picMatch = /^pic_toko(\d+)$/i.exec(role || "");
   const picTokoId = picMatch ? Number(picMatch[1]) : toko ? Number(toko) : null;
 
-  const [showSubMenuDashboardToko, setShowSubMenuDashboardToko] = useState(false);
+  const [showSubMenuDashboardToko, setShowSubMenuDashboardToko] =
+    useState(false);
   const [showSubMenulaporan, setShowSubMenulaporan] = useState(false);
-  const [showSubMenuTransferBarang, setShowSubMenuTransferBarang] = useState(false);
+  const [showSubMenuTransferBarang, setShowSubMenuTransferBarang] =
+    useState(false);
   const [showSubMenuCetak, setShowSubMenuCetak] = useState(false);
+  const [showSubMenuMasterData, setShowSubMenuMasterData] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const panelRef = useRef(null);
@@ -80,8 +83,8 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
     // Expand laporan
     if (
-      ["laporan", "inventory", "persediaan", "stok", "keuangan", "sales"].some((x) =>
-        q.includes(x)
+      ["laporan", "inventory", "persediaan", "stok", "keuangan", "sales"].some(
+        (x) => q.includes(x)
       )
     ) {
       setShowSubMenulaporan(true);
@@ -124,12 +127,13 @@ const Sidebar = ({ role, toko, onLogout }) => {
       <div className="font-bold p-1 text-center">
         <h2 className="text-gray-200 text-xs">PT. MILA MEDIA TELEKOMUNIKASI</h2>
         {picTokoId !== null && TOKO_LABELS[picTokoId] && (
-          <div className="text-yellow-300 text-xs mt-1">{TOKO_LABELS[picTokoId]}</div>
+          <div className="text-yellow-300 text-xs mt-1">
+            {TOKO_LABELS[picTokoId]}
+          </div>
         )}
       </div>
 
       <nav className="mt-2 font-bold">
-
         {/* ======================= SUPER ADMIN ======================= */}
         {isSuper ? (
           <>
@@ -325,15 +329,59 @@ const Sidebar = ({ role, toko, onLogout }) => {
             </Link>
 
             {/* MASTER DATA */}
-            <Link
-              to="/data-management"
-              className={`flex items-center p-3 hover:bg-blue-500 ${
-                activePath === "/data-management" ? "bg-blue-600" : ""
+            <button
+              onClick={() => setShowSubMenuMasterData?.((s) => !s)}
+              className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${
+                activePath.includes("/data-management") ||
+                activePath.includes("/master-barang")
+                  ? "bg-blue-600"
+                  : ""
               }`}
             >
               <AiOutlineDatabase className="text-xl" />
               <span className="ml-2">MASTER DATA</span>
-            </Link>
+            </button>
+
+            {showSubMenuMasterData && (
+              <ul className="pl-6">
+                <li>
+                  <Link
+                    to="/data-management"
+                    className={`flex items-center p-2 hover:bg-blue-500 ${
+                      activePath === "/data-management" ? "bg-blue-600" : ""
+                    }`}
+                  >
+                    <AiOutlineDatabase className="text-sm" />
+                    <span className="ml-2">Data Management</span>
+                  </Link>
+                </li>
+
+                <li>
+                  <Link
+                    to="/master-barang"
+                    className={`flex items-center p-2 hover:bg-blue-500 ${
+                      activePath === "/master-barang" ? "bg-blue-600" : ""
+                    }`}
+                  >
+                    <AiOutlineDatabase className="text-sm" />
+                    <span className="ml-2">Master Barang</span>
+                  </Link>
+                </li>
+                 {/* ✅ MASTER PEMBELIAN — BARU */}
+                 <li>
+                  <Link
+                    to="/master-pembelian"
+                    onClick={() => setMobileOpen(false)}
+                    className={`flex items-center p-2 hover:bg-blue-500 ${
+                      activePath === "/master-pembelian" ? "bg-blue-600" : ""
+                    }`}
+                  >
+                    <AiOutlineDatabase className="text-sm" />
+                    <span className="ml-2">Master Pembelian</span>
+                  </Link>
+                </li>
+              </ul>
+            )}
           </>
         ) : (
           <>
@@ -353,7 +401,9 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     <Link
                       to={`/toko/${visibleTokoIds[0]}`}
                       className={`flex items-center p-2 hover:bg-blue-500 ${
-                        activePath === `/toko/${visibleTokoIds[0]}` ? "bg-blue-600" : ""
+                        activePath === `/toko/${visibleTokoIds[0]}`
+                          ? "bg-blue-600"
+                          : ""
                       }`}
                     >
                       <FaStore className="text-sm" />

@@ -65,6 +65,12 @@ export default function StockOpname() {
   // opname local { keyOrSku: stokFisik }
   const [opnameMap, setOpnameMap] = useState({});
 
+  // ===== Tambahan untuk Edit/Delete per SKU (Stok Opname Cepat) =====
+  const [editSku, setEditSku] = useState(null);
+  const [editHargaSuplayer, setEditHargaSuplayer] = useState("");
+  const [editHargaUnit, setEditHargaUnit] = useState("");
+  const [showModalEditSku, setShowModalEditSku] = useState(false);
+
   // UI controls
   const [filterToko, setFilterToko] = useState("semua");
   const [filterStatus, setFilterStatus] = useState("semua");
@@ -125,6 +131,7 @@ export default function StockOpname() {
       NOMOR_UNIK: r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
       KATEGORI_HARGA: r.KATEGORI_HARGA || "",
       HARGA_UNIT: Number(r.HARGA_UNIT || r.HARGA || 0),
+      HARGA_SUPLAYER: Number(r.HARGA_SUPLAYER || r.HARGA_SUPPLIER || 0),
       PAYMENT_METODE: r.PAYMENT_METODE || "",
       SYSTEM_PAYMENT: r.SYSTEM_PAYMENT || "",
       TOTAL:
@@ -234,7 +241,9 @@ export default function StockOpname() {
     return allTransaksi.filter((r) => {
       let ok = true;
       if (filterToko !== "semua") {
-        ok = ok && String(r.NAMA_TOKO || "") === String(filterToko || "");
+        ok =
+          ok &&
+          String(r.NAMA_TOKO || "") === String(filterToko || "");
       }
       if (filterStatus !== "semua") {
         ok =
@@ -288,7 +297,9 @@ export default function StockOpname() {
 
   const handleSave = async () => {
     const tanggal =
-      form.TANGGAL_TRANSAKSI || form.TANGGAL || new Date().toISOString().slice(0, 10);
+      form.TANGGAL_TRANSAKSI ||
+      form.TANGGAL ||
+      new Date().toISOString().slice(0, 10);
     const brand = form.NAMA_BRAND || form.BRAND;
     const barang = form.NAMA_BARANG || form.BARANG;
     const tokoName = form.NAMA_TOKO || "PUSAT";
@@ -319,7 +330,8 @@ export default function StockOpname() {
       if (editId) {
         const tokoIndex = fallbackTokoNames.findIndex(
           (n) =>
-            String(n).toUpperCase() === String(payload.NAMA_TOKO || "").toUpperCase()
+            String(n).toUpperCase() ===
+            String(payload.NAMA_TOKO || "").toUpperCase()
         );
         const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
         if (typeof updateTransaksi === "function") {
@@ -337,7 +349,8 @@ export default function StockOpname() {
       } else {
         const tokoIndex = fallbackTokoNames.findIndex(
           (n) =>
-            String(n).toUpperCase() === String(payload.NAMA_TOKO || "").toUpperCase()
+            String(n).toUpperCase() ===
+            String(payload.NAMA_TOKO || "").toUpperCase()
         );
         const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
         if (typeof addTransaksi === "function") {
@@ -368,7 +381,8 @@ export default function StockOpname() {
     try {
       const tokoIndex = fallbackTokoNames.findIndex(
         (n) =>
-          String(n).toUpperCase() === String(row.NAMA_TOKO || "").toUpperCase()
+          String(n).toUpperCase() ===
+          String(row.NAMA_TOKO || "").toUpperCase()
       );
       const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
       if (typeof deleteTransaksi === "function") {
@@ -388,7 +402,8 @@ export default function StockOpname() {
     try {
       const tokoIndex = fallbackTokoNames.findIndex(
         (n) =>
-          String(n).toUpperCase() === String(row.NAMA_TOKO || "").toUpperCase()
+          String(n).toUpperCase() ===
+          String(row.NAMA_TOKO || "").toUpperCase()
       );
       const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
       if (typeof updateTransaksi === "function") {
@@ -429,9 +444,13 @@ export default function StockOpname() {
   const saveOpnameFor = async (record) => {
     const key =
       record.NOMOR_UNIK ||
-      `${record.NAMA_BRAND || record.brand}|${record.NAMA_BARANG || record.barang}`;
+      `${record.NAMA_BRAND || record.brand}|${
+        record.NAMA_BARANG || record.barang
+      }`;
     const fisik = Number(opnameMap[key] ?? "");
-    const sistemQty = Number(record.QTY || record.QTY_SYSTEM || record.totalQty || 0);
+    const sistemQty = Number(
+      record.QTY || record.QTY_SYSTEM || record.totalQty || 0
+    );
 
     if (Number.isNaN(fisik)) {
       alert("Masukkan angka stok fisik yang valid");
@@ -501,6 +520,105 @@ export default function StockOpname() {
     }
   };
 
+  // ===================== Edit & Delete per SKU (Stok Opname Cepat) =====================
+  const openEditSku = (key) => {
+    setEditSku(key);
+    const sample = allTransaksi.find(
+      (x) =>
+        x.NOMOR_UNIK === key ||
+        `${x.NAMA_BRAND}|${x.NAMA_BARANG}` === key
+    );
+
+    setEditHargaSuplayer(sample?.HARGA_SUPLAYER || 0);
+    setEditHargaUnit(sample?.HARGA_UNIT || 0);
+
+    setShowModalEditSku(true);
+  };
+
+  const saveEditSku = async () => {
+    if (!editSku) return;
+
+    const list = allTransaksi.filter(
+      (r) =>
+        r.NOMOR_UNIK === editSku ||
+        `${r.NAMA_BRAND}|${r.NAMA_BARANG}` === editSku
+    );
+
+    for (const row of list) {
+      const tokoIndex = fallbackTokoNames.findIndex(
+        (n) =>
+          String(n).toUpperCase() ===
+          String(row.NAMA_TOKO || "").toUpperCase()
+      );
+      const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
+
+      const newHargaUnit = Number(editHargaUnit || 0);
+      const newHargaSuplayer = Number(editHargaSuplayer || 0);
+
+      await updateTransaksi(tokoId, row.id, {
+        ...row,
+        HARGA_UNIT: newHargaUnit,
+        HARGA_SUPLAYER: newHargaSuplayer,
+        TOTAL: row.QTY * newHargaUnit,
+      });
+    }
+
+    // update lokal juga
+    setAllTransaksi((prev) =>
+      prev.map((r) => {
+        if (
+          r.NOMOR_UNIK === editSku ||
+          `${r.NAMA_BRAND}|${r.NAMA_BARANG}` === editSku
+        ) {
+          const newHargaUnit = Number(editHargaUnit || 0);
+          const newHargaSuplayer = Number(editHargaSuplayer || 0);
+          return {
+            ...r,
+            HARGA_UNIT: newHargaUnit,
+            HARGA_SUPLAYER: newHargaSuplayer,
+            TOTAL: r.QTY * newHargaUnit,
+          };
+        }
+        return r;
+      })
+    );
+
+    alert("Harga SKU berhasil diperbarui.");
+    setShowModalEditSku(false);
+  };
+
+  const deleteSku = async (key) => {
+    if (!window.confirm("Hapus semua transaksi untuk SKU ini?")) return;
+
+    const list = allTransaksi.filter(
+      (r) =>
+        r.NOMOR_UNIK === key ||
+        `${r.NAMA_BRAND}|${r.NAMA_BARANG}` === key
+    );
+
+    for (const row of list) {
+      const tokoIndex = fallbackTokoNames.findIndex(
+        (n) =>
+          String(n).toUpperCase() ===
+          String(row.NAMA_TOKO || "").toUpperCase()
+      );
+      const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
+      await deleteTransaksi(tokoId, row.id);
+    }
+
+    setAllTransaksi((prev) =>
+      prev.filter(
+        (r) =>
+          !(
+            r.NOMOR_UNIK === key ||
+            `${r.NAMA_BRAND}|${r.NAMA_BARANG}` === key
+          )
+      )
+    );
+
+    alert("SKU berhasil dihapus.");
+  };
+
   // ===================== Export / Import =====================
   const exportAggregatedExcel = () => {
     const map = new Map();
@@ -542,6 +660,7 @@ export default function StockOpname() {
       QTY: r.QTY,
       NOMOR_UNIK: r.NOMOR_UNIK,
       HARGA_UNIT: r.HARGA_UNIT,
+      HARGA_SUPLAYER: r.HARGA_SUPLAYER,
       STATUS: r.STATUS,
       KETERANGAN: r.KETERANGAN,
     }));
@@ -589,13 +708,15 @@ export default function StockOpname() {
           const tokoName = row.NAMA_TOKO || row.TOKO || "PUSAT";
           const tokoIndex = fallbackTokoNames.findIndex(
             (t) =>
-              String(t).toUpperCase() === String(tokoName || "").toUpperCase()
+              String(t).toUpperCase() ===
+              String(tokoName || "").toUpperCase()
           );
           const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
           const payload = {
             ...row,
             QTY: Number(row.QTY || row.QUANTITY || 0),
             HARGA_UNIT: Number(row.HARGA_UNIT || row.PRICE || 0),
+            HARGA_SUPLAYER: Number(row.HARGA_SUPLAYER || 0),
             TANGGAL_TRANSAKSI: row.TANGGAL_TRANSAKSI || row.TANGGAL || "",
             NAMA_BRAND: row.NAMA_BRAND || row.BRAND || "",
             NAMA_BARANG: row.NAMA_BARANG || row.BARANG || "",
@@ -1010,7 +1131,9 @@ export default function StockOpname() {
                 <td className="p-2 border text-right">
                   Rp {fmt(r.HARGA_UNIT)}
                 </td>
-                <td className="p-2 border text-right">Rp {fmt(r.TOTAL)}</td>
+                <td className="p-2 border text-right">
+                  Rp {fmt(r.TOTAL)}
+                </td>
                 <td
                   className={`p-2 border font-semibold ${
                     r.STATUS === "Approved"
@@ -1058,9 +1181,7 @@ export default function StockOpname() {
         </span>
         <div className="space-x-2">
           <button
-            onClick={() =>
-              currentPage > 1 && setCurrentPage((p) => p - 1)
-            }
+            onClick={() => currentPage > 1 && setCurrentPage((p) => p - 1)}
             disabled={currentPage === 1}
             className="px-2 py-1 border rounded disabled:opacity-40"
           >
@@ -1078,7 +1199,7 @@ export default function StockOpname() {
         </div>
       </div>
 
-      {/* STOK OPNAME CEPAT */}
+      {/* STOK OPNAME CEPAT (Per SKU) */}
       <div className="bg-white p-4 rounded shadow mt-6">
         <h3 className="font-semibold mb-3">Stok Opname Cepat (Per SKU)</h3>
         <div className="overflow-x-auto">
@@ -1089,6 +1210,8 @@ export default function StockOpname() {
                 <th className="p-2 border">SKU / No Unik</th>
                 <th className="p-2 border">Brand</th>
                 <th className="p-2 border">Barang</th>
+                <th className="p-2 border">Harga Suplayer</th>
+                <th className="p-2 border">Harga Unit</th>
                 <th className="p-2 border">Stok Sistem</th>
                 <th className="p-2 border">Stok Fisik</th>
                 <th className="p-2 border">Selisih</th>
@@ -1101,13 +1224,32 @@ export default function StockOpname() {
                   const sistem = ag.totalQty || 0;
                   const fisik = Number(opnameMap[key] ?? "");
                   const selisih = Number.isNaN(fisik) ? "" : fisik - sistem;
+
+                  const sample = allTransaksi.find(
+                    (x) =>
+                      x.NOMOR_UNIK === key ||
+                      `${x.NAMA_BRAND}|${x.NAMA_BARANG}` === key
+                  );
+                  const hargaSup = sample?.HARGA_SUPLAYER || 0;
+                  const hargaUnit = sample?.HARGA_UNIT || 0;
+
                   return (
                     <tr key={key} className="hover:bg-gray-50">
-                      <td className="p-2 border text-center">{idx + 1}</td>
+                      <td className="p-2 border text-center">
+                        {idx + 1}
+                      </td>
                       <td className="p-2 border font-mono">{key}</td>
                       <td className="p-2 border">{ag.brand}</td>
                       <td className="p-2 border">{ag.barang}</td>
-                      <td className="p-2 border text-center">{sistem}</td>
+                      <td className="p-2 border text-right">
+                        Rp {fmt(hargaSup)}
+                      </td>
+                      <td className="p-2 border text-right">
+                        Rp {fmt(hargaUnit)}
+                      </td>
+                      <td className="p-2 border text-center">
+                        {sistem}
+                      </td>
                       <td className="p-2 border">
                         <input
                           className="w-24 p-1 border rounded"
@@ -1131,7 +1273,21 @@ export default function StockOpname() {
                       >
                         {selisih === "" ? "-" : selisih}
                       </td>
-                      <td className="p-2 border text-center">
+                      <td className="p-2 border text-center space-x-2">
+                        <button
+                          className="text-blue-600 hover:text-blue-800 text-sm inline-flex"
+                          onClick={() => openEditSku(key)}
+                          title="Edit Harga"
+                        >
+                          <FaEdit />
+                        </button>
+                        <button
+                          className="text-red-600 hover:text-red-800 text-sm inline-flex"
+                          onClick={() => deleteSku(key)}
+                          title="Hapus SKU"
+                        >
+                          <FaTrash />
+                        </button>
                         <button
                           onClick={() =>
                             saveOpnameFor({
@@ -1140,7 +1296,8 @@ export default function StockOpname() {
                               QTY: ag.totalQty,
                             })
                           }
-                          className="px-3 py-1 bg-blue-600 text-white rounded text-xs flex items-center mx-auto"
+                          className="px-3 py-1 bg-blue-600 text-white rounded text-xs inline-flex items-center mx-auto mt-1"
+                          title="Simpan penyesuaian opname"
                         >
                           <FaSave className="mr-1" /> Simpan Opname
                         </button>
@@ -1153,6 +1310,56 @@ export default function StockOpname() {
           </table>
         </div>
       </div>
+
+      {/* MODAL EDIT HARGA PER SKU */}
+      {showModalEditSku && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
+          <div className="bg-white p-5 rounded shadow-md w-96">
+            <h3 className="font-bold mb-3">Edit Harga SKU</h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs block mb-1">
+                  Harga Suplayer
+                </label>
+                <input
+                  type="number"
+                  className="w-full border p-2 rounded"
+                  value={editHargaSuplayer}
+                  onChange={(e) =>
+                    setEditHargaSuplayer(e.target.value)
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="text-xs block mb-1">Harga Unit</label>
+                <input
+                  type="number"
+                  className="w-full border p-2 rounded"
+                  value={editHargaUnit}
+                  onChange={(e) => setEditHargaUnit(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                className="px-3 py-1 bg-gray-400 text-white rounded"
+                onClick={() => setShowModalEditSku(false)}
+              >
+                Batal
+              </button>
+              <button
+                className="px-3 py-1 bg-blue-600 text-white rounded"
+                onClick={saveEditSku}
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

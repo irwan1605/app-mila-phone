@@ -60,6 +60,8 @@ import { listenUsers, getAllUsersOnce } from "./services/FirebaseService";
 
 /* Default local users (fallback login offline) */
 import defaultUsers from "./data/UserManagementRole";
+import MasterBarang from "./pages/MasterBarang";
+import MasterPembelian from "./pages/MasterPembelian";
 
 /* ===========================
     Utility role → toko
@@ -189,6 +191,9 @@ export default function App() {
                     element={<FinanceReportMonthly />}
                   />
                   <Route path="/stok-opname" element={<StockOpname />} />
+                  <Route path="/master-barang" element={<MasterBarang />} />
+                  <Route path="/master-pembelian" element={<MasterPembelian />} />
+
 
                   {/* Produk */}
                   <Route path="/products" element={<Products />} />
