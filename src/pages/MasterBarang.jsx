@@ -4,7 +4,7 @@
 // - IMEI tidak boleh duplikat (input & antar SKU).
 // - Tanggal menggunakan field TANGGAL_TRANSAKSI (opsi A).
 // - Kategori Brand: SEPEDA LISTRIK, MOTOR LISTRIK, HANDPHONE, ACCESORIES.
-
+// src/pages/MasterBarang.jsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   listenAllTransaksi,
@@ -12,6 +12,7 @@ import {
   updateTransaksi,
   deleteTransaksi,
 } from "../services/FirebaseService";
+import { deleteMasterBarang } from "../services/FirebaseService";
 
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -28,8 +29,12 @@ import {
   FaTimes,
 } from "react-icons/fa";
 
+import { getDatabase, ref, get, remove } from "firebase/database";
+
+const db = getDatabase();
+
 const fallbackTokoNames = [
-  "CILANGKAP",
+  "CILANGKAP PUSAT",
   "CIBINONG",
   "GAS ALAM",
   "CITEUREUP",
@@ -39,7 +44,7 @@ const fallbackTokoNames = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
-  "PUSAT",
+
 ];
 
 const fmt = (n) => {
@@ -469,48 +474,78 @@ export default function MasterBarang() {
     );
   };
 
-// DELETE SKU — PRO MAX REALTIME + PERMANENT DELETE + ANTI-REAPPEAR
+// ===================== DELETE SKU PRO MAX (HILANG TOTAL) =====================
 const deleteSku = async (data) => {
-  if (!window.confirm(`Hapus semua transaksi untuk SKU?\n${data.brand} - ${data.barang}`))
-    return;
+  const brand = (data.brand || "").trim();
+  const barang = (data.barang || "").trim();
+  const skuKey = `${brand}_${barang}`.replace(/\s+/g, "_");
 
-  // Ambil semua transaksi SKU berdasarkan brand+barang
-  const rows = allTransaksi.filter(
-    (x) =>
-      `${(x.NAMA_BRAND || "").trim()}|${(x.NAMA_BARANG || "").trim()}` ===
-      `${(data.brand || "").trim()}|${(data.barang || "").trim()}`
-  );
-
-  if (rows.length === 0) {
-    alert("Tidak ada transaksi SKU untuk dihapus.");
-    return;
-  }
+  if (!window.confirm(`Yakin hapus SKU?\n${brand} - ${barang}`)) return;
 
   try {
-    // 1. HAPUS SEMUA FIREBASE MENGGUNAKAN Promise.all
-    await Promise.all(
-      rows.map(async (r) => {
-        if (r.id) {
-          const tokoIndex = getTokoIndex(r) || 1;
-          return deleteTransaksi(tokoIndex, r.id);
+    // 1) Hapus semua transaksi SKU (IMEI / non IMEI)
+    const rows = allTransaksi.filter(
+      (x) =>
+        (x.NAMA_BRAND || "").trim() === brand &&
+        (x.NAMA_BARANG || "").trim() === barang
+    );
+
+    for (const r of rows) {
+      const tokoIndex =
+        fallbackTokoNames.findIndex(
+          (t) =>
+            t.toUpperCase() === String(r.NAMA_TOKO || "PUSAT").toUpperCase()
+        ) + 1;
+
+      if (r.id) {
+        await deleteTransaksi(tokoIndex, r.id);
+      } else {
+        // FORCE DELETE untuk transaksi lama tanpa ID
+        const trxPath = `toko/${tokoIndex}/transaksi`;
+        const snap = await get(ref(db, trxPath));
+        if (snap.exists()) {
+          snap.forEach((child) => {
+            const val = child.val();
+            if (
+              (val.NAMA_BRAND || "").trim() === brand &&
+              (val.NAMA_BARANG || "").trim() === barang
+            ) {
+              remove(ref(db, `${trxPath}/${child.key}`));
+            }
+          });
         }
-      })
-    );
+      }
+    }
 
-    // 2. UPDATE STATE LOCAL BERDASARKAN ID (PASTI HILANG REALTIME)
+    // 2) HAPUS MASTER STOCK (INI YANG MEMBUAT REFRESH TIDAK MUNCUL LAGI)
+    await deleteMasterBarang(brand, barang);
+
+    // 3) update state agar realtime hilang
     setAllTransaksi((prev) =>
-      prev.filter((x) => !rows.some((r) => r.id === x.id))
+      prev.filter(
+        (x) =>
+          (x.NAMA_BRAND || "").trim() !== brand ||
+          (x.NAMA_BARANG || "").trim() !== barang
+      )
     );
 
-    alert("SKU berhasil dihapus. Realtime & permanen.");
-
+    alert("SKU berhasil dihapus TOTAL dari transaksi + master stock.");
   } catch (err) {
-    console.error("deleteSku PRO MAX error:", err);
-    alert("Gagal menghapus SKU. Silakan coba lagi.");
+    console.error("Delete SKU ERROR:", err);
+    alert("Gagal menghapus SKU.");
   }
 };
 
+useEffect(() => {
+  const unsub =
+    typeof listenAllTransaksi === "function"
+      ? listenAllTransaksi((list) => {
+          setAllTransaksi(Array.isArray(list) ? list : []);
+        })
+      : null;
 
+  return () => unsub && unsub();
+}, []);
 
 
   // TAMBAH STOCK

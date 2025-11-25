@@ -1,4 +1,12 @@
 // src/services/FirebaseService.js
+// FirebaseService.js — PRO MAX edition
+// Improvements:
+// - normalize transaksi to always include `id`, tokoId, TOKO
+// - ensure addTransaksi writes data with the firebase key as id
+// - listenAllTransaksi sorts by TANGGAL_TRANSAKSI and normalizes missing fields
+// - forceDeleteTransaksi to remove legacy rows without id based on matcher
+// - robust helper functions and safer get/set/remove usage
+
 import { db } from "../FirebaseInit";
 import {
   ref,
@@ -14,6 +22,10 @@ import {
 /* ============================================================
    HELPERS
 ============================================================ */
+
+/**
+ * Convert snapshot val to list safely
+ */
 const safeValToList = (snap) => {
   const v = snap.val();
   if (!v) return [];
@@ -25,9 +37,36 @@ const safeValToList = (snap) => {
   return Array.isArray(v) ? v : [v];
 };
 
+/**
+ * Normalize transaksi row into consistent shape used by app
+ * Ensures id, tokoId, TOKO exist.
+ */
+const normalizeTransaksi = (id, row = {}, tokoId = null, tokoName = "") => {
+  const fixed = {
+    id: id || null,
+    tokoId,
+    TOKO: tokoName || "",
+    // keep all other fields
+    ...row,
+  };
+
+  // Backwards compatibility: support older field names
+  if (!fixed.TANGGAL_TRANSAKSI && fixed.TANGGAL) {
+    fixed.TANGGAL_TRANSAKSI = fixed.TANGGAL;
+  }
+
+  // ensure QTY is numeric for calculations
+  if (fixed.QTY !== undefined) {
+    fixed.QTY = Number(fixed.QTY);
+  }
+
+  return fixed;
+};
+
 /* ============================================================
    TOKO HELPERS
 ============================================================ */
+
 export const getTokoName = async (tokoId) => {
   try {
     if (!tokoId && tokoId !== 0) return null;
@@ -57,13 +96,17 @@ export const getTokoName = async (tokoId) => {
 /* ============================================================
    TRANSAKSI PER TOKO
 ============================================================ */
+
+/**
+ * Listen transaksi for single toko (returns array of rows {id, ...})
+ */
 export const listenTransaksiByToko = (tokoId, callback) => {
   const r = ref(db, `toko/${tokoId}/transaksi`);
   const unsub = onValue(
     r,
     (snap) => {
       const raw = snap.val() || {};
-      const list = Object.entries(raw).map(([id, item]) => ({ id, ...item }));
+      const list = Object.entries(raw).map(([id, item]) => normalizeTransaksi(id, item, tokoId));
       callback(list);
     },
     (err) => {
@@ -74,19 +117,46 @@ export const listenTransaksiByToko = (tokoId, callback) => {
   return () => unsub && unsub();
 };
 
-export const addTransaksi = (tokoId, data) => {
+/**
+ * Add transaksi: writes a new transaksi and ensures id is stored in the object.
+ * Returns the generated key.
+ */
+export const addTransaksi = async (tokoId, data) => {
   const r = push(ref(db, `toko/${tokoId}/transaksi`));
-  return set(r, data);
+  const payload = {
+    ...data,
+    // if caller didn't include TANGGAL_TRANSAKSI, try to keep consistent timestamp
+    TANGGAL_TRANSAKSI: data.TANGGAL_TRANSAKSI || data.TANGGAL || new Date().toISOString(),
+  };
+  await set(r, payload);
+  // Optionally set id inside object for easier migration/read (not strictly necessary)
+  try {
+    await update(ref(db, `toko/${tokoId}/transaksi/${r.key}`), { id: r.key });
+  } catch (e) {
+    // ignore update error (best-effort)
+    console.warn("Could not set id field on new transaksi:", e);
+  }
+  return r.key;
 };
 
+/**
+ * Update transaksi by id
+ */
 export const updateTransaksi = (tokoId, id, data) => {
   return update(ref(db, `toko/${tokoId}/transaksi/${id}`), data);
 };
 
+/**
+ * Delete transaksi by id
+ */
 export const deleteTransaksi = (tokoId, id) => {
   return remove(ref(db, `toko/${tokoId}/transaksi/${id}`));
 };
 
+/**
+ * Listen ALL transaksi across semua toko, return merged array normalized.
+ * Sorting uses TANGGAL_TRANSAKSI (newer first).
+ */
 export const listenAllTransaksi = (callback) => {
   const r = ref(db, "toko");
   const unsub = onValue(
@@ -97,18 +167,23 @@ export const listenAllTransaksi = (callback) => {
 
       Object.entries(raw).forEach(([tokoId, tokoData]) => {
         const tokoName =
-          tokoData?.info?.name || tokoData?.name || `TOKO ${tokoId}`;
+          (tokoData && tokoData.info && tokoData.info.name) ||
+          tokoData?.name ||
+          `TOKO ${tokoId}`;
 
         if (tokoData?.transaksi) {
           Object.entries(tokoData.transaksi).forEach(([id, row]) => {
-            merged.push({ id, tokoId, TOKO: tokoName, ...row });
+            merged.push(normalizeTransaksi(id, row, tokoId, tokoName));
           });
         }
       });
 
-      merged.sort((a, b) =>
-        new Date(b.TANGGAL || 0) - new Date(a.TANGGAL || 0)
-      );
+      // sort by TANGGAL_TRANSAKSI (newest first), fallback to createdAt or id
+      merged.sort((a, b) => {
+        const ta = new Date(a.TANGGAL_TRANSAKSI || a.createdAt || 0).getTime() || 0;
+        const tb = new Date(b.TANGGAL_TRANSAKSI || b.createdAt || 0).getTime() || 0;
+        return tb - ta;
+      });
 
       callback(merged);
     },
@@ -122,8 +197,45 @@ export const listenAllTransaksi = (callback) => {
 };
 
 /* ============================================================
+   FORCE DELETE (for legacy rows without ID or inconsistent data)
+   This helper scans transaksi path for a toko and deletes children
+   that match the provided matchFn(val) predicate.
+============================================================ */
+
+/**
+ * matchFn: (val) => boolean
+ */
+export const forceDeleteTransaksi = async (tokoId, matchFn) => {
+  try {
+    if (tokoId === undefined || tokoId === null) return;
+    const transaksiPath = `toko/${tokoId}/transaksi`;
+    const snap = await get(ref(db, transaksiPath));
+    if (!snap.exists()) return;
+
+    const deletes = [];
+    snap.forEach((child) => {
+      const val = child.val();
+      try {
+        if (matchFn(val, child.key)) {
+          deletes.push(remove(ref(db, `${transaksiPath}/${child.key}`)));
+        }
+      } catch (e) {
+        console.warn("forceDeleteTransaksi matchFn error for child:", child.key, e);
+      }
+    });
+
+    if (deletes.length) {
+      await Promise.all(deletes);
+    }
+  } catch (err) {
+    console.error("forceDeleteTransaksi error", err);
+  }
+};
+
+/* ============================================================
    USERS MANAGEMENT
 ============================================================ */
+
 export const saveUserOnline = (user) => {
   if (!user?.username) return Promise.reject("Invalid User");
   return set(ref(db, `users/${user.username}`), user);
@@ -170,6 +282,7 @@ export const getAllUsersOnce = async () => {
 /* ============================================================
    PENJUALAN (DataManagement)
 ============================================================ */
+
 export const addPenjualan = (data) => {
   const r = push(ref(db, "penjualan"));
   return set(r, data);
@@ -190,13 +303,10 @@ export const listenPenjualan = (callback) => {
     r,
     (snap) => {
       const raw = snap.val() || {};
-      const list = Object.entries(raw).map(([id, item]) => ({ id, ...item }));
-
+      const list = Object.entries(raw).map(([id, item]) => normalizeTransaksi(id, item));
       list.sort((a, b) =>
-        new Date(b.TANGGAL_TRANSAKSI || 0) -
-        new Date(a.TANGGAL_TRANSAKSI || 0)
+        new Date(b.TANGGAL_TRANSAKSI || 0) - new Date(a.TANGGAL_TRANSAKSI || 0)
       );
-
       callback(list);
     },
     (err) => {
@@ -231,7 +341,7 @@ export const getStockForToko = async (tokoName, sku) => {
   return snap.exists() ? snap.val() : null;
 };
 
-// Tambah stok
+// Tambah stok (safe transaction)
 export const addStock = (tokoName, sku, payload) => {
   const r = ref(db, `stock/${tokoName}/${sku}`);
   return runTransaction(r, (cur) => {
@@ -404,7 +514,18 @@ export const updateTransferRequest = (id, data) => {
   return update(ref(db, `transfer_requests/${id}`), data);
 };
 
-
+// HAPUS DATA MASTER di /stock/{brand}/{sku}
+export const deleteMasterBarang = async (brand, barang) => {
+  try {
+    const sku = `${brand}_${barang}`.replace(/\s+/g, "_");
+    const path = `stock/${brand}/${sku}`;
+    await remove(ref(db, path));
+    return true;
+  } catch (err) {
+    console.error("deleteMasterBarang:", err);
+    return false;
+  }
+};
 
 
 /* ============================================================
@@ -417,6 +538,8 @@ const FirebaseService = {
   updateTransaksi,
   deleteTransaksi,
   listenAllTransaksi,
+  forceDeleteTransaksi,
+  deleteMasterBarang,
 
   addPenjualan,
   updatePenjualan,
@@ -433,6 +556,15 @@ const FirebaseService = {
   addStock,
   reduceStock,
   transferStock,
+
+  getInventoryItem,
+  updateInventory,
+  createInventory,
+  adjustInventoryStock,
+
+  createTransferRequest,
+  listenTransferRequests,
+  updateTransferRequest,
 };
 
 export default FirebaseService;

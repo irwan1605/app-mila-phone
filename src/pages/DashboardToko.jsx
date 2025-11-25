@@ -38,7 +38,7 @@ import {
 
 export default function DashboardToko({ tokoId }) {
   const fallbackTokoNames = [
-    "CILANGKAP",
+    "CILANGKAP PUSAT",
     "CIBINONG",
     "GAS ALAM",
     "CITEUREUP",

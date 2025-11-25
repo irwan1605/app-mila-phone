@@ -33,7 +33,7 @@ import { listenAllTransaksi } from "../services/FirebaseService";
 export default function Dashboard() {
   // ==== SAMA DENGAN DashboardToko ====
   const fallbackTokoNames = [
-    "CILANGKAP",
+    "CILANGKAP PUSAT",
     "CIBINONG",
     "GAS ALAM",
     "CITEUREUP",

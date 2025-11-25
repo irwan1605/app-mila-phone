@@ -1,5 +1,5 @@
 // =======================
-// SIDEBAR.JSX — FINAL PRO MAX
+// SIDEBAR.JSX — FINAL FIXED (NO UI CHANGES)
 // =======================
 import React, { useRef, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -46,9 +46,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
   const location = useLocation();
   const activePath = location.pathname;
 
-  // =========================
-  // GLOBAL SEARCH CONTEXT
-  // =========================
   const { searchQuery } = useGlobalSearch();
 
   const isSuper = role === "superadmin" || role === "admin";
@@ -64,24 +61,137 @@ const Sidebar = ({ role, toko, onLogout }) => {
   const [showSubMenuMasterData, setShowSubMenuMasterData] = useState(false);
 
   const [mobileOpen, setMobileOpen] = useState(false);
+
   const panelRef = useRef(null);
+  const scrollRefMobile = useRef(null);
+  const scrollRefDesktop = useRef(null);
+  const listRefMobile = useRef(null);
+  const listRefDesktop = useRef(null);
+
+  // ESC Close
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Scroll Glow + Focus Highlight Setup
+  useEffect(() => {
+    const setupScrollGlow = (el, listEl) => {
+      if (!el || !listEl) return () => {};
+
+      let raf = null;
+
+      const applyGlow = () => {
+        const max = Math.max(1, el.scrollHeight - el.clientHeight);
+        const top = el.scrollTop;
+        const t = Math.min(1, Math.max(0, top / max));
+
+        const topOpacity = top > 0 ? 0.35 : 0.0;
+        const bottomOpacity = top < max ? 0.35 : 0.0;
+
+        const hueTop = 200 + 100 * t;
+        const hueBottom = 170 + 50 * t;
+
+        el.style.setProperty("--glowTopOpacity", String(topOpacity));
+        el.style.setProperty("--glowBottomOpacity", String(bottomOpacity));
+        el.style.setProperty("--glowHueTop", String(hueTop));
+        el.style.setProperty("--glowHueBottom", String(hueBottom));
+      };
+
+      const onScroll = () => {
+        if (raf) return;
+        raf = requestAnimationFrame(() => {
+          raf = null;
+          applyGlow();
+        });
+      };
+
+      const ro = new ResizeObserver(() => applyGlow());
+      el.addEventListener("scroll", onScroll, { passive: true });
+      ro.observe(el);
+      applyGlow();
+
+      const io = new IntersectionObserver(
+        (entries) => {
+          listEl
+            .querySelectorAll(".in-focus")
+            .forEach((n) => n.classList.remove("in-focus"));
+
+          const best = entries.reduce(
+            (acc, e) =>
+              e.intersectionRatio > (acc?.intersectionRatio ?? 0) ? e : acc,
+            null
+          );
+
+          if (best?.isIntersecting) {
+            const item = best.target.closest("a,button,li");
+            item?.classList?.add("in-focus");
+          }
+        },
+        {
+          root: el,
+          threshold: [0.25, 0.5, 0.75],
+          rootMargin: "-25% 0% -25% 0%",
+        }
+      );
+
+      listEl.querySelectorAll("a, button").forEach((n) => io.observe(n));
+
+      return () => {
+        el.removeEventListener("scroll", onScroll);
+        ro.disconnect();
+        io.disconnect();
+        if (raf) cancelAnimationFrame(raf);
+      };
+    };
+
+    const cleanups = [];
+
+    if (scrollRefDesktop.current && listRefDesktop.current) {
+      cleanups.push(
+        setupScrollGlow(
+          scrollRefDesktop.current,
+          listRefDesktop.current
+        )
+      );
+    }
+
+    if (scrollRefMobile.current && listRefMobile.current) {
+      cleanups.push(
+        setupScrollGlow(scrollRefMobile.current, listRefMobile.current)
+      );
+    }
+
+    return () => cleanups.forEach((fn) => fn && fn());
+  }, []);
+
+  // ===========================
+  // FIXED: Auto Focus (inside useEffect, NOT conditional outside)
+  // ===========================
+  useEffect(() => {
+    if (!mobileOpen || !panelRef.current) return;
+
+    const firstFocusable = panelRef.current.querySelector(
+      "a,button,input,select"
+    );
+    firstFocusable?.focus();
+  }, [mobileOpen]);
 
   const visibleTokoIds = isSuper ? ALL_TOKO_IDS : picTokoId ? [picTokoId] : [];
 
-  // =================================================================
-  // 🔎 AUTO EXPAND SUBMENU BERDASARKAN SEARCH QUERY
-  // =================================================================
+  // Auto Expand by Search
   useEffect(() => {
     if (!searchQuery) return;
 
     const q = searchQuery.toLowerCase();
 
-    // Expand Dashboard Toko
     if (Object.values(TOKO_LABELS).some((t) => t.toLowerCase().includes(q))) {
       setShowSubMenuDashboardToko(true);
     }
 
-    // Expand laporan
     if (
       ["laporan", "inventory", "persediaan", "stok", "keuangan", "sales"].some(
         (x) => q.includes(x)
@@ -90,12 +200,10 @@ const Sidebar = ({ role, toko, onLogout }) => {
       setShowSubMenulaporan(true);
     }
 
-    // Expand Transfer Barang
     if (["transfer", "barang", "kirim"].some((x) => q.includes(x))) {
       setShowSubMenuTransferBarang(true);
     }
 
-    // Expand Cetak Faktur / Invoice
     if (["invoice", "faktur", "print"].some((x) => q.includes(x))) {
       setShowSubMenuCetak(true);
     }
@@ -121,7 +229,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
   // ===========================
   const SidebarBody = () => (
     <>
-      {/* LOGO */}
       <img src="/logoMMT.png" alt="Logo" className="logo mb-1" />
 
       <div className="font-bold p-1 text-center">
@@ -134,10 +241,8 @@ const Sidebar = ({ role, toko, onLogout }) => {
       </div>
 
       <nav className="mt-2 font-bold">
-        {/* ======================= SUPER ADMIN ======================= */}
         {isSuper ? (
           <>
-            {/* DASHBOARD PUSAT */}
             <Link
               to="/dashboard"
               className={`flex items-center p-3 hover:bg-blue-500 ${
@@ -148,7 +253,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
               <span className="ml-2">DASHBOARD PUSAT</span>
             </Link>
 
-            {/* DASHBOARD TOKO */}
             <button
               onClick={() => setShowSubMenuDashboardToko((s) => !s)}
               className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${highlightIfMatch(
@@ -177,7 +281,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
               </ul>
             )}
 
-            {/* LAPORAN */}
             <button
               onClick={() => setShowSubMenulaporan((s) => !s)}
               className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${highlightIfMatch(
@@ -240,7 +343,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
               </ul>
             )}
 
-            {/* TRANSFER BARANG */}
             <button
               onClick={() => setShowSubMenuTransferBarang((s) => !s)}
               className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${highlightIfMatch(
@@ -267,7 +369,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
               </ul>
             )}
 
-            {/* CETAK FAKTUR & INVOICE */}
             <button
               onClick={() => setShowSubMenuCetak((s) => !s)}
               className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${highlightIfMatch(
@@ -306,7 +407,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
               </ul>
             )}
 
-            {/* SPAREPART */}
             <Link
               to="/modul-sparepart"
               className={`flex items-center p-3 hover:bg-blue-500 ${
@@ -317,7 +417,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
               <span className="ml-2">MODUL SPAREPART</span>
             </Link>
 
-            {/* USER MANAGEMENT */}
             <Link
               to="/user-management"
               className={`flex items-center p-3 hover:bg-blue-500 ${
@@ -328,9 +427,8 @@ const Sidebar = ({ role, toko, onLogout }) => {
               <span className="ml-2">USER MANAGEMENT</span>
             </Link>
 
-            {/* MASTER DATA */}
             <button
-              onClick={() => setShowSubMenuMasterData?.((s) => !s)}
+              onClick={() => setShowSubMenuMasterData((s) => !s)}
               className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${
                 activePath.includes("/data-management") ||
                 activePath.includes("/master-barang")
@@ -367,8 +465,8 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     <span className="ml-2">Master Barang</span>
                   </Link>
                 </li>
-                 {/* ✅ MASTER PEMBELIAN — BARU */}
-                 <li>
+
+                <li>
                   <Link
                     to="/master-pembelian"
                     onClick={() => setMobileOpen(false)}
@@ -385,10 +483,9 @@ const Sidebar = ({ role, toko, onLogout }) => {
           </>
         ) : (
           <>
-            {/* PIC TOKO VIEW */}
             <button
               onClick={() => setShowSubMenuDashboardToko((s) => !s)}
-              className={`w-full flex items-center p-3 hover:bg-blue-500 text-left`}
+              className="w-full flex items-center p-3 hover:bg-blue-500 text-left"
             >
               <FaStore className="text-xl" />
               <span className="ml-2">DASHBOARD TOKO</span>
@@ -418,7 +515,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
               </ul>
             )}
 
-            {/* SERVICE */}
             <Link
               to="/service-handphone"
               className={`flex items-center p-3 hover:bg-blue-500 ${
@@ -443,8 +539,8 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
   return (
     <>
-      {/* MOBILE */}
-      <div className="lg:hidden sticky top-0 bg-white/70 backdrop-blur border-b z-50">
+      {/* TOP BAR (Mobile) */}
+      <div className="lg:hidden sticky top-0 z-[60] bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b">
         <div className="h-12 flex items-center justify-between px-3">
           <button
             aria-label="Buka menu"
@@ -460,23 +556,52 @@ const Sidebar = ({ role, toko, onLogout }) => {
         </div>
       </div>
 
-      {mobileOpen && (
-        <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} />
-      )}
+      {/* OVERLAY (Mobile) */}
+      <div
+        className={`sidebar-overlay lg:hidden ${mobileOpen ? "show" : ""}`}
+        onClick={() => setMobileOpen(false)}
+      />
 
+      {/* PANEL (Mobile) */}
       <aside
         ref={panelRef}
         className={`sidebar-panel lg:hidden ${mobileOpen ? "open" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigasi"
       >
         <div className="bg-blue-700 w-64 h-full text-white flex flex-col">
-          <SidebarBody />
+          <div className="flex items-center justify-between p-3 border-b border-white/10">
+            <span className="font-semibold">Navigasi</span>
+            <button
+              className="close-btn"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Tutup menu"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div
+            ref={scrollRefMobile}
+            className="custom-scroll overflow-y-auto flex-1"
+          >
+            <div ref={listRefMobile} className="px-0">
+              <SidebarBody />
+            </div>
+          </div>
         </div>
       </aside>
 
-      {/* DESKTOP */}
-      <aside className="hidden lg:flex bg-blue-700 w-64 h-screen sticky top-0 text-white">
-        <div className="custom-scroll overflow-y-auto flex-1">
-          <SidebarBody />
+      {/* SIDEBAR (Desktop) */}
+      <aside className="hidden lg:flex bg-blue-700 w-64 h-screen sticky top-0 text-white z-40">
+        <div
+          ref={scrollRefDesktop}
+          className="custom-scroll overflow-y-auto flex flex-col w-full"
+        >
+          <div ref={listRefDesktop}>
+            <SidebarBody />
+          </div>
         </div>
       </aside>
     </>
