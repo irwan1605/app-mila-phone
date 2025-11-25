@@ -6,6 +6,8 @@ import { Link, useLocation } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import "./Sidebar.css";
 import { useGlobalSearch } from "../context/GlobalSearchContext";
+import { FaCashRegister } from "react-icons/fa";
+
 
 import {
   FaHome,
@@ -476,6 +478,19 @@ const Sidebar = ({ role, toko, onLogout }) => {
                   >
                     <AiOutlineDatabase className="text-sm" />
                     <span className="ml-2">Master Pembelian</span>
+                  </Link>
+                </li>
+
+                <li>
+                  <Link
+                    to="/master-penjualan"
+                    onClick={() => setMobileOpen(false)}
+                    className={`flex items-center p-2 hover:bg-blue-500 ${
+                      activePath === "/master-penjualan" ? "bg-blue-600" : ""
+                    }`}
+                  >
+                   <AiOutlineDatabase className="text-sm" />
+                    <span className="ml-2">Master Penjualan</span>
                   </Link>
                 </li>
               </ul>

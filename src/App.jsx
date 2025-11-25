@@ -62,6 +62,7 @@ import { listenUsers, getAllUsersOnce } from "./services/FirebaseService";
 import defaultUsers from "./data/UserManagementRole";
 import MasterBarang from "./pages/MasterBarang";
 import MasterPembelian from "./pages/MasterPembelian";
+import MasterPenjualan from "./pages/MasterPenjualan";
 
 /* ===========================
     Utility role → toko
@@ -150,7 +151,11 @@ export default function App() {
         ) : (
           /* ======================== LOGGED IN MODE ===================== */
           <div className="flex h-screen overflow-hidden">
-            <Sidebar role={user.role} toko={user.toko} onLogout={handleLogout} />
+            <Sidebar
+              role={user.role}
+              toko={user.toko}
+              onLogout={handleLogout}
+            />
 
             <div className="flex-1 flex flex-col min-w-0">
               <Navbar user={user} onLogout={handleLogout} />
@@ -163,7 +168,9 @@ export default function App() {
                   <Route
                     path="/dashboard"
                     element={
-                      <ProtectedRoute allowedRoles={["superadmin", "admin", "pic_toko"]}>
+                      <ProtectedRoute
+                        allowedRoles={["superadmin", "admin", "pic_toko"]}
+                      >
                         <Dashboard user={user} />
                       </ProtectedRoute>
                     }
@@ -173,7 +180,9 @@ export default function App() {
                   <Route
                     path="/toko/:id"
                     element={
-                      <ProtectedRoute allowedRoles={["superadmin", "admin", "pic_toko"]}>
+                      <ProtectedRoute
+                        allowedRoles={["superadmin", "admin", "pic_toko"]}
+                      >
                         <TokoWrapper user={user} />
                       </ProtectedRoute>
                     }
@@ -184,7 +193,10 @@ export default function App() {
 
                   {/* Reports */}
                   <Route path="/sales-report" element={<SalesReport />} />
-                  <Route path="/inventory-report" element={<InventoryReport />} />
+                  <Route
+                    path="/inventory-report"
+                    element={<InventoryReport />}
+                  />
                   <Route path="/finance-report" element={<FinanceReport />} />
                   <Route
                     path="/finance-report-monthly"
@@ -192,8 +204,15 @@ export default function App() {
                   />
                   <Route path="/stok-opname" element={<StockOpname />} />
                   <Route path="/master-barang" element={<MasterBarang />} />
-                  <Route path="/master-pembelian" element={<MasterPembelian />} />
-
+                  <Route
+                    path="/master-pembelian"
+                    element={<MasterPembelian />}
+                  />
+                  {/* Master Penjualan – BARU */}
+                  <Route
+                    path="/master-penjualan"
+                    element={<MasterPenjualan />}
+                  />
 
                   {/* Produk */}
                   <Route path="/products" element={<Products />} />
@@ -239,7 +258,10 @@ export default function App() {
                     path="/penjualan-motor-listrik"
                     element={<PenjualanMotorListrik />}
                   />
-                  <Route path="/accessories" element={<PenjualanAccessories />} />
+                  <Route
+                    path="/accessories"
+                    element={<PenjualanAccessories />}
+                  />
                   <Route path="/input-penjualan" element={<InputPenjualan />} />
 
                   {/* Sparepart */}
