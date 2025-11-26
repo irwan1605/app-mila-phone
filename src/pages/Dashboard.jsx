@@ -1,16 +1,20 @@
-// src/pages/Dashboard.jsx — FINAL (Fully Synced With DashboardToko.jsx)
+// src/pages/Dashboard.jsx — DASHBOARD PUSAT CILANGKAP PUSAT
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FaFileExcel,
-  FaFilePdf,
   FaFilter,
-  FaChevronLeft,
-  FaChevronRight,
+  FaSearch,
+  FaStore,
+  FaExchangeAlt,
+  FaClipboardList,
+  FaMoneyBillWave,
+  FaBoxes,
+  FaClock,
+  FaHandHoldingUsd,
 } from "react-icons/fa";
 
 import * as XLSX from "xlsx";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 
 import {
   BarChart,
@@ -18,7 +22,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  Legend,
   PieChart,
   Pie,
   Cell,
@@ -28,11 +31,19 @@ import {
   CartesianGrid,
 } from "recharts";
 
-import { listenAllTransaksi } from "../services/FirebaseService";
+import {
+  listenAllTransaksi,
+  listenStockAll, // ✅ ambil stok MASTER BARANG (CILANGKAP PUSAT)
+} from "../services/FirebaseService";
 
 export default function Dashboard() {
-  // ==== SAMA DENGAN DashboardToko ====
-  const fallbackTokoNames = [
+  const navigate = useNavigate();
+
+  // === DATA FIREBASE ===
+  const [dataTransaksi, setDataTransaksi] = useState([]);
+  const [stokMaster, setStokMaster] = useState([]);
+
+  const [tokoList, setTokoList] = useState([
     "CILANGKAP PUSAT",
     "CIBINONG",
     "GAS ALAM",
@@ -43,59 +54,57 @@ export default function Dashboard() {
     "PITARA",
     "KOTA WISATA",
     "SAWANGAN",
-  ];
-
-  const [data, setData] = useState([]);
-  const [tokoList, setTokoList] = useState(fallbackTokoNames);
+  ]);
   const [salesList, setSalesList] = useState([]);
 
+  // === FILTER ===
   const [filterType, setFilterType] = useState("semua");
   const [filterValue, setFilterValue] = useState("");
   const [filterToko, setFilterToko] = useState("semua");
   const [filterSales, setFilterSales] = useState("semua");
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 10;
+  // === SEARCH IMEI ===
+  const [searchImei, setSearchImei] = useState("");
 
   // =======================================================
-  // LOAD FIREBASE REALTIME
+  // LISTEN MASTER STOK (CILANGKAP PUSAT) — MASTER BARANG
+  // =======================================================
+  useEffect(() => {
+    const unsub = listenStockAll((listRaw = []) => {
+      setStokMaster(Array.isArray(listRaw) ? listRaw : []);
+    });
+    return () => unsub && unsub();
+  }, []);
+
+  // =======================================================
+  // LISTEN SEMUA TRANSAKSI (UNTUK OMZET, PIUTANG, DLL)
   // =======================================================
   useEffect(() => {
     const unsub = listenAllTransaksi((listRaw = []) => {
       const formatted = (listRaw || []).map((r) => ({
         ...r,
-
-        // ===== NORMALISASI FIELD =====
         id: r.id,
-
         TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || r.TANGGAL || "",
         NO_INVOICE: r.NO_INVOICE || "",
         NAMA_USER: r.NAMA_USER || "",
         NO_HP_USER: r.NO_HP_USER || "",
-
         NAMA_PIC_TOKO: r.NAMA_PIC_TOKO || "",
         NAMA_SALES: r.NAMA_SALES || "",
         TITIPAN_REFERENSI: r.TITIPAN_REFERENSI || "",
-
         NAMA_TOKO: r.NAMA_TOKO || r.TOKO || "",
         TOKO: r.NAMA_TOKO || r.TOKO || "",
-
         NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "",
         NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "",
-
         QTY: Number(r.QTY || 0),
-
         NOMOR_UNIK:
           r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
         IMEI: r.IMEI || "",
         NO_DINAMO: r.NO_DINAMO || "",
         NO_RANGKA: r.NO_RANGKA || "",
-
         KATEGORI_HARGA: r.KATEGORI_HARGA || "",
         HARGA_UNIT: Number(r.HARGA_UNIT || r.HARGA || 0),
         PAYMENT_METODE: r.PAYMENT_METODE || "",
         SYSTEM_PAYMENT: r.SYSTEM_PAYMENT || "",
-
         MDR: Number(r.MDR || 0),
         POTONGAN_MDR: Number(r.POTONGAN_MDR || 0),
         NO_ORDER_KONTRAK: r.NO_ORDER_KONTRAK || "",
@@ -103,40 +112,34 @@ export default function Dashboard() {
         DP_USER_MERCHANT: Number(r.DP_USER_MERCHANT || 0),
         DP_USER_TOKO: Number(r.DP_USER_TOKO || 0),
         REQUEST_DP_TALANGAN: Number(r.REQUEST_DP_TALANGAN || 0),
-
         KETERANGAN: r.KETERANGAN || "",
         STATUS: r.STATUS || "Pending",
-
         TOTAL:
           Number(r.TOTAL) ||
           Number(r.QTY || 0) * Number(r.HARGA_UNIT || r.HARGA || 0),
       }));
 
-      setData(formatted);
+      setDataTransaksi(formatted);
 
-      // ===== FILTER LIST TOKO =====
       const tokoNames = [
         ...new Set(formatted.map((r) => r.NAMA_TOKO || r.TOKO).filter(Boolean)),
       ];
-      setTokoList(tokoNames.length > 0 ? tokoNames : fallbackTokoNames);
+      if (tokoNames.length > 0) setTokoList(tokoNames);
 
-      // ===== FILTER LIST SALES =====
       const uniqueSales = [
         ...new Set(formatted.map((r) => r.NAMA_SALES).filter(Boolean)),
       ];
       setSalesList(uniqueSales);
-
-      setCurrentPage(1);
     });
 
     return () => unsub && unsub();
   }, []);
 
   // =======================================================
-  // FILTERING
+  // FILTERING (UNTUK CHART & INFO)
   // =======================================================
   const filteredData = useMemo(() => {
-    let f = data;
+    let f = dataTransaksi;
 
     if (filterToko !== "semua") {
       f = f.filter((r) => (r.NAMA_TOKO || r.TOKO) === filterToko);
@@ -165,45 +168,42 @@ export default function Dashboard() {
     }
 
     return f;
-  }, [data, filterType, filterValue, filterToko, filterSales]);
+  }, [dataTransaksi, filterType, filterValue, filterToko, filterSales]);
 
   // =======================================================
-  // PAGINATION
+  // METRIK DASHBOARD PUSAT
   // =======================================================
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / rowsPerPage));
-  const paginated = filteredData.slice(
-    (currentPage - 1) * rowsPerPage,
-    currentPage * rowsPerPage
+  const totalOmzet = useMemo(
+    () => filteredData.reduce((a, b) => a + Number(b.TOTAL || 0), 0),
+    [filteredData]
+  );
+
+  const totalStok = useMemo(
+    () =>
+      stokMaster.reduce((a, b) => a + Number(b.qty || b.QTY || 0), 0),
+    [stokMaster]
+  );
+
+  const totalPenjualan = useMemo(
+    () => filteredData.filter((x) => x.STATUS === "Approved").length,
+    [filteredData]
+  );
+
+  const totalPending = useMemo(
+    () => filteredData.filter((x) => x.STATUS === "Pending").length,
+    [filteredData]
+  );
+
+  const totalPiutang = useMemo(
+    () =>
+      filteredData
+        .filter((x) => x.SYSTEM_PAYMENT === "PIUTANG")
+        .reduce((a, b) => a + Number(b.TOTAL || 0), 0),
+    [filteredData]
   );
 
   // =======================================================
-  // EXPORT EXCEL
-  // =======================================================
-  const exportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filteredData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Dashboard");
-    XLSX.writeFile(wb, "Dashboard_Utama.xlsx");
-  };
-
-  // =======================================================
-  // EXPORT PDF
-  // =======================================================
-  const exportPDF = () => {
-    const table = document.getElementById("dashboardTable");
-    html2canvas(table).then((canvas) => {
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("l", "mm", "a4");
-      const w = pdf.internal.pageSize.getWidth();
-      const h = (canvas.height * w) / canvas.width;
-
-      pdf.addImage(imgData, "PNG", 0, 0, w, h);
-      pdf.save("Dashboard_Utama.pdf");
-    });
-  };
-
-  // =======================================================
-  // CHART COLORS
+  // DATA UNTUK CHART
   // =======================================================
   const COLORS = [
     "#2563EB",
@@ -216,21 +216,15 @@ export default function Dashboard() {
     "#3B82F6",
   ];
 
-  // =======================================================
-  // OMZET PER TOKO
-  // =======================================================
   const omzetPerToko = useMemo(() => {
     const map = {};
     filteredData.forEach((x) => {
-      const toko = x.NAMA_TOKO || x.TOKO;
+      const toko = x.NAMA_TOKO || x.TOKO || "UNKNOWN";
       map[toko] = (map[toko] || 0) + Number(x.TOTAL || 0);
     });
     return Object.entries(map).map(([toko, omzet]) => ({ toko, omzet }));
   }, [filteredData]);
 
-  // =======================================================
-  // OMZET PER SALES
-  // =======================================================
   const omzetPerSales = useMemo(() => {
     const map = {};
     filteredData.forEach((x) => {
@@ -240,9 +234,6 @@ export default function Dashboard() {
     return Object.entries(map).map(([sales, omzet]) => ({ sales, omzet }));
   }, [filteredData]);
 
-  // =======================================================
-  // OMZET PER HARI
-  // =======================================================
   const omzetPerHari = useMemo(() => {
     const map = {};
     filteredData.forEach((x) => {
@@ -255,9 +246,6 @@ export default function Dashboard() {
       .sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
   }, [filteredData]);
 
-  // =======================================================
-  // OMZET PER BULAN
-  // =======================================================
   const omzetPerBulan = useMemo(() => {
     const map = {};
     filteredData.forEach((x) => {
@@ -272,184 +260,225 @@ export default function Dashboard() {
   }, [filteredData]);
 
   // =======================================================
-  // UI (TIDAK DIRUBAH)
+  // EXPORT EXCEL (TANPA TABLE)
+  // =======================================================
+  const exportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filteredData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Dashboard_Pusat");
+    XLSX.writeFile(wb, "Dashboard_Pusat.xlsx");
+  };
+
+  // =======================================================
+  // HANDLER SEARCH IMEI → ARAHKAN KE CardPenjualanToko
+  // =======================================================
+  const handleSearchImei = () => {
+    if (!searchImei.trim()) {
+      alert("Masukkan IMEI terlebih dahulu");
+      return;
+    }
+    navigate(`/toko/cilangkap-pusat/penjualan?imei=${encodeURIComponent(searchImei.trim())}`);
+  };
+
+  // =======================================================
+  // UI DASHBOARD PUSAT (TANPA TABLE)
   // =======================================================
   return (
-    <div className="p-4 bg-gray-100 rounded-xl shadow-md">
-      <h2 className="text-2xl font-bold mb-4">Dashboard Utama - PT Mila Media Telekomunikasi</h2>
+    <div className="p-4 sm:p-6 bg-gray-100 rounded-xl shadow-md min-h-screen">
+      <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-slate-800">
+        Dashboard Pusat - CILANGKAP PUSAT
+      </h2>
 
-      {/* FILTER */}
-      <div className="flex flex-wrap gap-2 items-center mb-4">
-        <FaFilter />
-
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="p-2 border rounded"
-        >
-          <option value="semua">Semua</option>
-          <option value="hari">Per Hari</option>
-          <option value="bulan">Per Bulan</option>
-          <option value="tahun">Per Tahun</option>
-        </select>
-
-        {filterType !== "semua" && (
+      {/* SEARCH IMEI UNTUK PENJUALAN MULTI BARANG */}
+      <div className="bg-white rounded-2xl shadow mb-6 p-4 flex flex-col md:flex-row gap-3 items-center">
+        <div className="flex items-center flex-1 gap-2">
+          <FaSearch className="text-gray-400" />
           <input
-            type="date"
-            className="p-2 border rounded"
-            onChange={(e) => setFilterValue(e.target.value)}
+            type="text"
+            value={searchImei}
+            onChange={(e) => setSearchImei(e.target.value)}
+            className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none"
+            placeholder="Cari IMEI dari stok MASTER BARANG untuk transaksi penjualan..."
           />
-        )}
-
-        <select
-          value={filterToko}
-          onChange={(e) => setFilterToko(e.target.value)}
-          className="p-2 border rounded"
+        </div>
+        <button
+          onClick={handleSearchImei}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold"
         >
-          <option value="semua">Semua Toko</option>
-          {tokoList.map((t, i) => (
-            <option key={i}>{t}</option>
-          ))}
-        </select>
-
-        <select
-          value={filterSales}
-          onChange={(e) => setFilterSales(e.target.value)}
-          className="p-2 border rounded"
-        >
-          <option value="semua">Semua Sales</option>
-          {salesList.map((s, i) => (
-            <option key={i}>{s}</option>
-          ))}
-        </select>
+          Proses Penjualan
+        </button>
       </div>
 
-      {/* SUMMARY */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-white p-3 rounded shadow text-center">
-          <h3>Total Transaksi</h3>
-          <p className="text-xl font-bold">{filteredData.length}</p>
-        </div>
-
-        <div className="bg-white p-3 rounded shadow text-center">
-          <h3>Total Omzet</h3>
-          <p className="text-xl font-bold text-green-600">
-            Rp {filteredData.reduce((a, b) => a + Number(b.TOTAL), 0).toLocaleString()}
+      {/* 3 CARD MENU UTAMA (PENJUALAN, STOCK OPNAME, TRANSFER GUDANG) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div
+          onClick={() => navigate("/toko/cilangkap-pusat/penjualan")}
+          className="cursor-pointer bg-gradient-to-br from-blue-500 to-blue-700 text-white p-5 rounded-2xl shadow hover:scale-[1.02] transition transform"
+        >
+          <FaStore size={28} />
+          <h3 className="mt-3 font-bold text-lg">Penjualan Pusat</h3>
+          <p className="text-xs opacity-90 mt-1">
+            Melakukan transaksi penjualan langsung dari stok CILANGKAP PUSAT.
           </p>
         </div>
 
-        <div className="bg-white p-3 rounded shadow text-center">
-          <h3>Total Toko Aktif</h3>
-          <p className="text-xl font-bold">{omzetPerToko.length}</p>
+        <div
+          onClick={() => navigate("/toko/cilangkap-pusat/stock-opname")}
+          className="cursor-pointer bg-gradient-to-br from-emerald-500 to-emerald-700 text-white p-5 rounded-2xl shadow hover:scale-[1.02] transition transform"
+        >
+          <FaClipboardList size={28} />
+          <h3 className="mt-3 font-bold text-lg">Stock Opname Pusat</h3>
+          <p className="text-xs opacity-90 mt-1">
+            Audit dan penyesuaian stok barang secara realtime dari gudang pusat.
+          </p>
+        </div>
+
+        <div
+          onClick={() => navigate("/toko/cilangkap-pusat/transfer-gudang")}
+          className="cursor-pointer bg-gradient-to-br from-orange-500 to-orange-700 text-white p-5 rounded-2xl shadow hover:scale-[1.02] transition transform"
+        >
+          <FaExchangeAlt size={28} />
+          <h3 className="mt-3 font-bold text-lg">Transfer Gudang</h3>
+          <p className="text-xs opacity-90 mt-1">
+            Mengirim barang ke semua toko cabang secara realtime & online.
+          </p>
         </div>
       </div>
 
-      {/* TABLE */}
-      <div className="bg-white p-2 rounded shadow overflow-auto" id="dashboardTable">
-        <table className="w-full text-sm border-collapse">
-          <thead className="bg-blue-600 text-white">
-            <tr>
-              <th className="p-2 border">Tanggal</th>
-              <th className="p-2 border">Invoice</th>
-              <th className="p-2 border">User</th>
-              <th className="p-2 border">No HP</th>
-              <th className="p-2 border">PIC Toko</th>
-              <th className="p-2 border">Sales</th>
-              <th className="p-2 border">Titipan</th>
-              <th className="p-2 border">Toko</th>
-              <th className="p-2 border">Brand</th>
-              <th className="p-2 border">Barang</th>
-              <th className="p-2 border">Qty</th>
-              <th className="p-2 border">Nomor IMEI</th>
-              <th className="p-2 border">Dinamo</th>
-              <th className="p-2 border">Rangka</th>
-              <th className="p-2 border">Kategori</th>
-              <th className="p-2 border">Harga</th>
-              <th className="p-2 border">Payment</th>
-              <th className="p-2 border">System</th>
-              <th className="p-2 border">MDR</th>
-              <th className="p-2 border">Ptg MDR</th>
-              <th className="p-2 border">Kontrak</th>
-              <th className="p-2 border">Tenor</th>
-              <th className="p-2 border">DP Merchant</th>
-              <th className="p-2 border">DP Toko</th>
-              <th className="p-2 border">Req DP</th>
-              <th className="p-2 border">Ket</th>
-              <th className="p-2 border">Status</th>
-              <th className="p-2 border">Total</th>
-            </tr>
-          </thead>
+      {/* INFORMASI SUMMARY (KEUANGAN, STOK, PENJUALAN, PENDING, PIUTANG) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div className="bg-white rounded-2xl shadow p-4 flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <FaMoneyBillWave className="text-green-600" />
+            <span className="text-xs text-slate-500">Informasi Keuangan</span>
+          </div>
+          <div className="text-lg font-bold text-slate-800">
+            Rp {totalOmzet.toLocaleString("id-ID")}
+          </div>
+          <span className="text-[11px] text-slate-500">
+            Total omzet berdasarkan transaksi yang difilter.
+          </span>
+        </div>
 
-          <tbody>
-            {paginated.map((r, i) => (
-              <tr key={i} className="hover:bg-gray-50">
-                <td className="p-2 border">{r.TANGGAL_TRANSAKSI}</td>
-                <td className="p-2 border">{r.NO_INVOICE}</td>
-                <td className="p-2 border">{r.NAMA_USER}</td>
-                <td className="p-2 border">{r.NO_HP_USER}</td>
-                <td className="p-2 border">{r.NAMA_PIC_TOKO}</td>
-                <td className="p-2 border">{r.NAMA_SALES}</td>
-                <td className="p-2 border">{r.TITIPAN_REFERENSI}</td>
-                <td className="p-2 border">{r.NAMA_TOKO || r.TOKO}</td>
-                <td className="p-2 border">{r.NAMA_BRAND}</td>
-                <td className="p-2 border">{r.NAMA_BARANG}</td>
-                <td className="p-2 border text-center">{r.QTY}</td>
-                <td className="p-2 border">{r.NOMOR_UNIK}</td>
-                <td className="p-2 border">{r.NO_DINAMO}</td>
-                <td className="p-2 border">{r.NO_RANGKA}</td>
-                <td className="p-2 border">{r.KATEGORI_HARGA}</td>
-                <td className="p-2 border text-right">
-                  {r.HARGA_UNIT.toLocaleString()}
-                </td>
-                <td className="p-2 border">{r.PAYMENT_METODE}</td>
-                <td className="p-2 border">{r.SYSTEM_PAYMENT}</td>
-                <td className="p-2 border text-right">{r.MDR}</td>
-                <td className="p-2 border text-right">{r.POTONGAN_MDR}</td>
-                <td className="p-2 border">{r.NO_ORDER_KONTRAK}</td>
-                <td className="p-2 border">{r.TENOR}</td>
-                <td className="p-2 border text-right">{r.DP_USER_MERCHANT}</td>
-                <td className="p-2 border text-right">{r.DP_USER_TOKO}</td>
-                <td className="p-2 border text-right">{r.REQUEST_DP_TALANGAN}</td>
-                <td className="p-2 border">{r.KETERANGAN}</td>
-                <td className="p-2 border">{r.STATUS}</td>
-                <td className="p-2 border text-right">
-                  {Number(r.TOTAL).toLocaleString()}
-                </td>
-              </tr>
+        <div className="bg-white rounded-2xl shadow p-4 flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <FaBoxes className="text-blue-600" />
+            <span className="text-xs text-slate-500">Jumlah Stock</span>
+          </div>
+          <div className="text-lg font-bold text-slate-800">
+            {totalStok} Unit
+          </div>
+          <span className="text-[11px] text-slate-500">
+            Total stok MASTER BARANG CILANGKAP PUSAT.
+          </span>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow p-4 flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <FaStore className="text-indigo-600" />
+            <span className="text-xs text-slate-500">Informasi Penjualan</span>
+          </div>
+          <div className="text-lg font-bold text-slate-800">
+            {totalPenjualan} Approved
+          </div>
+          <span className="text-[11px] text-slate-500">
+            Jumlah transaksi dengan status APPROVED.
+          </span>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow p-4 flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <FaClock className="text-yellow-500" />
+            <span className="text-xs text-slate-500">Transaksi Pending</span>
+          </div>
+          <div className="text-lg font-bold text-slate-800">
+            {totalPending}
+          </div>
+          <span className="text-[11px] text-slate-500">
+            Menunggu proses / approval.
+          </span>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow p-4 flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <FaHandHoldingUsd className="text-red-600" />
+            <span className="text-xs text-slate-500">Informasi Piutang</span>
+          </div>
+          <div className="text-lg font-bold text-slate-800">
+            Rp {totalPiutang.toLocaleString("id-ID")}
+          </div>
+          <span className="text-[11px] text-slate-500">
+            Total nilai transaksi dengan sistem bayar PIUTANG.
+          </span>
+        </div>
+      </div>
+
+      {/* FILTER (UNTUK CHART & ANALYTIC) */}
+      <div className="bg-white rounded-2xl shadow p-4 mb-4">
+        <div className="flex flex-wrap gap-2 items-center mb-3">
+          <FaFilter className="text-gray-500" />
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="p-2 border rounded text-sm"
+          >
+            <option value="semua">Semua Periode</option>
+            <option value="hari">Per Hari</option>
+            <option value="bulan">Per Bulan</option>
+            <option value="tahun">Per Tahun</option>
+          </select>
+
+          {filterType !== "semua" && (
+            <input
+              type="date"
+              className="p-2 border rounded text-sm"
+              onChange={(e) => setFilterValue(e.target.value)}
+            />
+          )}
+
+          <select
+            value={filterToko}
+            onChange={(e) => setFilterToko(e.target.value)}
+            className="p-2 border rounded text-sm"
+          >
+            <option value="semua">Semua Toko</option>
+            {tokoList.map((t, i) => (
+              <option key={i} value={t}>
+                {t}
+              </option>
             ))}
-          </tbody>
-        </table>
+          </select>
+
+          <select
+            value={filterSales}
+            onChange={(e) => setFilterSales(e.target.value)}
+            className="p-2 border rounded text-sm"
+          >
+            <option value="semua">Semua Sales</option>
+            {salesList.map((s, i) => (
+              <option key={i} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={exportExcel}
+            className="ml-auto px-3 py-2 rounded bg-green-600 text-white text-xs sm:text-sm flex items-center gap-1"
+          >
+            <FaFileExcel /> Export Excel
+          </button>
+        </div>
       </div>
 
-      {/* PAGINATION */}
-      <div className="flex justify-between mt-3">
-        <button
-          className="px-3 py-1 border rounded"
-          disabled={currentPage === 1}
-          onClick={() => setCurrentPage(currentPage - 1)}
-        >
-          <FaChevronLeft />
-        </button>
-
-        <span>
-          Halaman {currentPage} dari {totalPages}
-        </span>
-
-        <button
-          className="px-3 py-1 border rounded"
-          disabled={currentPage === totalPages}
-          onClick={() => setCurrentPage(currentPage + 1)}
-        >
-          <FaChevronRight />
-        </button>
-      </div>
-
-      {/* CHARTS */}
-      <div className="grid grid-cols-2 gap-4 mt-6">
+      {/* CHARTS (TETAP, TANPA TABLE) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
         {/* CHART TOKO */}
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="text-center font-semibold">Omzet Per Toko</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="bg-white p-4 rounded-2xl shadow">
+          <h3 className="text-center font-semibold mb-2">
+            Omzet Per Toko
+          </h3>
+          <ResponsiveContainer width="100%" height={260}>
             <BarChart data={omzetPerToko}>
               <XAxis dataKey="toko" />
               <YAxis />
@@ -460,9 +489,11 @@ export default function Dashboard() {
         </div>
 
         {/* CHART SALES */}
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="text-center font-semibold">Omzet Per Sales</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="bg-white p-4 rounded-2xl shadow">
+          <h3 className="text-center font-semibold mb-2">
+            Omzet Per Sales
+          </h3>
+          <ResponsiveContainer width="100%" height={260}>
             <PieChart>
               <Pie
                 data={omzetPerSales}
@@ -470,7 +501,7 @@ export default function Dashboard() {
                 nameKey="sales"
                 cx="50%"
                 cy="50%"
-                outerRadius={100}
+                outerRadius={90}
                 label
               >
                 {omzetPerSales.map((_, i) => (
@@ -482,11 +513,12 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* CHART HARIAN & BULANAN */}
-      <div className="grid grid-cols-2 gap-4 mt-6">
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="text-center font-semibold">Omzet Harian</h3>
-          <ResponsiveContainer width="100%" height={300}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        <div className="bg-white p-4 rounded-2xl shadow">
+          <h3 className="text-center font-semibold mb-2">
+            Omzet Harian
+          </h3>
+          <ResponsiveContainer width="100%" height={260}>
             <LineChart data={omzetPerHari}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="tanggal" />
@@ -497,9 +529,11 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white p-4 rounded shadow">
-          <h3 className="text-center font-semibold">Omzet Bulanan</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="bg-white p-4 rounded-2xl shadow">
+          <h3 className="text-center font-semibold mb-2">
+            Omzet Bulanan
+          </h3>
+          <ResponsiveContainer width="100%" height={260}>
             <LineChart data={omzetPerBulan}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="bulan" />
@@ -509,23 +543,6 @@ export default function Dashboard() {
             </LineChart>
           </ResponsiveContainer>
         </div>
-      </div>
-
-      {/* EXPORT */}
-      <div className="mt-6 flex justify-end gap-3">
-        <button
-          onClick={exportExcel}
-          className="px-4 py-2 rounded bg-green-600 text-white flex items-center"
-        >
-          <FaFileExcel className="mr-2" /> Excel
-        </button>
-
-        <button
-          onClick={exportPDF}
-          className="px-4 py-2 rounded bg-red-600 text-white flex items-center"
-        >
-          <FaFilePdf className="mr-2" /> PDF
-        </button>
       </div>
     </div>
   );
