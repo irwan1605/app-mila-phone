@@ -1,0 +1,101 @@
+/* PRINT ONLY STYLE */
+
+.invoice-print-area {
+    width: 210mm;
+    min-height: 297mm;
+    margin: auto;
+    background: #fff;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+    color: #000;
+  }
+  
+  .invoice-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  
+  .invoice-logo img {
+    height: 60px;
+  }
+  
+  .invoice-company {
+    font-size: 12px;
+  }
+  
+  .invoice-company h1 {
+    font-size: 16px;
+    margin: 0;
+  }
+  
+  .invoice-info {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+    font-size: 12px;
+  }
+  
+  .invoice-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+  }
+  
+  .invoice-table th,
+  .invoice-table td {
+    border: 1px solid #000;
+    padding: 6px;
+    font-size: 11px;
+    text-align: center;
+  }
+  
+  .invoice-table th {
+    background: #eee;
+  }
+  
+  .invoice-total {
+    margin-top: 12px;
+    display: flex;
+    justify-content: flex-end;
+  }
+  
+  .invoice-total table {
+    width: 300px;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  
+  .invoice-total td {
+    border: 1px solid #000;
+    padding: 6px;
+  }
+  
+  .invoice-total .grand td {
+    font-weight: bold;
+    background: #eee;
+  }
+  
+  .invoice-footer {
+    margin-top: 40px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+  
+  /* PRINT CONFIG */
+  @media print {
+    body * {
+      visibility: hidden;
+    }
+    .invoice-print-area,
+    .invoice-print-area * {
+      visibility: visible;
+    }
+    .invoice-print-area {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+  }
+  

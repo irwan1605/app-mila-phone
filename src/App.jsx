@@ -63,6 +63,10 @@ import defaultUsers from "./data/UserManagementRole";
 import MasterBarang from "./pages/MasterBarang";
 import MasterPembelian from "./pages/MasterPembelian";
 import MasterPenjualan from "./pages/MasterPenjualan";
+import MasterKaryawan from "./pages/MasterKaryawan";
+import CardPenjualanToko from "./pages/Toko/CardPenjualanToko/CardPenjualanToko";
+import CardStockOpnameToko from "./pages/Toko/CardStockOpnameToko";
+import CardTransferGudangToko from "./pages/Toko/CardTransferGudangToko";
 
 /* ===========================
     Utility role → toko
@@ -188,6 +192,20 @@ export default function App() {
                     }
                   />
 
+                  {/* Modul per toko */}
+                  <Route
+                    path="/toko/:tokoId/penjualan"
+                    element={<CardPenjualanToko />}
+                  />
+                  <Route
+                    path="/toko/:tokoId/stock-opname"
+                    element={<CardStockOpnameToko />}
+                  />
+                  <Route
+                    path="/toko/:tokoId/transfer-gudang"
+                    element={<CardTransferGudangToko />}
+                  />
+
                   {/* Management User */}
                   <Route path="/user-management" element={<UserManagement />} />
 
@@ -213,6 +231,7 @@ export default function App() {
                     path="/master-penjualan"
                     element={<MasterPenjualan />}
                   />
+                  <Route path="/master-karyawan" element={<MasterKaryawan />} />
 
                   {/* Produk */}
                   <Route path="/products" element={<Products />} />

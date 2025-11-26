@@ -8,7 +8,6 @@ import "./Sidebar.css";
 import { useGlobalSearch } from "../context/GlobalSearchContext";
 import { FaCashRegister } from "react-icons/fa";
 
-
 import {
   FaHome,
   FaMobileAlt,
@@ -154,10 +153,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
     if (scrollRefDesktop.current && listRefDesktop.current) {
       cleanups.push(
-        setupScrollGlow(
-          scrollRefDesktop.current,
-          listRefDesktop.current
-        )
+        setupScrollGlow(scrollRefDesktop.current, listRefDesktop.current)
       );
     }
 
@@ -489,8 +485,21 @@ const Sidebar = ({ role, toko, onLogout }) => {
                       activePath === "/master-penjualan" ? "bg-blue-600" : ""
                     }`}
                   >
-                   <AiOutlineDatabase className="text-sm" />
+                    <AiOutlineDatabase className="text-sm" />
                     <span className="ml-2">Master Penjualan</span>
+                  </Link>
+                </li>
+
+                <li>
+                  <Link
+                    to="/master-karyawan"
+                    onClick={() => setMobileOpen(false)}
+                    className={`flex items-center p-2 hover:bg-blue-500 ${
+                      activePath === "/master-karyawan" ? "bg-blue-600" : ""
+                    }`}
+                  >
+                    <AiOutlineDatabase className="text-sm" />
+                    <span className="ml-2">Master Karyawan</span>
                   </Link>
                 </li>
               </ul>

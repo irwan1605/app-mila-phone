@@ -527,6 +527,74 @@ export const deleteMasterBarang = async (brand, barang) => {
   }
 };
 
+/* ============================================================
+   MASTER KARYAWAN
+   Path: /karyawan/{id}
+============================================================ */
+
+// Listen realtime seluruh karyawan
+export const listenKaryawan = (callback) => {
+  const r = ref(db, "karyawan");
+  const unsub = onValue(
+    r,
+    (snap) => {
+      const raw = snap.val() || {};
+      const arr = Object.entries(raw).map(([id, v]) => ({
+        id,
+        ...v,
+      }));
+      callback(arr);
+    },
+    (err) => {
+      console.error("listenKaryawan error:", err);
+      callback([]);
+    }
+  );
+  return () => unsub && unsub();
+};
+
+// Tambah karyawan
+export const addKaryawan = async (data) => {
+  try {
+    const r = push(ref(db, "karyawan"));
+    await set(r, {
+      ...data,
+      id: r.key,
+      createdAt: new Date().toISOString(),
+    });
+    return r.key;
+  } catch (err) {
+    console.error("addKaryawan error:", err);
+    throw err;
+  }
+};
+
+// Update karyawan
+export const updateKaryawan = async (id, data) => {
+  try {
+    await update(ref(db, `karyawan/${id}`), {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    });
+    return true;
+  } catch (err) {
+    console.error("updateKaryawan error:", err);
+    throw err;
+  }
+};
+
+// Hapus karyawan
+export const deleteKaryawan = async (id) => {
+  try {
+    await remove(ref(db, `karyawan/${id}`));
+    return true;
+  } catch (err) {
+    console.error("deleteKaryawan error:", err);
+    throw err;
+  }
+};
+
+
 
 /* ============================================================
    DEFAULT EXPORT
@@ -565,6 +633,12 @@ const FirebaseService = {
   createTransferRequest,
   listenTransferRequests,
   updateTransferRequest,
+
+  listenKaryawan,
+  addKaryawan,
+  updateKaryawan,
+  deleteKaryawan,
+
 };
 
 export default FirebaseService;
