@@ -1,1530 +1,792 @@
 // src/pages/MasterPenjualan.jsx
-// Master Penjualan PRO – multi QTY, IMEI, Total Penjualan, Status otomatis, Preview & Cetak Invoice
-
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  listenPenjualan,
-  addPenjualan,
-  updatePenjualan,
-  deletePenjualan,
+  listenAllTransaksi,
+  addTransaksi,
+  updateTransaksi,
+  deleteTransaksi,
 } from "../services/FirebaseService";
-
-import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-
 import {
+  FaPlus,
   FaEdit,
   FaTrash,
-  FaSave,
   FaSearch,
-  FaFileExcel,
-  FaFilePdf,
-  FaPlus,
-  FaTimes,
-  FaEye,
-  FaPrint,
+  FaChevronLeft,
+  FaChevronRight,
 } from "react-icons/fa";
 
-const fallbackTokoNames = [
-  "CILANGKAP PUSAT",
-  "CIBINONG",
-  "GAS ALAM",
-  "CITEUREUP",
-  "CIRACAS",
-  "METLAND 1",
-  "METLAND 2",
-  "PITARA",
-  "KOTA WISATA",
-  "SAWANGAN",
-];
-
-const KATEGORI_OPTIONS = [
-  "SEPEDA LISTRIK",
-  "MOTOR LISTRIK",
-  "HANDPHONE",
-  "ACCESORIES",
-];
-
-const CATEGORY_BRAND_OPTIONS = {
-  "SEPEDA LISTRIK": ["Uwinfly", "Selis", "Viar", "Volta", "NIU"],
-  "MOTOR LISTRIK": ["Viar", "Volta", "NIU"],
-  HANDPHONE: ["SAMSUNG", "OPPO", "IPHONE", "REALME", "XIAOMI", "INFINIX", "VIVO"],
-  ACCESORIES: ["Universal", "FDR", "Swallow", "Lainnya"],
+// =========================
+// KONSTANTA MDR PAYMENT METHOD
+// =========================
+const MDR_MAP = {
+  "CASH TUNAI": 0,
+  COD: 0,
+  "TRANSFER KE MMT": 0,
+  "QRIS BARCODE": 0,
+  "DEBIT MESIN EDC": 0,
+  "KARTU KREDIT MESIN EDC": 0,
+  "BLIBLI INSTORE": 5,
+  "AKULAKU BARCODE": 0,
+  "AKULAKU MARKETPLACE": 5,
+  "BLIBLI MARKET PLACE": 5,
+  "TOKOPEDIA MARKETPLACE": 5,
+  "LAZADA MARKETPLACE": 5,
+  "TIKTOK MAERKETPLACE": 6,
+  "SHOPEE MARKETPLACE": 6,
+  "SHOPEE EDC": 0,
+  "SHOPEE BARCODE": 0,
+  "AEON ENINE": 0,
+  "HOME CREDIT POLO": 0,
+  "HOME CREDIT MARKETPLACE": 5,
+  "KREDIVO BARCODE NON PROMO": 0,
+  "KREDIVO BARCODE VOUCER PROMO": 5,
+  "KREDIVO MARKETPLACE": 5,
+  "ADIRA HIROTO": 0,
+  SPEKTRA: 0,
+  "TUKAR TAMBAH": 0,
+  AVANTO: 0,
+  "SAMSUNG FINANCE": 0,
 };
+
+const PAYMENT_METHOD_OPTIONS = Object.keys(MDR_MAP);
 
 const TIPE_BAYAR_OPTIONS = ["CASH", "PIUTANG", "DEBIT CARD"];
 
-const PAYMENT_METHOD_OPTIONS = [
-  "AKULAKU",
-  "KREDIVO",
-  "BRITAMA",
-  "BCA",
-  "BLI BLI",
-  "ONLINE SHOPE",
-  "HOME CREDIT INDONESIA (HCI)",
-  "SPEKTRA",
-];
-
-const fmt = (n) => {
-  try {
-    return Number(n || 0).toLocaleString("id-ID");
-  } catch {
-    return String(n || "");
-  }
-};
-
-// Mapping status otomatis dari tipe bayar
-const getStatusFromTipeBayar = (tipe) => {
-  const t = (tipe || "").toUpperCase();
-  if (t === "CASH" || t === "DEBIT CARD") return "LUNAS";
-  if (t === "PIUTANG") return "PIUTANG";
-  return "";
-};
-
-export default function MasterPenjualan() {
-  const [penjualanList, setPenjualanList] = useState([]);
-  const [search, setSearch] = useState("");
-  const [filterTanggal, setFilterTanggal] = useState("");
-  const [filterKategori, setFilterKategori] = useState("");
-  const [filterToko, setFilterToko] = useState("");
-
-  const [showModalTambah, setShowModalTambah] = useState(false);
-  const [showModalEdit, setShowModalEdit] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-
-  const [tambahForm, setTambahForm] = useState({
-    tanggal: new Date().toISOString().slice(0, 10),
-    noFaktur: "",
-    namaToko: "PUSAT",
-    kategoriBarang: "",
-    namaBrand: "",
-    namaBarang: "",
-    imei: "",
-    warna: "",
-    qty: 1,
-    hargaPenjualan: "",
-    idPelanggan: "",
-    namaSH: "",
-    namaSales: "",
-    staff: "",
-    tipeBayar: "",
-    paymentMethod: "",
-    status: "",
-    keterangan: "",
+const fmt = (v) =>
+  Number(v || 0).toLocaleString("id-ID", {
+    minimumFractionDigits: 0,
   });
 
-  const [editForm, setEditForm] = useState(null);
+export default function MasterPenjualan() {
+  // =========================
+  // STATE
+  // =========================
+  const [listPenjualan, setListPenjualan] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const tableRef = useRef(null);
+  const [form, setForm] = useState({
+    // HEADER
+    TANGGAL: "",
+    NO_FAKTUR: "",
+    NAMA_TOKO: "CILANGKAP PUSAT",
+    ID_PELANGGAN: "",
+    NAMA_PELANGGAN: "",
+    NO_TLP: "",
+    NAMA_SH: "",
+    NAMA_SALES: "",
+    STAFF: "",
+    // BARANG
+    KATEGORI_BARANG: "",
+    NAMA_BRAND: "",
+    NAMA_BARANG: "",
+    IMEI: "",
+    WARNA: "",
+    QTY: "",
+    HARGA_JUAL: "",
+    TOTAL_ITEM: 0,
+    // PEMBAYARAN
+    TIPE_BAYAR: "",
+    PAYMENT_METHOD: "",
+    MDR: 0,
+    STATUS: "LUNAS",
+    KETERANGAN: "",
+    // KOLOM TAMBAHAN BEBAS
+    EXTRA_LABEL_1: "",
+    EXTRA_VALUE_1: "",
+    EXTRA_LABEL_2: "",
+    EXTRA_VALUE_2: "",
+  });
 
-  // ===================== LISTENER =====================
+  const [isEditing, setIsEditing] = useState(false);
+  const [editId, setEditId] = useState(null);
+
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const rowsPerPage = 10;
+
+  // =========================
+  // LISTENER FIREBASE REALTIME
+  // =========================
   useEffect(() => {
-    const unsub = listenPenjualan((list) => {
-      setPenjualanList(Array.isArray(list) ? list : []);
+    const unsub = listenAllTransaksi((itemsRaw = []) => {
+      const items = Array.isArray(itemsRaw) ? itemsRaw : [];
+      const normalized = items.map((r) => ({
+        ...r,
+        QTY: Number(r.QTY || 0),
+        HARGA_JUAL: Number(r.HARGA_JUAL || 0),
+        TOTAL_ITEM:
+          Number(r.TOTAL_ITEM) ||
+          Number(r.QTY || 0) * Number(r.HARGA_JUAL || 0),
+      }));
+      setListPenjualan(normalized);
     });
-    return () => unsub && unsub();
+
+    return () => {
+      if (typeof unsub === "function") unsub();
+    };
   }, []);
 
-  // ===================== FILTER & SEARCH =====================
-  const filteredList = useMemo(() => {
-    let list = [...penjualanList];
+  // =========================
+  // HITUNG MDR OTOMATIS
+  // =========================
+  useEffect(() => {
+    const persen = MDR_MAP[form.PAYMENT_METHOD] ?? 0;
+    setForm((prev) => ({ ...prev, MDR: persen }));
+  }, [form.PAYMENT_METHOD]);
 
-    const q = search.trim().toLowerCase();
-    if (q) {
-      list = list.filter((x) => {
-        return (
-          (x.NAMA_TOKO || "").toLowerCase().includes(q) ||
-          (x.NAMA_BRAND || "").toLowerCase().includes(q) ||
-          (x.NAMA_BARANG || "").toLowerCase().includes(q) ||
-          (x.NO_INVOICE || "").toLowerCase().includes(q) ||
-          (x.IMEI || "").toLowerCase().includes(q) ||
-          (x.WARNA || "").toLowerCase().includes(q) ||
-          (x.ID_PELANGGAN || "").toLowerCase().includes(q) ||
-          (x.NAMA_SH || "").toLowerCase().includes(q) ||
-          (x.NAMA_SALES || "").toLowerCase().includes(q) ||
-          (x.STAFF || "").toLowerCase().includes(q) ||
-          (x.STATUS || "").toLowerCase().includes(q) ||
-          (x.KETERANGAN || "").toLowerCase().includes(q)
-        );
-      });
-    }
+  // =========================
+  // HITUNG TOTAL ITEM
+  // =========================
+  useEffect(() => {
+    const total =
+      Number(form.QTY || 0) * Number(form.HARGA_JUAL || 0);
+    setForm((prev) => ({ ...prev, TOTAL_ITEM: total }));
+  }, [form.QTY, form.HARGA_JUAL]);
 
-    if (filterTanggal) {
-      list = list.filter(
-        (x) =>
-          (x.TANGGAL_TRANSAKSI || "").slice(0, 10) === filterTanggal.slice(0, 10)
+  // =========================
+  // GRAND TOTAL (SEMUA PENJUALAN YANG TERLIHAT)
+  // =========================
+  const filteredData = useMemo(() => {
+    if (!search.trim()) return listPenjualan;
+    const s = search.toLowerCase();
+    return listPenjualan.filter((row) => {
+      return (
+        (row.NO_FAKTUR || "").toLowerCase().includes(s) ||
+        (row.NAMA_PELANGGAN || "").toLowerCase().includes(s) ||
+        (row.NAMA_BARANG || "").toLowerCase().includes(s) ||
+        (row.IMEI || "").toLowerCase().includes(s) ||
+        (row.NAMA_TOKO || "").toLowerCase().includes(s)
       );
-    }
-
-    if (filterKategori) {
-      list = list.filter(
-        (x) => (x.KATEGORI_BARANG || x.KATEGORI_BRAND || "") === filterKategori
-      );
-    }
-
-    if (filterToko) {
-      list = list.filter(
-        (x) => (x.NAMA_TOKO || "").toUpperCase() === filterToko.toUpperCase()
-      );
-    }
-
-    // sort terbaru di atas
-    list.sort((a, b) => {
-      const ta = new Date(a.TANGGAL_TRANSAKSI || 0).getTime();
-      const tb = new Date(b.TANGGAL_TRANSAKSI || 0).getTime();
-      return tb - ta;
     });
+  }, [listPenjualan, search]);
 
-    return list;
-  }, [penjualanList, search, filterTanggal, filterKategori, filterToko]);
+  const grandTotal = useMemo(
+    () =>
+      filteredData.reduce(
+        (sum, row) => sum + Number(row.TOTAL_ITEM || row.TOTAL || 0),
+        0
+      ),
+    [filteredData]
+  );
 
-  // ===================== TOTAL PENJUALAN (FORM) =====================
-  const totalTambah = useMemo(() => {
-    const qty = Number(tambahForm.qty || 0);
-    const harga = Number(tambahForm.hargaPenjualan || 0);
-    if (!qty || !harga) return 0;
-    return qty * harga;
-  }, [tambahForm.qty, tambahForm.hargaPenjualan]);
+  // PAGINATION
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredData.length / rowsPerPage)
+  );
+  const currentPageRows = filteredData.slice(
+    (page - 1) * rowsPerPage,
+    page * rowsPerPage
+  );
 
-  const totalEdit = useMemo(() => {
-    if (!editForm) return 0;
-    const qty = Number(editForm.qty || 0);
-    const harga = Number(editForm.hargaPenjualan || 0);
-    if (!qty || !harga) return 0;
-    return qty * harga;
-  }, [editForm?.qty, editForm?.hargaPenjualan]);
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [totalPages, page]);
 
-  // ===================== ADD PENJUALAN =====================
-  const openTambahModal = () => {
-    setTambahForm({
-      tanggal: new Date().toISOString().slice(0, 10),
-      noFaktur: "",
-      namaToko: "PUSAT",
-      kategoriBarang: "",
-      namaBrand: "",
-      namaBarang: "",
-      imei: "",
-      warna: "",
-      qty: 1,
-      hargaPenjualan: "",
-      idPelanggan: "",
-      namaSH: "",
-      namaSales: "",
-      staff: "",
-      tipeBayar: "",
-      paymentMethod: "",
-      status: "",
-      keterangan: "",
+  // =========================
+  // HANDLER
+  // =========================
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const resetForm = () => {
+    setForm({
+      TANGGAL: "",
+      NO_FAKTUR: "",
+      NAMA_TOKO: "CILANGKAP PUSAT",
+      ID_PELANGGAN: "",
+      NAMA_PELANGGAN: "",
+      NO_TLP: "",
+      NAMA_SH: "",
+      NAMA_SALES: "",
+      STAFF: "",
+      KATEGORI_BARANG: "",
+      NAMA_BRAND: "",
+      NAMA_BARANG: "",
+      IMEI: "",
+      WARNA: "",
+      QTY: "",
+      HARGA_JUAL: "",
+      TOTAL_ITEM: 0,
+      TIPE_BAYAR: "",
+      PAYMENT_METHOD: "",
+      MDR: 0,
+      STATUS: "LUNAS",
+      KETERANGAN: "",
+      EXTRA_LABEL_1: "",
+      EXTRA_VALUE_1: "",
+      EXTRA_LABEL_2: "",
+      EXTRA_VALUE_2: "",
     });
-    setShowModalTambah(true);
+    setIsEditing(false);
+    setEditId(null);
   };
 
-  // handle change tipe bayar → update status otomatis
-  const handleChangeTipeBayarTambah = (value) => {
-    const statusAuto = getStatusFromTipeBayar(value);
-    setTambahForm((p) => ({
-      ...p,
-      tipeBayar: value,
-      status: statusAuto,
-    }));
-  };
-
-  const handleSubmitTambah = async () => {
-    try {
-      const qty = Number(tambahForm.qty || 0);
-      const harga = Number(tambahForm.hargaPenjualan || 0);
-
-      if (!tambahForm.tanggal) {
-        alert("Tanggal wajib diisi.");
-        return;
-      }
-
-      if (!tambahForm.namaToko) {
-        alert("Nama Toko wajib diisi.");
-        return;
-      }
-
-      if (!tambahForm.kategoriBarang) {
-        alert("Kategori Barang wajib dipilih.");
-        return;
-      }
-
-      if (!tambahForm.namaBrand) {
-        alert("Nama Brand wajib dipilih.");
-        return;
-      }
-
-      if (!tambahForm.namaBarang) {
-        alert("Nama Barang wajib diisi.");
-        return;
-      }
-
-      if (!qty || qty <= 0) {
-        alert("QTY harus lebih dari 0.");
-        return;
-      }
-
-      if (!harga || harga <= 0) {
-        alert("Harga Penjualan harus lebih dari 0.");
-        return;
-      }
-
-      // Status otomatis fallback jika belum terisi
-      const finalStatus =
-        tambahForm.status || getStatusFromTipeBayar(tambahForm.tipeBayar);
-
-      // ====== IMEI MULTI-SUPPORT (tanpa ubah UI) ======
-      // Bisa isi banyak IMEI dipisah enter / koma / titik koma.
-      // Jika hanya 1 IMEI & QTY > 1 => IMEI yang sama dipakai semua.
-      let imeiList = String(tambahForm.imei || "")
-        .split(/[\n,;]+/)
-        .map((x) => x.trim())
-        .filter((x) => x !== "");
-
-      if (imeiList.length === 0) {
-        // Tidak isi IMEI => semua transaksi tanpa IMEI
-        imeiList = Array(qty).fill("");
-      } else if (imeiList.length === 1 && qty > 1) {
-        // Satu IMEI tapi Qty banyak => salin IMEI yang sama
-        imeiList = Array(qty).fill(imeiList[0]);
-      } else if (imeiList.length !== qty) {
-        alert(
-          `Jumlah IMEI (${imeiList.length}) harus sama dengan QTY (${qty}).\n` +
-            `Masukkan IMEI dipisah ENTER / koma / titik koma.`
-        );
-        return;
-      }
-
-      // Cek IMEI duplikat (hanya kalau diisi)
-      const nonEmptyImei = imeiList.filter((v) => v !== "");
-      const dupCheck = new Set(nonEmptyImei);
-      if (nonEmptyImei.length > 0 && dupCheck.size !== nonEmptyImei.length) {
-        alert("Nomor IMEI tidak boleh sama (duplikat).");
-        return;
-      }
-
-      const invoiceNumber = tambahForm.noFaktur || `FJ-${Date.now()}`;
-
-      // Buat 1 baris per unit qty
-      for (let i = 0; i < qty; i++) {
-        const payload = {
-          TANGGAL_TRANSAKSI: tambahForm.tanggal,
-          NO_INVOICE: invoiceNumber,
-          NAMA_TOKO: tambahForm.namaToko,
-          KATEGORI_BARANG: tambahForm.kategoriBarang,
-          NAMA_BRAND: tambahForm.namaBrand,
-          NAMA_BARANG: tambahForm.namaBarang,
-          IMEI: imeiList[i] || "",
-          WARNA: tambahForm.warna || "",
-          QTY: 1,
-          HARGA_JUAL: harga,
-          TOTAL: harga, // per unit
-          ID_PELANGGAN: tambahForm.idPelanggan || "",
-          NAMA_SH: tambahForm.namaSH || "",
-          NAMA_SALES: tambahForm.namaSales || "",
-          STAFF: tambahForm.staff || "",
-          TIPE_BAYAR: tambahForm.tipeBayar || "",
-          PAYMENT_METHOD: tambahForm.paymentMethod || "",
-          STATUS: finalStatus || "",
-          KETERANGAN: tambahForm.keterangan || "",
-        };
-
-        await addPenjualan(payload);
-      }
-
-      alert("Data penjualan berhasil ditambahkan.");
-      setShowModalTambah(false);
-    } catch (err) {
-      console.error("handleSubmitTambah error:", err);
-      alert("Gagal menambah data penjualan.");
-    }
-  };
-
-  // ===================== EDIT PENJUALAN =====================
-  const openEditModal = (row) => {
-    setEditForm({
-      id: row.id,
-      tanggal: (row.TANGGAL_TRANSAKSI || "").slice(0, 10),
-      noFaktur: row.NO_INVOICE || "",
-      namaToko: row.NAMA_TOKO || "",
-      kategoriBarang: row.KATEGORI_BARANG || row.KATEGORI_BRAND || "",
-      namaBrand: row.NAMA_BRAND || "",
-      namaBarang: row.NAMA_BARANG || "",
-      imei: row.IMEI || "",
-      warna: row.WARNA || "",
-      qty: row.QTY || 1,
-      hargaPenjualan: row.HARGA_JUAL || row.TOTAL || "",
-      idPelanggan: row.ID_PELANGGAN || "",
-      namaSH: row.NAMA_SH || "",
-      namaSales: row.NAMA_SALES || "",
-      staff: row.STAFF || "",
-      tipeBayar: row.TIPE_BAYAR || "",
-      paymentMethod: row.PAYMENT_METHOD || row.PAYMENT_METODE || "",
-      status: row.STATUS || "",
-      keterangan: row.KETERANGAN || "",
-    });
-    setShowModalEdit(true);
-  };
-
-  const handleChangeTipeBayarEdit = (value) => {
-    const statusAuto = getStatusFromTipeBayar(value);
-    setEditForm((p) => ({
-      ...p,
-      tipeBayar: value,
-      status: statusAuto,
-    }));
-  };
-
-  const handleSubmitEdit = async () => {
-    try {
-      if (!editForm || !editForm.id) {
-        alert("Data penjualan tidak valid.");
-        return;
-      }
-
-      const harga = Number(editForm.hargaPenjualan || 0);
-      const qty = Number(editForm.qty || 0);
-
-      if (!editForm.tanggal) {
-        alert("Tanggal wajib diisi.");
-        return;
-      }
-
-      if (!editForm.namaToko) {
-        alert("Nama Toko wajib diisi.");
-        return;
-      }
-
-      if (!editForm.kategoriBarang) {
-        alert("Kategori Barang wajib dipilih.");
-        return;
-      }
-
-      if (!editForm.namaBrand) {
-        alert("Nama Brand wajib dipilih.");
-        return;
-      }
-
-      if (!editForm.namaBarang) {
-        alert("Nama Barang wajib diisi.");
-        return;
-      }
-
-      if (!qty || qty <= 0) {
-        alert("QTY harus lebih dari 0.");
-        return;
-      }
-
-      if (!harga || harga <= 0) {
-        alert("Harga Penjualan harus lebih dari 0.");
-        return;
-      }
-
-      const finalStatus =
-        editForm.status || getStatusFromTipeBayar(editForm.tipeBayar);
-
-      const payload = {
-        TANGGAL_TRANSAKSI: editForm.tanggal,
-        NO_INVOICE: editForm.noFaktur || "",
-        NAMA_TOKO: editForm.namaToko,
-        KATEGORI_BARANG: editForm.kategoriBarang,
-        NAMA_BRAND: editForm.namaBrand,
-        NAMA_BARANG: editForm.namaBarang,
-        IMEI: editForm.imei || "",
-        WARNA: editForm.warna || "",
-        QTY: qty,
-        HARGA_JUAL: harga,
-        TOTAL: harga * qty,
-        ID_PELANGGAN: editForm.idPelanggan || "",
-        NAMA_SH: editForm.namaSH || "",
-        NAMA_SALES: editForm.namaSales || "",
-        STAFF: editForm.staff || "",
-        TIPE_BAYAR: editForm.tipeBayar || "",
-        PAYMENT_METHOD: editForm.paymentMethod || "",
-        STATUS: finalStatus || "",
-        KETERANGAN: editForm.keterangan || "",
-      };
-
-      await updatePenjualan(editForm.id, payload);
-      alert("Data penjualan berhasil diupdate.");
-      setShowModalEdit(false);
-    } catch (err) {
-      console.error("handleSubmitEdit error:", err);
-      alert("Gagal mengupdate data penjualan.");
-    }
-  };
-
-  // ===================== DELETE =====================
-  const handleDelete = async (row) => {
-    if (!window.confirm(`Hapus data penjualan ini?\n${row.NAMA_BARANG}`)) return;
-    try {
-      if (row.id) {
-        await deletePenjualan(row.id);
-      }
-      alert("Data penjualan berhasil dihapus.");
-    } catch (err) {
-      console.error("handleDelete error:", err);
-      alert("Gagal menghapus data penjualan.");
-    }
-  };
-
-  // ===================== EXPORT =====================
-  const handleExportExcel = () => {
-    const sheetData = filteredList.map((x) => ({
-      Tanggal: (x.TANGGAL_TRANSAKSI || "").slice(0, 10),
-      No_Faktur: x.NO_INVOICE,
-      Nama_Toko: x.NAMA_TOKO,
-      Kategori_Barang: x.KATEGORI_BARANG || x.KATEGORI_BRAND,
-      Nama_Brand: x.NAMA_BRAND,
-      Nama_Barang: x.NAMA_BARANG,
-      IMEI: x.IMEI,
-      Warna: x.WARNA,
-      QTY: x.QTY,
-      Harga_Penjualan: x.HARGA_JUAL || x.TOTAL,
-      Total_Penjualan: (x.HARGA_JUAL || x.TOTAL || 0) * (x.QTY || 1),
-      ID_Pelanggan: x.ID_PELANGGAN,
-      Nama_SH: x.NAMA_SH,
-      Nama_SALES: x.NAMA_SALES,
-      STAFF: x.STAFF,
-      Tipe_Bayar: x.TIPE_BAYAR,
-      Payment_Method: x.PAYMENT_METHOD || x.PAYMENT_METODE,
-      Status: x.STATUS,
-      Keterangan: x.KETERANGAN,
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(sheetData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "MASTER_PENJUALAN");
-    XLSX.writeFile(
-      wb,
-      `MASTER_PENJUALAN_${new Date().toISOString().slice(0, 10)}.xlsx`
-    );
-  };
-
-  const handleExportPDF = async () => {
-    try {
-      const el = tableRef.current;
-      if (!el) {
-        alert("Tabel tidak ditemukan.");
-        return;
-      }
-
-      const canvas = await html2canvas(el, { scale: 1.2 });
-      const imgData = canvas.toDataURL("image/png");
-
-      const pdf = new jsPDF("l", "mm", "a4");
-      const width = pdf.internal.pageSize.getWidth();
-      const height = (canvas.height * width) / canvas.width;
-
-      pdf.addImage(imgData, "PNG", 0, 0, width, height);
-      pdf.save(
-        `MASTER_PENJUALAN_${new Date().toISOString().slice(0, 10)}.pdf`
-      );
-    } catch (err) {
-      console.error("handleExportPDF error:", err);
-      alert("Gagal export PDF.");
-    }
-  };
-
-  // ===================== PREVIEW & CETAK INVOICE (FORM TAMBAH) =====================
-  const handlePreviewInvoice = () => {
-    if (!tambahForm.namaBarang) {
-      alert("Isi data penjualan dulu sebelum preview.");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.TANGGAL || !form.NO_FAKTUR || !form.NAMA_BARANG) {
+      alert("Tanggal, No Faktur, dan Nama Barang wajib diisi");
       return;
     }
-    setShowPreview(true);
+
+    const payload = {
+      ...form,
+      QTY: Number(form.QTY || 0),
+      HARGA_JUAL: Number(form.HARGA_JUAL || 0),
+      TOTAL_ITEM:
+        Number(form.QTY || 0) * Number(form.HARGA_JUAL || 0),
+      TOTAL: Number(form.TOTAL_ITEM || 0),
+    };
+
+    try {
+      setLoading(true);
+      if (isEditing && editId) {
+        await updateTransaksi(editId, payload);
+        alert("Data penjualan berhasil diupdate");
+      } else {
+        await addTransaksi(payload);
+        alert("Data penjualan berhasil disimpan");
+      }
+      resetForm();
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menyimpan data penjualan");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handlePrintInvoice = () => {
-    const qty = Number(tambahForm.qty || 0);
-    const harga = Number(tambahForm.hargaPenjualan || 0);
-    const total = qty * harga;
-
-    const doc = new jsPDF("p", "mm", "a4");
-    let y = 15;
-
-    doc.setFontSize(16);
-    doc.text("INVOICE PENJUALAN", 14, y);
-    y += 8;
-
-    doc.setFontSize(11);
-    doc.text(`Tanggal: ${tambahForm.tanggal || "-"}`, 14, y);
-    y += 6;
-    doc.text(`No Faktur: ${tambahForm.noFaktur || "-"}`, 14, y);
-    y += 6;
-    doc.text(`Nama Toko: ${tambahForm.namaToko || "-"}`, 14, y);
-    y += 8;
-
-    doc.text(`Kategori: ${tambahForm.kategoriBarang || "-"}`, 14, y);
-    y += 6;
-    doc.text(`Brand: ${tambahForm.namaBrand || "-"}`, 14, y);
-    y += 6;
-    doc.text(`Barang: ${tambahForm.namaBarang || "-"}`, 14, y);
-    y += 6;
-    doc.text(`Warna: ${tambahForm.warna || "-"}`, 14, y);
-    y += 6;
-    doc.text(`IMEI: ${tambahForm.imei || "-"}`, 14, y);
-    y += 8;
-
-    doc.text(`QTY: ${qty}`, 14, y);
-    y += 6;
-    doc.text(`Harga Jual: Rp ${fmt(harga)}`, 14, y);
-    y += 6;
-    doc.text(`Total Penjualan: Rp ${fmt(total)}`, 14, y);
-    y += 8;
-
-    doc.text(`Tipe Bayar: ${tambahForm.tipeBayar || "-"}`, 14, y);
-    y += 6;
-    doc.text(`Status: ${tambahForm.status || "-"}`, 14, y);
-    y += 8;
-
-    doc.text(`ID Pelanggan: ${tambahForm.idPelanggan || "-"}`, 14, y);
-    y += 6;
-    doc.text(`Nama SH: ${tambahForm.namaSH || "-"}`, 14, y);
-    y += 6;
-    doc.text(`Nama SALES: ${tambahForm.namaSales || "-"}`, 14, y);
-    y += 6;
-    doc.text(`Staff: ${tambahForm.staff || "-"}`, 14, y);
-    y += 8;
-
-    doc.text(`Keterangan: ${tambahForm.keterangan || "-"}`, 14, y);
-
-    doc.save(
-      `INVOICE_${tambahForm.noFaktur || `FJ-${new Date().getTime()}`}.pdf`
-    );
+  const handleEdit = (row) => {
+    setForm({
+      TANGGAL: row.TANGGAL || row.TANGGAL_TRANSAKSI || "",
+      NO_FAKTUR: row.NO_FAKTUR || row.NO_INVOICE || "",
+      NAMA_TOKO: row.NAMA_TOKO || "CILANGKAP PUSAT",
+      ID_PELANGGAN: row.ID_PELANGGAN || "",
+      NAMA_PELANGGAN: row.NAMA_PELANGGAN || "",
+      NO_TLP: row.NO_TLP || "",
+      NAMA_SH: row.NAMA_SH || "",
+      NAMA_SALES: row.NAMA_SALES || "",
+      STAFF: row.STAFF || "",
+      KATEGORI_BARANG: row.KATEGORI_BARANG || "",
+      NAMA_BRAND: row.NAMA_BRAND || "",
+      NAMA_BARANG: row.NAMA_BARANG || "",
+      IMEI: row.IMEI || "",
+      WARNA: row.WARNA || "",
+      QTY: row.QTY || "",
+      HARGA_JUAL: row.HARGA_JUAL || "",
+      TOTAL_ITEM: row.TOTAL_ITEM || row.TOTAL || 0,
+      TIPE_BAYAR: row.TIPE_BAYAR || "",
+      PAYMENT_METHOD: row.PAYMENT_METHOD || "",
+      MDR: row.MDR || MDR_MAP[row.PAYMENT_METHOD] || 0,
+      STATUS: row.STATUS || "LUNAS",
+      KETERANGAN: row.KETERANGAN || "",
+      EXTRA_LABEL_1: row.EXTRA_LABEL_1 || "",
+      EXTRA_VALUE_1: row.EXTRA_VALUE_1 || "",
+      EXTRA_LABEL_2: row.EXTRA_LABEL_2 || "",
+      EXTRA_VALUE_2: row.EXTRA_VALUE_2 || "",
+    });
+    setIsEditing(true);
+    setEditId(row.id);
   };
 
-  // ===================== RENDER =====================
+  const handleDelete = async (row) => {
+    if (!window.confirm("Yakin hapus penjualan ini?")) return;
+    try {
+      setLoading(true);
+      await deleteTransaksi(row.id);
+      alert("Data penjualan berhasil dihapus");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menghapus data penjualan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =========================
+  // RENDER
+  // =========================
   return (
-    <div className="p-4 space-y-4">
-      <h2 className="text-xl font-bold">MASTER PENJUALAN</h2>
-
-      {/* TOOLBAR */}
-      <div className="flex flex-wrap items-center gap-3 mb-3">
-        <div className="flex items-center border rounded px-3 py-2 w-full sm:w-72">
-          <FaSearch className="text-gray-500" />
-          <input
-            className="ml-2 flex-1 outline-none text-sm"
-            placeholder="Cari toko / brand / barang / IMEI / pelanggan ..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
+      <div className="max-w-7xl mx-auto space-y-5">
+        {/* HEADER */}
+        <div className="bg-white rounded-2xl shadow p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">
+              Master Penjualan
+            </h1>
+            <p className="text-xs text-slate-500">
+              Terhubung realtime ke Firebase. MDR otomatis berdasarkan
+              Payment Method.
+            </p>
+          </div>
+          <div className="text-xs text-slate-500">
+            Grand Total Penjualan:{" "}
+            <span className="font-bold text-indigo-600">
+              Rp {fmt(grandTotal)}
+            </span>
+          </div>
         </div>
 
-        <input
-          type="date"
-          className="border rounded px-3 py-2 text-sm"
-          value={filterTanggal}
-          onChange={(e) => setFilterTanggal(e.target.value)}
-        />
-
-        <select
-          className="border rounded px-3 py-2 text-sm"
-          value={filterKategori}
-          onChange={(e) => setFilterKategori(e.target.value)}
+        {/* FORM */}
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white rounded-2xl shadow p-4 space-y-4"
         >
-          <option value="">Semua Kategori</option>
-          {KATEGORI_OPTIONS.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
+          {/* BARIS 1 – HEADER */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="text-xs text-slate-600">Tanggal</label>
+              <input
+                type="date"
+                name="TANGGAL"
+                value={form.TANGGAL}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">
+                No Faktur / Invoice
+              </label>
+              <input
+                name="NO_FAKTUR"
+                value={form.NO_FAKTUR}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">Nama Toko</label>
+              <input
+                name="NAMA_TOKO"
+                value={form.NAMA_TOKO}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm bg-slate-100"
+                readOnly
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">
+                ID Pelanggan
+              </label>
+              <input
+                name="ID_PELANGGAN"
+                value={form.ID_PELANGGAN}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
 
-        <select
-          className="border rounded px-3 py-2 text-sm"
-          value={filterToko}
-          onChange={(e) => setFilterToko(e.target.value)}
-        >
-          <option value="">Semua Toko</option>
-          {fallbackTokoNames.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+          {/* BARIS 2 – PELANGGAN & SALES */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="text-xs text-slate-600">
+                Nama Pelanggan
+              </label>
+              <input
+                name="NAMA_PELANGGAN"
+                value={form.NAMA_PELANGGAN}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">No Telepon</label>
+              <input
+                name="NO_TLP"
+                value={form.NO_TLP}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">Nama SH</label>
+              <input
+                name="NAMA_SH"
+                value={form.NAMA_SH}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">
+                Nama SALES
+              </label>
+              <input
+                name="NAMA_SALES"
+                value={form.NAMA_SALES}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
 
-        <button
-          onClick={openTambahModal}
-          className="px-3 py-2 bg-indigo-600 text-white rounded flex items-center text-sm"
-        >
-          <FaPlus className="mr-2" /> Tambah Penjualan
-        </button>
+          {/* BARIS 3 – STAFF & BARANG */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="text-xs text-slate-600">STAFF</label>
+              <input
+                name="STAFF"
+                value={form.STAFF}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">
+                Kategori Barang
+              </label>
+              <input
+                name="KATEGORI_BARANG"
+                value={form.KATEGORI_BARANG}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">Nama Brand</label>
+              <input
+                name="NAMA_BRAND"
+                value={form.NAMA_BRAND}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">Nama Barang</label>
+              <input
+                name="NAMA_BARANG"
+                value={form.NAMA_BARANG}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
 
-        <button
-          onClick={handleExportExcel}
-          className="px-3 py-2 bg-green-600 text-white rounded flex items-center text-sm"
-        >
-          <FaFileExcel className="mr-2" /> Export Excel
-        </button>
+          {/* BARIS 4 – IMEI, WARNA, QTY, HARGA */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="text-xs text-slate-600">IMEI</label>
+              <input
+                name="IMEI"
+                value={form.IMEI}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">Warna</label>
+              <input
+                name="WARNA"
+                value={form.WARNA}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">QTY</label>
+              <input
+                type="number"
+                name="QTY"
+                value={form.QTY}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm text-right"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">
+                Harga Penjualan
+              </label>
+              <input
+                type="number"
+                name="HARGA_JUAL"
+                value={form.HARGA_JUAL}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm text-right"
+              />
+            </div>
+          </div>
 
-        <button
-          onClick={handleExportPDF}
-          className="px-3 py-2 bg-red-600 text-white rounded flex items-center text-sm"
-        >
-          <FaFilePdf className="mr-2" /> Export PDF
-        </button>
-      </div>
+          {/* BARIS 5 – PEMBAYARAN */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div>
+              <label className="text-xs text-slate-600">Tipe Bayar</label>
+              <select
+                name="TIPE_BAYAR"
+                value={form.TIPE_BAYAR}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">- Pilih -</option>
+                {TIPE_BAYAR_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">
+                Payment Methode
+              </label>
+              <select
+                name="PAYMENT_METHOD"
+                value={form.PAYMENT_METHOD}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">- Pilih -</option>
+                {PAYMENT_METHOD_OPTIONS.map((pm) => (
+                  <option key={pm} value={pm}>
+                    {pm}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">MDR (%)</label>
+              <input
+                readOnly
+                value={form.MDR}
+                className="w-full border rounded-lg px-3 py-2 text-sm bg-slate-100"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">Status</label>
+              <select
+                name="STATUS"
+                value={form.STATUS}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="LUNAS">LUNAS</option>
+                <option value="PIUTANG">PIUTANG</option>
+              </select>
+            </div>
+          </div>
 
-      {/* TABLE */}
-      <div
-        ref={tableRef}
-        className="bg-white rounded shadow overflow-x-auto border"
-      >
-        <table className="w-full text-xs sm:text-sm border-collapse">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border p-2">No</th>
-              <th className="border p-2">Tanggal</th>
-              <th className="border p-2">No Faktur</th>
-              <th className="border p-2">Nama Toko</th>
-              <th className="border p-2">Kategori Barang</th>
-              <th className="border p-2">Nama Brand</th>
-              <th className="border p-2">Nama Barang</th>
-              <th className="border p-2">IMEI</th>
-              <th className="border p-2">Warna</th>
-              <th className="border p-2 text-center">QTY</th>
-              <th className="border p-2 text-right">Harga Jual</th>
-              <th className="border p-2 text-right">Total Penjualan</th>
-              <th className="border p-2">ID Pelanggan</th>
-              <th className="border p-2">Nama SH</th>
-              <th className="border p-2">Nama SALES</th>
-              <th className="border p-2">STAFF</th>
-              <th className="border p-2">Tipe Bayar</th>
-              <th className="border p-2">Payment Method</th>
-              <th className="border p-2">Status</th>
-              <th className="border p-2">Keterangan</th>
-              <th className="border p-2 text-center">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredList.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={21}
-                  className="border p-3 text-center text-gray-500"
-                >
-                  Tidak ada data penjualan.
-                </td>
-              </tr>
-            ) : (
-              filteredList.map((row, idx) => {
-                const hargaJual = row.HARGA_JUAL || row.TOTAL || 0;
-                const totalRow = hargaJual * (row.QTY || 1);
+          {/* BARIS 6 – KETERANGAN & KOLOM TAMBAHAN */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-slate-600">
+                Keterangan
+              </label>
+              <input
+                name="KETERANGAN"
+                value={form.KETERANGAN}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">
+                Kolom Tambahan 1 (Nama)
+              </label>
+              <input
+                name="EXTRA_LABEL_1"
+                value={form.EXTRA_LABEL_1}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                placeholder="Isi nilai"
+                name="EXTRA_VALUE_1"
+                value={form.EXTRA_VALUE_1}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600">
+                Kolom Tambahan 2 (Nama)
+              </label>
+              <input
+                name="EXTRA_LABEL_2"
+                value={form.EXTRA_LABEL_2}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                placeholder="Isi nilai"
+                name="EXTRA_VALUE_2"
+                value={form.EXTRA_VALUE_2}
+                onChange={handleChange}
+                className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+              />
+            </div>
+          </div>
 
-                return (
-                  <tr key={row.id || idx} className="hover:bg-gray-50">
-                    <td className="border p-2 text-center">{idx + 1}</td>
-                    <td className="border p-2">
-                      {(row.TANGGAL_TRANSAKSI || "").slice(0, 10)}
-                    </td>
-                    <td className="border p-2">{row.NO_INVOICE}</td>
-                    <td className="border p-2">{row.NAMA_TOKO}</td>
-                    <td className="border p-2">
-                      {row.KATEGORI_BARANG || row.KATEGORI_BRAND}
-                    </td>
-                    <td className="border p-2">{row.NAMA_BRAND}</td>
-                    <td className="border p-2">{row.NAMA_BARANG}</td>
-                    <td className="border p-2">{row.IMEI}</td>
-                    <td className="border p-2">{row.WARNA}</td>
-                    <td className="border p-2 text-center">{row.QTY}</td>
-                    <td className="border p-2 text-right">
-                      Rp {fmt(hargaJual)}
-                    </td>
-                    <td className="border p-2 text-right">
-                      Rp {fmt(totalRow)}
-                    </td>
-                    <td className="border p-2">{row.ID_PELANGGAN}</td>
-                    <td className="border p-2">{row.NAMA_SH}</td>
-                    <td className="border p-2">{row.NAMA_SALES}</td>
-                    <td className="border p-2">{row.STAFF}</td>
-                    <td className="border p-2">{row.TIPE_BAYAR}</td>
-                    <td className="border p-2">
-                      {row.PAYMENT_METHOD || row.PAYMENT_METODE}
-                    </td>
-                    <td className="border p-2">{row.STATUS}</td>
-                    <td className="border p-2 whitespace-pre-wrap">
-                      {row.KETERANGAN}
-                    </td>
-                    <td className="border p-2 text-center space-x-2">
-                      <button
-                        onClick={() => openEditModal(row)}
-                        className="text-blue-600 inline-block mr-2"
-                      >
-                        <FaEdit />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(row)}
-                        className="text-red-600 inline-block"
-                      >
-                        <FaTrash />
-                      </button>
+          {/* BARIS 7 – TOTAL ITEM + BUTTON */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
+            <div className="text-sm text-slate-600">
+              TOTAL ITEM:{" "}
+              <span className="font-bold text-indigo-600">
+                Rp {fmt(form.TOTAL_ITEM)}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-2 rounded-lg"
+              >
+                <FaPlus />
+                {isEditing ? "UPDATE PENJUALAN" : "SIMPAN PENJUALAN"}
+              </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="text-sm px-4 py-2 rounded-lg border"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {/* TABEL PENJUALAN */}
+        <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h2 className="font-semibold text-slate-800">
+              Data Penjualan
+            </h2>
+            <div className="flex items-center gap-2">
+              <FaSearch className="text-slate-400" />
+              <input
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="border rounded-lg px-3 py-2 text-sm"
+                placeholder="Cari faktur / pelanggan / barang / IMEI..."
+              />
+            </div>
+          </div>
+
+          {/* INFO GRAND TOTAL & NAV PAGE */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-slate-600">
+            <span>
+              Total data:{" "}
+              <b>{filteredData.length}</b> | Grand Total:{" "}
+              <b>Rp {fmt(grandTotal)}</b>
+            </span>
+            <span>
+              Halaman {page} dari {totalPages}
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs sm:text-sm border">
+              <thead className="bg-indigo-600 text-white">
+                <tr>
+                  <th className="p-2 border">No</th>
+                  <th className="p-2 border">Tanggal</th>
+                  <th className="p-2 border">No Faktur</th>
+                  <th className="p-2 border">Toko</th>
+                  <th className="p-2 border">Pelanggan</th>
+                  <th className="p-2 border">Barang</th>
+                  <th className="p-2 border">IMEI</th>
+                  <th className="p-2 border">Qty</th>
+                  <th className="p-2 border">Harga</th>
+                  <th className="p-2 border">Total</th>
+                  <th className="p-2 border">Status</th>
+                  <th className="p-2 border">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentPageRows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={12}
+                      className="text-center p-4 text-slate-500"
+                    >
+                      Tidak ada data penjualan.
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                ) : (
+                  currentPageRows.map((row, idx) => (
+                    <tr key={row.id || idx} className="hover:bg-slate-50">
+                      <td className="border p-2 text-center">
+                        {(page - 1) * rowsPerPage + idx + 1}
+                      </td>
+                      <td className="border p-2">
+                        {row.TANGGAL || row.TANGGAL_TRANSAKSI}
+                      </td>
+                      <td className="border p-2">
+                        {row.NO_FAKTUR || row.NO_INVOICE}
+                      </td>
+                      <td className="border p-2">
+                        {row.NAMA_TOKO || "CILANGKAP PUSAT"}
+                      </td>
+                      <td className="border p-2">
+                        {row.NAMA_PELANGGAN}
+                      </td>
+                      <td className="border p-2">{row.NAMA_BARANG}</td>
+                      <td className="border p-2 font-mono">{row.IMEI}</td>
+                      <td className="border p-2 text-center">{row.QTY}</td>
+                      <td className="border p-2 text-right">
+                        Rp {fmt(row.HARGA_JUAL)}
+                      </td>
+                      <td className="border p-2 text-right">
+                        Rp {fmt(row.TOTAL_ITEM || row.TOTAL)}
+                      </td>
+                      <td className="border p-2">{row.STATUS}</td>
+                      <td className="border p-2 text-center">
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(row)}
+                            className="text-blue-600"
+                          >
+                            <FaEdit />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(row)}
+                            className="text-red-600"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PAGINATION */}
+          <div className="flex justify-end items-center gap-2 mt-3 text-xs">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-2 py-1 border rounded disabled:opacity-40 flex items-center gap-1"
+            >
+              <FaChevronLeft /> Prev
+            </button>
+            <span>
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() =>
+                setPage((p) => Math.min(totalPages, p + 1))
+              }
+              className="px-2 py-1 border rounded disabled:opacity-40 flex items-center gap-1"
+            >
+              Next <FaChevronRight />
+            </button>
+          </div>
+        </div>
       </div>
-
-      {/* MODAL TAMBAH */}
-      {showModalTambah && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-start py-8 z-50 overflow-y-auto">
-          <div className="bg-white w-full max-w-3xl rounded shadow p-5">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-bold">Tambah Penjualan</h3>
-              <button
-                onClick={() => setShowModalTambah(false)}
-                className="text-gray-600"
-              >
-                <FaTimes />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
-              <div>
-                <label className="text-xs">Tanggal</label>
-                <input
-                  type="date"
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.tanggal}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, tanggal: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">No Faktur / Invoice</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.noFaktur}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, noFaktur: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Nama Toko</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.namaToko}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, namaToko: e.target.value }))
-                  }
-                >
-                  {fallbackTokoNames.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs">Kategori Barang</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.kategoriBarang}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      kategoriBarang: e.target.value,
-                      namaBrand: "",
-                    }))
-                  }
-                >
-                  <option value="">Pilih Kategori</option>
-                  {KATEGORI_OPTIONS.map((k) => (
-                    <option key={k} value={k}>
-                      {k}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs">Nama Brand</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.namaBrand}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, namaBrand: e.target.value }))
-                  }
-                  disabled={!tambahForm.kategoriBarang}
-                >
-                  <option value="">
-                    {tambahForm.kategoriBarang
-                      ? "Pilih Brand"
-                      : "Pilih Kategori dulu"}
-                  </option>
-                  {tambahForm.kategoriBarang &&
-                    (CATEGORY_BRAND_OPTIONS[tambahForm.kategoriBarang] || []
-                    ).map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs">Nama Barang</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.namaBarang}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, namaBarang: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">IMEI</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.imei}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, imei: e.target.value }))
-                  }
-                />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  Bisa isi banyak IMEI dipisah ENTER / koma / titik koma.
-                </p>
-              </div>
-
-              <div>
-                <label className="text-xs">Warna</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.warna}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, warna: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">QTY</label>
-                <input
-                  type="number"
-                  min={1}
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.qty}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, qty: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Harga Penjualan</label>
-                <input
-                  type="number"
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.hargaPenjualan}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      hargaPenjualan: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Total Penjualan</label>
-                <input
-                  className="w-full border p-2 rounded bg-gray-100"
-                  value={`Rp ${fmt(totalTambah)}`}
-                  readOnly
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">ID Pelanggan</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.idPelanggan}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      idPelanggan: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Nama SH</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.namaSH}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, namaSH: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Nama SALES</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.namaSales}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      namaSales: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">STAFF</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.staff}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, staff: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Tipe Bayar</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.tipeBayar}
-                  onChange={(e) => handleChangeTipeBayarTambah(e.target.value)}
-                >
-                  <option value="">Pilih Tipe Bayar</option>
-                  {TIPE_BAYAR_OPTIONS.map((tb) => (
-                    <option key={tb} value={tb}>
-                      {tb}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs">Payment Method</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.paymentMethod}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      paymentMethod: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Pilih Payment Method</option>
-                  {PAYMENT_METHOD_OPTIONS.map((pm) => (
-                    <option key={pm} value={pm}>
-                      {pm}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs">Status</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={tambahForm.status}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, status: e.target.value }))
-                  }
-                >
-                  <option value="">Pilih Status</option>
-                  <option value="LUNAS">LUNAS</option>
-                  <option value="PIUTANG">PIUTANG</option>
-                </select>
-                <p className="text-[10px] text-gray-500 mt-1">
-                  Status akan otomatis mengikuti Tipe Bayar (CASH/DEBIT → LUNAS,
-                  PIUTANG → PIUTANG), tapi masih bisa diubah manual jika
-                  diperlukan.
-                </p>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-xs">Keterangan</label>
-                <textarea
-                  rows={3}
-                  className="w-full border p-2 rounded text-xs sm:text-sm"
-                  value={tambahForm.keterangan}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      keterangan: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap justify-between items-center gap-2 mt-4">
-              <div className="flex gap-2">
-                <button
-                  className="px-3 py-1 bg-gray-500 text-white rounded text-sm flex items-center"
-                  onClick={handlePreviewInvoice}
-                >
-                  <FaEye className="mr-1" /> Preview
-                </button>
-                <button
-                  className="px-3 py-1 bg-orange-600 text-white rounded text-sm flex items-center"
-                  onClick={handlePrintInvoice}
-                >
-                  <FaPrint className="mr-1" /> Cetak Invoice
-                </button>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  className="px-3 py-1 bg-gray-400 text-white rounded text-sm"
-                  onClick={() => setShowModalTambah(false)}
-                >
-                  <FaTimes className="inline" /> Batal
-                </button>
-                <button
-                  className="px-3 py-1 bg-indigo-600 text-white rounded text-sm flex items-center"
-                  onClick={handleSubmitTambah}
-                >
-                  <FaSave className="mr-1" /> Simpan
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL EDIT */}
-      {showModalEdit && editForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-start py-8 z-50 overflow-y-auto">
-          <div className="bg-white w-full max-w-3xl rounded shadow p-5">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-bold">Edit Penjualan</h3>
-              <button
-                onClick={() => setShowModalEdit(false)}
-                className="text-gray-600"
-              >
-                <FaTimes />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
-              <div>
-                <label className="text-xs">Tanggal</label>
-                <input
-                  type="date"
-                  className="w-full border p-2 rounded"
-                  value={editForm.tanggal}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, tanggal: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">No Faktur / Invoice</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={editForm.noFaktur}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, noFaktur: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Nama Toko</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={editForm.namaToko}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, namaToko: e.target.value }))
-                  }
-                >
-                  {fallbackTokoNames.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs">Kategori Barang</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={editForm.kategoriBarang}
-                  onChange={(e) =>
-                    setEditForm((p) => ({
-                      ...p,
-                      kategoriBarang: e.target.value,
-                      namaBrand: "",
-                    }))
-                  }
-                >
-                  <option value="">Pilih Kategori</option>
-                  {KATEGORI_OPTIONS.map((k) => (
-                    <option key={k} value={k}>
-                      {k}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs">Nama Brand</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={editForm.namaBrand}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, namaBrand: e.target.value }))
-                  }
-                  disabled={!editForm.kategoriBarang}
-                >
-                  <option value="">
-                    {editForm.kategoriBarang
-                      ? "Pilih Brand"
-                      : "Pilih Kategori dulu"}
-                  </option>
-                  {editForm.kategoriBarang &&
-                    (CATEGORY_BRAND_OPTIONS[editForm.kategoriBarang] || []
-                    ).map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs">Nama Barang</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={editForm.namaBarang}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, namaBarang: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">IMEI</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={editForm.imei}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, imei: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Warna</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={editForm.warna}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, warna: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">QTY</label>
-                <input
-                  type="number"
-                  min={1}
-                  className="w-full border p-2 rounded"
-                  value={editForm.qty}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, qty: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Harga Penjualan</label>
-                <input
-                  type="number"
-                  className="w-full border p-2 rounded"
-                  value={editForm.hargaPenjualan}
-                  onChange={(e) =>
-                    setEditForm((p) => ({
-                      ...p,
-                      hargaPenjualan: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Total Penjualan</label>
-                <input
-                  className="w-full border p-2 rounded bg-gray-100"
-                  value={`Rp ${fmt(totalEdit)}`}
-                  readOnly
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">ID Pelanggan</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={editForm.idPelanggan}
-                  onChange={(e) =>
-                    setEditForm((p) => ({
-                      ...p,
-                      idPelanggan: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Nama SH</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={editForm.namaSH}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, namaSH: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Nama SALES</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={editForm.namaSales}
-                  onChange={(e) =>
-                    setEditForm((p) => ({
-                      ...p,
-                      namaSales: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">STAFF</label>
-                <input
-                  className="w-full border p-2 rounded"
-                  value={editForm.staff}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, staff: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Tipe Bayar</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={editForm.tipeBayar}
-                  onChange={(e) =>
-                    handleChangeTipeBayarEdit(e.target.value)
-                  }
-                >
-                  <option value="">Pilih Tipe Bayar</option>
-                  {TIPE_BAYAR_OPTIONS.map((tb) => (
-                    <option key={tb} value={tb}>
-                      {tb}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs">Payment Method</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={editForm.paymentMethod}
-                  onChange={(e) =>
-                    setEditForm((p) => ({
-                      ...p,
-                      paymentMethod: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Pilih Payment Method</option>
-                  {PAYMENT_METHOD_OPTIONS.map((pm) => (
-                    <option key={pm} value={pm}>
-                      {pm}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs">Status</label>
-                <select
-                  className="w-full border p-2 rounded"
-                  value={editForm.status}
-                  onChange={(e) =>
-                    setEditForm((p) => ({ ...p, status: e.target.value }))
-                  }
-                >
-                  <option value="">Pilih Status</option>
-                  <option value="LUNAS">LUNAS</option>
-                  <option value="PIUTANG">PIUTANG</option>
-                </select>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-xs">Keterangan</label>
-                <textarea
-                  rows={3}
-                  className="w-full border p-2 rounded text-xs sm:text-sm"
-                  value={editForm.keterangan}
-                  onChange={(e) =>
-                    setEditForm((p) => ({
-                      ...p,
-                      keterangan: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                className="px-3 py-1 bg-gray-400 text-white rounded text-sm"
-                onClick={() => setShowModalEdit(false)}
-              >
-                <FaTimes />
-              </button>
-              <button
-                className="px-3 py-1 bg-blue-600 text-white rounded text-sm flex items-center"
-                onClick={handleSubmitEdit}
-              >
-                <FaSave className="mr-1" /> Simpan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL PREVIEW INVOICE (dari form tambah) */}
-      {showPreview && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-          <div className="bg-white w-full max-w-lg rounded shadow p-5">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-bold">Preview Invoice Penjualan</h3>
-              <button
-                onClick={() => setShowPreview(false)}
-                className="text-gray-600"
-              >
-                <FaTimes />
-              </button>
-            </div>
-            <div className="text-xs sm:text-sm space-y-1">
-              <p>
-                <span className="font-semibold">Tanggal:</span>{" "}
-                {tambahForm.tanggal || "-"}
-              </p>
-              <p>
-                <span className="font-semibold">No Faktur:</span>{" "}
-                {tambahForm.noFaktur || "-"}
-              </p>
-              <p>
-                <span className="font-semibold">Nama Toko:</span>{" "}
-                {tambahForm.namaToko || "-"}
-              </p>
-              <hr className="my-2" />
-              <p>
-                <span className="font-semibold">Kategori:</span>{" "}
-                {tambahForm.kategoriBarang || "-"}
-              </p>
-              <p>
-                <span className="font-semibold">Brand:</span>{" "}
-                {tambahForm.namaBrand || "-"}
-              </p>
-              <p>
-                <span className="font-semibold">Barang:</span>{" "}
-                {tambahForm.namaBarang || "-"}
-              </p>
-              <p>
-                <span className="font-semibold">Warna:</span>{" "}
-                {tambahForm.warna || "-"}
-              </p>
-              <p className="whitespace-pre-wrap">
-                <span className="font-semibold">IMEI:</span>{" "}
-                {tambahForm.imei || "-"}
-              </p>
-              <hr className="my-2" />
-              <p>
-                <span className="font-semibold">QTY:</span>{" "}
-                {tambahForm.qty || 0}
-              </p>
-              <p>
-                <span className="font-semibold">Harga Jual:</span>{" "}
-                Rp {fmt(tambahForm.hargaPenjualan || 0)}
-              </p>
-              <p>
-                <span className="font-semibold">Total Penjualan:</span>{" "}
-                Rp {fmt(totalTambah)}
-              </p>
-              <hr className="my-2" />
-              <p>
-                <span className="font-semibold">Tipe Bayar:</span>{" "}
-                {tambahForm.tipeBayar || "-"}
-              </p>
-              <p>
-                <span className="font-semibold">Payment Method:</span>{" "}
-                {tambahForm.paymentMethod || "-"}
-              </p>
-              <p>
-                <span className="font-semibold">Status:</span>{" "}
-                {tambahForm.status || "-"}
-              </p>
-              <hr className="my-2" />
-              <p>
-                <span className="font-semibold">ID Pelanggan:</span>{" "}
-                {tambahForm.idPelanggan || "-"}
-              </p>
-              <p>
-                <span className="font-semibold">Nama SH:</span>{" "}
-                {tambahForm.namaSH || "-"}
-              </p>
-              <p>
-                <span className="font-semibold">Nama SALES:</span>{" "}
-                {tambahForm.namaSales || "-"}
-              </p>
-              <p>
-                <span className="font-semibold">Staff:</span>{" "}
-                {tambahForm.staff || "-"}
-              </p>
-              <p className="whitespace-pre-wrap">
-                <span className="font-semibold">Keterangan:</span>{" "}
-                {tambahForm.keterangan || "-"}
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                className="px-3 py-1 bg-gray-400 text-white rounded text-sm"
-                onClick={() => setShowPreview(false)}
-              >
-                <FaTimes className="inline" /> Tutup
-              </button>
-              <button
-                className="px-3 py-1 bg-orange-600 text-white rounded text-sm flex items-center"
-                onClick={handlePrintInvoice}
-              >
-                <FaPrint className="mr-1" /> Cetak Invoice
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

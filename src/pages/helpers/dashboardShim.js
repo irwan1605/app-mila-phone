@@ -2,9 +2,17 @@
 import db from "../../data/database.js";
 
 export const TOKO_LABELS = {
-  "GAS ALAM": "TOKO GAS ALAM",
-  "PERMATA": "TOKO PERMATA",
-  "PUSAT": "TOKO PUSAT",
+  "CILANGKAP PUSAT": "CILANGKAP PUSAT",
+  "CIBINONG": "CIBINONG",
+  "GAS ALAM": "GAS ALAM",
+  "CITEUREUP": "CITEUREUP",
+  "CIRACAS": "CIRACAS",
+  "METLAND 1": "METLAND 1",
+  "METLAND 2": "METLAND 2",
+  "PITARA": "PITARA",
+  "KOTA WISATA": "KOTA WISATA",
+  "SAWANGAN": "SAWANGAN",
+  
 };
 
 export const PAYMENT_METHODS = ["Cash", "Transfer", "Debit", "E-Wallet", "Leasing / Kredit"];

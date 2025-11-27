@@ -34,7 +34,7 @@ export default function CetakFakturPROMAX() {
   const [form, setForm] = useState({
     nomorFaktur: nextInvoiceNumber("INV"),
     tanggal: new Date().toISOString().slice(0, 10),
-    namaToko: "Toko Pusat",
+    namaToko: "CILANGKAP PUSAT",
     namaCustomer: "",
     alamatCustomer: "",
     items: [

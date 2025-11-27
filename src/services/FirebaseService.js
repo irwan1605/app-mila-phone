@@ -515,17 +515,17 @@ export const updateTransferRequest = (id, data) => {
 };
 
 // HAPUS DATA MASTER di /stock/{brand}/{sku}
-export const deleteMasterBarang = async (brand, barang) => {
-  try {
-    const sku = `${brand}_${barang}`.replace(/\s+/g, "_");
-    const path = `stock/${brand}/${sku}`;
-    await remove(ref(db, path));
-    return true;
-  } catch (err) {
-    console.error("deleteMasterBarang:", err);
-    return false;
-  }
-};
+// export const deleteMasterBarang = async (brand, barang) => {
+//   try {
+//     const sku = `${brand}_${barang}`.replace(/\s+/g, "_");
+//     const path = `stock/${brand}/${sku}`;
+//     await remove(ref(db, path));
+//     return true;
+//   } catch (err) {
+//     console.error("deleteMasterBarang:", err);
+//     return false;
+//   }
+// };
 
 /* ============================================================
    MASTER KARYAWAN
@@ -592,6 +592,15 @@ export const deleteKaryawan = async (id) => {
     console.error("deleteKaryawan error:", err);
     throw err;
   }
+};
+
+/* =========================
+   MASTER BARANG DELETE
+========================= */
+
+export const deleteMasterBarang = async (brand, barang) => {
+  const sku = `${brand}_${barang}`.replace(/\s+/g, "_");
+  return remove(ref(db, `stock/${brand}/${sku}`));
 };
 
 

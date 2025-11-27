@@ -165,9 +165,9 @@ export default function MasterPembelian() {
         if (!tImei) return false;
         if (tImei !== im) return false;
         if (originalGroupKey) {
-          const tKey = `${t.TANGGAL_TRANSAKSI || ""}|${
-            t.NAMA_SUPPLIER || ""
-          }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+          const tKey = `${t.TANGGAL_TRANSAKSI || ""}|${t.NAMA_SUPPLIER || ""}|${
+            t.NAMA_BRAND || ""
+          }|${t.NAMA_BARANG || ""}`;
           if (tKey === originalGroupKey) return false;
         }
         return true;
@@ -175,7 +175,9 @@ export default function MasterPembelian() {
 
       if (conflict) {
         errors.push(
-          `IMEI / No MESIN ${im} sudah digunakan di SKU ${conflict.NAMA_BRAND} - ${conflict.NAMA_BARANG} (Supplier: ${
+          `IMEI / No MESIN ${im} sudah digunakan di SKU ${
+            conflict.NAMA_BRAND
+          } - ${conflict.NAMA_BARANG} (Supplier: ${
             conflict.NAMA_SUPPLIER || "-"
           })`
         );
@@ -185,6 +187,7 @@ export default function MasterPembelian() {
 
     return errors;
   };
+
   // ===================== HAPUS PEMBELIAN =====================
   const deletePembelian = async (item) => {
     if (
@@ -207,8 +210,7 @@ export default function MasterPembelian() {
       for (const r of rows) {
         const tokoIndex =
           fallbackTokoNames.findIndex(
-            (t) =>
-              t.toUpperCase() === String(r.NAMA_TOKO || "").toUpperCase()
+            (t) => t.toUpperCase() === String(r.NAMA_TOKO || "").toUpperCase()
           ) + 1;
 
         if (typeof deleteTransaksi === "function") {
@@ -275,8 +277,7 @@ export default function MasterPembelian() {
         const r = rows[i];
         const tokoIndex =
           fallbackTokoNames.findIndex(
-            (t) =>
-              t.toUpperCase() === String(r.NAMA_TOKO || "").toUpperCase()
+            (t) => t.toUpperCase() === String(r.NAMA_TOKO || "").toUpperCase()
           ) + 1;
 
         let newIMEI = r.IMEI;
@@ -297,8 +298,7 @@ export default function MasterPembelian() {
           NO_INVOICE: editData.noInvoice,
           HARGA_SUPLAYER: Number(editData.hargaSup || 0),
           HARGA_UNIT: Number(editData.hargaUnit || 0),
-          TOTAL:
-            Number(r.QTY || 0) * Number(editData.hargaUnit || 0),
+          TOTAL: Number(r.QTY || 0) * Number(editData.hargaUnit || 0),
           IMEI: newIMEI,
         };
 
@@ -325,8 +325,7 @@ export default function MasterPembelian() {
               NO_INVOICE: editData.noInvoice,
               HARGA_SUPLAYER: Number(editData.hargaSup || 0),
               HARGA_UNIT: Number(editData.hargaUnit || 0),
-              TOTAL:
-                Number(x.QTY || 0) * Number(editData.hargaUnit || 0),
+              TOTAL: Number(x.QTY || 0) * Number(editData.hargaUnit || 0),
             };
           }
           return x;
@@ -373,8 +372,7 @@ export default function MasterPembelian() {
     if (!supplier) return alert("Nama Supplier wajib diisi.");
     if (!brand) return alert("Brand wajib diisi.");
     if (!barang) return alert("Nama barang wajib diisi.");
-    if (!hUnit || hUnit <= 0)
-      return alert("Harga Unit harus lebih dari 0.");
+    if (!hUnit || hUnit <= 0) return alert("Harga Unit harus lebih dari 0.");
     if (imeis.length === 0 && qtyInput <= 0)
       return alert("Isi IMEI atau Qty (lebih dari 0).");
 
@@ -406,8 +404,7 @@ export default function MasterPembelian() {
     try {
       const tokoIndex =
         fallbackTokoNames.findIndex(
-          (t) =>
-            t.toUpperCase() === String(namaToko || "").toUpperCase()
+          (t) => t.toUpperCase() === String(namaToko || "").toUpperCase()
         ) + 1;
 
       // INSERT PER IMEI
@@ -486,6 +483,7 @@ export default function MasterPembelian() {
       alert("Gagal menambahkan pembelian.");
     }
   };
+
   // ===================== EXPORT EXCEL =====================
   const exportExcel = () => {
     const rows = Object.values(groupedPembelian).map((r) => ({
@@ -526,9 +524,7 @@ export default function MasterPembelian() {
     const h = (canvas.height * w) / canvas.width;
 
     pdf.addImage(img, "PNG", 0, 0, w, h);
-    pdf.save(
-      `MasterPembelian_${new Date().toISOString().slice(0, 10)}.pdf`
-    );
+    pdf.save(`MasterPembelian_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   // ===================== PREVIEW INVOICE =====================
@@ -664,7 +660,6 @@ export default function MasterPembelian() {
 
     const totalSup = totalQty * Number(hargaSup || 0);
 
-    // TEMPLATE HTML CETAK PDF
     const html = `
       <div style="font-family: Arial; padding: 30px; width: 700px">
 
@@ -692,7 +687,7 @@ export default function MasterPembelian() {
           </thead>
           <tbody>
             ${
-              (imeis.length > 0
+              imeis.length > 0
                 ? imeis
                     .map(
                       (im, i) => `
@@ -717,7 +712,7 @@ export default function MasterPembelian() {
                 <td>${Number(hargaSup || 0).toLocaleString()}</td>
                 <td>${(qty * Number(hargaSup || 0)).toLocaleString()}</td>
               </tr>
-            `)
+            `
             }
           </tbody>
         </table>
@@ -746,6 +741,7 @@ export default function MasterPembelian() {
     pdf.save(`InvoicePembelian_${supplier}_${tanggal}.pdf`);
     wrapper.remove();
   };
+
   // ===================== RENDER =====================
   return (
     <div className="p-4 space-y-4">
@@ -808,10 +804,7 @@ export default function MasterPembelian() {
           <tbody>
             {filteredPurchases.length === 0 ? (
               <tr>
-                <td
-                  colSpan={13}
-                  className="text-center text-gray-500 p-3"
-                >
+                <td colSpan={13} className="text-center text-gray-500 p-3">
                   Tidak ada data pembelian.
                 </td>
               </tr>
@@ -840,9 +833,7 @@ export default function MasterPembelian() {
                     <td className="border p-2 text-right">
                       Rp {fmt(item.hargaUnit)}
                     </td>
-                    <td className="border p-2 text-center">
-                      {item.totalQty}
-                    </td>
+                    <td className="border p-2 text-center">{item.totalQty}</td>
                     <td className="border p-2 text-right">
                       Rp {fmt(item.totalHargaSup)}
                     </td>
@@ -916,9 +907,7 @@ export default function MasterPembelian() {
                 <input
                   className="border p-2 rounded w-full"
                   value={tambahForm.brand}
-                  onChange={(e) =>
-                    handleTambahChange("brand", e.target.value)
-                  }
+                  onChange={(e) => handleTambahChange("brand", e.target.value)}
                 />
               </div>
 
@@ -927,9 +916,7 @@ export default function MasterPembelian() {
                 <input
                   className="border p-2 rounded w-full"
                   value={tambahForm.barang}
-                  onChange={(e) =>
-                    handleTambahChange("barang", e.target.value)
-                  }
+                  onChange={(e) => handleTambahChange("barang", e.target.value)}
                 />
               </div>
 
@@ -963,9 +950,7 @@ export default function MasterPembelian() {
                   type="number"
                   className="border p-2 rounded w-full"
                   value={tambahForm.qty}
-                  onChange={(e) =>
-                    handleTambahChange("qty", e.target.value)
-                  }
+                  onChange={(e) => handleTambahChange("qty", e.target.value)}
                 />
               </div>
 

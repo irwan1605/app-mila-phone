@@ -3,7 +3,7 @@ export const DB_KEY_SESSION = "mgs_session";
 
 
 const seedUsersFromScreenshot = () => ([
-{ id: 1, name: "Admin Toko Pusat", role: "admin", store: "Toko Pusat", email: "admin@mgs.id", password: "admin123" },
+{ id: 1, name: "Admin CILANGKAP PUSAT", role: "admin", store: "CILANGKAP PUSAT", email: "admin@mgs.id", password: "admin123" },
 { id: 2, name: "User Toko Cabang 1", role: "user", store: "Toko Cabang 1", email: "cabang1@mgs.id", password: "123456" },
 { id: 3, name: "User Toko Cabang 2", role: "user", store: "Toko Cabang 2", email: "cabang2@mgs.id", password: "123456" },
 { id: 4, name: "User Toko Cabang 3", role: "user", store: "Toko Cabang 3", email: "cabang3@mgs.id", password: "123456" },
@@ -18,7 +18,7 @@ const seedUsersFromScreenshot = () => ([
 
 
 export const allStores = [
-"Toko Pusat",
+"CILANGKAP PUSAT",
 ...Array.from({ length: 10 }, (_, i) => `Toko Cabang ${i + 1}`),
 ];
 

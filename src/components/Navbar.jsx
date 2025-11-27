@@ -17,11 +17,16 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
   };
 
   const picContacts = [
-    { name: "PIC Toko 1", phone: "6281384158142" },
-    { name: "PIC Toko 2", phone: "6287737398191" },
-    { name: "PIC Toko 3", phone: "628121854336" },
-    { name: "PIC Toko 4", phone: "6281284458160" },
-    { name: "PIC Toko 5", phone: "6287878712342" },
+    { name: "PIC CILANGKAP PUSAT", phone: "6281384158142" },
+    { name: "PIC CIBINONG", phone: "6287737398191" },
+    { name: "PIC GAS ALAM", phone: "628121854336" },
+    { name: "PIC CITEUREUP", phone: "6281284458160" },
+    { name: "PIC CIRACAS", phone: "6287878712342" },
+    { name: "PIC METLAND 1", phone: "6281384158142" },
+    { name: "PIC METLAND 2", phone: "6287737398191" },
+    { name: "PIC PITARA", phone: "628121854336" },
+    { name: "PIC KOTA WISATA", phone: "6281284458160" },
+    { name: "PIC SAWANGAN", phone: "6287878712342" },
   ];
 
   const handleLogout = () => {

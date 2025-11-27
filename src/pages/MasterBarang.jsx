@@ -44,7 +44,6 @@ const fallbackTokoNames = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
-
 ];
 
 const fmt = (n) => {
@@ -196,7 +195,11 @@ export default function MasterBarang() {
   }, [groupedSku, search, filterTanggal, filterKategori]);
 
   // VALIDASI IMEI
-  const validateImeis = (imeiLines, originalBrand = null, originalBarang = null) => {
+  const validateImeis = (
+    imeiLines,
+    originalBrand = null,
+    originalBarang = null
+  ) => {
     const errors = [];
     const seen = new Set();
 
@@ -276,7 +279,11 @@ export default function MasterBarang() {
       .filter(Boolean);
 
     // 2. Validasi duplikat & konflik DB (pakai rawImeis dulu)
-    const vErr = validateImeis(rawImeis, editData.originalBrand, editData.originalBarang);
+    const vErr = validateImeis(
+      rawImeis,
+      editData.originalBrand,
+      editData.originalBarang
+    );
     if (vErr.length) {
       alert(vErr.join("\n"));
       return;
@@ -314,7 +321,9 @@ export default function MasterBarang() {
 
     // 4. Ambil semua row transaksi untuk SKU ini
     const skuRows = allTransaksi.filter((r) => {
-      const key = `${(r.NAMA_BRAND || "").trim()}|${(r.NAMA_BARANG || "").trim()}`;
+      const key = `${(r.NAMA_BRAND || "").trim()}|${(
+        r.NAMA_BARANG || ""
+      ).trim()}`;
       return key === skuKeyOriginal;
     });
 
@@ -361,7 +370,9 @@ export default function MasterBarang() {
 
     // Rebuild skuRowsAfter (baris yang tersisa untuk di-update)
     const skuRowsAfter = updatedAll.filter((r) => {
-      const key = `${(r.NAMA_BRAND || "").trim()}|${(r.NAMA_BARANG || "").trim()}`;
+      const key = `${(r.NAMA_BRAND || "").trim()}|${(
+        r.NAMA_BARANG || ""
+      ).trim()}`;
       return key === skuKeyOriginal;
     });
 
@@ -371,7 +382,9 @@ export default function MasterBarang() {
 
       const tokoIndex =
         fallbackTokoNames.findIndex(
-          (t) => t.toUpperCase() === String(template.NAMA_TOKO || "PUSAT").toUpperCase()
+          (t) =>
+            t.toUpperCase() ===
+            String(template.NAMA_TOKO || "PUSAT").toUpperCase()
         ) + 1;
 
       for (let i = oldQty; i < newQty; i++) {
@@ -380,7 +393,10 @@ export default function MasterBarang() {
             editData.tanggal ||
             template.TANGGAL_TRANSAKSI ||
             new Date().toISOString().slice(0, 10),
-          NO_INVOICE: editData.noInvoiceSample || template.NO_INVOICE || `ADJ-${Date.now()}`,
+          NO_INVOICE:
+            editData.noInvoiceSample ||
+            template.NO_INVOICE ||
+            `ADJ-${Date.now()}`,
           NAMA_USER: template.NAMA_USER || "SYSTEM",
           NAMA_TOKO: template.NAMA_TOKO || "PUSAT",
           NAMA_BRAND: editData.brand,
@@ -389,13 +405,17 @@ export default function MasterBarang() {
           IMEI: finalImeis[i] || "",
           NOMOR_UNIK: `ADJ|EDIT|${Date.now()}|${i}`,
           HARGA_UNIT: Number(editData.hargaUnit || template.HARGA_UNIT || 0),
-          HARGA_SUPLAYER: Number(editData.hargaSup || template.HARGA_SUPLAYER || 0),
+          HARGA_SUPLAYER: Number(
+            editData.hargaSup || template.HARGA_SUPLAYER || 0
+          ),
           TOTAL: Number(editData.hargaUnit || template.HARGA_UNIT || 0) * 1,
           PAYMENT_METODE: template.PAYMENT_METODE || "TAMBAH STOCK",
           SYSTEM_PAYMENT: template.SYSTEM_PAYMENT || "SYSTEM",
-          KETERANGAN: template.KETERANGAN || "Penyesuaian stok (Edit Master Barang)",
+          KETERANGAN:
+            template.KETERANGAN || "Penyesuaian stok (Edit Master Barang)",
           STATUS: template.STATUS || "Approved",
-          KATEGORI_BRAND: editData.kategoriBrand || template.KATEGORI_BRAND || "",
+          KATEGORI_BRAND:
+            editData.kategoriBrand || template.KATEGORI_BRAND || "",
         };
 
         try {
@@ -414,11 +434,14 @@ export default function MasterBarang() {
     // 6. Setelah jumlah baris sesuai, update metadata & IMEI
     const finalSkuRows = updatedAll
       .filter((r) => {
-        const key = `${(r.NAMA_BRAND || "").trim()}|${(r.NAMA_BARANG || "").trim()}`;
+        const key = `${(r.NAMA_BRAND || "").trim()}|${(
+          r.NAMA_BARANG || ""
+        ).trim()}`;
         // cocokkan ke SKU lama (brand/barang original) ATAU SKU baru (brand/barang hasil edit)
         return (
           key === skuKeyOriginal ||
-          key === `${(editData.brand || "").trim()}|${(editData.barang || "").trim()}`
+          key ===
+            `${(editData.brand || "").trim()}|${(editData.barang || "").trim()}`
         );
       })
       // pastikan urutan stabil
@@ -444,10 +467,13 @@ export default function MasterBarang() {
         NO_INVOICE: editData.noInvoiceSample || r.NO_INVOICE || "",
         HARGA_SUPLAYER: Number(editData.hargaSup || r.HARGA_SUPLAYER || 0),
         HARGA_UNIT: Number(editData.hargaUnit || r.HARGA_UNIT || 0),
-        TOTAL: Number(r.QTY || 0) * Number(editData.hargaUnit || r.HARGA_UNIT || 0),
+        TOTAL:
+          Number(r.QTY || 0) * Number(editData.hargaUnit || r.HARGA_UNIT || 0),
         IMEI: finalImeis[i] || "",
         TANGGAL_TRANSAKSI:
-          editData.tanggal || r.TANGGAL_TRANSAKSI || new Date().toISOString().slice(0, 10),
+          editData.tanggal ||
+          r.TANGGAL_TRANSAKSI ||
+          new Date().toISOString().slice(0, 10),
         KATEGORI_BRAND: editData.kategoriBrand || r.KATEGORI_BRAND || "",
       };
 
@@ -474,79 +500,77 @@ export default function MasterBarang() {
     );
   };
 
-// ===================== DELETE SKU PRO MAX (HILANG TOTAL) =====================
-const deleteSku = async (data) => {
-  const brand = (data.brand || "").trim();
-  const barang = (data.barang || "").trim();
-  const skuKey = `${brand}_${barang}`.replace(/\s+/g, "_");
+  // ===================== DELETE SKU PRO MAX (HILANG TOTAL) =====================
+  const deleteSku = async (data) => {
+    const brand = data.brand;
+    const barang = data.barang;
 
-  if (!window.confirm(`Yakin hapus SKU?\n${brand} - ${barang}`)) return;
+    if (!window.confirm(`Yakin hapus TOTAL:\n${brand} - ${barang}?`)) return;
 
-  try {
-    // 1) Hapus semua transaksi SKU (IMEI / non IMEI)
-    const rows = allTransaksi.filter(
-      (x) =>
-        (x.NAMA_BRAND || "").trim() === brand &&
-        (x.NAMA_BARANG || "").trim() === barang
-    );
+    try {
+      // 1️⃣ HAPUS SEMUA TRANSAKSI DI SEMUA TOKO
+      const rows = allTransaksi.filter(
+        (x) =>
+          x.NAMA_BRAND === brand &&
+          x.NAMA_BARANG === barang
+      );
 
-    for (const r of rows) {
-      const tokoIndex =
-        fallbackTokoNames.findIndex(
-          (t) =>
-            t.toUpperCase() === String(r.NAMA_TOKO || "PUSAT").toUpperCase()
-        ) + 1;
+      for (const r of rows) {
+        const tokoIndex =
+          fallbackTokoNames.findIndex(
+            (t) =>
+              t.toUpperCase() ===
+              String(r.NAMA_TOKO || "PUSAT").toUpperCase()
+          ) + 1;
 
-      if (r.id) {
-        await deleteTransaksi(tokoIndex, r.id);
-      } else {
-        // FORCE DELETE untuk transaksi lama tanpa ID
-        const trxPath = `toko/${tokoIndex}/transaksi`;
-        const snap = await get(ref(db, trxPath));
-        if (snap.exists()) {
-          snap.forEach((child) => {
-            const val = child.val();
-            if (
-              (val.NAMA_BRAND || "").trim() === brand &&
-              (val.NAMA_BARANG || "").trim() === barang
-            ) {
-              remove(ref(db, `${trxPath}/${child.key}`));
-            }
-          });
+        if (r.id) {
+          await deleteTransaksi(tokoIndex, r.id);
+        } else {
+          const trxPath = `toko/${tokoIndex}/transaksi`;
+          const snap = await get(ref(db, trxPath));
+          if (snap.exists()) {
+            snap.forEach((child) => {
+              const val = child.val();
+              if (
+                val.NAMA_BRAND === brand &&
+                val.NAMA_BARANG === barang
+              ) {
+                remove(ref(db, `${trxPath}/${child.key}`));
+              }
+            });
+          }
         }
       }
+
+      // 2️⃣ HAPUS MASTER STOCK FIREBASE
+      await deleteMasterBarang(brand, barang);
+
+      // 3️⃣ HAPUS DARI STATE
+      setAllTransaksi((prev) =>
+        prev.filter(
+          (x) =>
+            x.NAMA_BRAND !== brand ||
+            x.NAMA_BARANG !== barang
+        )
+      );
+
+      alert("✅ SKU berhasil dihapus TOTAL dari Firebase.");
+    } catch (err) {
+      console.error("Delete SKU ERROR:", err);
+      alert("❌ Gagal menghapus SKU.");
     }
+  };
 
-    // 2) HAPUS MASTER STOCK (INI YANG MEMBUAT REFRESH TIDAK MUNCUL LAGI)
-    await deleteMasterBarang(brand, barang);
+  useEffect(() => {
+    const unsub =
+      typeof listenAllTransaksi === "function"
+        ? listenAllTransaksi((list) => {
+            setAllTransaksi(Array.isArray(list) ? list : []);
+          })
+        : null;
 
-    // 3) update state agar realtime hilang
-    setAllTransaksi((prev) =>
-      prev.filter(
-        (x) =>
-          (x.NAMA_BRAND || "").trim() !== brand ||
-          (x.NAMA_BARANG || "").trim() !== barang
-      )
-    );
-
-    alert("SKU berhasil dihapus TOTAL dari transaksi + master stock.");
-  } catch (err) {
-    console.error("Delete SKU ERROR:", err);
-    alert("Gagal menghapus SKU.");
-  }
-};
-
-useEffect(() => {
-  const unsub =
-    typeof listenAllTransaksi === "function"
-      ? listenAllTransaksi((list) => {
-          setAllTransaksi(Array.isArray(list) ? list : []);
-        })
-      : null;
-
-  return () => unsub && unsub();
-}, []);
-
+    return () => unsub && unsub();
+  }, []);
 
   // TAMBAH STOCK
   const openTambahModal = () => {
@@ -557,7 +581,7 @@ useEffect(() => {
       hargaUnit: "",
       qty: 1,
       imeiList: "",
-      namaToko: "PUSAT",
+      namaToko:  "CILANGKAP PUSAT",
       noInvoice: "",
       tanggal: new Date().toISOString().slice(0, 10),
       kategoriBrand: "",
@@ -604,7 +628,9 @@ useEffect(() => {
     }
 
     const tokoIndex =
-      fallbackTokoNames.findIndex((t) => t.toUpperCase() === namaToko.toUpperCase()) + 1;
+      fallbackTokoNames.findIndex(
+        (t) => t.toUpperCase() === namaToko.toUpperCase()
+      ) + 1;
 
     for (let i = 0; i < imeiLines.length; i++) {
       const payload = {
@@ -651,7 +677,10 @@ useEffect(() => {
     const ws = XLSX.utils.json_to_sheet(sheetData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "MASTER_BARANG");
-    XLSX.writeFile(wb, `MASTER_BARANG_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(
+      wb,
+      `MASTER_BARANG_${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
   };
 
   // EXPORT PDF
@@ -748,7 +777,9 @@ useEffect(() => {
               <th className="border p-2">Kategori Brand</th>
               <th className="border p-2">Brand</th>
               <th className="border p-2">Barang</th>
-              <th className="border p-2 whitespace-pre-wrap">IMEI / No MESIN</th>
+              <th className="border p-2 whitespace-pre-wrap">
+                IMEI / No MESIN
+              </th>
               <th className="border p-2 text-right">Harga Supplier</th>
               <th className="border p-2 text-right">Harga Unit</th>
               <th className="border p-2 text-center">Stok Sistem</th>
@@ -759,7 +790,10 @@ useEffect(() => {
           <tbody>
             {filteredSkuList.length === 0 ? (
               <tr>
-                <td colSpan={10} className="p-3 border text-center text-gray-500">
+                <td
+                  colSpan={10}
+                  className="p-3 border text-center text-gray-500"
+                >
                   Tidak ada data.
                 </td>
               </tr>
@@ -788,8 +822,12 @@ useEffect(() => {
                       {imeiShown.length > 0 ? imeiShown.join("\n") : "-"}
                     </td>
 
-                    <td className="border p-2 text-right">Rp {fmt(x.hargaSup)}</td>
-                    <td className="border p-2 text-right">Rp {fmt(x.hargaUnit)}</td>
+                    <td className="border p-2 text-right">
+                      Rp {fmt(x.hargaSup)}
+                    </td>
+                    <td className="border p-2 text-right">
+                      Rp {fmt(x.hargaUnit)}
+                    </td>
                     <td className="border p-2 text-center">{x.totalQty}</td>
 
                     <td className="border p-2 text-center space-x-2">
@@ -823,7 +861,10 @@ useEffect(() => {
           <div className="bg-white w-full max-w-2xl rounded shadow p-5">
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-bold">TAMBAHKAN STOCK</h3>
-              <button onClick={() => setShowModalTambah(false)} className="text-gray-600">
+              <button
+                onClick={() => setShowModalTambah(false)}
+                className="text-gray-600"
+              >
                 <FaTimes />
               </button>
             </div>
@@ -923,7 +964,10 @@ useEffect(() => {
                   className="w-full border p-2 rounded text-sm"
                   value={tambahForm.kategoriBrand}
                   onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, kategoriBrand: e.target.value }))
+                    setTambahForm((p) => ({
+                      ...p,
+                      kategoriBrand: e.target.value,
+                    }))
                   }
                 >
                   <option value="">- Pilih Kategori -</option>
@@ -975,7 +1019,10 @@ useEffect(() => {
           <div className="bg-white w-full max-w-md rounded shadow p-5">
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-bold">Edit Master Barang</h3>
-              <button onClick={() => setShowModalEdit(false)} className="text-gray-600">
+              <button
+                onClick={() => setShowModalEdit(false)}
+                className="text-gray-600"
+              >
                 <FaTimes />
               </button>
             </div>
@@ -1009,7 +1056,10 @@ useEffect(() => {
                   className="w-full border p-2 rounded text-sm"
                   value={editData.noInvoiceSample}
                   onChange={(e) =>
-                    setEditData((p) => ({ ...p, noInvoiceSample: e.target.value }))
+                    setEditData((p) => ({
+                      ...p,
+                      noInvoiceSample: e.target.value,
+                    }))
                   }
                 />
               </div>
@@ -1053,8 +1103,9 @@ useEffect(() => {
                   }
                 />
                 <p className="text-[10px] text-gray-500 mt-1">
-                  Saat simpan: Stok Sistem akan otomatis disesuaikan dengan jumlah IMEI,
-                  atau IMEI akan dipotong dari bawah jika lebih banyak dari stok.
+                  Saat simpan: Stok Sistem akan otomatis disesuaikan dengan
+                  jumlah IMEI, atau IMEI akan dipotong dari bawah jika lebih
+                  banyak dari stok.
                 </p>
               </div>
 
@@ -1076,7 +1127,10 @@ useEffect(() => {
                   className="w-full border p-2 rounded text-sm"
                   value={editData.kategoriBrand}
                   onChange={(e) =>
-                    setEditData((p) => ({ ...p, kategoriBrand: e.target.value }))
+                    setEditData((p) => ({
+                      ...p,
+                      kategoriBrand: e.target.value,
+                    }))
                   }
                 >
                   <option value="">- Pilih Kategori -</option>
@@ -1099,8 +1153,8 @@ useEffect(() => {
                   }
                 />
                 <p className="text-[10px] text-gray-500 mt-1">
-                  • IMEI tidak boleh sama. • Jumlah IMEI akan disinkronkan dengan Stok Sistem
-                  sesuai aturan A1 & B1.
+                  • IMEI tidak boleh sama. • Jumlah IMEI akan disinkronkan
+                  dengan Stok Sistem sesuai aturan A1 & B1.
                 </p>
               </div>
             </div>
