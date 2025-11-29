@@ -32,7 +32,7 @@ import * as XLSX from "xlsx";
 import { getStockIndex } from "./StockBarang";
 
 /* ===================== Konstanta & Utils ===================== */
-export const CENTRAL_NAME = "PUSAT";
+export const CENTRAL_NAME = "CILANGKAP PUSAT";
 
 // Key localStorage yang sudah dipakai oleh halaman stok (biar sinkron):
 const LOCAL_KEYS = {

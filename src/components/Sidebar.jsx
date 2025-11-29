@@ -299,7 +299,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     }`}
                   >
                     <BsGraphUp className="text-lg" />
-                    <span className="ml-2">Penjualan</span>
+                    <span className="ml-2">Laporan Penjualan</span>
                   </Link>
                 </li>
 
@@ -311,7 +311,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     }`}
                   >
                     <BsTagsFill className="text-lg" />
-                    <span className="ml-2">Persediaan</span>
+                    <span className="ml-2">Laporan Persediaan</span>
                   </Link>
                 </li>
 
@@ -323,7 +323,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     }`}
                   >
                     <AiOutlineDatabase className="text-lg" />
-                    <span className="ml-2">Stok Opname</span>
+                    <span className="ml-2">Laporan Stok Opname</span>
                   </Link>
                 </li>
 
@@ -335,7 +335,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     }`}
                   >
                     <FaMoneyCheckAlt className="text-lg" />
-                    <span className="ml-2">Keuangan</span>
+                    <span className="ml-2">Laporan Keuangan</span>
                   </Link>
                 </li>
               </ul>

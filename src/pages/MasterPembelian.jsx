@@ -46,6 +46,9 @@ const fmt = (n) => {
 export default function MasterPembelian() {
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [search, setSearch] = useState("");
+  // ===== PAGINATION STATE =====
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const tableRef = useRef(null);
 
@@ -65,10 +68,10 @@ export default function MasterPembelian() {
     qty: 1,
     imeiList: "",
     noInvoice: "",
-    namaToko: "PUSAT",
+    namaToko: "CILANGKAP PUSAT", // ✅ default langsung PUSAT
   });
 
-  // ===== LISTENER FIREBASE =====
+  // ===== LISTENER FIREBASE (REALTIME) =====
   useEffect(() => {
     const unsub =
       typeof listenAllTransaksi === "function"
@@ -144,7 +147,15 @@ export default function MasterPembelian() {
     });
   }, [groupedPembelian, search]);
 
-  // ===================== VALIDASI IMEI =====================
+  // ===== PAGINATION LOGIC =====
+  const totalPages = Math.ceil(filteredPurchases.length / itemsPerPage);
+
+  const paginatedPurchases = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredPurchases.slice(start, start + itemsPerPage);
+  }, [filteredPurchases, currentPage]);
+
+  // ===================== VALIDASI IMEI (INPUT + DATABASE) =====================
   const validateImeis = (imeiLines, originalGroupKey = null) => {
     const errors = [];
     const seen = new Set();
@@ -300,6 +311,7 @@ export default function MasterPembelian() {
           HARGA_UNIT: Number(editData.hargaUnit || 0),
           TOTAL: Number(r.QTY || 0) * Number(editData.hargaUnit || 0),
           IMEI: newIMEI,
+          NAMA_TOKO: "CILANGKAP PUSAT", // ✅ kalau diedit tetap PUSAT
         };
 
         if (typeof updateTransaksi === "function") {
@@ -326,6 +338,7 @@ export default function MasterPembelian() {
               HARGA_SUPLAYER: Number(editData.hargaSup || 0),
               HARGA_UNIT: Number(editData.hargaUnit || 0),
               TOTAL: Number(x.QTY || 0) * Number(editData.hargaUnit || 0),
+              NAMA_TOKO: "CILANGKAP PUSAT",
             };
           }
           return x;
@@ -376,7 +389,7 @@ export default function MasterPembelian() {
     if (imeis.length === 0 && qtyInput <= 0)
       return alert("Isi IMEI atau Qty (lebih dari 0).");
 
-    // validasi IMEI input sendiri
+    // validasi IMEI input sendiri (duplikat di form)
     const seen = new Set();
     for (const im of imeis) {
       if (seen.has(im)) return alert(`IMEI duplikat di input: ${im}`);
@@ -394,7 +407,7 @@ export default function MasterPembelian() {
       qtyInput = imeis.length;
     }
 
-    // cek konflik dengan database
+    // cek konflik dengan database (All Transaksi)
     const dbErrors = validateImeis(imeis, null);
     if (dbErrors.length) {
       alert(dbErrors.join("\n"));
@@ -402,10 +415,11 @@ export default function MasterPembelian() {
     }
 
     try {
-      const tokoIndex =
-        fallbackTokoNames.findIndex(
-          (t) => t.toUpperCase() === String(namaToko || "").toUpperCase()
-        ) + 1;
+      // ✅ Paksa semua pembelian masuk CILANGKAP PUSAT
+      const forcedNamaToko =
+        (namaToko && namaToko.trim() && "CILANGKAP PUSAT") ||
+        "CILANGKAP PUSAT";
+      const tokoIndex = 1; // index 1 = CILANGKAP PUSAT
 
       // INSERT PER IMEI
       if (imeis.length > 0) {
@@ -415,7 +429,7 @@ export default function MasterPembelian() {
             NO_INVOICE: noInvoice || `INV-${Date.now()}`,
             NAMA_SUPPLIER: supplier,
             NAMA_USER: "SYSTEM",
-            NAMA_TOKO: namaToko,
+            NAMA_TOKO: forcedNamaToko,
             NAMA_BRAND: brand,
             NAMA_BARANG: barang,
             QTY: 1,
@@ -433,6 +447,7 @@ export default function MasterPembelian() {
           if (typeof addTransaksi === "function") {
             await addTransaksi(tokoIndex, payload);
           }
+          // update lokal supaya tabel langsung bertambah
           setAllTransaksi((prev) => [...prev, payload]);
         }
       }
@@ -444,7 +459,7 @@ export default function MasterPembelian() {
           NO_INVOICE: noInvoice || `INV-${Date.now()}`,
           NAMA_SUPPLIER: supplier,
           NAMA_USER: "SYSTEM",
-          NAMA_TOKO: namaToko,
+          NAMA_TOKO: forcedNamaToko,
           NAMA_BRAND: brand,
           NAMA_BARANG: barang,
           QTY: qtyInput,
@@ -464,7 +479,7 @@ export default function MasterPembelian() {
         setAllTransaksi((prev) => [...prev, payload]);
       }
 
-      alert("Pembelian berhasil ditambahkan.");
+      alert("Pembelian berhasil ditambahkan ke STOCK CILANGKAP PUSAT.");
       setShowTambah(false);
       setTambahForm({
         tanggal: "",
@@ -476,7 +491,7 @@ export default function MasterPembelian() {
         qty: 1,
         imeiList: "",
         noInvoice: "",
-        namaToko: "PUSAT",
+        namaToko: "CILANGKAP PUSAT",
       });
     } catch (err) {
       console.error("submitTambah error:", err);
@@ -809,7 +824,7 @@ export default function MasterPembelian() {
                 </td>
               </tr>
             ) : (
-              filteredPurchases.map(([key, item], i) => {
+              paginatedPurchases.map(([key, item], i) => {
                 const shownImeis = search.trim()
                   ? (item.imeis || []).filter((im) =>
                       im.toLowerCase().includes(search.toLowerCase())
@@ -818,7 +833,9 @@ export default function MasterPembelian() {
 
                 return (
                   <tr key={key} className="hover:bg-gray-50">
-                    <td className="border p-2 text-center">{i + 1}</td>
+                    <td className="border p-2 text-center">
+                      {(currentPage - 1) * itemsPerPage + i + 1}
+                    </td>
                     <td className="border p-2">{item.tanggal}</td>
                     <td className="border p-2">{item.supplier}</td>
                     <td className="border p-2">{item.noInvoice || "-"}</td>
@@ -862,6 +879,55 @@ export default function MasterPembelian() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* PAGINATION NAVIGATION */}
+      <div className="flex justify-between items-center mt-4 text-sm">
+        <div>
+          Halaman {currentPage} dari {totalPages || 1}
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            className={`px-3 py-1 rounded border ${
+              currentPage === 1
+                ? "bg-gray-300 text-gray-500"
+                : "bg-white hover:bg-gray-100"
+            }`}
+          >
+            Prev
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentPage(i + 1)}
+              className={`px-3 py-1 rounded border ${
+                currentPage === i + 1
+                  ? "bg-indigo-600 text-white"
+                  : "bg-white hover:bg-gray-100"
+              }`}
+            >
+              {i + 1}
+            </button>
+          ))}
+
+          <button
+            disabled={currentPage === totalPages}
+            onClick={() =>
+              setCurrentPage((p) => Math.min(totalPages, p + 1))
+            }
+            className={`px-3 py-1 rounded border ${
+              currentPage === totalPages || totalPages === 0
+                ? "bg-gray-300 text-gray-500"
+                : "bg-white hover:bg-gray-100"
+            }`}
+          >
+            Next
+          </button>
+        </div>
       </div>
 
       {/* MODAL TAMBAH */}
@@ -972,9 +1038,9 @@ export default function MasterPembelian() {
                 <textarea
                   rows={5}
                   className="border p-2 rounded w-full font-mono text-xs"
-                  placeholder="Contoh:
+                  placeholder={`Contoh:
 6633849364
-ABCD-99383-XYZ"
+ABCD-99383-XYZ`}
                   value={tambahForm.imeiList}
                   onChange={(e) =>
                     handleTambahChange("imeiList", e.target.value)
@@ -1063,7 +1129,7 @@ ABCD-99383-XYZ"
               </div>
 
               <div>
-                <label className="text-xs">Brand</label>
+                <label className="text-xs">Kategori Barang</label>
                 <input
                   className="border p-2 rounded w-full"
                   value={editData.brand}

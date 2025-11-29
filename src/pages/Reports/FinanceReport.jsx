@@ -18,8 +18,7 @@ import {
 
 // ===== Konfigurasi Toko =====
 const fallbackTokoNames = [
-  "PUSAT",
-  "CILANGKAP",
+  "CILANGKAP PUSAT",
   "CIBINONG",
   "GAS ALAM",
   "CITEUREUP",
@@ -65,7 +64,7 @@ function normalizeRecord(r) {
 
     // SETORAN
     TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || todayStr(),
-    NAMA_TOKO: r.NAMA_TOKO || "PUSAT",
+    NAMA_TOKO: r.NAMA_TOKO || "CILANGKAP PUSAT",
     KATEGORI_PEMBAYARAN: r.KATEGORI_PEMBAYARAN || "",
     JUMLAH_SETORAN: toNum(r.JUMLAH_SETORAN || r.TOTAL || 0),
     REF_SETORAN: r.REF_SETORAN || "",
@@ -104,7 +103,7 @@ export default function FinanceReport() {
   const formEmpty = {
     TIPE: "SETORAN",
     TANGGAL_TRANSAKSI: todayStr(),
-    NAMA_TOKO: "PUSAT",
+    NAMA_TOKO: "CILANGKAP PUSAT",
     KATEGORI_PEMBAYARAN: "",
     JUMLAH_SETORAN: 0,
     REF_SETORAN: "",
@@ -330,7 +329,7 @@ export default function FinanceReport() {
       {/* Header */}
       <div className="flex items-center justify-between">
       <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-lg shadow mb-4">
-          <h1 className="text-2xl font-bold">Finance Report — Setoran (PUSAT)</h1>
+          <h1 className="text-2xl font-bold">Finance Report — Setoran (CILANGKAP PUSAT)</h1>
           <p className="text-sm text-slate-600">
             Semua setoran disimpan sebagai transaksi bertipe <code>"SETORAN"</code>.
           </p>

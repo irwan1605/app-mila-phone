@@ -38,7 +38,7 @@ import {
 */
 
 const fallbackTokoNames = [
-  "CILANGKAP",
+  "CILANGKAP PUSAT",
   "CIBINONG",
   "GAS ALAM",
   "CITEUREUP",
@@ -48,7 +48,6 @@ const fallbackTokoNames = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
-  "PUSAT",
 ];
 
 const rowsPerPageDefault = 12;
@@ -124,7 +123,7 @@ export default function StockOpname() {
       NAMA_PIC_TOKO: r.NAMA_PIC_TOKO || "",
       NAMA_SALES: r.NAMA_SALES || "",
       TITIPAN_REFERENSI: r.TITIPAN_REFERENSI || "",
-      NAMA_TOKO: r.NAMA_TOKO || r.TOKO || "PUSAT",
+      NAMA_TOKO: r.NAMA_TOKO || r.TOKO || "CILANGKAP PUSAT",
       NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "",
       NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "",
       QTY: Number(r.QTY || 0),
@@ -163,7 +162,7 @@ export default function StockOpname() {
               id: `SB-${idx}`,
               TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
               NO_INVOICE: `SB-DUMMY-${idx + 1}`,
-              NAMA_TOKO: "PUSAT",
+              NAMA_TOKO: "CILANGKAP PUSAT",
               NAMA_BRAND: s.brand || s.NAMA_BRAND || "",
               NAMA_BARANG: s.nama || s.NAMA_BARANG || s.BARANG || "",
               QTY: s.qty || s.stock || 1,
@@ -201,7 +200,7 @@ export default function StockOpname() {
               id: `SB-${idx}`,
               TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
               NO_INVOICE: `SB-DUMMY-${idx + 1}`,
-              NAMA_TOKO: "PUSAT",
+              NAMA_TOKO: "CILANGKAP PUSAT",
               NAMA_BRAND: s.brand || s.NAMA_BRAND || "",
               NAMA_BARANG: s.nama || s.NAMA_BARANG || s.BARANG || "",
               QTY: s.qty || s.stock || 1,
@@ -233,7 +232,7 @@ export default function StockOpname() {
           .map((t) => String(t))
       ),
     ];
-    if (!names.includes("PUSAT")) names.unshift("PUSAT");
+    if (!names.includes("CILANGKAP PUSAT")) names.unshift("CILANGKAP PUSAT");
     return names.length ? names : fallbackTokoNames;
   }, [allTransaksi]);
 
@@ -302,7 +301,7 @@ export default function StockOpname() {
       new Date().toISOString().slice(0, 10);
     const brand = form.NAMA_BRAND || form.BRAND;
     const barang = form.NAMA_BARANG || form.BARANG;
-    const tokoName = form.NAMA_TOKO || "PUSAT";
+    const tokoName = form.NAMA_TOKO || "CILANGKAP PUSAT";
     const qty = Number(form.QTY || 0);
     const hargaUnit = Number(form.HARGA_UNIT || form.HARGA || 0);
 
@@ -467,7 +466,7 @@ export default function StockOpname() {
       TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
       NO_INVOICE: `OPN-${Date.now()}`,
       NAMA_USER: "SYSTEM OPNAME",
-      NAMA_TOKO: "PUSAT",
+      NAMA_TOKO: "CILANGKAP PUSAT",
       NAMA_BRAND: record.NAMA_BRAND || record.brand || "",
       NAMA_BARANG: record.NAMA_BARANG || record.barang || "",
       QTY: Math.abs(selisih),
@@ -494,7 +493,7 @@ export default function StockOpname() {
 
       // integrasi dengan tabel stock/stockRealtime bila diinginkan
       if (typeof addStock === "function" && selisih > 0) {
-        await addStock("PUSAT", payload.NOMOR_UNIK || payload.NO_INVOICE, {
+        await addStock("CILANGKAP PUSAT", payload.NOMOR_UNIK || payload.NO_INVOICE, {
           nama: payload.NAMA_BARANG,
           imei: payload.NOMOR_UNIK,
           qty: Math.abs(selisih),
@@ -502,7 +501,7 @@ export default function StockOpname() {
       }
       if (typeof reduceStock === "function" && selisih < 0) {
         await reduceStock(
-          "PUSAT",
+          "CILANGKAP PUSAT",
           payload.NOMOR_UNIK || payload.NO_INVOICE,
           Math.abs(selisih)
         );
@@ -636,7 +635,7 @@ export default function StockOpname() {
         });
       const rec = map.get(key);
       rec.TOTAL_QTY += Number(r.QTY || 0);
-      if ((r.NAMA_TOKO || "").toUpperCase() === "PUSAT")
+      if ((r.NAMA_TOKO || "").toUpperCase() === "CILANGKAP PUSAT")
         rec.PUSAT_QTY += Number(r.QTY || 0);
     });
     const rows = Array.from(map.values());
@@ -705,7 +704,7 @@ export default function StockOpname() {
         const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
         for (const row of json) {
-          const tokoName = row.NAMA_TOKO || row.TOKO || "PUSAT";
+          const tokoName = row.NAMA_TOKO || row.TOKO || "CILANGKAP PUSAT";
           const tokoIndex = fallbackTokoNames.findIndex(
             (t) =>
               String(t).toUpperCase() ===
@@ -756,7 +755,7 @@ export default function StockOpname() {
         Stok Opname & Inventory Management
       </h2>
       <p className="text-sm text-gray-600 mb-4">
-        Pantau stok PUSAT & semua toko, lakukan opname cepat, dan sinkronkan
+        Pantau stok CILANGKAP PUSAT & semua toko, lakukan opname cepat, dan sinkronkan
         dengan transaksi penjualan.
       </p>
 
@@ -879,7 +878,7 @@ export default function StockOpname() {
             <label className="block text-sm mb-1">Nama Toko</label>
             <select
               name="NAMA_TOKO"
-              value={form.NAMA_TOKO || "PUSAT"}
+              value={form.NAMA_TOKO || "CILANGKAP PUSAT"}
               onChange={handleChange}
               className="w-full p-2 border rounded"
             >

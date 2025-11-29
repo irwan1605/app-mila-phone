@@ -23,7 +23,7 @@ import {
 
 /* fallback toko names (same list used across app) */
 const fallbackTokoNames = [
-  "CILANGKAP",
+  "CILANGKAP PUSAT",
   "CIBINONG",
   "GAS ALAM",
   "CITEUREUP",
@@ -316,7 +316,7 @@ export default function SalesReport() {
     <div className="p-4 bg-gray-100 rounded-xl shadow-md">
       <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-lg shadow mb-4">
         <h2 className="text-2xl font-semibold mb-4 text-gray-800">
-          Sales Report — Pusat (Realtime)
+          Sales Report — Cilangkap Pusat (Realtime)
         </h2>
       </div>
       {/* filters */}

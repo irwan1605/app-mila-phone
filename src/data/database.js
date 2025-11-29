@@ -71,7 +71,7 @@ const initialData = [
   
   // === Nama Toko (10 Toko) ===
   export const tokoList = [
-    "CILANGKAP",
+    "CILANGKAP PUSAT",
     "CIBINONG",
     "GAS ALAM",
     "CITEUREUP",
@@ -81,7 +81,6 @@ const initialData = [
     "PITARA",
     "KOTA WISATA",
     "PERMATA",
-    "PUSAT",
   ];
   
   // =====================================================
