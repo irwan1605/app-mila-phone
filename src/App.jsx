@@ -41,7 +41,7 @@ import SuratJalan from "./pages/SuratJalan";
 import Invoice from "./pages/Invoice";
 import FinanceReportMonthly from "./pages/Reports/FinanceReportMonthly";
 import FinanceReport from "./pages/Reports/FinanceReport";
-import Sperpar from "./pages/Sperpar";
+import Sperpart from "./pages/Sperpart";
 import { GlobalSearchProvider } from "./context/GlobalSearchContext";
 
 import StockOpname from "./pages/StockOpname";
@@ -284,7 +284,7 @@ export default function App() {
                   <Route path="/input-penjualan" element={<InputPenjualan />} />
 
                   {/* Sparepart */}
-                  <Route path="/modul-sparepart" element={<Sperpar />} />
+                  <Route path="/modul-sparepart" element={<Sperpart />} />
 
                   {/* ✨ Fitur Baru — Transfer Barang */}
                   <Route
