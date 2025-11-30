@@ -15,7 +15,7 @@ import {
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import FirebaseService from "../services/FirebaseService"; // expects functions documented below
+import FirebaseService from "../services/FirebaseService";
 
 const fallbackTokoNames = [
   "CILANGKAP PUSAT",
@@ -30,6 +30,10 @@ const fallbackTokoNames = [
   "SAWANGAN",
 ];
 
+// key untuk simpan form di localStorage (supaya tidak hilang saat pindah halaman / refresh)
+const FORM_STORAGE_KEY = "transferBarangForm_v1";
+const IMEI_STORAGE_KEY = "transferBarangImeiSearch_v1";
+
 // helper format rupiah
 const fmt = (v) => {
   try {
@@ -43,11 +47,26 @@ export default function TransferBarang() {
   const navigate = useNavigate();
 
   // ================== THEME ==================
-  const [isDark, setIsDark] = useState(true);
+  // Default: terang. Jika sudah pernah pilih, ambil dari localStorage.
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("transferTheme") === "dark";
+    } catch {
+      return false;
+    }
+  });
 
-  // -----------------------
-  // app state
-  // -----------------------
+  // Simpan pilihan theme ke localStorage supaya saat refresh tetap sama
+  useEffect(() => {
+    try {
+      localStorage.setItem("transferTheme", isDark ? "dark" : "light");
+    } catch {
+      // ignore
+    }
+  }, [isDark]);
+
+  // ----------------------- app state -----------------------
   const [stockAll, setStockAll] = useState({});
   const [tokoList, setTokoList] = useState(fallbackTokoNames);
 
@@ -55,6 +74,8 @@ export default function TransferBarang() {
   const [imeiSearch, setImeiSearch] = useState("");
   const [imeiDropdownOpen, setImeiDropdownOpen] = useState(false);
 
+  // (sisa dari versi lama, tidak lagi dipakai untuk select "Ke Toko",
+  // tapi dibiarkan agar tidak mengurangi struktur code asli)
   const [showTokoDropdown, setShowTokoDropdown] = useState(false);
 
   // form state (sku tetap dipakai backend)
@@ -86,7 +107,46 @@ export default function TransferBarang() {
   // admin flag: simple detection from localStorage.user.isAdmin === true
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // untuk mode edit request pending
+  const [editingRequestId, setEditingRequestId] = useState(null);
+
   const tableRef = useRef(null);
+
+  // ------------------------------------------------------------------
+  // 0) LOAD FORM DARI LOCALSTORAGE (agar input tidak hilang saat pindah halaman / refresh)
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    try {
+      const rawForm = localStorage.getItem(FORM_STORAGE_KEY);
+      if (rawForm) {
+        const saved = JSON.parse(rawForm);
+        setForm((prev) => ({
+          ...prev,
+          ...saved,
+          // fallback default jika tidak ada di storage
+          tanggal:
+            saved.tanggal || prev.tanggal || new Date().toISOString().slice(0, 10),
+          dari: saved.dari || prev.dari || "CILANGKAP PUSAT",
+        }));
+      }
+      const rawImei = localStorage.getItem(IMEI_STORAGE_KEY);
+      if (rawImei) {
+        setImeiSearch(rawImei);
+      }
+    } catch (err) {
+      console.warn("Gagal load form TransferBarang dari localStorage", err);
+    }
+  }, []);
+
+  // SIMPAN FORM & IMEI SEARCH KE LOCALSTORAGE setiap ada perubahan
+  useEffect(() => {
+    try {
+      localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(form));
+      localStorage.setItem(IMEI_STORAGE_KEY, imeiSearch || "");
+    } catch (err) {
+      console.warn("Gagal simpan form TransferBarang ke localStorage", err);
+    }
+  }, [form, imeiSearch]);
 
   // ------------------------------------------------------------------
   // 1) realtime stock listener
@@ -112,7 +172,8 @@ export default function TransferBarang() {
     const list = keys.length
       ? Array.from(new Set([...keys, ...fallbackTokoNames]))
       : fallbackTokoNames;
-    // ensure PUSAT first
+
+    // ensure PUSAT first (kalau ada)
     list.sort((a, b) => {
       if (a === "PUSAT") return -1;
       if (b === "PUSAT") return 1;
@@ -121,9 +182,7 @@ export default function TransferBarang() {
     setTokoList(list);
   }, [stockAll]);
 
-  // ---------------------------
-  // detect admin from localStorage
-  // ---------------------------
+  // --------------------------- detect admin from localStorage ---------------------------
   useEffect(() => {
     try {
       const u = JSON.parse(localStorage.getItem("user") || "{}");
@@ -135,6 +194,8 @@ export default function TransferBarang() {
 
   // ------------------------------------------------------------------
   // 2) IMEI options (berdasarkan MASTER STOCK / MASTER BARANG di toko asal)
+  //   - Jika dari === "CILANGKAP PUSAT" → pakai stok master pusat
+  //   - Selain itu → pakai stok toko masing-masing
   // ------------------------------------------------------------------
   const imeiOptions = useMemo(() => {
     const perToko = stockAll[form.dari] || {};
@@ -220,6 +281,49 @@ export default function TransferBarang() {
   }, [form.dari, form.sku, stockAll]);
 
   // ------------------------------------------------------------------
+  // 3b) AUTO ISI FIELD KETIKA INPUT NO IMEI MANUAL (form.imei)
+  //   - Untuk CILANGKAP PUSAT: ambil dari master pusat
+  //   - Untuk toko lain: ambil dari stok toko masing-masing
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    const { dari, imei } = form;
+    if (!dari || !imei) return;
+
+    const perToko = stockAll[dari] || {};
+    const imeiTrim = String(imei).trim();
+
+    let matchSku = null;
+    let matchItem = null;
+
+    Object.entries(perToko).forEach(([skuKey, it]) => {
+      const itemImei = String(it.imei || "").trim();
+      if (!matchSku && itemImei && itemImei === imeiTrim) {
+        matchSku = skuKey;
+        matchItem = it;
+      }
+    });
+
+    if (matchSku && matchItem) {
+      setForm((f) => ({
+        ...f,
+        sku: matchSku,
+        brand: matchItem.brand || f.brand || "",
+        nama: matchItem.nama || f.nama || "",
+        harga:
+          f.harga !== "" && f.harga !== undefined
+            ? f.harga
+            : matchItem.harga || "",
+        noInvoice:
+          f.noInvoice ||
+          matchItem.noInvoice ||
+          matchItem.NO_INVOICE ||
+          f.noInvoice ||
+          "",
+      }));
+    }
+  }, [form.imei, form.dari, stockAll]);
+
+  // ------------------------------------------------------------------
   // 4) target qty preview
   // ------------------------------------------------------------------
   useEffect(() => {
@@ -247,7 +351,27 @@ export default function TransferBarang() {
   }, []);
 
   // ------------------------------------------------------------------
-  // 6) handlers
+  // 6) helper: CEK IMEI LINTAS TOKO (KHUSUS CILANGKAP PUSAT)
+  //   - Mengembalikan nama toko lain jika IMEI sudah ada di toko tersebut
+  // ------------------------------------------------------------------
+  const findImeiInOtherStores = (imeiValue, fromToko) => {
+    const imeiTrim = String(imeiValue || "").trim();
+    if (!imeiTrim) return null;
+
+    for (const [tokoName, items] of Object.entries(stockAll || {})) {
+      if (!items || tokoName === fromToko) continue; // jangan cek toko asal
+      for (const it of Object.values(items)) {
+        const itemImei = String(it?.imei || "").trim();
+        if (itemImei && itemImei === imeiTrim) {
+          return tokoName;
+        }
+      }
+    }
+    return null;
+  };
+
+  // ------------------------------------------------------------------
+  // 7) handlers
   // ------------------------------------------------------------------
   const handleChange = (e) => {
     const { name, value, type } = e.target;
@@ -281,7 +405,29 @@ export default function TransferBarang() {
     setImeiDropdownOpen(false);
   };
 
-  // create transfer request (for approval)
+  // muat request pending ke form untuk diedit
+  const loadRequestToForm = (req) => {
+    setForm({
+      tanggal:
+        req.tanggal || new Date().toISOString().slice(0, 10),
+      dari: req.dari || "CILANGKAP PUSAT",
+      ke: req.ke || "",
+      sku: req.sku || "",
+      brand: req.brand || "",
+      nama: req.nama || "",
+      imei: req.imei || "",
+      noInvoice: req.noInvoice || "",
+      qty: req.qty || 1,
+      harga: req.harga || "",
+      pic: req.pic || "",
+      keterangan: req.keterangan || "",
+    });
+    setImeiSearch(req.imei || "");
+    setEditingRequestId(req.id || null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // create / update transfer request (for approval)
   const createTransferRequest = async () => {
     const {
       tanggal,
@@ -306,6 +452,10 @@ export default function TransferBarang() {
       alert("Mohon isi: Dari, Ke, dan pilih IMEI / SKU terlebih dahulu.");
       return;
     }
+    if (!imei) {
+      alert("IMEI / Nomor Mesin wajib diisi.");
+      return;
+    }
     if (dari === ke) {
       alert("Toko asal & tujuan tidak boleh sama.");
       return;
@@ -317,6 +467,19 @@ export default function TransferBarang() {
     if (availableQty < Number(qty)) {
       alert(`Stok tidak cukup. Tersedia: ${availableQty}`);
       return;
+    }
+
+    // VALIDASI LINTAS TOKO KHUSUS CILANGKAP PUSAT:
+    // cek apakah IMEI ini sudah ada di toko lain (selain 'dari')
+    if (dari === "CILANGKAP PUSAT") {
+      const tokoDuplikat = findImeiInOtherStores(imei, dari);
+      if (tokoDuplikat) {
+        alert(
+          `IMEI ${imei} sudah terdaftar di toko ${tokoDuplikat}. ` +
+            "Request transfer dibatalkan untuk menghindari duplikasi IMEI lintas toko."
+        );
+        return;
+      }
     }
 
     const performedBy = (() => {
@@ -348,23 +511,45 @@ export default function TransferBarang() {
 
     setLoading(true);
     try {
-      if (typeof FirebaseService.createTransferRequest === "function") {
-        await FirebaseService.createTransferRequest(payload);
-        alert(
-          "Request transfer berhasil dibuat dan menunggu approval admin."
-        );
+      // MODE EDIT: jika editingRequestId ada, update request lama
+      if (editingRequestId) {
+        if (typeof FirebaseService.updateTransferRequest === "function") {
+          await FirebaseService.updateTransferRequest(editingRequestId, payload);
+          alert("Request transfer berhasil diperbarui.");
+        } else {
+          // fallback lokal jika updateTransferRequest tidak tersedia
+          setPendingRequests((prev) =>
+            prev.map((r) =>
+              r.id === editingRequestId ? { ...r, ...payload } : r
+            )
+          );
+          alert(
+            "Request transfer diperbarui secara lokal (updateTransferRequest tidak tersedia)."
+          );
+        }
       } else {
-        const id = `local-${Date.now()}`;
-        const r = { id, ...payload };
-        setPendingRequests((p) => [r, ...p]);
-        alert(
-          "Request transfer dibuat secara lokal (FirebaseService.createTransferRequest tidak tersedia)."
-        );
+        // MODE BUAT BARU
+        if (typeof FirebaseService.createTransferRequest === "function") {
+          await FirebaseService.createTransferRequest(payload);
+          alert(
+            "Request transfer berhasil dibuat dan menunggu approval admin."
+          );
+        } else {
+          const id = `local-${Date.now()}`;
+          const r = { id, ...payload };
+          setPendingRequests((p) => [r, ...p]);
+          alert(
+            "Request transfer dibuat secara lokal (FirebaseService.createTransferRequest tidak tersedia)."
+          );
+        }
       }
 
+      // update session history lokal (untuk cetak surat jalan)
       setSessionHistory((h) =>
         [{ id: `req-${Date.now()}`, ...payload }, ...h].slice(0, 500)
       );
+
+      // reset form setelah berhasil (supaya input baru bersih)
       setForm((f) => ({
         ...f,
         sku: "",
@@ -378,9 +563,18 @@ export default function TransferBarang() {
         keterangan: "",
       }));
       setImeiSearch("");
+      setEditingRequestId(null);
+
+      // bersihkan form di localStorage juga
+      try {
+        localStorage.removeItem(FORM_STORAGE_KEY);
+        localStorage.removeItem(IMEI_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
     } catch (err) {
       console.error("createTransferRequest error:", err);
-      alert("Gagal membuat request transfer. Cek console.");
+      alert("Gagal memproses request transfer. Cek console.");
     } finally {
       setLoading(false);
     }
@@ -429,11 +623,11 @@ export default function TransferBarang() {
     }
   };
 
-  // admin: reject request
+  // admin: reject request (fungsi ini bisa dianggap VOID sebelum stok benar-benar dipindahkan)
   const rejectRequest = async (req, reason = "") => {
     if (
       !window.confirm(
-        `Tolak request ${req.sku} ${req.qty} dari ${req.dari} ke ${req.ke}?`
+        `Tolak (VOID) request ${req.sku} ${req.qty} dari ${req.dari} ke ${req.ke}?`
       )
     )
       return;
@@ -450,7 +644,7 @@ export default function TransferBarang() {
       } else {
         setPendingRequests((p) => p.filter((x) => x.id !== req.id));
       }
-      alert("Request ditolak.");
+      alert("Request di-VOID / ditolak. Stok tetap pada posisi awal.");
     } catch (err) {
       console.error("rejectRequest error:", err);
       alert("Gagal menolak request.");
@@ -532,9 +726,7 @@ export default function TransferBarang() {
     y += 20;
     doc.text(`Keterangan: ${t.keterangan || "-"}`, 15, y);
 
-    doc.save(
-      `SuratJalan_${t.tanggal}_${t.dari}_to_${t.ke}.pdf`
-    );
+    doc.save(`SuratJalan_${t.tanggal}_${t.dari}_to_${t.ke}.pdf`);
   };
 
   // ================== THEME CLASS ==================
@@ -585,9 +777,7 @@ export default function TransferBarang() {
 
         {/* FORM + SUMMARY */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-          <div
-            className={`lg:col-span-2 p-4 rounded shadow ${cardClass}`}
-          >
+          <div className={`lg:col-span-2 p-4 rounded shadow ${cardClass}`}>
             <h3 className="font-semibold mb-3 flex items-center gap-2">
               <FaExchangeAlt /> Form Transfer Barang
             </h3>
@@ -631,60 +821,28 @@ export default function TransferBarang() {
                 </select>
               </div>
 
-              <div className="relative">
+              {/* KE TOKO SEKARANG DROPDOWN */}
+              <div>
                 <label className="block text-sm mb-1">
                   Ke Toko (Tujuan)
                 </label>
-                <input
-                  type="text"
+                <select
                   name="ke"
                   value={form.ke}
-                  onChange={(e) => {
-                    setForm((f) => ({ ...f, ke: e.target.value }));
-                    setShowTokoDropdown(true);
-                  }}
-                  onFocus={() => setShowTokoDropdown(true)}
-                  placeholder="Ketik nama toko..."
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, ke: e.target.value }))
+                  }
                   className="w-full p-2 border rounded bg-transparent"
-                />
-                {showTokoDropdown && (
-                  <div
-                    className={`absolute z-20 w-full rounded shadow max-h-40 overflow-y-auto ${
-                      isDark ? "bg-slate-900 border border-slate-700" : "bg-white border"
-                    }`}
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    {tokoList
-                      .filter((t) => t !== form.dari)
-                      .filter((t) =>
-                        t
-                          .toLowerCase()
-                          .includes(form.ke.toLowerCase())
-                      )
-                      .map((t) => (
-                        <div
-                          key={t}
-                          className={`px-3 py-2 cursor-pointer text-sm ${
-                            isDark
-                              ? "hover:bg-indigo-900"
-                              : "hover:bg-indigo-100"
-                          }`}
-                          onClick={() => {
-                            setForm((f) => ({ ...f, ke: t }));
-                            setShowTokoDropdown(false);
-                          }}
-                        >
-                          {t}
-                        </div>
-                      ))}
-                    {form.ke &&
-                      !tokoList.some((t) => t === form.ke) && (
-                        <div className="px-3 py-2 text-xs italic text-gray-500">
-                          Toko baru (manual): {form.ke}
-                        </div>
-                      )}
-                  </div>
-                )}
+                >
+                  <option value="">- Pilih Toko -</option>
+                  {tokoList
+                    .filter((t) => t !== form.dari)
+                    .map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                </select>
               </div>
 
               {/* IMEI SEARCH */}
@@ -701,10 +859,7 @@ export default function TransferBarang() {
                   }}
                   onFocus={() => setImeiDropdownOpen(true)}
                   onKeyDown={(e) => {
-                    if (
-                      e.key === "Enter" &&
-                      imeiOptions.length > 0
-                    ) {
+                    if (e.key === "Enter" && imeiOptions.length > 0) {
                       handleImeiSelect(imeiOptions[0]);
                     }
                   }}
@@ -714,7 +869,9 @@ export default function TransferBarang() {
                 {imeiDropdownOpen && (
                   <div
                     className={`absolute z-30 w-full rounded shadow max-h-48 overflow-y-auto mt-1 ${
-                      isDark ? "bg-slate-900 border border-slate-700" : "bg-white border"
+                      isDark
+                        ? "bg-slate-900 border border-slate-700"
+                        : "bg-white border"
                     }`}
                     onMouseDown={(e) => e.preventDefault()}
                   >
@@ -729,15 +886,12 @@ export default function TransferBarang() {
                               : "hover:bg-indigo-100"
                           }`}
                         >
-                          <div className="font-mono">
-                            IMEI: {item.imei}
-                          </div>
+                          <div className="font-mono">IMEI: {item.imei}</div>
                           <div className="text-xs">
                             {item.brand} — {item.nama}
                           </div>
                           <div className="text-[11px] text-gray-400">
-                            SKU: {item.skuKey} | Stok:{" "}
-                            {item.qty || 0}
+                            SKU: {item.skuKey} | Stok: {item.qty || 0}
                           </div>
                         </div>
                       ))
@@ -759,7 +913,7 @@ export default function TransferBarang() {
                   name="noInvoice"
                   value={form.noInvoice}
                   onChange={handleChange}
-                  className="w-full p-2 border rounded bg-slate-900/10 bg-transparent"
+                  className="w-full p-2 border rounded bg-transparent"
                   placeholder="Otomatis terisi setelah pilih IMEI (jika ada di master)"
                 />
               </div>
@@ -810,9 +964,7 @@ export default function TransferBarang() {
               </div>
 
               <div>
-                <label className="block text-sm mb-1">
-                  Qty Transfer
-                </label>
+                <label className="block text-sm mb-1">Qty Transfer</label>
                 <input
                   type="number"
                   min={1}
@@ -852,7 +1004,7 @@ export default function TransferBarang() {
                 <button
                   onClick={() => {
                     alert(
-                      "Admin dapat approve request di tabel Pending Requests di bawah."
+                      "Admin dapat approve / edit request di tabel Pending Requests di bawah."
                     );
                   }}
                   className="px-4 py-2 bg-green-600 text-white rounded flex items-center text-sm"
@@ -866,7 +1018,11 @@ export default function TransferBarang() {
                   className="px-4 py-2 bg-indigo-600 text-white rounded flex items-center text-sm"
                 >
                   <FaArrowRight className="mr-2" />
-                  {loading ? "Memproses..." : "Buat Request"}
+                  {loading
+                    ? "Memproses..."
+                    : editingRequestId
+                    ? "Update Request"
+                    : "Buat Request"}
                 </button>
               )}
 
@@ -884,9 +1040,7 @@ export default function TransferBarang() {
           </div>
 
           {/* summary */}
-          <div
-            className={`p-4 rounded shadow ${cardClass}`}
-          >
+          <div className={`p-4 rounded shadow ${cardClass}`}>
             <h3 className="font-semibold mb-2">Ringkasan</h3>
             <div className="mb-2 text-xs text-gray-400">IMEI / SKU</div>
             <div className="font-mono mb-3 text-sm">
@@ -900,10 +1054,7 @@ export default function TransferBarang() {
                   {form.dari || "-"}
                 </div>
                 <div className="text-xs">
-                  Sistem:{" "}
-                  <span className="font-mono">
-                    {availableQty}
-                  </span>
+                  Sistem: <span className="font-mono">{availableQty}</span>
                 </div>
               </div>
 
@@ -913,10 +1064,7 @@ export default function TransferBarang() {
                   {form.ke || "-"}
                 </div>
                 <div className="text-xs">
-                  Sistem:{" "}
-                  <span className="font-mono">
-                    {targetQty}
-                  </span>
+                  Sistem: <span className="font-mono">{targetQty}</span>
                 </div>
               </div>
             </div>
@@ -931,8 +1079,7 @@ export default function TransferBarang() {
                   {form.qty || 0} unit
                 </span>
                 <span className="font-mono text-sm">
-                  {targetQty} →{" "}
-                  {targetQty + (Number(form.qty) || 0)}
+                  {targetQty} → {targetQty + (Number(form.qty) || 0)}
                 </span>
               </div>
             </div>
@@ -950,13 +1097,10 @@ export default function TransferBarang() {
         </div>
 
         {/* admin pending requests */}
-        <div
-          className={`p-4 rounded shadow mb-6 ${cardClass}`}
-        >
+        <div className={`p-4 rounded shadow mb-6 ${cardClass}`}>
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-semibold">
-              Pending Transfer Requests{" "}
-              {isAdmin ? "(Admin Mode)" : ""}
+              Pending Transfer Requests {isAdmin ? "(Admin Mode)" : ""}
             </h3>
             <div className="flex items-center gap-2">
               <button
@@ -972,9 +1116,7 @@ export default function TransferBarang() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs sm:text-sm border-collapse">
                 <thead
-                  className={
-                    isDark ? "bg-slate-900/60" : "bg-slate-100"
-                  }
+                  className={isDark ? "bg-slate-900/60" : "bg-slate-100"}
                 >
                   <tr>
                     <th className="p-2 border">No</th>
@@ -999,84 +1141,68 @@ export default function TransferBarang() {
                       </td>
                     </tr>
                   )}
-                  {(pendingRequests || []).map(
-                    (req, idx) => (
-                      <tr
-                        key={req.id || idx}
-                        className={
-                          isDark
-                            ? "hover:bg-slate-800"
-                            : "hover:bg-gray-50"
-                        }
-                      >
-                        <td className="p-2 border text-center">
-                          {idx + 1}
-                        </td>
-                        <td className="p-2 border">
-                          {req.tanggal}
-                        </td>
-                        <td className="p-2 border">{req.dari}</td>
-                        <td className="p-2 border">{req.ke}</td>
-                        <td className="p-2 border font-mono">
-                          {req.sku}
-                        </td>
-                        <td className="p-2 border text-center">
-                          {req.qty}
-                        </td>
-                        <td className="p-2 border">{req.pic}</td>
-                        <td className="p-2 border">
-                          {req.status || "Pending"}
-                        </td>
-                        <td className="p-2 border text-center space-x-2">
-                          <button
-                            onClick={() =>
-                              approveRequest(req)
-                            }
-                            className="px-2 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-xs inline-flex items-center"
-                          >
-                            <FaCheck className="mr-1" />
-                            Approve
-                          </button>
-                          <button
-                            onClick={() =>
-                              rejectRequest(req)
-                            }
-                            className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-xs inline-flex items-center ml-2"
-                          >
-                            <FaTimes className="mr-1" />
-                            Reject
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  )}
+                  {(pendingRequests || []).map((req, idx) => (
+                    <tr
+                      key={req.id || idx}
+                      className={
+                        isDark ? "hover:bg-slate-800" : "hover:bg-gray-50"
+                      }
+                    >
+                      <td className="p-2 border text-center">{idx + 1}</td>
+                      <td className="p-2 border">{req.tanggal}</td>
+                      <td className="p-2 border">{req.dari}</td>
+                      <td className="p-2 border">{req.ke}</td>
+                      <td className="p-2 border font-mono">{req.sku}</td>
+                      <td className="p-2 border text-center">{req.qty}</td>
+                      <td className="p-2 border">{req.pic}</td>
+                      <td className="p-2 border">
+                        {req.status || "Pending"}
+                      </td>
+                      <td className="p-2 border text-center space-x-2">
+                        <button
+                          onClick={() => approveRequest(req)}
+                          className="px-2 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-xs inline-flex items-center"
+                        >
+                          <FaCheck className="mr-1" />
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => rejectRequest(req)}
+                          className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-xs inline-flex items-center ml-2"
+                        >
+                          <FaTimes className="mr-1" />
+                          Void / Reject
+                        </button>
+                        <button
+                          onClick={() => loadRequestToForm(req)}
+                          className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs inline-flex items-center ml-2"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           ) : (
             <div className={`text-sm ${subTextClass}`}>
               Sebagai user biasa, kamu dapat membuat request transfer.
-              Admin akan melihat halaman ini untuk approve.
+              Admin akan melihat halaman ini untuk approve / edit / void.
             </div>
           )}
         </div>
 
         {/* session history table */}
-        <div
-          className={`p-4 rounded shadow ${cardClass}`}
-        >
-          <h3 className="font-semibold mb-3">
-            Riwayat Transfer (Sesi Ini)
-          </h3>
+        <div className={`p-4 rounded shadow ${cardClass}`}>
+          <h3 className="font-semibold mb-3">Riwayat Transfer (Sesi Ini)</h3>
           <div className="overflow-x-auto">
             <table
               ref={tableRef}
               className="w-full text-xs sm:text-sm border-collapse"
             >
               <thead
-                className={
-                  isDark ? "bg-slate-900/60" : "bg-slate-100"
-                }
+                className={isDark ? "bg-slate-900/60" : "bg-slate-100"}
               >
                 <tr>
                   <th className="p-2 border">No</th>
@@ -1106,31 +1232,21 @@ export default function TransferBarang() {
                   <tr
                     key={h.id || idx}
                     className={
-                      isDark
-                        ? "hover:bg-slate-800"
-                        : "hover:bg-gray-50"
+                      isDark ? "hover:bg-slate-800" : "hover:bg-gray-50"
                     }
                   >
-                    <td className="p-2 border text-center">
-                      {idx + 1}
-                    </td>
+                    <td className="p-2 border text-center">{idx + 1}</td>
                     <td className="p-2 border">{h.tanggal}</td>
                     <td className="p-2 border">{h.dari}</td>
                     <td className="p-2 border">{h.ke}</td>
-                    <td className="p-2 border font-mono">
-                      {h.sku}
-                    </td>
+                    <td className="p-2 border font-mono">{h.sku}</td>
                     <td className="p-2 border">{h.nama}</td>
-                    <td className="p-2 border text-center">
-                      {h.qty}
-                    </td>
+                    <td className="p-2 border text-center">{h.qty}</td>
                     <td className="p-2 border text-right">
                       Rp {fmt(h.harga)}
                     </td>
                     <td className="p-2 border">{h.pic}</td>
-                    <td className="p-2 border text-xs">
-                      {h.keterangan}
-                    </td>
+                    <td className="p-2 border text-xs">{h.keterangan}</td>
                   </tr>
                 ))}
               </tbody>

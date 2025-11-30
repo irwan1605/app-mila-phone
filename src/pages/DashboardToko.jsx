@@ -21,7 +21,12 @@ import {
   CartesianGrid,
 } from "recharts";
 
-import { listenAllTransaksi, addTransaksi } from "../services/FirebaseService";
+import {
+  listenAllTransaksi,
+  addTransaksi,
+  potongStockMasterByImei,
+} from "../services/FirebaseService";
+import * as XLSX from "xlsx";
 
 // ======================= KONSTAN =======================
 const TOKO_LIST = [
@@ -78,6 +83,9 @@ const CREDIT_PRESET = {
   },
 };
 
+// ✅ KEY UNTUK SIMPAN TEMA
+const THEME_KEY = "DASHBOARD_TOKO_THEME";
+
 export default function DashboardToko(props) {
   const params = useParams();
   const tokoId = props.tokoId || params.tokoId || params.id;
@@ -86,13 +94,82 @@ export default function DashboardToko(props) {
   const toko = TOKO_LIST.find((t) => t.id === String(tokoId));
 
   // ======================= STATE GLOBAL =======================
-  const [isDark, setIsDark] = useState(true);
+  // ✅ DEFAULT LIGHT MODE (false) + akan dioverride oleh localStorage
+  const [isDark, setIsDark] = useState(false);
 
   const [allTransaksi, setAllTransaksi] = useState([]);
+
+  // ======================= LAPORAN VOID & RETURN =======================
+  const [laporanVoid, setLaporanVoid] = useState([]);
+  const [laporanReturn, setLaporanReturn] = useState([]);
 
   // Penjualan cepat via IMEI
   const [searchImei, setSearchImei] = useState("");
   const [quickItems, setQuickItems] = useState([]);
+
+  // ✅ PAGINATION TABLE PENJUALAN
+  const [page, setPage] = useState(1);
+  const perPage = 10;
+
+  const totalPage = useMemo(
+    () => Math.max(1, Math.ceil((quickItems || []).length / perPage)),
+    [quickItems, perPage]
+  );
+
+  const paginatedQuickItems = useMemo(() => {
+    const start = (page - 1) * perPage;
+    return (quickItems || []).slice(start, start + perPage);
+  }, [quickItems, page, perPage]);
+
+  // ======================= CHART VOID & RETURN PER TOKO =======================
+const dataChartVoidReturn = useMemo(() => {
+  const map = {};
+  TOKO_LIST.forEach((t) => {
+    map[t.name] = { VOID: 0, RETURN: 0 };
+  });
+
+  (allTransaksi || []).forEach((x) => {
+    const tokoName = x.NAMA_TOKO;
+    const total = Number(x.TOTAL || x.HARGA_UNIT || 0);
+
+    if (!map[tokoName]) return;
+
+    if ((x.STATUS || "").toUpperCase() === "VOID") {
+      map[tokoName].VOID += total;
+    }
+
+    if ((x.STATUS || "").toUpperCase() === "RETURN") {
+      map[tokoName].RETURN += total;
+    }
+  });
+
+  return Object.entries(map).map(([name, val]) => ({
+    name,
+    VOID: val.VOID,
+    RETURN: val.RETURN,
+  }));
+}, [allTransaksi]);
+
+const exportVoidExcel = () => {
+  const ws = XLSX.utils.json_to_sheet(laporanVoidExport);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Laporan VOID");
+  XLSX.writeFile(wb, `Laporan_VOID_${toko?.name}.xlsx`);
+};
+
+const exportReturnExcel = () => {
+  const ws = XLSX.utils.json_to_sheet(laporanReturnExport);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Laporan RETURN");
+  XLSX.writeFile(wb, `Laporan_RETURN_${toko?.name}.xlsx`);
+};
+
+
+
+  useEffect(() => {
+    // kalau jumlah data berubah & page jadi kebesaran, turunkan ke max
+    if (page > totalPage) setPage(totalPage);
+  }, [totalPage, page]);
 
   const [paymentType, setPaymentType] = useState(""); // "CASH" | "TRANSFER" | "KREDIT"
   const [creditForm, setCreditForm] = useState({
@@ -104,41 +181,63 @@ export default function DashboardToko(props) {
   });
 
   // ======================= DRAFT STORAGE (ANTI HILANG SAAT REFRESH) =======================
-const DRAFT_KEY = `DASHBOARD_DRAFT_TOKO_${tokoId}`;
+  const DRAFT_KEY = `DASHBOARD_DRAFT_TOKO_${tokoId}`;
 
-// Load draft saat pertama render
-useEffect(() => {
-  const saved = localStorage.getItem(DRAFT_KEY);
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      setQuickItems(parsed.quickItems || []);
-      setPaymentType(parsed.paymentType || "");
-      setCreditForm(
-        parsed.creditForm || {
-          paymentMethod: "",
-          mdr: "",
-          kategoriHarga: "",
-          mpProtec: "",
-          tenor: "",
-        }
-      );
-    } catch {}
-  }
-}, [tokoId]);
+  // Load draft saat pertama render
+  useEffect(() => {
+    const saved = localStorage.getItem(DRAFT_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setQuickItems(parsed.quickItems || []);
+        setPaymentType(parsed.paymentType || "");
+        setCreditForm(
+          parsed.creditForm || {
+            paymentMethod: "",
+            mdr: "",
+            kategoriHarga: "",
+            mpProtec: "",
+            tenor: "",
+          }
+        );
+      } catch {}
+    }
+  }, [DRAFT_KEY]); 
+  
+  useEffect(() => {
+    localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        quickItems,
+        paymentType,
+        creditForm,
+      })
+    );
+  }, [DRAFT_KEY, quickItems, paymentType, creditForm]); 
+  
 
-// Simpan draft setiap ada perubahan
-useEffect(() => {
-  localStorage.setItem(
-    DRAFT_KEY,
-    JSON.stringify({
-      quickItems,
-      paymentType,
-      creditForm,
-    })
-  );
-}, [quickItems, paymentType, creditForm, tokoId]);
+  // Simpan draft setiap ada perubahan
+  useEffect(() => {
+    localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        quickItems,
+        paymentType,
+        creditForm,
+      })
+    );
+  }, [quickItems, paymentType, creditForm, tokoId]);
 
+  // ======================= THEME PERSIST (TIDAK BERUBAH SAAT REFRESH) =======================
+  useEffect(() => {
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    if (savedTheme === "dark") setIsDark(true);
+    if (savedTheme === "light") setIsDark(false);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
+  }, [isDark]);
 
   // ======================= LISTENER FIREBASE =======================
   useEffect(() => {
@@ -198,6 +297,30 @@ useEffect(() => {
     }));
   }, [allTransaksi]);
 
+  // ======================= FILTER REALTIME VOID & RETURN =======================
+  const dataVoidRealtime = useMemo(() => {
+    return (allTransaksi || []).filter(
+      (x) =>
+        (x.STATUS || "").toUpperCase() === "VOID" &&
+        (x.PAYMENT_METODE || "").toUpperCase().includes("PENJUALAN") &&
+        x.NAMA_TOKO === (toko ? toko.name : "")
+    );
+  }, [allTransaksi, toko]);
+
+  const dataReturnRealtime = useMemo(() => {
+    return (allTransaksi || []).filter(
+      (x) =>
+        (x.STATUS || "").toUpperCase() === "RETURN" &&
+        (x.PAYMENT_METODE || "").toUpperCase().includes("PENJUALAN") &&
+        x.NAMA_TOKO === (toko ? toko.name : "")
+    );
+  }, [allTransaksi, toko]);
+
+  useEffect(() => {
+    setLaporanVoid(dataVoidRealtime);
+    setLaporanReturn(dataReturnRealtime);
+  }, [dataVoidRealtime, dataReturnRealtime]);
+
   // ======================= INDEX IMEI DARI DATA PEMBELIAN =======================
   const imeiIndex = useMemo(() => {
     const map = {};
@@ -232,6 +355,55 @@ useEffect(() => {
     [quickItems]
   );
 
+// eslint-disable-next-line no-unused-vars
+const totalVoid = useMemo(() => {
+  return laporanVoid.reduce(
+    (sum, x) => sum + Number(x.TOTAL || x.HARGA_UNIT || 0),
+    0
+  );
+}, [laporanVoid]);
+
+
+// eslint-disable-next-line no-unused-vars
+const totalReturn = useMemo(() => {
+  return laporanReturn.reduce(
+    (sum, x) => sum + Number(x.TOTAL || x.HARGA_UNIT || 0),
+    0
+  );
+}, [laporanReturn]);
+
+
+// eslint-disable-next-line no-unused-vars
+const laporanVoidExport = useMemo(() => {
+  return (laporanVoid || []).map((x, i) => ({
+    No: i + 1,
+    Tanggal: x.TANGGAL_TRANSAKSI,
+    Invoice: x.NO_INVOICE,
+    Brand: x.NAMA_BRAND,
+    Barang: x.NAMA_BARANG,
+    IMEI: x.IMEI,
+    Harga: x.HARGA_UNIT,
+    Status: x.STATUS,
+    Toko: x.NAMA_TOKO,
+  }));
+}, [laporanVoid]);
+
+// eslint-disable-next-line no-unused-vars
+const laporanReturnExport = useMemo(() => {
+  return (laporanReturn || []).map((x, i) => ({
+    No: i + 1,
+    Tanggal: x.TANGGAL_TRANSAKSI,
+    Invoice: x.NO_INVOICE,
+    Brand: x.NAMA_BRAND,
+    Barang: x.NAMA_BARANG,
+    IMEI: x.IMEI,
+    Harga: x.HARGA_UNIT,
+    Status: x.STATUS,
+    Toko: x.NAMA_TOKO,
+  }));
+}, [laporanReturn]);
+
+
   const statusPembayaran = useMemo(() => {
     if (paymentType === "CASH") return getStatusFromTipeBayar("CASH");
     if (paymentType === "TRANSFER") return getStatusFromTipeBayar("DEBIT CARD");
@@ -262,21 +434,21 @@ useEffect(() => {
       alert("Masukkan IMEI terlebih dahulu.");
       return;
     }
-  
+
     // ✅ CEK DUPLIKAT DI TABEL DRAFT
     const alreadyDraft = quickItems.find((p) => p.imei === imei);
     if (alreadyDraft) {
       alert("❌ IMEI ini sudah ada di tabel penjualan.");
       return;
     }
-  
+
     const data = imeiIndex[imei];
-  
+
     if (!data) {
       alert("❌ IMEI tidak ditemukan di stok pembelian.");
       return;
     }
-  
+
     // ✅ BLOKIR JIKA IMEI SUDAH TERJUAL
     const isSold = (allTransaksi || []).some(
       (t) =>
@@ -284,15 +456,15 @@ useEffect(() => {
         (t.STATUS || "").toUpperCase() === "LUNAS" &&
         (t.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
     );
-  
+
     if (isSold) {
       alert("❌ IMEI ini sudah pernah terjual.");
       return;
     }
-  
+
     const hargaUnit =
       Number(data.HARGA_UNIT || data.HARGA_JUAL || data.TOTAL || 0) || 0;
-  
+
     const newItem = {
       id: `${imei}-${Date.now()}`,
       tanggal: new Date().toISOString().slice(0, 10),
@@ -303,11 +475,10 @@ useEffect(() => {
       hargaUnit,
       qty: 1,
     };
-  
+
     setQuickItems((prev) => [...prev, newItem]);
     setSearchImei("");
   };
-  
 
   const handleRemoveItem = (id) => {
     setQuickItems((prev) => prev.filter((x) => x.id !== id));
@@ -446,26 +617,26 @@ useEffect(() => {
         alert("Pilih jenis pembayaran terlebih dahulu.");
         return;
       }
-  
+
       const tanggal = new Date().toISOString().slice(0, 10);
       const invoiceNo = `INV-${tokoId || "X"}-${Date.now()}`;
-  
+
       const tipeBayarForStatus =
         paymentType === "CASH"
           ? "CASH"
           : paymentType === "TRANSFER"
           ? "DEBIT CARD"
           : "PIUTANG";
-  
+
       const status = getStatusFromTipeBayar(tipeBayarForStatus);
-  
+
       const paymentMethodFinal =
         paymentType === "CASH"
           ? "TUNAI"
           : paymentType === "TRANSFER"
           ? "TRANSFER BANK"
           : creditForm.paymentMethod || "";
-  
+
       for (const it of quickItems) {
         const payload = {
           TANGGAL_TRANSAKSI: tanggal,
@@ -477,21 +648,21 @@ useEffect(() => {
           QTY: 1,
           HARGA_UNIT: Number(it.hargaUnit || 0),
           TOTAL: Number(it.hargaUnit || 0),
-  
+
           PAYMENT_METHOD: paymentMethodFinal,
           KATEGORI_BAYAR: tipeBayarForStatus,
           MDR: creditForm.mdr || "",
           KATEGORI_HARGA: creditForm.kategoriHarga || "",
           MP_PROTEK: creditForm.mpProtec || "",
           TENOR: creditForm.tenor || "",
-  
+
           PAYMENT_METODE: "PENJUALAN",
           STATUS: status,
         };
-  
+
         // ✅ SIMPAN KE MASTER PENJUALAN TOKO
         await addTransaksi(tokoId, payload);
-  
+
         // ✅ TANDAI STOK DI PUSAT BERKURANG (IMEI SOLD)
         await addTransaksi("1", {
           ...payload,
@@ -499,15 +670,20 @@ useEffect(() => {
           STATUS: "LUNAS",
           PAYMENT_METODE: "STOCK_KURANG",
         });
+
+        // ✅ PANGGIL FUNGSI MASTER BARANG (JIKA ADA)
+        if (typeof potongStockMasterByImei === "function") {
+          await potongStockMasterByImei(it.imei);
+        }
       }
-  
+
       // ✅ HAPUS DRAFT SETELAH BERHASIL
       localStorage.removeItem(DRAFT_KEY);
-  
+
       alert("✅ Penjualan berhasil disimpan & stok otomatis berkurang.");
-  
+
       handlePreviewInvoice();
-  
+
       setQuickItems([]);
       setPaymentType("");
       setCreditForm({
@@ -517,12 +693,12 @@ useEffect(() => {
         mpProtec: "",
         tenor: "",
       });
+      setPage(1);
     } catch (err) {
       console.error("handleSimpanCetak error:", err);
       alert("❌ Gagal menyimpan penjualan.");
     }
   };
-  
 
   // ======================= HANDLE TIDAK ADA TOKO =======================
   if (!toko) {
@@ -816,7 +992,7 @@ useEffect(() => {
           </div>
 
           {/* TABEL ITEM */}
-          <div className="w-full overflow-x-auto rounded-xl border border-slate-700/60 mb-4">
+          <div className="w-full overflow-x-auto rounded-xl border border-slate-700/60 mb-3">
             <table className="min-w-full text-xs sm:text-sm">
               <thead className={isDark ? "bg-slate-900/80" : "bg-slate-100"}>
                 <tr>
@@ -839,7 +1015,7 @@ useEffect(() => {
                     </td>
                   </tr>
                 ) : (
-                  quickItems.map((it, idx) => (
+                  paginatedQuickItems.map((it, idx) => (
                     <tr
                       key={it.id}
                       className={
@@ -848,7 +1024,9 @@ useEffect(() => {
                           : "border-t border-slate-200 hover:bg-slate-50"
                       }
                     >
-                      <td className="px-2 py-2">{idx + 1}</td>
+                      <td className="px-2 py-2">
+                        {(page - 1) * perPage + idx + 1}
+                      </td>
                       <td className="px-2 py-2 whitespace-nowrap">
                         {it.tanggal}
                       </td>
@@ -881,6 +1059,45 @@ useEffect(() => {
               </tbody>
             </table>
           </div>
+
+          {/* ✅ NAVIGASI PAGE TABEL (TETAP DI BAWAH, TIDAK MEMECAH TABEL) */}
+          {quickItems.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4 text-xs sm:text-sm">
+              <span className={subTextClass}>
+                Menampilkan {paginatedQuickItems.length} dari{" "}
+                {quickItems.length} item
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className={`px-3 py-1 rounded-lg border text-xs ${
+                    page === 1
+                      ? "opacity-40 cursor-not-allowed"
+                      : "hover:bg-slate-800/60"
+                  }`}
+                >
+                  Sebelumnya
+                </button>
+                <span className={subTextClass}>
+                  Hal {page} / {totalPage}
+                </span>
+                <button
+                  disabled={page === totalPage}
+                  onClick={() =>
+                    setPage((p) => Math.min(totalPage, p + 1))
+                  }
+                  className={`px-3 py-1 rounded-lg border text-xs ${
+                    page === totalPage || totalPage === 0
+                      ? "opacity-40 cursor-not-allowed"
+                      : "hover:bg-slate-800/60"
+                  }`}
+                >
+                  Berikutnya
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* TOMBOL PEMBAYARAN */}
           <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between mb-4">
@@ -1026,10 +1243,106 @@ useEffect(() => {
               >
                 Simpan & Cetak
               </button>
+
+              
             </div>
           </div>
         </div>
       </div>
+{/* ===================== TABEL LAPORAN VOID & RETURN ===================== */}
+<div className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl mt-10`}>
+  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
+    <h2 className="font-semibold text-base sm:text-lg">
+      Laporan VOID & RETURN Realtime
+    </h2>
+    <div className="flex gap-2">
+      <button
+        onClick={exportVoidExcel}
+        className="px-3 py-1 rounded-lg bg-red-600 text-white text-xs"
+      >
+        Export VOID
+      </button>
+      <button
+        onClick={exportReturnExcel}
+        className="px-3 py-1 rounded-lg bg-amber-600 text-white text-xs"
+      >
+        Export RETURN
+      </button>
+    </div>
+  </div>
+
+  {/* ===== TABLE VOID ===== */}
+  <div className="mb-6">
+    <h3 className="font-semibold text-sm mb-2 text-red-400">Tabel VOID</h3>
+    <div className="overflow-x-auto border rounded-lg">
+      <table className="min-w-full text-xs">
+        <thead className={isDark ? "bg-slate-900" : "bg-slate-100"}>
+          <tr>
+            <th className="p-2">Tanggal</th>
+            <th className="p-2">Invoice</th>
+            <th className="p-2">Brand</th>
+            <th className="p-2">Barang</th>
+            <th className="p-2">IMEI</th>
+            <th className="p-2">Harga</th>
+          </tr>
+        </thead>
+        <tbody>
+          {laporanVoid.length === 0 ? (
+            <tr><td colSpan="6" className="text-center p-3">Tidak ada data VOID</td></tr>
+          ) : (
+            laporanVoid.map((x, i) => (
+              <tr key={i}>
+                <td className="p-2">{x.TANGGAL_TRANSAKSI}</td>
+                <td className="p-2">{x.NO_INVOICE}</td>
+                <td className="p-2">{x.NAMA_BRAND}</td>
+                <td className="p-2">{x.NAMA_BARANG}</td>
+                <td className="p-2 font-mono">{x.IMEI}</td>
+                <td className="p-2 text-right">Rp {fmt(x.HARGA_UNIT)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {/* ===== TABLE RETURN ===== */}
+  <div>
+    <h3 className="font-semibold text-sm mb-2 text-amber-400">Tabel RETURN</h3>
+    <div className="overflow-x-auto border rounded-lg">
+      <table className="min-w-full text-xs">
+        <thead className={isDark ? "bg-slate-900" : "bg-slate-100"}>
+          <tr>
+            <th className="p-2">Tanggal</th>
+            <th className="p-2">Invoice</th>
+            <th className="p-2">Brand</th>
+            <th className="p-2">Barang</th>
+            <th className="p-2">IMEI</th>
+            <th className="p-2">Harga</th>
+          </tr>
+        </thead>
+        <tbody>
+          {laporanReturn.length === 0 ? (
+            <tr><td colSpan="6" className="text-center p-3">Tidak ada data RETURN</td></tr>
+          ) : (
+            laporanReturn.map((x, i) => (
+              <tr key={i}>
+                <td className="p-2">{x.TANGGAL_TRANSAKSI}</td>
+                <td className="p-2">{x.NO_INVOICE}</td>
+                <td className="p-2">{x.NAMA_BRAND}</td>
+                <td className="p-2">{x.NAMA_BARANG}</td>
+                <td className="p-2 font-mono">{x.IMEI}</td>
+                <td className="p-2 text-right">Rp {fmt(x.HARGA_UNIT)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
     </div>
   );
 }

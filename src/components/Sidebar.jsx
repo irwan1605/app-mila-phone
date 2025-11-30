@@ -448,7 +448,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     }`}
                   >
                     <AiOutlineDatabase className="text-sm" />
-                    <span className="ml-2">Data Management</span>
+                    <span className="ml-2">Master Data Management</span>
                   </Link>
                 </li>
 

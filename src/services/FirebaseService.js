@@ -9,6 +9,7 @@
 
 import { db } from "../FirebaseInit";
 import {
+  getDatabase, 
   ref,
   onValue,
   get,
@@ -18,6 +19,7 @@ import {
   remove,
   runTransaction,
 } from "firebase/database";
+
 
 /* ============================================================
    HELPERS
@@ -602,6 +604,86 @@ export const deleteMasterBarang = async (brand, barang) => {
   const sku = `${brand}_${barang}`.replace(/\s+/g, "_");
   return remove(ref(db, `stock/${brand}/${sku}`));
 };
+
+// ================== POTONG STOK MASTER BARANG BY IMEI (REALTIME DB VERSION) ==================
+export const potongStockMasterByImei = async (imei) => {
+  if (!imei) return;
+
+  try {
+    const r = ref(db, "toko");
+    const snap = await get(r);
+
+    if (!snap.exists()) {
+      console.warn("DATA TOKO TIDAK DITEMUKAN");
+      return;
+    }
+
+    const semuaToko = snap.val();
+    let target = null;
+    let targetPath = null;
+
+    // LOOP SEMUA TOKO & TRANSAKSI
+    Object.entries(semuaToko).forEach(([tokoId, tokoData]) => {
+      if (!tokoData?.transaksi) return;
+
+      Object.entries(tokoData.transaksi).forEach(([trxId, trx]) => {
+        if (
+          trx.IMEI === imei &&
+          trx.NAMA_TOKO === "CILANGKAP PUSAT" &&
+          trx.PAYMENT_METODE === "PEMBELIAN" &&
+          trx.STATUS === "Approved"
+        ) {
+          target = trx;
+          targetPath = `toko/${tokoId}/transaksi/${trxId}`;
+        }
+      });
+    });
+
+    if (!target || !targetPath) {
+      console.warn("❌ STOK PUSAT TIDAK DITEMUKAN UNTUK IMEI:", imei);
+      return;
+    }
+
+    // ✅ UPDATE STATUS MENJADI TERJUAL
+    await update(ref(db, targetPath), {
+      STATUS: "TERJUAL",
+      KETERANGAN: "AUTO SOLD DARI DASHBOARD TOKO",
+      TANGGAL_KELUAR: new Date().toISOString().slice(0, 10),
+    });
+
+    console.log("✅ STOCK MASTER BERHASIL DIPOTONG UNTUK IMEI:", imei);
+  } catch (err) {
+    console.error("❌ GAGAL POTONG STOK MASTER:", err);
+  }
+};
+
+export const restoreStockByImeiRealtime = async (imei, namaToko) => {
+  const db = getDatabase();
+  const trxRef = ref(db, "toko");
+
+  const snapshot = await get(trxRef);
+  if (!snapshot.exists()) return;
+
+  snapshot.forEach((tokoSnap) => {
+    tokoSnap.child("transaksi").forEach((child) => {
+      const val = child.val();
+
+      if (
+        String(val.IMEI || "") === String(imei) &&
+        (val.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN"
+      ) {
+        const newQty = Number(val.QTY || 0) + 1;
+
+        update(
+          ref(db, `toko/${tokoSnap.key}/transaksi/${child.key}`),
+          { QTY: newQty }
+        );
+      }
+    });
+  });
+};
+
+
 
 
 

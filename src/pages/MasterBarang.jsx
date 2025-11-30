@@ -64,15 +64,12 @@ const KATEGORI_OPTIONS = [
 export default function MasterBarang() {
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [search, setSearch] = useState("");
-
-  // filter tambahan
   const [filterTanggal, setFilterTanggal] = useState("");
   const [filterKategori, setFilterKategori] = useState("");
-
   const [editData, setEditData] = useState(null);
   const [showModalEdit, setShowModalEdit] = useState(false);
-
   const [showModalTambah, setShowModalTambah] = useState(false);
+
   const [tambahForm, setTambahForm] = useState({
     brand: "",
     barang: "",
@@ -88,7 +85,7 @@ export default function MasterBarang() {
 
   const tableRef = useRef(null);
 
-  // LISTENER FIREBASE
+  // ================= LISTENER FIREBASE =================
   useEffect(() => {
     const unsub =
       typeof listenAllTransaksi === "function"
@@ -100,7 +97,7 @@ export default function MasterBarang() {
     return () => unsub && unsub();
   }, []);
 
-  // GROUP SKU
+  // ================= GROUP SKU + AUTO POTONG STOK =================
   const groupedSku = useMemo(() => {
     const map = {};
 
@@ -125,18 +122,28 @@ export default function MasterBarang() {
         };
       }
 
+      // ✅ BARIS ASLI ANDA (TIDAK DIHAPUS)
       map[key].totalQty += Number(x.QTY || 0);
 
-      if (x.IMEI && String(x.IMEI).trim() !== "") {
-        map[key].imeis.push(String(x.IMEI).trim());
+      // ✅ ✅ ✅ TAMBAHAN FINAL: AUTO POTONG SAAT PENJUALAN
+      const pmx = (x.PAYMENT_METODE || "").toUpperCase();
+      const stx = (x.STATUS || "").toUpperCase();
+      if (pmx === "PENJUALAN" && stx === "LUNAS") {
+        map[key].totalQty -= Number(x.QTY || 0);
       }
 
-      // ambil harga terakhir jika ada
+      // ✅ IMEI UNIK
+      if (x.IMEI && String(x.IMEI).trim() !== "") {
+        const imeiStr = String(x.IMEI).trim();
+        if (!map[key].imeis.includes(imeiStr)) {
+          map[key].imeis.push(imeiStr);
+        }
+      }
+
       map[key].hargaSup = Number(x.HARGA_SUPLAYER || map[key].hargaSup || 0);
       map[key].hargaUnit = Number(x.HARGA_UNIT || map[key].hargaUnit || 0);
       if (x.NO_INVOICE) map[key].noInvoiceSample = x.NO_INVOICE;
 
-      // tanggal sample → ambil yang paling awal
       if (
         x.TANGGAL_TRANSAKSI &&
         (!map[key].tanggalSample ||
@@ -145,7 +152,6 @@ export default function MasterBarang() {
         map[key].tanggalSample = x.TANGGAL_TRANSAKSI;
       }
 
-      // kategori brand sample → jika belum ada dan x punya
       if (x.KATEGORI_BRAND && !map[key].kategoriBrandSample) {
         map[key].kategoriBrandSample = x.KATEGORI_BRAND;
       }
@@ -510,9 +516,7 @@ export default function MasterBarang() {
     try {
       // 1️⃣ HAPUS SEMUA TRANSAKSI DI SEMUA TOKO
       const rows = allTransaksi.filter(
-        (x) =>
-          x.NAMA_BRAND === brand &&
-          x.NAMA_BARANG === barang
+        (x) => x.NAMA_BRAND === brand && x.NAMA_BARANG === barang
       );
 
       for (const r of rows) {
@@ -531,10 +535,7 @@ export default function MasterBarang() {
           if (snap.exists()) {
             snap.forEach((child) => {
               const val = child.val();
-              if (
-                val.NAMA_BRAND === brand &&
-                val.NAMA_BARANG === barang
-              ) {
+              if (val.NAMA_BRAND === brand && val.NAMA_BARANG === barang) {
                 remove(ref(db, `${trxPath}/${child.key}`));
               }
             });
@@ -548,9 +549,7 @@ export default function MasterBarang() {
       // 3️⃣ HAPUS DARI STATE
       setAllTransaksi((prev) =>
         prev.filter(
-          (x) =>
-            x.NAMA_BRAND !== brand ||
-            x.NAMA_BARANG !== barang
+          (x) => x.NAMA_BRAND !== brand || x.NAMA_BARANG !== barang
         )
       );
 
@@ -581,7 +580,7 @@ export default function MasterBarang() {
       hargaUnit: "",
       qty: 1,
       imeiList: "",
-      namaToko:  "CILANGKAP PUSAT",
+      namaToko: "CILANGKAP PUSAT",
       noInvoice: "",
       tanggal: new Date().toISOString().slice(0, 10),
       kategoriBrand: "",
@@ -597,7 +596,8 @@ export default function MasterBarang() {
     const qty = Number(tambahForm.qty || 0);
     const invoice = tambahForm.noInvoice.trim() || `INV-${Date.now()}`;
     const namaToko = tambahForm.namaToko || "PUSAT";
-    const tanggal = tambahForm.tanggal || new Date().toISOString().slice(0, 10);
+    const tanggal =
+      tambahForm.tanggal || new Date().toISOString().slice(0, 10);
     const kategoriBrand = tambahForm.kategoriBrand;
 
     if (!brand || !barang) {
@@ -941,7 +941,10 @@ export default function MasterBarang() {
                   className="w-full border p-2 rounded"
                   value={tambahForm.noInvoice}
                   onChange={(e) =>
-                    setTambahForm((p) => ({ ...p, noInvoice: e.target.value }))
+                    setTambahForm((p) => ({
+                      ...p,
+                      noInvoice: e.target.value,
+                    }))
                   }
                 />
               </div>

@@ -31,10 +31,13 @@ import {
   StockOpname.jsx
   - Menampilkan stok pusat & semua toko (realtime melalui transaksi)
   - Fallback ke StockBarang (dummy stok PUSAT) jika Firebase kosong
-  - CRUD transaksi (Tambah/Edit/Delete/Approve)
+  - CRUD transaksi (Tambah/Edit/Delete/Approve/VOID)
   - Stok Opname Cepat per SKU (selisih stok fisik vs sistem)
   - Export Excel (Aggregated + Raw) & PDF
   - Import Excel → update/add ke Firebase
+  - Cek IMEI unik (tidak boleh ada IMEI yang sama di tabel)
+  - VOID mengembalikan stok ke CILANGKAP PUSAT
+  - Draft form disimpan ke localStorage agar tidak hilang saat pindah halaman/refresh
 */
 
 const fallbackTokoNames = [
@@ -51,6 +54,7 @@ const fallbackTokoNames = [
 ];
 
 const rowsPerPageDefault = 12;
+const FORM_STORAGE_KEY = "stockOpnameFormDraft";
 
 export default function StockOpname() {
   // data sources
@@ -78,6 +82,35 @@ export default function StockOpname() {
   const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageDefault);
 
   const tableRef = useRef(null);
+
+  // ===================== LOAD DRAFT FORM DARI LOCALSTORAGE =====================
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(FORM_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object") {
+          setForm(parsed);
+        }
+      }
+    } catch (e) {
+      console.error("Gagal load draft form StockOpname", e);
+    }
+  }, []);
+
+  // Simpan draft form ke localStorage setiap ada perubahan,
+  // agar saat pindah halaman / refresh data input tidak hilang sebelum disimpan.
+  useEffect(() => {
+    try {
+      if (!form || Object.keys(form).length === 0) {
+        localStorage.removeItem(FORM_STORAGE_KEY);
+      } else {
+        localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(form));
+      }
+    } catch (e) {
+      console.error("Gagal simpan draft form StockOpname", e);
+    }
+  }, [form]);
 
   // ===================== LOAD DATA (Firebase + Fallback StockBarang) =====================
   useEffect(() => {
@@ -222,9 +255,103 @@ export default function StockOpname() {
     }
   }
 
+  // ===================== AUTO ISI FORM DARI IMEI (Master Barang + Penjualan) =====================
+  useEffect(() => {
+    if (!form.NOMOR_UNIK) return;
+
+    const imeiInput = String(form.NOMOR_UNIK).trim();
+    const tokoName = form.NAMA_TOKO || "CILANGKAP PUSAT";
+    const stokAll = stockRealtime || {};
+
+    let found = null;
+
+    // Prioritas 1: stok di toko yang dipilih
+    if (stokAll[tokoName]) {
+      for (const [sku, item] of Object.entries(stokAll[tokoName] || {})) {
+        const imeiItem = String(
+          item.imei ||
+            item.NOMOR_UNIK ||
+            item.no_imei ||
+            item.NO_IMEI ||
+            ""
+        ).trim();
+        if (imeiItem && imeiItem === imeiInput) {
+          found = { sku, ...item };
+          break;
+        }
+      }
+    }
+
+    // Prioritas 2: stok di CILANGKAP PUSAT (Master Barang Pusat)
+    if (
+      !found &&
+      tokoName !== "CILANGKAP PUSAT" &&
+      stokAll["CILANGKAP PUSAT"]
+    ) {
+      for (const [sku, item] of Object.entries(
+        stokAll["CILANGKAP PUSAT"] || {}
+      )) {
+        const imeiItem = String(
+          item.imei ||
+            item.NOMOR_UNIK ||
+            item.no_imei ||
+            item.NO_IMEI ||
+            ""
+        ).trim();
+        if (imeiItem && imeiItem === imeiInput) {
+          found = { sku, ...item };
+          break;
+        }
+      }
+    }
+
+    // Prioritas 3: dari transaksi penjualan (Master Penjualan / Transfer Barang)
+    if (!found) {
+      const trx = allTransaksi.find(
+        (r) => String(r.NOMOR_UNIK || "").trim() === imeiInput
+      );
+      if (trx) {
+        setForm((f) => ({
+          ...f,
+          NO_INVOICE: f.NO_INVOICE || trx.NO_INVOICE || "",
+          NAMA_BRAND: f.NAMA_BRAND || trx.NAMA_BRAND || "",
+          NAMA_BARANG: f.NAMA_BARANG || trx.NAMA_BARANG || "",
+          HARGA_UNIT:
+            f.HARGA_UNIT !== "" && f.HARGA_UNIT !== undefined
+              ? f.HARGA_UNIT
+              : trx.HARGA_UNIT || trx.HARGA || 0,
+        }));
+      }
+      return;
+    }
+
+    // Isi otomatis dari stok master (baik PUSAT maupun Toko masing-masing)
+    setForm((f) => ({
+      ...f,
+      NO_INVOICE:
+        f.NO_INVOICE ||
+        found.noInvoice ||
+        found.NO_INVOICE ||
+        f.NO_INVOICE ||
+        "",
+      NAMA_BRAND: f.NAMA_BRAND || found.brand || found.NAMA_BRAND || "",
+      NAMA_BARANG: f.NAMA_BARANG || found.nama || found.NAMA_BARANG || "",
+      HARGA_UNIT:
+        f.HARGA_UNIT !== "" && f.HARGA_UNIT !== undefined
+          ? f.HARGA_UNIT
+          : found.harga ||
+            found.HARGA_UNIT ||
+            found.harga_jual ||
+            f.HARGA_UNIT ||
+            0,
+      QTY: f.QTY || found.qty || 1,
+    }));
+  }, [form.NOMOR_UNIK, form.NAMA_TOKO, stockRealtime, allTransaksi]);
+
   // ===================== Derivasi: options toko, filter, pagination =====================
   const tokoOptions = useMemo(() => {
-    const names = [
+    // NAMA TOKO dari transaksi
+    const fromTransaksi = [
       ...new Set(
         (allTransaksi || [])
           .map((r) => r.NAMA_TOKO)
@@ -232,9 +359,24 @@ export default function StockOpname() {
           .map((t) => String(t))
       ),
     ];
-    if (!names.includes("CILANGKAP PUSAT")) names.unshift("CILANGKAP PUSAT");
-    return names.length ? names : fallbackTokoNames;
-  }, [allTransaksi]);
+
+    // NAMA TOKO dari stockRealtime (Master Barang)
+    const fromStock = Object.keys(stockRealtime || {});
+
+    // gabung + fallback list
+    const merged = Array.from(
+      new Set([...fromTransaksi, ...fromStock, ...fallbackTokoNames])
+    );
+
+    // pastikan CILANGKAP PUSAT jadi toko pusat (di urutan pertama)
+    merged.sort((a, b) => {
+      if (a === "CILANGKAP PUSAT") return -1;
+      if (b === "CILANGKAP PUSAT") return 1;
+      return String(a).localeCompare(String(b));
+    });
+
+    return merged;
+  }, [allTransaksi, stockRealtime]);
 
   const filteredRows = useMemo(() => {
     return allTransaksi.filter((r) => {
@@ -286,6 +428,18 @@ export default function StockOpname() {
     }
   };
 
+  // ===================== CEK IMEI DUPLIKAT (HARUS UNIK) =====================
+  const isDuplicateIMEI = (imei, excludeId = null) => {
+    if (!imei) return false;
+    const cleaned = String(imei).trim();
+    if (!cleaned) return false;
+    return allTransaksi.some(
+      (r) =>
+        String(r.NOMOR_UNIK || "").trim() === cleaned &&
+        (!excludeId || r.id !== excludeId)
+    );
+  };
+
   // ===================== Form Handlers =====================
   const handleChange = (e) => {
     const { name, value, type } = e.target;
@@ -307,6 +461,12 @@ export default function StockOpname() {
 
     if (!tanggal || !brand || !barang || !tokoName) {
       alert("Isi minimal: Tanggal, Toko, Nama Brand, Nama Barang");
+      return;
+    }
+
+    // 🚫 Cek IMEI duplikat (hanya boleh satu di tabel)
+    if (form.NOMOR_UNIK && isDuplicateIMEI(form.NOMOR_UNIK, editId)) {
+      alert("Nomor IMEI sudah terdaftar. Tidak boleh ada IMEI yang sama.");
       return;
     }
 
@@ -360,8 +520,15 @@ export default function StockOpname() {
         setAllTransaksi((d) => [...d, normalizeRecord(payload)]);
       }
 
+      // bersihkan form + draft setelah Request / Simpan berhasil
       setForm({});
       setEditId(null);
+      try {
+        localStorage.removeItem(FORM_STORAGE_KEY);
+      } catch (e) {
+        console.error("Gagal hapus draft form setelah simpan", e);
+      }
+
       alert("Simpan berhasil");
     } catch (err) {
       console.error("save error", err);
@@ -375,25 +542,74 @@ export default function StockOpname() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // =========== TOMBOL DELETE → VOID (KEMBALIKAN STOK KE MASTER BARANG) ===========
   const handleDelete = async (row) => {
-    if (!window.confirm("Yakin hapus transaksi ini?")) return;
+    if (
+      !window.confirm(
+        "Yakin VOID transaksi ini dan mengembalikan stok ke CILANGKAP PUSAT?"
+      )
+    )
+      return;
     try {
+      const qty = Number(row.QTY || 0);
+      const imeiKey = row.NOMOR_UNIK || row.NO_INVOICE || "";
+      const namaBarang = row.NAMA_BARANG || "";
+
+      // 1. Kembalikan stok ke CILANGKAP PUSAT (MASTER BARANG)
+      if (typeof addStock === "function" && imeiKey) {
+        await addStock("CILANGKAP PUSAT", imeiKey, {
+          nama: namaBarang,
+          imei: row.NOMOR_UNIK,
+          qty,
+        });
+      }
+
+      // 2. Kurangi stok dari toko asal (jika bukan pusat)
+      const tokoName = row.NAMA_TOKO || "CILANGKAP PUSAT";
+      if (
+        typeof reduceStock === "function" &&
+        tokoName &&
+        tokoName !== "CILANGKAP PUSAT" &&
+        imeiKey
+      ) {
+        await reduceStock(tokoName, imeiKey, qty);
+      }
+
+      // 3. Update status transaksi → VOID (tidak dihapus)
       const tokoIndex = fallbackTokoNames.findIndex(
         (n) =>
-          String(n).toUpperCase() ===
-          String(row.NAMA_TOKO || "").toUpperCase()
+          String(n).toUpperCase() === String(tokoName || "").toUpperCase()
       );
       const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
-      if (typeof deleteTransaksi === "function") {
-        await deleteTransaksi(tokoId, row.id);
-      } else {
-        console.warn("deleteTransaksi not found");
+
+      if (typeof updateTransaksi === "function") {
+        await updateTransaksi(tokoId, row.id, {
+          ...row,
+          STATUS: "VOID",
+          KETERANGAN:
+            (row.KETERANGAN ? row.KETERANGAN + " | " : "") +
+            "Transaksi di-VOID, stok dikembalikan ke CILANGKAP PUSAT",
+        });
       }
-      setAllTransaksi((d) => d.filter((x) => x.id !== row.id));
-      alert("Berhasil dihapus");
+
+      setAllTransaksi((d) =>
+        d.map((x) =>
+          x.id === row.id
+            ? {
+                ...x,
+                STATUS: "VOID",
+                KETERANGAN:
+                  (x.KETERANGAN ? x.KETERANGAN + " | " : "") +
+                  "Transaksi di-VOID, stok dikembalikan ke CILANGKAP PUSAT",
+              }
+            : x
+        )
+      );
+
+      alert("Transaksi berhasil di-VOID dan stok dikembalikan.");
     } catch (err) {
-      console.error("delete error", err);
-      alert("Gagal menghapus");
+      console.error("void error", err);
+      alert("Gagal melakukan VOID transaksi");
     }
   };
 
@@ -493,11 +709,15 @@ export default function StockOpname() {
 
       // integrasi dengan tabel stock/stockRealtime bila diinginkan
       if (typeof addStock === "function" && selisih > 0) {
-        await addStock("CILANGKAP PUSAT", payload.NOMOR_UNIK || payload.NO_INVOICE, {
-          nama: payload.NAMA_BARANG,
-          imei: payload.NOMOR_UNIK,
-          qty: Math.abs(selisih),
-        });
+        await addStock(
+          "CILANGKAP PUSAT",
+          payload.NOMOR_UNIK || payload.NO_INVOICE,
+          {
+            nama: payload.NAMA_BARANG,
+            imei: payload.NOMOR_UNIK,
+            qty: Math.abs(selisih),
+          }
+        );
       }
       if (typeof reduceStock === "function" && selisih < 0) {
         await reduceStock(
@@ -723,6 +943,19 @@ export default function StockOpname() {
             STATUS: row.STATUS || "Pending",
           };
 
+          // 🚫 Cek IMEI Duplikat saat IMPORT (untuk row baru tanpa id)
+          if (
+            payload.NOMOR_UNIK &&
+            !row.id &&
+            isDuplicateIMEI(payload.NOMOR_UNIK)
+          ) {
+            console.warn(
+              "Lewati row import karena IMEI sudah ada:",
+              payload.NOMOR_UNIK
+            );
+            continue;
+          }
+
           try {
             if (row.id && typeof updateTransaksi === "function") {
               await updateTransaksi(tokoId, row.id, payload);
@@ -750,17 +983,17 @@ export default function StockOpname() {
 
   // ===================== RENDER =====================
   return (
-    <div className="p-4 bg-gray-100 rounded-xl shadow-md">
-      <h2 className="text-xl font-bold mb-2">
+    <div className="p-4 md:p-6 bg-gradient-to-br from-slate-50 via-white to-blue-50 rounded-xl shadow-lg">
+      <h2 className="text-xl md:text-2xl font-bold mb-2 text-blue-700">
         Stok Opname & Inventory Management
       </h2>
       <p className="text-sm text-gray-600 mb-4">
-        Pantau stok CILANGKAP PUSAT & semua toko, lakukan opname cepat, dan sinkronkan
-        dengan transaksi penjualan.
+        Pantau stok CILANGKAP PUSAT & semua toko, lakukan opname cepat, dan
+        sinkronkan dengan transaksi penjualan.
       </p>
 
       {/* CONTROL BAR */}
-      <div className="bg-white rounded shadow p-3 mb-4 flex flex-wrap items-center gap-3">
+      <div className="bg-white rounded-xl shadow-md p-3 mb-4 flex flex-wrap items-center gap-3 transition hover:shadow-lg">
         <div className="flex items-center gap-2">
           <FaSearch className="text-gray-500" />
           <input
@@ -770,7 +1003,7 @@ export default function StockOpname() {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className="p-2 border rounded w-72"
+            className="p-2 border rounded w-72 max-w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
         </div>
 
@@ -780,7 +1013,7 @@ export default function StockOpname() {
             setFilterToko(e.target.value);
             setCurrentPage(1);
           }}
-          className="p-2 border rounded"
+          className="p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
         >
           <option value="semua">Semua Toko</option>
           {tokoOptions.map((t) => (
@@ -796,7 +1029,7 @@ export default function StockOpname() {
             setFilterStatus(e.target.value);
             setCurrentPage(1);
           }}
-          className="p-2 border rounded"
+          className="p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
         >
           <option value="semua">Semua Status</option>
           <option value="Pending">Pending</option>
@@ -807,7 +1040,7 @@ export default function StockOpname() {
         <select
           value={rowsPerPage}
           onChange={(e) => setRowsPerPage(Number(e.target.value) || 10)}
-          className="p-2 border rounded"
+          className="p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
         >
           <option value={10}>10 baris</option>
           <option value={20}>20 baris</option>
@@ -817,26 +1050,26 @@ export default function StockOpname() {
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
             onClick={exportAggregatedExcel}
-            className="px-3 py-1 bg-indigo-600 text-white rounded flex items-center text-sm"
+            className="px-3 py-1 bg-indigo-600 text-white rounded flex items-center text-sm hover:bg-indigo-700 transition"
           >
             <FaFileExcel className="mr-2" /> Agg Excel
           </button>
 
           <button
             onClick={exportRawExcel}
-            className="px-3 py-1 bg-green-600 text-white rounded flex items-center text-sm"
+            className="px-3 py-1 bg-green-600 text-white rounded flex items-center text-sm hover:bg-green-700 transition"
           >
             <FaFileExcel className="mr-2" /> Raw Excel
           </button>
 
           <button
             onClick={exportPDF}
-            className="px-3 py-1 bg-red-600 text-white rounded flex items-center text-sm"
+            className="px-3 py-1 bg-red-600 text-white rounded flex items-center text-sm hover:bg-red-700 transition"
           >
             <FaFilePdf className="mr-2" /> PDF
           </button>
 
-          <label className="px-3 py-1 bg-blue-600 text-white rounded cursor-pointer flex items-center text-sm">
+          <label className="px-3 py-1 bg-blue-600 text-white rounded cursor-pointer flex items-center text-sm hover:bg-blue-700 transition">
             Import Excel
             <input
               type="file"
@@ -849,9 +1082,11 @@ export default function StockOpname() {
       </div>
 
       {/* FORM INPUT TRANSAKSI */}
-      <div className="bg-white p-4 rounded shadow mb-6">
-        <h3 className="font-semibold mb-3">Input / Edit Transaksi Stok</h3>
-        <div className="grid grid-cols-3 gap-3">
+      <div className="bg-white p-4 rounded-xl shadow-md mb-6 transition hover:shadow-lg">
+        <h3 className="font-semibold mb-3 text-blue-700">
+          Input / Edit Transaksi Stok
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="block text-sm mb-1">Tanggal Transaksi</label>
             <input
@@ -859,7 +1094,7 @@ export default function StockOpname() {
               name="TANGGAL_TRANSAKSI"
               value={form.TANGGAL_TRANSAKSI || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -869,7 +1104,7 @@ export default function StockOpname() {
               name="NO_INVOICE"
               value={form.NO_INVOICE || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
               placeholder="INV-YYYY-XXXXX"
             />
           </div>
@@ -880,7 +1115,7 @@ export default function StockOpname() {
               name="NAMA_TOKO"
               value={form.NAMA_TOKO || "CILANGKAP PUSAT"}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
               {tokoOptions.map((t) => (
                 <option key={t} value={t}>
@@ -896,7 +1131,7 @@ export default function StockOpname() {
               name="NAMA_BRAND"
               value={form.NAMA_BRAND || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -906,7 +1141,7 @@ export default function StockOpname() {
               name="NAMA_BARANG"
               value={form.NAMA_BARANG || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -917,7 +1152,7 @@ export default function StockOpname() {
               name="QTY"
               value={form.QTY || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -929,7 +1164,7 @@ export default function StockOpname() {
               name="NOMOR_UNIK"
               value={form.NOMOR_UNIK || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -939,7 +1174,7 @@ export default function StockOpname() {
               name="KATEGORI_HARGA"
               value={form.KATEGORI_HARGA || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
               placeholder="Retail / Grosir / Promo"
             />
           </div>
@@ -951,7 +1186,7 @@ export default function StockOpname() {
               name="HARGA_UNIT"
               value={form.HARGA_UNIT || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -961,7 +1196,7 @@ export default function StockOpname() {
               name="PAYMENT_METODE"
               value={form.PAYMENT_METODE || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
               placeholder="Cash / Kredit / dll"
             />
           </div>
@@ -972,7 +1207,7 @@ export default function StockOpname() {
               name="SYSTEM_PAYMENT"
               value={form.SYSTEM_PAYMENT || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
               placeholder="PT. / Leasing / dll"
             />
           </div>
@@ -984,7 +1219,7 @@ export default function StockOpname() {
               name="MDR"
               value={form.MDR || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -995,7 +1230,7 @@ export default function StockOpname() {
               name="POTONGAN_MDR"
               value={form.POTONGAN_MDR || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -1005,7 +1240,7 @@ export default function StockOpname() {
               name="NO_ORDER_KONTRAK"
               value={form.NO_ORDER_KONTRAK || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -1015,7 +1250,7 @@ export default function StockOpname() {
               name="TENOR"
               value={form.TENOR || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
               placeholder="12x, 24x, dll"
             />
           </div>
@@ -1027,7 +1262,7 @@ export default function StockOpname() {
               name="DP_USER_MERCHANT"
               value={form.DP_USER_MERCHANT || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -1038,7 +1273,7 @@ export default function StockOpname() {
               name="DP_USER_TOKO"
               value={form.DP_USER_TOKO || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -1049,17 +1284,17 @@ export default function StockOpname() {
               name="REQUEST_DP_TALANGAN"
               value={form.REQUEST_DP_TALANGAN || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
-          <div className="col-span-3">
+          <div className="col-span-1 md:col-span-3">
             <label className="block text-sm mb-1">Keterangan</label>
             <textarea
               name="KETERANGAN"
               value={form.KETERANGAN || ""}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded min-h-[60px] focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
 
@@ -1069,7 +1304,7 @@ export default function StockOpname() {
               name="STATUS"
               value={form.STATUS || "Pending"}
               onChange={handleChange}
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
               <option value="Pending">Pending</option>
               <option value="Approved">Approved</option>
@@ -1078,10 +1313,10 @@ export default function StockOpname() {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-blue-600 text-white rounded flex items-center"
+            className="px-4 py-2 bg-blue-600 text-white rounded flex items-center hover:bg-blue-700 transition"
           >
             <FaSave className="mr-2" /> {editId ? "Update" : "Tambah"} Data
           </button>
@@ -1089,8 +1324,13 @@ export default function StockOpname() {
             onClick={() => {
               setForm({});
               setEditId(null);
+              try {
+                localStorage.removeItem(FORM_STORAGE_KEY);
+              } catch (e) {
+                console.error("Gagal hapus draft form saat batal", e);
+              }
             }}
-            className="px-4 py-2 border rounded flex items-center"
+            className="px-4 py-2 border rounded flex items-center hover:bg-gray-100 transition"
           >
             <FaTimes className="mr-2" />
             Batal
@@ -1098,8 +1338,11 @@ export default function StockOpname() {
         </div>
       </div>
 
-      {/* TABLE TRANSAKSI */}
-      <div className="bg-white rounded shadow overflow-x-auto" ref={tableRef}>
+      {/* TABLE TRANSAKSI (Transfer Barang) */}
+      <div
+        className="bg-white rounded-xl shadow-md overflow-x-auto transition hover:shadow-lg"
+        ref={tableRef}
+      >
         <table className="w-full text-sm border-collapse">
           <thead className="bg-blue-600 text-white">
             <tr>
@@ -1119,7 +1362,10 @@ export default function StockOpname() {
 
           <tbody>
             {paginated.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
+              <tr
+                key={r.id}
+                className="hover:bg-blue-50 transition-colors duration-150"
+              >
                 <td className="p-2 border">{r.TANGGAL_TRANSAKSI}</td>
                 <td className="p-2 border">{r.NO_INVOICE}</td>
                 <td className="p-2 border">{r.NAMA_TOKO}</td>
@@ -1139,6 +1385,8 @@ export default function StockOpname() {
                       ? "text-green-600"
                       : r.STATUS === "Rejected"
                       ? "text-red-600"
+                      : r.STATUS === "VOID"
+                      ? "text-gray-500"
                       : "text-yellow-600"
                   }`}
                 >
@@ -1152,10 +1400,11 @@ export default function StockOpname() {
                   >
                     <FaEdit />
                   </button>
+                  {/* DELETE → VOID */}
                   <button
                     onClick={() => handleDelete(r)}
-                    className="text-red-600 hover:text-red-800"
-                    title="Hapus"
+                    className="text-orange-600 hover:text-orange-800"
+                    title="VOID (kembalikan stok ke pusat)"
                   >
                     <FaTrash />
                   </button>
@@ -1182,7 +1431,7 @@ export default function StockOpname() {
           <button
             onClick={() => currentPage > 1 && setCurrentPage((p) => p - 1)}
             disabled={currentPage === 1}
-            className="px-2 py-1 border rounded disabled:opacity-40"
+            className="px-2 py-1 border rounded disabled:opacity-40 hover:bg-gray-100 transition"
           >
             <FaChevronLeft />
           </button>
@@ -1191,7 +1440,7 @@ export default function StockOpname() {
               currentPage < totalPages && setCurrentPage((p) => p + 1)
             }
             disabled={currentPage === totalPages}
-            className="px-2 py-1 border rounded disabled:opacity-40"
+            className="px-2 py-1 border rounded disabled:opacity-40 hover:bg-gray-100 transition"
           >
             <FaChevronRight />
           </button>
@@ -1199,8 +1448,10 @@ export default function StockOpname() {
       </div>
 
       {/* STOK OPNAME CEPAT (Per SKU) */}
-      <div className="bg-white p-4 rounded shadow mt-6">
-        <h3 className="font-semibold mb-3">Stok Opname Cepat (Per SKU)</h3>
+      <div className="bg-white p-4 rounded-xl shadow-md mt-6 transition hover:shadow-lg">
+        <h3 className="font-semibold mb-3 text-blue-700">
+          Stok Opname Cepat (Per SKU)
+        </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead className="bg-gray-200">
@@ -1251,7 +1502,7 @@ export default function StockOpname() {
                       </td>
                       <td className="p-2 border">
                         <input
-                          className="w-24 p-1 border rounded"
+                          className="w-24 p-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
                           value={opnameMap[key] ?? ""}
                           onChange={(e) =>
                             setOpnameMap((m) => ({
@@ -1295,7 +1546,7 @@ export default function StockOpname() {
                               QTY: ag.totalQty,
                             })
                           }
-                          className="px-3 py-1 bg-blue-600 text-white rounded text-xs inline-flex items-center mx-auto mt-1"
+                          className="px-3 py-1 bg-blue-600 text-white rounded text-xs inline-flex items-center mx-auto mt-1 hover:bg-blue-700 transition"
                           title="Simpan penyesuaian opname"
                         >
                           <FaSave className="mr-1" /> Simpan Opname

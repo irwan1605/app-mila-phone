@@ -27,7 +27,7 @@ import jsPDF from "jspdf";
 
 /* === fallback toko names (same used in DashboardToko) === */
 const fallbackTokoNames = [
-  "CILANGKAP",
+  "CILANGKAP PUSAT",
   "CIBINONG",
   "GAS ALAM",
   "CITEUREUP",
@@ -53,10 +53,15 @@ export default function DataManagement() {
   const [filterStatus, setFilterStatus] = useState("semua");
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
+  const [search, setSearch] = useState(""); // 🔍 search global
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
   const tableRef = useRef(null);
+
+  // dropdown data
+  const [listKaryawan, setListKaryawan] = useState([]);
+  const [listSupplier, setListSupplier] = useState([]);
 
   // subscribe realtime to selected toko
   useEffect(() => {
@@ -109,6 +114,33 @@ export default function DataManagement() {
     });
   }, [tokoName]);
 
+  // 🔽 dropdown: karyawan (NIK)
+  useEffect(() => {
+    if (typeof FirebaseService.listenKaryawan === "function") {
+      const unsub = FirebaseService.listenKaryawan((rows = []) => {
+        setListKaryawan(rows || []);
+      });
+      return () => unsub && unsub();
+    }
+  }, []);
+
+  // 🔽 dropdown: supplier (dari semua transaksi)
+  useEffect(() => {
+    if (typeof FirebaseService.listenAllTransaksi === "function") {
+      const unsub = FirebaseService.listenAllTransaksi((rows = []) => {
+        const names = Array.from(
+          new Set(
+            (rows || [])
+              .map((r) => r.NAMA_SUPPLIER)
+              .filter(Boolean)
+          )
+        );
+        setListSupplier(names);
+      });
+      return () => unsub && unsub();
+    }
+  }, []);
+
   // Normalize record shape — ensure all expected fields exist
   const normalizeRecord = (r = {}) => {
     return {
@@ -125,22 +157,35 @@ export default function DataManagement() {
       NAMA_SALES: r.NAMA_SALES || "",
       TITIPAN_REFERENSI: r.TITIPAN_REFERENSI || "",
       NAMA_TOKO: r.NAMA_TOKO || r.TOKO || tokoName,
+
+      // 🔽 bidang yang bisa diolah di MASTER DATA MANAGEMENT
+      PAYMENT_METODE: r.PAYMENT_METODE || "",
+      KATEGORI_BRAND: r.KATEGORI_BRAND || "",
       NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "",
+      BRAND: r.BRAND || r.NAMA_BRAND || "",
       NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "",
+      MDR: Number(r.MDR || 0),
+      KATEGORI_HARGA: r.KATEGORI_HARGA || "",
+      NAMA_SUPPLIER: r.NAMA_SUPPLIER || "",
+      MP_PROTECK: r.MP_PROTECK || "",
+      TENOR: r.TENOR || "",
+      NIK_KARYAWAN: r.NIK_KARYAWAN || "",
+      NAMA_SH: r.NAMA_SH || "",
+      TUYUL: r.TUYUL || "",
+      WARNA: r.WARNA || "",
       QTY: Number(r.QTY || 0),
+
       NOMOR_UNIK:
         r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
       IMEI: r.IMEI || "",
       NO_DINAMO: r.NO_DINAMO || "",
       NO_RANGKA: r.NO_RANGKA || "",
-      KATEGORI_HARGA: r.KATEGORI_HARGA || "",
+      KATEGORI_HARGA_OLD: r.KATEGORI_HARGA || "", // legacy safe
+
       HARGA_UNIT: Number(r.HARGA_UNIT || r.HARGA || 0),
-      PAYMENT_METODE: r.PAYMENT_METODE || "",
       SYSTEM_PAYMENT: r.SYSTEM_PAYMENT || "",
-      MDR: Number(r.MDR || 0),
       POTONGAN_MDR: Number(r.POTONGAN_MDR || 0),
       NO_ORDER_KONTRAK: r.NO_ORDER_KONTRAK || "",
-      TENOR: r.TENOR || "",
       DP_USER_MERCHANT: Number(r.DP_USER_MERCHANT || 0),
       DP_USER_TOKO: Number(r.DP_USER_TOKO || 0),
       REQUEST_DP_TALANGAN: Number(r.REQUEST_DP_TALANGAN || 0),
@@ -171,7 +216,8 @@ export default function DataManagement() {
 
   // ---------------- helper: detect nomor unik ----------------
   const detectNomor = (val) => {
-    if (!val) return { NOMOR_UNIK: "", IMEI: "", NO_DINAMO: "", NO_RANGKA: "" };
+    if (!val)
+      return { NOMOR_UNIK: "", IMEI: "", NO_DINAMO: "", NO_RANGKA: "" };
     const s = String(val).trim();
     const onlyDigits = /^\d+$/.test(s);
     if (onlyDigits && s.length >= 14 && s.length <= 17) {
@@ -189,23 +235,44 @@ export default function DataManagement() {
     try {
       if (typeof FirebaseService.adjustInventoryStock === "function") {
         // preferred function if available
-        await FirebaseService.adjustInventoryStock(targetTokoId, skuOrKey, delta);
-      } else if (typeof FirebaseService.updateInventory === "function" && typeof FirebaseService.getInventoryItem === "function") {
+        await FirebaseService.adjustInventoryStock(
+          targetTokoId,
+          skuOrKey,
+          delta
+        );
+      } else if (
+        typeof FirebaseService.updateInventory === "function" &&
+        typeof FirebaseService.getInventoryItem === "function"
+      ) {
         // fallback: try to fetch inventory item then update stock
-        const item = await FirebaseService.getInventoryItem(targetTokoId, skuOrKey);
+        const item = await FirebaseService.getInventoryItem(
+          targetTokoId,
+          skuOrKey
+        );
         if (item) {
-          const newStock = (Number(item.stock || 0) + Number(delta));
-          await FirebaseService.updateInventory(targetTokoId, item.id || item.key, { stock: newStock });
+          const newStock = Number(item.stock || 0) + Number(delta);
+          await FirebaseService.updateInventory(
+            targetTokoId,
+            item.id || item.key,
+            { stock: newStock }
+          );
         } else if (typeof FirebaseService.createInventory === "function") {
           // create a new inventory record if none exists and delta is negative (we consume)
           if (delta < 0) {
-            await FirebaseService.createInventory(targetTokoId, { sku: skuOrKey, stock: Math.max(0, delta * -1) });
+            await FirebaseService.createInventory(targetTokoId, {
+              sku: skuOrKey,
+              stock: Math.max(0, delta * -1),
+            });
           }
         } else {
-          console.warn("No inventory update function available (getInventoryItem/updateInventory/createInventory).");
+          console.warn(
+            "No inventory update function available (getInventoryItem/updateInventory/createInventory)."
+          );
         }
       } else {
-        console.warn("adjustInventoryStock or updateInventory/getInventoryItem not found in FirebaseService — inventory not updated.");
+        console.warn(
+          "adjustInventoryStock or updateInventory/getInventoryItem not found in FirebaseService — inventory not updated."
+        );
       }
     } catch (err) {
       console.error("adjustInventory error:", err);
@@ -256,6 +323,16 @@ export default function DataManagement() {
       REQUEST_DP_TALANGAN: Number(form.REQUEST_DP_TALANGAN || 0),
       STATUS: form.STATUS || "Pending",
       NAMA_TOKO: form.NAMA_TOKO || tokoName,
+      // field tambahan master data
+      KATEGORI_BRAND: form.KATEGORI_BRAND || "",
+      NAMA_SUPPLIER: form.NAMA_SUPPLIER || "",
+      MP_PROTECK: form.MP_PROTECK || "",
+      TENOR: form.TENOR || "",
+      NIK_KARYAWAN: form.NIK_KARYAWAN || "",
+      NAMA_SH: form.NAMA_SH || "",
+      TUYUL: form.TUYUL || "",
+      BRAND: form.BRAND || brand || "",
+      WARNA: form.WARNA || "",
     };
 
     const rec = normalizeRecord(payload);
@@ -263,9 +340,12 @@ export default function DataManagement() {
     try {
       const targetTokoName = rec.NAMA_TOKO || tokoName;
       const targetTokoIndex = fallbackTokoNames.findIndex(
-        (n) => String(n).toUpperCase() === String(targetTokoName).toUpperCase()
+        (n) =>
+          String(n).toUpperCase() ===
+          String(targetTokoName).toUpperCase()
       );
-      const targetTokoId = targetTokoIndex >= 0 ? targetTokoIndex + 1 : tokoId;
+      const targetTokoId =
+        targetTokoIndex >= 0 ? targetTokoIndex + 1 : tokoId;
 
       if (editId) {
         // editing existing record: compute qty delta and adjust inventory accordingly
@@ -286,7 +366,9 @@ export default function DataManagement() {
 
         // adjust inventory: when delta > 0 means we consumed additional items -> decrease stock by delta
         if (delta !== 0) {
-          const sku = rec.NOMOR_UNIK || `${rec.NAMA_BRAND}:${rec.NAMA_BARANG}`.trim();
+          const sku =
+            rec.NOMOR_UNIK ||
+            `${rec.NAMA_BRAND}:${rec.NAMA_BARANG}`.trim();
           // we want: transaction consuming qty reduces inventory => inventory delta = -delta
           await adjustInventory(targetTokoId, sku, -delta);
         }
@@ -303,7 +385,9 @@ export default function DataManagement() {
 
         // adjust inventory: new transaction consumes qty -> reduce stock by qty
         if (rec.QTY && rec.QTY > 0) {
-          const sku = rec.NOMOR_UNIK || `${rec.NAMA_BRAND}:${rec.NAMA_BARANG}`.trim();
+          const sku =
+            rec.NOMOR_UNIK ||
+            `${rec.NAMA_BRAND}:${rec.NAMA_BARANG}`.trim();
           await adjustInventory(targetTokoId, sku, -rec.QTY);
         }
       }
@@ -324,7 +408,9 @@ export default function DataManagement() {
 
     // switch selected toko to the record's toko so update/delete will target correct toko collection
     const idx = fallbackTokoNames.findIndex(
-      (n) => String(n).toUpperCase() === String(row.NAMA_TOKO || "").toUpperCase()
+      (n) =>
+        String(n).toUpperCase() ===
+        String(row.NAMA_TOKO || "").toUpperCase()
     );
     if (idx >= 0) setTokoId(idx + 1);
 
@@ -334,12 +420,22 @@ export default function DataManagement() {
   // ---------------- delete ----------------
   // now accepts optional tokoName to ensure delete happens on correct toko collection
   const handleDelete = async (id, recordTokoName) => {
+    const target = data.find((x) => x.id === id);
+    // 🔐 blokir hapus penjualan
+    if (target?.PAYMENT_METODE === "PENJUALAN") {
+      alert("❌ DATA PENJUALAN TIDAK BOLEH DIHAPUS");
+      return;
+    }
+
     if (!window.confirm("Yakin hapus data ini?")) return;
     try {
       const targetTokoIndex = fallbackTokoNames.findIndex(
-        (n) => String(n).toUpperCase() === String(recordTokoName || "").toUpperCase()
+        (n) =>
+          String(n).toUpperCase() ===
+          String(recordTokoName || "").toUpperCase()
       );
-      const targetTokoId = targetTokoIndex >= 0 ? targetTokoIndex + 1 : tokoId;
+      const targetTokoId =
+        targetTokoIndex >= 0 ? targetTokoIndex + 1 : tokoId;
 
       const old = data.find((x) => x.id === id);
       const oldQty = old ? Number(old.QTY || 0) : 0;
@@ -353,7 +449,11 @@ export default function DataManagement() {
 
       // when deleting a transaction we should return items to stock -> increase inventory by oldQty
       if (oldQty > 0) {
-        const sku = (old && (old.NOMOR_UNIK || `${old.NAMA_BRAND}:${old.NAMA_BARANG}`.trim())) || "";
+        const sku =
+          (old &&
+            (old.NOMOR_UNIK ||
+              `${old.NAMA_BRAND}:${old.NAMA_BARANG}`.trim())) ||
+          "";
         await adjustInventory(targetTokoId, sku, oldQty);
       }
     } catch (err) {
@@ -367,16 +467,23 @@ export default function DataManagement() {
   const handleApproval = async (id, status, recordTokoName) => {
     try {
       const targetTokoIndex = fallbackTokoNames.findIndex(
-        (n) => String(n).toUpperCase() === String(recordTokoName || "").toUpperCase()
+        (n) =>
+          String(n).toUpperCase() ===
+          String(recordTokoName || "").toUpperCase()
       );
-      const targetTokoId = targetTokoIndex >= 0 ? targetTokoIndex + 1 : tokoId;
+      const targetTokoId =
+        targetTokoIndex >= 0 ? targetTokoIndex + 1 : tokoId;
 
       if (typeof FirebaseService.updateTransaksi === "function") {
-        await FirebaseService.updateTransaksi(targetTokoId, id, { STATUS: status });
+        await FirebaseService.updateTransaksi(targetTokoId, id, {
+          STATUS: status,
+        });
       } else {
         console.warn("updateTransaksi not found");
       }
-      setData((d) => d.map((r) => (r.id === id ? { ...r, STATUS: status } : r)));
+      setData((d) =>
+        d.map((r) => (r.id === id ? { ...r, STATUS: status } : r))
+      );
     } catch (err) {
       console.error("approval error:", err);
       alert("Gagal mengubah status.");
@@ -390,17 +497,32 @@ export default function DataManagement() {
       if (filterStatus !== "semua") ok = ok && r.STATUS === filterStatus;
       if (filterStartDate) {
         const start = new Date(filterStartDate).setHours(0, 0, 0, 0);
-        const rowDate = new Date(r.TANGGAL_TRANSAKSI || r.TANGGAL || null);
+        const rowDate = new Date(
+          r.TANGGAL_TRANSAKSI || r.TANGGAL || null
+        );
         ok = ok && rowDate >= start;
       }
       if (filterEndDate) {
         const end = new Date(filterEndDate).setHours(23, 59, 59, 999);
-        const rowDate = new Date(r.TANGGAL_TRANSAKSI || r.TANGGAL || null);
+        const rowDate = new Date(
+          r.TANGGAL_TRANSAKSI || r.TANGGAL || null
+        );
         ok = ok && rowDate <= end;
       }
+
+      // 🔍 search global ke semua field
+      if (search) {
+        const target = JSON.stringify(r).toLowerCase();
+        ok =
+          ok &&
+          target.includes(
+            String(search || "").toLowerCase()
+          );
+      }
+
       return ok;
     });
-  }, [data, filterStatus, filterStartDate, filterEndDate]);
+  }, [data, filterStatus, filterStartDate, filterEndDate, search]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / rowsPerPage));
   useEffect(() => {
@@ -452,8 +574,10 @@ export default function DataManagement() {
 
   // ---------------- UI ----------------
   return (
-    <div className="p-4 bg-gray-100 rounded-xl shadow-md">
-      <h2 className="text-xl font-bold mb-3">Data Management — Toko {tokoName}</h2>
+    <div className="p-4 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 rounded-xl shadow-md">
+      <h2 className="text-xl font-bold mb-3">
+        Data Management — Toko {tokoName}
+      </h2>
 
       {/* select toko (per-toko mode) */}
       <div className="flex items-center gap-3 mb-4">
@@ -473,6 +597,15 @@ export default function DataManagement() {
             </option>
           ))}
         </select>
+
+        {/* 🔍 search box */}
+        <input
+          type="text"
+          placeholder="🔍 Cari semua data..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="p-2 border rounded w-64"
+        />
 
         <div className="ml-auto flex items-center space-x-2">
           <button
@@ -507,11 +640,36 @@ export default function DataManagement() {
             onChange={handleChange}
             placeholder="INV-YYYY-00001"
           />
-          <Field label="Nama User" name="NAMA_USER" form={form} onChange={handleChange} />
-          <Field label="No HP User" name="NO_HP_USER" form={form} onChange={handleChange} />
-          <Field label="Nama PIC Toko" name="NAMA_PIC_TOKO" form={form} onChange={handleChange} />
-          <Field label="Nama Sales" name="NAMA_SALES" form={form} onChange={handleChange} />
-          <Field label="Titipan / Referensi" name="TITIPAN_REFERENSI" form={form} onChange={handleChange} />
+          <Field
+            label="Nama User"
+            name="NAMA_USER"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="No HP User"
+            name="NO_HP_USER"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Nama PIC Toko"
+            name="NAMA_PIC_TOKO"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Nama Sales"
+            name="NAMA_SALES"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Titipan / Referensi"
+            name="TITIPAN_REFERENSI"
+            form={form}
+            onChange={handleChange}
+          />
           {/* ensure default value shows tokoName when form empty */}
           <div>
             <label className="block text-sm mb-1">Nama Toko</label>
@@ -530,21 +688,180 @@ export default function DataManagement() {
             </select>
           </div>
 
-          <Field label="Nama Brand" name="NAMA_BRAND" form={form} onChange={handleChange} />
-          <Field label="Nama Barang" name="NAMA_BARANG" form={form} onChange={handleChange} />
-          <Field label="Qty" name="QTY" type="number" form={form} onChange={handleChange} />
-          <Field label="IMEI / No Dinamo / No Rangka" name="NOMOR_UNIK" form={form} onChange={handleChange} />
-          <Field label="Kategori Harga" name="KATEGORI_HARGA" form={form} onChange={handleChange} />
-          <Field label="Harga Unit" name="HARGA_UNIT" type="number" form={form} onChange={handleChange} />
-          <Field label="Payment Metode" name="PAYMENT_METODE" form={form} onChange={handleChange} />
-          <Field label="System Payment" name="SYSTEM_PAYMENT" form={form} onChange={handleChange} />
-          <Field label="MDR" name="MDR" type="number" form={form} onChange={handleChange} />
-          <Field label="Potongan MDR" name="POTONGAN_MDR" type="number" form={form} onChange={handleChange} />
-          <Field label="No Order / Kontrak" name="NO_ORDER_KONTRAK" form={form} onChange={handleChange} />
-          <Field label="Tenor" name="TENOR" form={form} onChange={handleChange} />
-          <Field label="DP User Merchant" name="DP_USER_MERCHANT" type="number" form={form} onChange={handleChange} />
-          <Field label="DP ke Toko" name="DP_USER_TOKO" type="number" form={form} onChange={handleChange} />
-          <Field label="Request DP Talangan" name="REQUEST_DP_TALANGAN" type="number" form={form} onChange={handleChange} />
+          {/* Bidang Master Data tambahan */}
+          <Field
+            label="Payment Metode"
+            name="PAYMENT_METODE"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Kategori Brand"
+            name="KATEGORI_BRAND"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Nama Brand"
+            name="NAMA_BRAND"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Brand"
+            name="BRAND"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Nama Barang"
+            name="NAMA_BARANG"
+            form={form}
+            onChange={handleChange}
+          />
+
+          {/* Supplier dropdown + ketik manual */}
+          <div>
+            <label className="block text-sm mb-1">Nama Supplier</label>
+            <input
+              list="supplierList"
+              name="NAMA_SUPPLIER"
+              value={form.NAMA_SUPPLIER ?? ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded"
+            />
+            <datalist id="supplierList">
+              {listSupplier.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </div>
+
+          <Field
+            label="MP Proteck"
+            name="MP_PROTECK"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Tenor"
+            name="TENOR"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Nama SH"
+            name="NAMA_SH"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Tuyul"
+            name="TUYUL"
+            form={form}
+            onChange={handleChange}
+          />
+
+          {/* NIK dropdown + manual */}
+          <div>
+            <label className="block text-sm mb-1">NIK Karyawan</label>
+            <input
+              list="nikList"
+              name="NIK_KARYAWAN"
+              value={form.NIK_KARYAWAN ?? ""}
+              onChange={handleChange}
+              className="w-full p-2 border rounded"
+            />
+            <datalist id="nikList">
+              {listKaryawan.map((k) => (
+                <option
+                  key={k.id || k.NIK}
+                  value={k.NIK}
+                />
+              ))}
+            </datalist>
+          </div>
+
+          <Field
+            label="Kategori Harga"
+            name="KATEGORI_HARGA"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Warna"
+            name="WARNA"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Qty"
+            name="QTY"
+            type="number"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="IMEI / No Dinamo / No Rangka"
+            name="NOMOR_UNIK"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Harga Unit"
+            name="HARGA_UNIT"
+            type="number"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="System Payment"
+            name="SYSTEM_PAYMENT"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="MDR"
+            name="MDR"
+            type="number"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Potongan MDR"
+            name="POTONGAN_MDR"
+            type="number"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="No Order / Kontrak"
+            name="NO_ORDER_KONTRAK"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="DP User Merchant"
+            name="DP_USER_MERCHANT"
+            type="number"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="DP ke Toko"
+            name="DP_USER_TOKO"
+            type="number"
+            form={form}
+            onChange={handleChange}
+          />
+          <Field
+            label="Request DP Talangan"
+            name="REQUEST_DP_TALANGAN"
+            type="number"
+            form={form}
+            onChange={handleChange}
+          />
+
           <div className="col-span-3">
             <label className="block text-sm mb-1">Keterangan</label>
             <textarea
@@ -557,7 +874,12 @@ export default function DataManagement() {
 
           <div>
             <label className="block text-sm mb-1">Status</label>
-            <select name="STATUS" value={form.STATUS ?? "Pending"} onChange={handleChange} className="w-full p-2 border rounded">
+            <select
+              name="STATUS"
+              value={form.STATUS ?? "Pending"}
+              onChange={handleChange}
+              className="w-full p-2 border rounded"
+            >
               <option value="Pending">Pending</option>
               <option value="Approved">Approved</option>
               <option value="Rejected">Rejected</option>
@@ -565,7 +887,10 @@ export default function DataManagement() {
           </div>
         </div>
 
-        <button onClick={handleSave} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded flex items-center">
+        <button
+          onClick={handleSave}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded flex items-center"
+        >
           <FaPlus className="mr-2" /> {editId ? "Update" : "Tambah"} Data
         </button>
       </div>
@@ -573,7 +898,11 @@ export default function DataManagement() {
       {/* filters */}
       <div className="flex items-center mb-4 gap-3">
         <FaFilter />
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="p-2 border rounded">
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="p-2 border rounded"
+        >
           <option value="semua">Semua Status</option>
           <option value="Pending">Pending</option>
           <option value="Approved">Approved</option>
@@ -581,52 +910,103 @@ export default function DataManagement() {
         </select>
 
         <label className="text-sm">Dari:</label>
-        <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} className="p-2 border rounded" />
+        <input
+          type="date"
+          value={filterStartDate}
+          onChange={(e) => setFilterStartDate(e.target.value)}
+          className="p-2 border rounded"
+        />
         <label className="text-sm">Sampai:</label>
-        <input type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} className="p-2 border rounded" />
-        <div className="ml-auto text-sm">Total: {filteredData.length} data</div>
+        <input
+          type="date"
+          value={filterEndDate}
+          onChange={(e) => setFilterEndDate(e.target.value)}
+          className="p-2 border rounded"
+        />
+        <div className="ml-auto text-sm">
+          Total: {filteredData.length} data
+        </div>
       </div>
 
       {/* table */}
       <div className="bg-white rounded shadow overflow-x-auto">
-        <table ref={tableRef} className="w-full text-sm border-collapse">
+        <table
+          ref={tableRef}
+          className="w-full text-sm border-collapse"
+        >
           <thead className="bg-blue-600 text-white">
             <tr>
               <th className="p-2 border">Tanggal</th>
               <th className="p-2 border">Invoice</th>
-              <th className="p-2 border">User</th>
-              <th className="p-2 border">HP</th>
-              <th className="p-2 border">PIC Toko</th>
-              <th className="p-2 border">Sales</th>
-              <th className="p-2 border">Referensi</th>
-              <th className="p-2 border">Toko</th>
+              <th className="p-2 border">Payment</th>
+              <th className="p-2 border">Kategori Brand</th>
               <th className="p-2 border">Brand</th>
               <th className="p-2 border">Barang</th>
+              <th className="p-2 border">Kategori Harga</th>
+              <th className="p-2 border">Supplier</th>
+              <th className="p-2 border">MP Proteck</th>
+              <th className="p-2 border">Tenor</th>
+              <th className="p-2 border">NIK</th>
+              <th className="p-2 border">Nama SH</th>
+              <th className="p-2 border">Tuyul</th>
+              <th className="p-2 border">Warna</th>
               <th className="p-2 border">Qty</th>
               <th className="p-2 border">No IMEI</th>
               <th className="p-2 border">Harga Unit</th>
               <th className="p-2 border">Total</th>
               <th className="p-2 border">Status</th>
+              <th className="p-2 border">Toko</th>
               <th className="p-2 border">Aksi</th>
             </tr>
           </thead>
           <tbody>
             {paginated.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
+              <tr
+                key={r.id}
+                className="hover:bg-gray-50"
+              >
                 <td className="p-2 border">{r.TANGGAL_TRANSAKSI}</td>
                 <td className="p-2 border">{r.NO_INVOICE}</td>
-                <td className="p-2 border">{r.NAMA_USER}</td>
-                <td className="p-2 border">{r.NO_HP_USER}</td>
-                <td className="p-2 border">{r.NAMA_PIC_TOKO}</td>
-                <td className="p-2 border">{r.NAMA_SALES}</td>
-                <td className="p-2 border">{r.TITIPAN_REFERENSI}</td>
-                <td className="p-2 border">{r.NAMA_TOKO}</td>
-                <td className="p-2 border">{r.NAMA_BRAND}</td>
-                <td className="p-2 border">{r.NAMA_BARANG}</td>
-                <td className="p-2 border text-center">{r.QTY}</td>
-                <td className="p-2 border">{r.NOMOR_UNIK}</td>
-                <td className="p-2 border text-right">{Number(r.HARGA_UNIT || 0).toLocaleString()}</td>
-                <td className="p-2 border text-right">{Number(r.TOTAL || 0).toLocaleString()}</td>
+                <td className="p-2 border">
+                  {r.PAYMENT_METODE}
+                </td>
+                <td className="p-2 border">
+                  {r.KATEGORI_BRAND}
+                </td>
+                <td className="p-2 border">{r.BRAND}</td>
+                <td className="p-2 border">
+                  {r.NAMA_BARANG}
+                </td>
+                <td className="p-2 border">
+                  {r.KATEGORI_HARGA}
+                </td>
+                <td className="p-2 border">
+                  {r.NAMA_SUPPLIER}
+                </td>
+                <td className="p-2 border">
+                  {r.MP_PROTECK}
+                </td>
+                <td className="p-2 border">{r.TENOR}</td>
+                <td className="p-2 border">
+                  {r.NIK_KARYAWAN}
+                </td>
+                <td className="p-2 border">
+                  {r.NAMA_SH}
+                </td>
+                <td className="p-2 border">{r.TUYUL}</td>
+                <td className="p-2 border">{r.WARNA}</td>
+                <td className="p-2 border text-center">
+                  {r.QTY}
+                </td>
+                <td className="p-2 border">
+                  {r.NOMOR_UNIK}
+                </td>
+                <td className="p-2 border text-right">
+                  {Number(r.HARGA_UNIT || 0).toLocaleString()}
+                </td>
+                <td className="p-2 border text-right">
+                  {Number(r.TOTAL || 0).toLocaleString()}
+                </td>
                 <td
                   className={`p-2 border font-semibold ${
                     r.STATUS === "Approved"
@@ -638,17 +1018,48 @@ export default function DataManagement() {
                 >
                   {r.STATUS}
                 </td>
+                <td className="p-2 border">{r.NAMA_TOKO}</td>
                 <td className="p-2 border text-center space-x-2">
-                  <button onClick={() => handleEdit(r)} className="text-blue-600 hover:text-blue-800" title="Edit">
+                  <button
+                    onClick={() => handleEdit(r)}
+                    className="text-blue-600 hover:text-blue-800"
+                    title="Edit"
+                  >
                     <FaEdit />
                   </button>
-                  <button onClick={() => handleDelete(r.id, r.NAMA_TOKO)} className="text-red-600 hover:text-red-800" title="Hapus">
+                  <button
+                    onClick={() =>
+                      handleDelete(r.id, r.NAMA_TOKO)
+                    }
+                    className="text-red-600 hover:text-red-800"
+                    title="Hapus"
+                  >
                     <FaTrash />
                   </button>
-                  <button onClick={() => handleApproval(r.id, "Approved", r.NAMA_TOKO)} className="text-green-600 hover:text-green-800" title="Approve">
+                  <button
+                    onClick={() =>
+                      handleApproval(
+                        r.id,
+                        "Approved",
+                        r.NAMA_TOKO
+                      )
+                    }
+                    className="text-green-600 hover:text-green-800"
+                    title="Approve"
+                  >
                     <FaCheckCircle />
                   </button>
-                  <button onClick={() => handleApproval(r.id, "Rejected", r.NAMA_TOKO)} className="text-orange-600 hover:text-orange-800" title="Reject">
+                  <button
+                    onClick={() =>
+                      handleApproval(
+                        r.id,
+                        "Rejected",
+                        r.NAMA_TOKO
+                      )
+                    }
+                    className="text-orange-600 hover:text-orange-800"
+                    title="Reject"
+                  >
                     <FaTimesCircle />
                   </button>
                 </td>
@@ -661,14 +1072,23 @@ export default function DataManagement() {
       {/* pagination */}
       <div className="flex justify-between items-center mt-3 text-sm">
         <span>
-          Halaman {currentPage} dari {totalPages} ({filteredData.length} data)
+          Halaman {currentPage} dari {totalPages} (
+          {filteredData.length} data)
         </span>
 
         <div>
-          <button onClick={prevPage} disabled={currentPage === 1} className="px-2 py-1 border rounded mr-2 disabled:opacity-40">
+          <button
+            onClick={prevPage}
+            disabled={currentPage === 1}
+            className="px-2 py-1 border rounded mr-2 disabled:opacity-40"
+          >
             <FaChevronLeft />
           </button>
-          <button onClick={nextPage} disabled={currentPage === totalPages} className="px-2 py-1 border rounded disabled:opacity-40">
+          <button
+            onClick={nextPage}
+            disabled={currentPage === totalPages}
+            className="px-2 py-1 border rounded disabled:opacity-40"
+          >
             <FaChevronRight />
           </button>
         </div>
@@ -678,12 +1098,25 @@ export default function DataManagement() {
 }
 
 /* Simple reusable Field component */
-function Field({ label, name, form, onChange, type = "text", options = [], placeholder }) {
+function Field({
+  label,
+  name,
+  form,
+  onChange,
+  type = "text",
+  options = [],
+  placeholder,
+}) {
   return (
     <div>
       <label className="block text-sm mb-1">{label}</label>
       {type === "select" ? (
-        <select name={name} value={form[name] ?? ""} onChange={onChange} className="w-full p-2 border rounded">
+        <select
+          name={name}
+          value={form[name] ?? ""}
+          onChange={onChange}
+          className="w-full p-2 border rounded"
+        >
           <option value="">Pilih</option>
           {options.map((o) => (
             <option key={o} value={o}>
@@ -692,9 +1125,21 @@ function Field({ label, name, form, onChange, type = "text", options = [], place
           ))}
         </select>
       ) : type === "textarea" ? (
-        <textarea name={name} value={form[name] ?? ""} onChange={onChange} className="w-full p-2 border rounded" />
+        <textarea
+          name={name}
+          value={form[name] ?? ""}
+          onChange={onChange}
+          className="w-full p-2 border rounded"
+        />
       ) : (
-        <input type={type} name={name} value={form[name] ?? ""} onChange={onChange} placeholder={placeholder} className="w-full p-2 border rounded" />
+        <input
+          type={type}
+          name={name}
+          value={form[name] ?? ""}
+          onChange={onChange}
+          placeholder={placeholder}
+          className="w-full p-2 border rounded"
+        />
       )}
     </div>
   );
