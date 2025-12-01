@@ -1,16 +1,45 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+// src/components/Navbar.jsx
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import "./Navbar.css";
-import { LogOut } from "lucide-react";
-import { useGlobalSearch } from "../context/GlobalSearchContext";   // GLOBAL SEARCH PRO MAX
+import { LogOut, UserCircle } from "lucide-react";
 
-const Navbar = ({ user, onLogout, isAuthenticated }) => {
+import { listenUsers } from "../services/FirebaseService";
+
+const Navbar = ({ user, onLogout }) => {
   const [showWhatsAppDropdown, setShowWhatsAppDropdown] = useState(false);
+  const [firebaseUsers, setFirebaseUsers] = useState([]);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
-  // ✅ SEARCH PRO MAX: keyword dari Global Search Context
-  const { keyword, setKeyword, setTriggerSearch } = useGlobalSearch();
+  // ✅ SAFE USER DARI LOCALSTORAGE
+  const activeUser = useMemo(() => {
+    try {
+      return user || JSON.parse(localStorage.getItem("user")) || null;
+    } catch {
+      return null;
+    }
+  }, [user]);
+
+  // ✅ AMBIL DATA USER DARI FIREBASE
+  useEffect(() => {
+    const unsub = listenUsers((list) => {
+      setFirebaseUsers(Array.isArray(list) ? list : []);
+    });
+
+    return () => unsub && unsub();
+  }, []);
+
+  // ✅ SINKRONKAN NAMA DARI USER MANAGEMENT
+  const finalUser = useMemo(() => {
+    if (!activeUser?.username) return activeUser;
+
+    const found = firebaseUsers.find(
+      (u) => u.username?.toLowerCase() === activeUser.username?.toLowerCase()
+    );
+
+    return found ? { ...activeUser, name: found.name } : activeUser;
+  }, [activeUser, firebaseUsers]);
 
   const handleWhatsAppClick = (phoneNumber) => {
     window.open(`https://wa.me/${phoneNumber}`, "_blank");
@@ -32,9 +61,10 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
   const handleLogout = () => {
     localStorage.removeItem("user");
     if (typeof onLogout === "function") onLogout();
+    navigate("/", { replace: true });
   };
 
-  // Close dropdown when clicking outside
+  // ✅ CLOSE DROPDOWN JIKA KLIK DI LUAR
   useEffect(() => {
     const handleOutsideClick = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -48,68 +78,42 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
     };
   }, []);
 
-  // 🚀 SEARCH PRO MAX — Enter key to trigger deep search
-  const handleSearchKey = (e) => {
-    if (e.key === "Enter") {
-      setTriggerSearch(Date.now());     // 🔥 trigger global search refresh
-
-      // 🔍 Smart redirect to pages if keyword matches
-      const q = keyword.toLowerCase();
-
-      if (q.includes("transfer") || q.includes("kirim") || q.includes("antar")) {
-        navigate("/transfer-barang");
-      }
-
-      if (q.includes("inventory") || q.includes("stok") || q.includes("persediaan")) {
-        navigate("/inventory-report");
-      }
-
-      if (q.includes("opname")) {
-        navigate("/stok-opname");
-      }
-
-      if (q.includes("penjualan") || q.includes("sales") || q.includes("laporan")) {
-        navigate("/data-management");
-      }
-    }
-  };
-
   return (
-    <nav className="bg-white shadow-md py-4 px-6 flex justify-between items-center">
-      <h1 className="text-2xl font-bold">
-        Aplikasi Monitoring dan Report Management MILA PHONE
+    <nav className="bg-gradient-to-r from-indigo-600 to-blue-600 shadow-xl py-4 px-6 flex justify-between items-center text-white">
+      <h1 className="text-xl md:text-2xl font-bold tracking-wide">
+        Monitoring & Report Management — MILA PHONE
       </h1>
 
-      <div className="flex items-center gap-2" ref={dropdownRef}>
+      <div className="flex items-center gap-4" ref={dropdownRef}>
+        {/* ✅ ✅ ✅ USER ICON + NAMA USER */}
+        {finalUser?.username && (
+          <div className="bg-white px-4 py-2 rounded-lg shadow font-bold text-black text-sm md:text-base flex items-center gap-2 shadow-md transition">
+            {/* ✅ ICON USER BERWARNA */}
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
+              <UserCircle size={22} className="text-white" />
+            </div>
 
-        {/* ========================================= */}
-        {/*     🔍 SEARCH PRO MAX FIELD (GLOBAL)       */}
-        {/* ========================================= */}
-        <input
-          type="text"
-          placeholder="Search Global... (Barang, SKU, Menu, Toko)"
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}   // kirim ke global context
-          onKeyDown={handleSearchKey}
-          className="border border-gray-300 px-4 py-2 rounded w-72"
-        />
+            {/* ✅ NAMA USER */}
+            <span>{finalUser.name || finalUser.username}</span>
+          </div>
+        )}
 
-        {/* Chat WhatsApp */}
+        {/* ✅ WHATSAPP */}
         <div className="relative">
           <button
             onClick={() => setShowWhatsAppDropdown(!showWhatsAppDropdown)}
-            className="px-4 py-2 bg-green-500 text-white hover:bg-green-700 rounded-lg wa-btn"
+            className="wa-btn px-4 py-2 bg-green-500 text-white hover:bg-green-600 rounded-lg shadow-md transition"
           >
             Chat WhatsApp
           </button>
 
           {showWhatsAppDropdown && (
-            <div className="absolute right-0 mt-2 w-56 bg-white text-black border rounded-lg shadow-lg z-10">
+            <div className="dropdown-animate absolute right-0 mt-2 w-64 bg-white text-black border rounded-lg shadow-xl z-10">
               {picContacts.map((pic, index) => (
                 <button
                   key={index}
                   onClick={() => handleWhatsAppClick(pic.phone)}
-                  className="block w-full text-left px-4 py-2 hover:bg-gray-200 wa-icon"
+                  className="block w-full text-left px-4 py-2 hover:bg-gray-200 transition"
                 >
                   {pic.name}
                 </button>
@@ -118,43 +122,15 @@ const Navbar = ({ user, onLogout, isAuthenticated }) => {
           )}
         </div>
 
-        {/* Menu after login */}
-        {isAuthenticated && user ? (
-          <div className="flex gap-4 items-center">
-
-            {user.role === "superadmin" && (
-              <>
-                <Link to="/dashboard">Dashboard</Link>
-                <Link to="/user-management">User Management</Link>
-                <Link to="/laporan">Laporan Semua Toko</Link>
-              </>
-            )}
-
-            {user.role === "pic" && (
-              <>
-                <Link to="/dashboard">Dashboard</Link>
-                <Link to={`/toko/${user.toko[0]}`}>Kelola {user.toko[0]}</Link>
-              </>
-            )}
-
-            {user.role === "staff" && (
-              <>
-                <Link to={`/toko/${user.toko[0]}`}>Toko {user.toko[0]}</Link>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="logout-btn"
-            >
-              <LogOut size={18} className="logout-icon" />
-              <span>Logout</span>
-            </button>
-          </div>
-        )}
+        {/* ✅ LOGOUT */}
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="logout-btn flex items-center gap-2 px-4 py-2 rounded-lg shadow-md transition"
+        >
+          <LogOut size={18} />
+          <span>Logout</span>
+        </button>
       </div>
     </nav>
   );

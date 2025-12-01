@@ -854,109 +854,8 @@ const laporanReturnExport = useMemo(() => {
           </button>
         </div>
 
-        {/* ================= CHART PENJUALAN & STOK ================= */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          {/* ================= PENJUALAN CEPAT VIA IMEI ================= */}
           <div
-            className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl`}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-semibold text-sm sm:text-base">
-                  Total Penjualan per Toko
-                </h3>
-                <p className={`text-[11px] ${subTextClass}`}>
-                  Berdasarkan transaksi berstatus{" "}
-                  <span className="text-emerald-300">APPROVED</span>
-                </p>
-              </div>
-            </div>
-            <div className="h-64 sm:h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dataPenjualanPerToko}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke={isDark ? "#1f2937" : "#e5e7eb"}
-                  />
-                  <XAxis
-                    dataKey="name"
-                    tick={{
-                      fill: isDark ? "#9ca3af" : "#4b5563",
-                      fontSize: 10,
-                    }}
-                  />
-                  <YAxis
-                    tick={{
-                      fill: isDark ? "#9ca3af" : "#4b5563",
-                      fontSize: 10,
-                    }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: isDark ? "#020617" : "#f9fafb",
-                      border: "1px solid #4b5563",
-                      borderRadius: "0.75rem",
-                      fontSize: 11,
-                      color: "#e5e7eb",
-                    }}
-                  />
-                  <Bar dataKey="total" radius={[8, 8, 2, 2]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div
-            className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl`}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-semibold text-sm sm:text-base">
-                  Stock Barang per Toko
-                </h3>
-                <p className={`text-[11px] ${subTextClass}`}>
-                  Berdasarkan total Qty dari transaksi{" "}
-                  <span className="text-sky-300">PEMBELIAN</span>
-                </p>
-              </div>
-            </div>
-            <div className="h-64 sm:h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dataStockPerToko}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke={isDark ? "#1f2937" : "#e5e7eb"}
-                  />
-                  <XAxis
-                    dataKey="name"
-                    tick={{
-                      fill: isDark ? "#9ca3af" : "#4b5563",
-                      fontSize: 10,
-                    }}
-                  />
-                  <YAxis
-                    tick={{
-                      fill: isDark ? "#9ca3af" : "#4b5563",
-                      fontSize: 10,
-                    }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: isDark ? "#020617" : "#f9fafb",
-                      border: "1px solid #4b5563",
-                      borderRadius: "0.75rem",
-                      fontSize: 11,
-                      color: "#e5e7eb",
-                    }}
-                  />
-                  <Bar dataKey="total" radius={[8, 8, 2, 2]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-
-        {/* ================= PENJUALAN CEPAT VIA IMEI ================= */}
-        <div
           className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl mt-6`}
         >
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-4">
@@ -1249,7 +1148,8 @@ const laporanReturnExport = useMemo(() => {
           </div>
         </div>
       </div>
-{/* ===================== TABEL LAPORAN VOID & RETURN ===================== */}
+
+      {/* ===================== TABEL LAPORAN VOID & RETURN ===================== */}
 <div className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl mt-10`}>
   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
     <h2 className="font-semibold text-base sm:text-lg">
@@ -1341,6 +1241,110 @@ const laporanReturnExport = useMemo(() => {
     </div>
   </div>
 </div>
+
+        {/* ================= CHART PENJUALAN & STOK ================= */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          <div
+            className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-semibold text-sm sm:text-base">
+                  Total Penjualan per Toko
+                </h3>
+                <p className={`text-[11px] ${subTextClass}`}>
+                  Berdasarkan transaksi berstatus{" "}
+                  <span className="text-emerald-300">APPROVED</span>
+                </p>
+              </div>
+            </div>
+            <div className="h-64 sm:h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dataPenjualanPerToko}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={isDark ? "#1f2937" : "#e5e7eb"}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    tick={{
+                      fill: isDark ? "#9ca3af" : "#4b5563",
+                      fontSize: 10,
+                    }}
+                  />
+                  <YAxis
+                    tick={{
+                      fill: isDark ? "#9ca3af" : "#4b5563",
+                      fontSize: 10,
+                    }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: isDark ? "#020617" : "#f9fafb",
+                      border: "1px solid #4b5563",
+                      borderRadius: "0.75rem",
+                      fontSize: 11,
+                      color: "#e5e7eb",
+                    }}
+                  />
+                  <Bar dataKey="total" radius={[8, 8, 2, 2]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div
+            className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-semibold text-sm sm:text-base">
+                  Stock Barang per Toko
+                </h3>
+                <p className={`text-[11px] ${subTextClass}`}>
+                  Berdasarkan total Qty dari transaksi{" "}
+                  <span className="text-sky-300">PEMBELIAN</span>
+                </p>
+              </div>
+            </div>
+            <div className="h-64 sm:h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dataStockPerToko}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={isDark ? "#1f2937" : "#e5e7eb"}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    tick={{
+                      fill: isDark ? "#9ca3af" : "#4b5563",
+                      fontSize: 10,
+                    }}
+                  />
+                  <YAxis
+                    tick={{
+                      fill: isDark ? "#9ca3af" : "#4b5563",
+                      fontSize: 10,
+                    }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: isDark ? "#020617" : "#f9fafb",
+                      border: "1px solid #4b5563",
+                      borderRadius: "0.75rem",
+                      fontSize: 11,
+                      color: "#e5e7eb",
+                    }}
+                  />
+                  <Bar dataKey="total" radius={[8, 8, 2, 2]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+      
+
 
 
     </div>
