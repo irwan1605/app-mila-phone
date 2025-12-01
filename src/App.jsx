@@ -62,7 +62,7 @@ import { listenUsers, getAllUsersOnce } from "./services/FirebaseService";
 import defaultUsers from "./data/UserManagementRole";
 import MasterBarang from "./pages/MasterBarang";
 import MasterPembelian from "./pages/MasterPembelian";
-import MasterPenjualan from "./pages/MasterPenjualan";
+import MasterPayment from "./pages/MasterPayment";
 import MasterKaryawan from "./pages/MasterKaryawan";
 import CardPenjualanToko from "./pages/Toko/CardPenjualanToko/CardPenjualanToko";
 import CardStockOpnameToko from "./pages/Toko/CardStockOpnameToko";
@@ -228,8 +228,8 @@ export default function App() {
                   />
                   {/* Master Penjualan – BARU */}
                   <Route
-                    path="/master-penjualan"
-                    element={<MasterPenjualan />}
+                    path="/master-payment"
+                    element={<MasterPayment />}
                   />
                   <Route path="/master-karyawan" element={<MasterKaryawan />} />
 

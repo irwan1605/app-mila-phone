@@ -684,7 +684,117 @@ export const restoreStockByImeiRealtime = async (imei, namaToko) => {
 };
 
 
+/* ============================================================
+   MASTER MANAGEMENT (REALTIME CRUD)
+   Path: /dataManagement/{masterName}/{id}
+============================================================ */
 
+const createMasterHelpers = (masterName) => {
+  const basePath = `dataManagement/${masterName}`;
+
+  return {
+    listen: (callback) => {
+      const r = ref(db, basePath);
+      const unsub = onValue(
+        r,
+        (snap) => {
+          const raw = snap.val() || {};
+          const arr = Object.entries(raw).map(([id, v]) => ({
+            id,
+            ...v,
+          }));
+          callback(arr);
+        },
+        (err) => {
+          console.error(`listen ${masterName} error:`, err);
+          callback([]);
+        }
+      );
+      return () => unsub && unsub();
+    },
+
+    add: async (data) => {
+      const r = push(ref(db, basePath));
+      await set(r, {
+        ...data,
+        id: r.key,
+        createdAt: new Date().toISOString(),
+      });
+      return r.key;
+    },
+
+    update: async (id, data) => {
+      return update(ref(db, `${basePath}/${id}`), {
+        ...data,
+        updatedAt: new Date().toISOString(),
+      });
+    },
+
+    delete: async (id) => {
+      return remove(ref(db, `${basePath}/${id}`));
+    },
+  };
+};
+
+/* =========================
+   INIT MASTER HELPERS
+========================= */
+
+// MASTER PELANGGAN
+const masterPelanggan = createMasterHelpers("masterPelanggan");
+export const listenMasterPelanggan = masterPelanggan.listen;
+export const addMasterPelanggan = masterPelanggan.add;
+export const updateMasterPelanggan = masterPelanggan.update;
+export const deleteMasterPelanggan = masterPelanggan.delete;
+
+// MASTER SALES
+const masterSales = createMasterHelpers("masterSales");
+export const listenMasterSales = masterSales.listen;
+export const addMasterSales = masterSales.add;
+export const updateMasterSales = masterSales.update;
+export const deleteMasterSales = masterSales.delete;
+
+// MASTER STORE HEAD (SH)
+const masterStoreHead = createMasterHelpers("masterStoreHead");
+export const listenMasterStoreHead = masterStoreHead.listen;
+export const addMasterStoreHead = masterStoreHead.add;
+export const updateMasterStoreHead = masterStoreHead.update;
+export const deleteMasterStoreHead = masterStoreHead.delete;
+
+// MASTER STORE LEADER (SL)
+const masterStoreLeader = createMasterHelpers("masterStoreLeader");
+export const listenMasterStoreLeader = masterStoreLeader.listen;
+export const addMasterStoreLeader = masterStoreLeader.add;
+export const updateMasterStoreLeader = masterStoreLeader.update;
+export const deleteMasterStoreLeader = masterStoreLeader.delete;
+
+// MASTER SALES TITIPAN (ST)
+const masterSalesTitipan = createMasterHelpers("masterSalesTitipan");
+export const listenMasterSalesTitipan = masterSalesTitipan.listen;
+export const addMasterSalesTitipan = masterSalesTitipan.add;
+export const updateMasterSalesTitipan = masterSalesTitipan.update;
+export const deleteMasterSalesTitipan = masterSalesTitipan.delete;
+
+// MASTER TOKO
+const masterToko = createMasterHelpers("masterToko");
+export const listenMasterToko = masterToko.listen;
+export const addMasterToko = masterToko.add;
+export const updateMasterToko = masterToko.update;
+export const deleteMasterToko = masterToko.delete;
+
+// MASTER BARANG & HARGA
+const masterBarangHarga = createMasterHelpers("masterBarangHarga");
+export const listenMasterBarangHarga = masterBarangHarga.listen;
+export const addMasterBarangHarga = masterBarangHarga.add;
+export const updateMasterBarangHarga = masterBarangHarga.update;
+export const deleteMasterBarangHarga = masterBarangHarga.delete;
+
+// MASTER SUPPLIER
+const masterSupplier = createMasterHelpers("masterSupplier");
+export const listenMasterSupplier = masterSupplier.listen;
+export const addMasterSupplier = masterSupplier.add;
+export const updateMasterSupplier = masterSupplier.update;
+export const deleteMasterSupplier = masterSupplier.delete;
 
 
 /* ============================================================
@@ -730,6 +840,49 @@ const FirebaseService = {
   updateKaryawan,
   deleteKaryawan,
 
+  potongStockMasterByImei,
+  restoreStockByImeiRealtime,
+
+  // ===== MASTER MANAGEMENT EXPORT =====
+  listenMasterPelanggan,
+  addMasterPelanggan,
+  updateMasterPelanggan,
+  deleteMasterPelanggan,
+
+  listenMasterSales,
+  addMasterSales,
+  updateMasterSales,
+  deleteMasterSales,
+
+  listenMasterStoreHead,
+  addMasterStoreHead,
+  updateMasterStoreHead,
+  deleteMasterStoreHead,
+
+  listenMasterStoreLeader,
+  addMasterStoreLeader,
+  updateMasterStoreLeader,
+  deleteMasterStoreLeader,
+
+  listenMasterSalesTitipan,
+  addMasterSalesTitipan,
+  updateMasterSalesTitipan,
+  deleteMasterSalesTitipan,
+
+  listenMasterToko,
+  addMasterToko,
+  updateMasterToko,
+  deleteMasterToko,
+
+  listenMasterBarangHarga,
+  addMasterBarangHarga,
+  updateMasterBarangHarga,
+  deleteMasterBarangHarga,
+
+  listenMasterSupplier,
+  addMasterSupplier,
+  updateMasterSupplier,
+  deleteMasterSupplier,
 };
 
 export default FirebaseService;

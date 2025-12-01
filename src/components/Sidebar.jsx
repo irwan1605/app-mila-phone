@@ -440,19 +440,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
             {showSubMenuMasterData && (
               <ul className="pl-6">
-                <li>
-                  <Link
-                    to="/data-management"
-                    className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/data-management" ? "bg-blue-600" : ""
-                    }`}
-                  >
-                    <AiOutlineDatabase className="text-sm" />
-                    <span className="ml-2">Master Data Management</span>
-                  </Link>
-                </li>
-
-                <li>
+                   <li>
                   <Link
                     to="/master-barang"
                     className={`flex items-center p-2 hover:bg-blue-500 ${
@@ -464,6 +452,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
                   </Link>
                 </li>
 
+                
                 <li>
                   <Link
                     to="/master-pembelian"
@@ -479,14 +468,14 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
                 <li>
                   <Link
-                    to="/master-penjualan"
+                    to="/master-payment"
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center p-2 hover:bg-blue-500 ${
                       activePath === "/master-penjualan" ? "bg-blue-600" : ""
                     }`}
                   >
                     <AiOutlineDatabase className="text-sm" />
-                    <span className="ml-2">Master Penjualan</span>
+                    <span className="ml-2">Master Payment</span>
                   </Link>
                 </li>
 
@@ -502,6 +491,24 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     <span className="ml-2">Master Karyawan</span>
                   </Link>
                 </li>
+
+
+                <li>
+                  <Link
+                    to="/data-management"
+                    className={`flex items-center p-2 hover:bg-blue-500 ${
+                      activePath === "/data-management" ? "bg-blue-600" : ""
+                    }`}
+                  >
+                    <AiOutlineDatabase className="text-sm" />
+                    <span className="ml-2">Master Management</span>
+                  </Link>
+                </li>
+
+             
+
+
+              
               </ul>
             )}
           </>

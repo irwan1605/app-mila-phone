@@ -1,10 +1,14 @@
-// src/pages/MasterPembelian.jsx
-import React, { useEffect, useMemo, useState, useRef } from "react";
+// =======================
+// MasterPembelian.jsx - FINAL
+// =======================
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   listenAllTransaksi,
   addTransaksi,
   updateTransaksi,
   deleteTransaksi,
+  addStock,
+  reduceStock,
 } from "../services/FirebaseService";
 
 import * as XLSX from "xlsx";
@@ -22,17 +26,37 @@ import {
   FaTimes,
 } from "react-icons/fa";
 
-const fallbackTokoNames = [
-  "CILANGKAP PUSAT",
-  "CIBINONG",
-  "GAS ALAM",
-  "CITEUREUP",
-  "CIRACAS",
-  "METLAND 1",
-  "METLAND 2",
-  "PITARA",
-  "KOTA WISATA",
-  "SAWANGAN",
+// =======================
+// KONFIGURASI
+// =======================
+const KATEGORI_OPTIONS = [
+  "SEPEDA LISTRIK",
+  "MOTOR LISTRIK",
+  "HANDPHONE",
+  "ACCESORIES",
+];
+
+const BRAND_OPTIONS = [
+  "OFERO",
+  "UWNFLY",
+  "E NINE",
+  "ZXTEX",
+  "UNITED",
+  "RAKATA",
+  "OPPO",
+  "SAMSUNG",
+  "REALME",
+  "VIVO",
+  "IPHONE",
+  "ZTE NUBIA",
+  "XIOMI",
+  "INFINIX",
+];
+
+const KATEGORI_WAJIB_IMEI = [
+  "SEPEDA LISTRIK",
+  "MOTOR LISTRIK",
+  "HANDPHONE",
 ];
 
 const fmt = (n) => {
@@ -43,476 +67,619 @@ const fmt = (n) => {
   }
 };
 
+const makeSku = (brand, barang) =>
+  `${(brand || "").trim()}_${(barang || "").trim()}`.replace(/\s+/g, "_");
+
+// =======================
+// KOMPONEN UTAMA
+// =======================
 export default function MasterPembelian() {
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [search, setSearch] = useState("");
-  // ===== PAGINATION STATE =====
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   const tableRef = useRef(null);
 
-  // MODAL EDIT
-  const [editData, setEditData] = useState(null);
+  const [showTambah, setShowTambah] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
 
-  // MODAL TAMBAH
-  const [showTambah, setShowTambah] = useState(false);
   const [tambahForm, setTambahForm] = useState({
-    tanggal: "",
+    tanggal: new Date().toISOString().slice(0, 10),
+    noDo: "",
     supplier: "",
-    brand: "",
-    barang: "",
+    brand: "", // ✅ Nama Brand
+    kategoriBrand: "",
+    barang: "", // ✅ Nama Barang
     hargaSup: "",
-    hargaUnit: "",
-    qty: 1,
     imeiList: "",
-    noInvoice: "",
-    namaToko: "CILANGKAP PUSAT", // ✅ default langsung PUSAT
+    qty: 1,
   });
 
-  // ===== LISTENER FIREBASE (REALTIME) =====
+  const [editData, setEditData] = useState(null);
+
+  // ======================= REALTIME FIREBASE =======================
   useEffect(() => {
     const unsub =
       typeof listenAllTransaksi === "function"
-        ? listenAllTransaksi((list) => {
-            setAllTransaksi(Array.isArray(list) ? list : []);
+        ? listenAllTransaksi((rows) => {
+            setAllTransaksi(rows || []);
           })
         : null;
 
     return () => unsub && unsub();
   }, []);
 
-  // ===== GROUP DATA PEMBELIAN (per Tanggal + Supplier + Brand + Barang) =====
+  // ======================= MASTER BARANG SOURCE (Brand / Barang / Kategori) =======================
+  const masterBarangList = useMemo(() => {
+    const map = {};
+    (allTransaksi || []).forEach((t) => {
+      if (!t.NAMA_BRAND || !t.NAMA_BARANG) return;
+      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+      if (!map[key]) {
+        map[key] = {
+          brand: t.NAMA_BRAND,
+          barang: t.NAMA_BARANG,
+          kategoriBrand: t.KATEGORI_BRAND || "",
+        };
+      }
+    });
+    return Object.values(map);
+  }, [allTransaksi]);
+
+  // Nama supplier diambil dari histori pembelian
+  const supplierOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (allTransaksi || [])
+            .filter(
+              (t) =>
+                (t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
+                t.NAMA_SUPPLIER
+            )
+            .map((t) => t.NAMA_SUPPLIER)
+        )
+      ),
+    [allTransaksi]
+  );
+
+  // Brand: gabungan BRAND_OPTIONS + brand dari masterBarangList
+  const brandOptionsDynamic = useMemo(() => {
+    const set = new Set(BRAND_OPTIONS);
+    masterBarangList.forEach((x) => {
+      if (x.brand) set.add(x.brand);
+    });
+    return Array.from(set);
+  }, [masterBarangList]);
+
+  // Nama Barang: dari MasterBarang, bisa difilter by Brand
+  const namaBarangOptions = useMemo(() => {
+    if (!tambahForm.brand) {
+      return Array.from(
+        new Set(masterBarangList.map((x) => x.barang).filter(Boolean))
+      );
+    }
+    return Array.from(
+      new Set(
+        masterBarangList
+          .filter((x) => x.brand === tambahForm.brand)
+          .map((x) => x.barang)
+          .filter(Boolean)
+      )
+    );
+  }, [masterBarangList, tambahForm.brand]);
+
+  // ======================= GROUP DATA PEMBELIAN UNTUK TABEL =======================
   const groupedPembelian = useMemo(() => {
     const map = {};
 
-    (allTransaksi || []).forEach((x) => {
-      if ((x.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return;
+    (allTransaksi || []).forEach((t) => {
+      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return;
 
-      const key = `${x.TANGGAL_TRANSAKSI || ""}|${x.NAMA_SUPPLIER || ""}|${
-        x.NAMA_BRAND || ""
-      }|${x.NAMA_BARANG || ""}`;
+      const tanggal = t.TANGGAL_TRANSAKSI || "";
+      const noDo = t.NO_INVOICE || "";
+      const supplier = t.NAMA_SUPPLIER || "";
+      const brand = t.NAMA_BRAND || "";
+      const barang = t.NAMA_BARANG || "";
+      const kategoriBrand = t.KATEGORI_BRAND || "";
+
+      const key = `${tanggal}|${noDo}|${supplier}|${brand}|${barang}`;
 
       if (!map[key]) {
         map[key] = {
           key,
-          tanggal: x.TANGGAL_TRANSAKSI || "",
-          supplier: x.NAMA_SUPPLIER || "",
-          brand: x.NAMA_BRAND || "",
-          barang: x.NAMA_BARANG || "",
-          hargaSup: Number(x.HARGA_SUPLAYER || 0),
-          hargaUnit: Number(x.HARGA_UNIT || 0),
-          noInvoice: x.NO_INVOICE || "",
+          tanggal,
+          noDo,
+          supplier,
+          brand,
+          barang,
+          kategoriBrand,
+          hargaSup: Number(t.HARGA_SUPLAYER || 0),
           imeis: [],
           totalQty: 0,
           totalHargaSup: 0,
-          totalHargaUnit: 0,
         };
       }
 
-      const qty = Number(x.QTY || 0);
-      const hSup = Number(x.HARGA_SUPLAYER || map[key].hargaSup || 0);
-      const hUnit = Number(x.HARGA_UNIT || map[key].hargaUnit || 0);
+      const qty = Number(t.QTY || 0);
+      const hSup = Number(t.HARGA_SUPLAYER || map[key].hargaSup || 0);
 
       map[key].totalQty += qty;
       map[key].totalHargaSup += qty * hSup;
-      map[key].totalHargaUnit += qty * hUnit;
-
-      // update sample unit price
       map[key].hargaSup = hSup;
-      map[key].hargaUnit = hUnit;
 
-      if (x.IMEI && String(x.IMEI).trim() !== "") {
-        map[key].imeis.push(String(x.IMEI).trim());
+      if (t.IMEI && String(t.IMEI).trim() !== "") {
+        map[key].imeis.push(String(t.IMEI).trim());
       }
     });
 
-    return map;
+    return Object.values(map).sort((a, b) => {
+      const ta = new Date(a.tanggal || 0).getTime();
+      const tb = new Date(b.tanggal || 0).getTime();
+      return tb - ta;
+    });
   }, [allTransaksi]);
 
-  // ===== FILTER SEARCH =====
+  // ======================= FILTER & PAGINATION =======================
   const filteredPurchases = useMemo(() => {
-    const q = (search || "").toLowerCase();
+    const q = String(search || "").toLowerCase();
+    if (!q) return groupedPembelian;
 
-    return Object.entries(groupedPembelian).filter(([_, v]) => {
+    return groupedPembelian.filter((v) => {
       return (
-        v.tanggal.toLowerCase().includes(q) ||
-        v.supplier.toLowerCase().includes(q) ||
-        v.brand.toLowerCase().includes(q) ||
-        v.barang.toLowerCase().includes(q) ||
-        v.noInvoice.toLowerCase().includes(q) ||
-        v.imeis.some((im) => im.toLowerCase().includes(q))
+        String(v.tanggal || "").toLowerCase().includes(q) ||
+        String(v.noDo || "").toLowerCase().includes(q) ||
+        String(v.supplier || "").toLowerCase().includes(q) ||
+        String(v.brand || "").toLowerCase().includes(q) ||
+        String(v.barang || "").toLowerCase().includes(q) ||
+        String(v.kategoriBrand || "").toLowerCase().includes(q) ||
+        (v.imeis || []).some((im) =>
+          String(im || "").toLowerCase().includes(q)
+        )
       );
     });
   }, [groupedPembelian, search]);
 
-  // ===== PAGINATION LOGIC =====
-  const totalPages = Math.ceil(filteredPurchases.length / itemsPerPage);
+  const totalPages =
+    Math.ceil((filteredPurchases.length || 1) / itemsPerPage) || 1;
 
   const paginatedPurchases = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredPurchases.slice(start, start + itemsPerPage);
   }, [filteredPurchases, currentPage]);
 
-  // ===================== VALIDASI IMEI (INPUT + DATABASE) =====================
-  const validateImeis = (imeiLines, originalGroupKey = null) => {
+  // ======================= VALIDASI IMEI =======================
+  const validateImeisNew = (imeiLines) => {
     const errors = [];
     const seen = new Set();
 
-    // Duplikat di input
     for (const im of imeiLines) {
       if (seen.has(im)) {
         errors.push(`IMEI / No MESIN duplikat di input: ${im}`);
-        break;
       }
       seen.add(im);
     }
+    if (errors.length) return errors;
 
-    // Duplikat terhadap database (kecuali record dalam grup yang sama saat edit)
     for (const im of imeiLines) {
       const conflict = (allTransaksi || []).find((t) => {
         const tImei = String(t.IMEI || "").trim();
         if (!tImei) return false;
-        if (tImei !== im) return false;
-        if (originalGroupKey) {
-          const tKey = `${t.TANGGAL_TRANSAKSI || ""}|${t.NAMA_SUPPLIER || ""}|${
-            t.NAMA_BRAND || ""
-          }|${t.NAMA_BARANG || ""}`;
-          if (tKey === originalGroupKey) return false;
-        }
-        return true;
+        return tImei === im;
       });
 
       if (conflict) {
         errors.push(
-          `IMEI / No MESIN ${im} sudah digunakan di SKU ${
-            conflict.NAMA_BRAND
-          } - ${conflict.NAMA_BARANG} (Supplier: ${
+          `IMEI / No MESIN ${im} sudah dipakai di ${conflict.NAMA_BRAND} - ${conflict.NAMA_BARANG} (Supplier: ${
             conflict.NAMA_SUPPLIER || "-"
           })`
         );
         break;
       }
     }
-
     return errors;
   };
 
-  // ===================== HAPUS PEMBELIAN =====================
+  const validateImeisEdit = (imeiLines, originalGroupKey) => {
+    const errors = [];
+    const seen = new Set();
+
+    for (const im of imeiLines) {
+      if (seen.has(im)) {
+        errors.push(`IMEI / No MESIN duplikat di input: ${im}`);
+      }
+      seen.add(im);
+    }
+    if (errors.length) return errors;
+
+    for (const im of imeiLines) {
+      const conflict = (allTransaksi || []).find((t) => {
+        const tImei = String(t.IMEI || "").trim();
+        if (!tImei || tImei !== im) return false;
+
+        const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
+          t.NAMA_SUPPLIER || ""
+        }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+
+        if (k === originalGroupKey) return false;
+        return true;
+      });
+
+      if (conflict) {
+        errors.push(
+          `IMEI / No MESIN ${im} sudah dipakai di ${conflict.NAMA_BRAND} - ${conflict.NAMA_BARANG} (Supplier: ${
+            conflict.NAMA_SUPPLIER || "-"
+          })`
+        );
+        break;
+      }
+    }
+    return errors;
+  };
+
+  // ======================= HAPUS PEMBELIAN (DELETE + REDUCE STOCK) =======================
   const deletePembelian = async (item) => {
     if (
       !window.confirm(
-        `Hapus semua transaksi pembelian untuk:\n${item.tanggal} - ${item.supplier} - ${item.brand} - ${item.barang}?`
+        `Hapus semua transaksi pembelian untuk:\n${item.tanggal} - DO: ${
+          item.noDo
+        }\nSupplier: ${item.supplier}\n${item.brand} - ${
+          item.barang
+        }\n(Qty: ${item.totalQty}) ?`
       )
-    )
+    ) {
       return;
+    }
 
-    const rows = (allTransaksi || []).filter(
-      (x) =>
-        (x.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
-        (x.TANGGAL_TRANSAKSI || "") === item.tanggal &&
-        (x.NAMA_SUPPLIER || "") === item.supplier &&
-        (x.NAMA_BRAND || "") === item.brand &&
-        (x.NAMA_BARANG || "") === item.barang
-    );
+    const key = `${item.tanggal || ""}|${item.noDo || ""}|${
+      item.supplier || ""
+    }|${item.brand || ""}|${item.barang || ""}`;
+
+    const rows = (allTransaksi || []).filter((t) => {
+      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return false;
+      const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
+        t.NAMA_SUPPLIER || ""
+      }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+      return k === key;
+    });
 
     try {
       for (const r of rows) {
-        const tokoIndex =
-          fallbackTokoNames.findIndex(
-            (t) => t.toUpperCase() === String(r.NAMA_TOKO || "").toUpperCase()
-          ) + 1;
-
-        if (typeof deleteTransaksi === "function") {
-          await deleteTransaksi(tokoIndex, r.id);
+        const tokoId = r.tokoId || 1;
+        if (r.id) {
+          await deleteTransaksi(tokoId, r.id);
         }
       }
 
-      // update lokal
-      setAllTransaksi((prev) =>
-        prev.filter(
-          (x) =>
-            !(
-              (x.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
-              (x.TANGGAL_TRANSAKSI || "") === item.tanggal &&
-              (x.NAMA_SUPPLIER || "") === item.supplier &&
-              (x.NAMA_BRAND || "") === item.brand &&
-              (x.NAMA_BARANG || "") === item.barang
-            )
-        )
-      );
+      const sku = makeSku(item.brand, item.barang);
+      try {
+        await reduceStock("CILANGKAP PUSAT", sku, item.totalQty);
+      } catch (e) {
+        console.warn("reduceStock gagal:", e);
+      }
 
-      alert("Data pembelian berhasil dihapus.");
+      alert("✅ Data pembelian & stok berhasil dihapus.");
     } catch (err) {
       console.error("deletePembelian error:", err);
-      alert("Gagal menghapus data pembelian.");
+      alert("❌ Gagal menghapus data.");
     }
   };
 
-  // ===================== BUKA MODAL EDIT =====================
+  // ======================= OPEN EDIT =======================
   const openEdit = (item) => {
     setEditData({
       ...item,
       imeiList: (item.imeis || []).join("\n"),
-      originalKey: `${item.tanggal}|${item.supplier}|${item.brand}|${item.barang}`,
+      originalKey: `${item.tanggal || ""}|${item.noDo || ""}|${
+        item.supplier || ""
+      }|${item.brand || ""}|${item.barang || ""}`,
+      hargaSup: item.hargaSup || 0,
     });
     setShowEdit(true);
   };
 
-  // ===================== SIMPAN EDIT =====================
+  // ======================= SAVE EDIT =======================
   const saveEdit = async () => {
     if (!editData) return;
 
-    const imeis = String(editData.imeiList || "")
-      .split("\n")
-      .map((a) => a.trim())
-      .filter(Boolean);
+    const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(
+      editData.kategoriBrand
+    );
+    const isAccessories = editData.kategoriBrand === "ACCESORIES";
 
-    const errors = validateImeis(imeis, editData.originalKey);
-    if (errors.length) {
-      alert(errors.join("\n"));
-      return;
+    let imeis = [];
+    if (isKategoriImei) {
+      imeis = String(editData.imeiList || "")
+        .split("\n")
+        .map((x) => x.trim())
+        .filter(Boolean);
+
+      if (imeis.length <= 0) {
+        alert(
+          "Kategori SEPEDA LISTRIK / MOTOR LISTRIK / HANDPHONE wajib mengisi IMEI."
+        );
+        return;
+      }
+
+      const err = validateImeisEdit(imeis, editData.originalKey);
+      if (err.length) {
+        alert(err.join("\n"));
+        return;
+      }
     }
 
-    const rows = (allTransaksi || []).filter(
-      (x) =>
-        (x.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
-        `${x.TANGGAL_TRANSAKSI || ""}|${x.NAMA_SUPPLIER || ""}|${
-          x.NAMA_BRAND || ""
-        }|${x.NAMA_BARANG || ""}` === editData.originalKey
-    );
+    const rows = (allTransaksi || []).filter((t) => {
+      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return false;
+      const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
+        t.NAMA_SUPPLIER || ""
+      }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+      return k === editData.originalKey;
+    });
+
+    if (rows.length === 0) {
+      alert("Data transaksi untuk pembelian ini tidak ditemukan.");
+      return;
+    }
 
     try {
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
-        const tokoIndex =
-          fallbackTokoNames.findIndex(
-            (t) => t.toUpperCase() === String(r.NAMA_TOKO || "").toUpperCase()
-          ) + 1;
+        const tokoId = r.tokoId || 1;
 
-        let newIMEI = r.IMEI;
-        if (imeis.length === 1) {
-          newIMEI = imeis[0];
-        } else if (imeis.length === rows.length) {
-          newIMEI = imeis[i];
-        } else if (imeis.length > 1 && imeis.length < rows.length) {
-          newIMEI = imeis[i] || r.IMEI;
+        let newIMEI = r.IMEI || "";
+        if (isKategoriImei) {
+          if (imeis.length === rows.length) {
+            newIMEI = imeis[i] || "";
+          } else if (imeis.length === 1) {
+            newIMEI = imeis[0];
+          }
+        } else if (isAccessories) {
+          newIMEI = "";
         }
 
         const payload = {
           ...r,
           TANGGAL_TRANSAKSI: editData.tanggal,
+          NO_INVOICE: editData.noDo,
           NAMA_SUPPLIER: editData.supplier,
-          NAMA_BRAND: editData.brand,
-          NAMA_BARANG: editData.barang,
-          NO_INVOICE: editData.noInvoice,
+          NAMA_BRAND: editData.brand, // ✅ Brand bener
+          NAMA_BARANG: editData.barang, // ✅ Barang bener
+          KATEGORI_BRAND: editData.kategoriBrand,
           HARGA_SUPLAYER: Number(editData.hargaSup || 0),
-          HARGA_UNIT: Number(editData.hargaUnit || 0),
-          TOTAL: Number(r.QTY || 0) * Number(editData.hargaUnit || 0),
+          TOTAL: Number(r.QTY || 0) * Number(editData.hargaSup || 0),
           IMEI: newIMEI,
-          NAMA_TOKO: "CILANGKAP PUSAT", // ✅ kalau diedit tetap PUSAT
+          NAMA_TOKO: "CILANGKAP PUSAT",
         };
 
-        if (typeof updateTransaksi === "function") {
-          await updateTransaksi(tokoIndex, r.id, payload);
+        if (r.id && typeof updateTransaksi === "function") {
+          await updateTransaksi(tokoId, r.id, payload);
         }
       }
 
-      // update lokal supaya tabel langsung berubah
-      setAllTransaksi((prev) =>
-        prev.map((x) => {
-          if (
-            (x.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
-            `${x.TANGGAL_TRANSAKSI || ""}|${x.NAMA_SUPPLIER || ""}|${
-              x.NAMA_BRAND || ""
-            }|${x.NAMA_BARANG || ""}` === editData.originalKey
-          ) {
-            return {
-              ...x,
-              TANGGAL_TRANSAKSI: editData.tanggal,
-              NAMA_SUPPLIER: editData.supplier,
-              NAMA_BRAND: editData.brand,
-              NAMA_BARANG: editData.barang,
-              NO_INVOICE: editData.noInvoice,
-              HARGA_SUPLAYER: Number(editData.hargaSup || 0),
-              HARGA_UNIT: Number(editData.hargaUnit || 0),
-              TOTAL: Number(x.QTY || 0) * Number(editData.hargaUnit || 0),
-              NAMA_TOKO: "CILANGKAP PUSAT",
-            };
-          }
-          return x;
-        })
-      );
-
-      alert("Perubahan pembelian tersimpan.");
+      alert("✅ Perubahan pembelian berhasil disimpan.");
       setShowEdit(false);
     } catch (err) {
       console.error("saveEdit error:", err);
-      alert("Gagal menyimpan perubahan.");
+      alert("❌ Gagal menyimpan perubahan.");
     }
   };
 
-  // ===================== TAMBAH PEMBELIAN =====================
-  const handleTambahChange = (key, val) => {
-    setTambahForm((prev) => ({ ...prev, [key]: val }));
+  // ======================= HANDLE FORM TAMBAH (AUTO QTY) =======================
+  const handleTambahChange = (key, value) => {
+    setTambahForm((prev) => {
+      const next = { ...prev, [key]: value };
+
+      const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(
+        key === "kategoriBrand" ? value : prev.kategoriBrand
+      );
+
+      if (key === "imeiList" || key === "kategoriBrand") {
+        const imeis = String(
+          key === "imeiList" ? value : prev.imeiList || ""
+        )
+          .split("\n")
+          .map((x) => x.trim())
+          .filter(Boolean);
+
+        if (isKategoriImei) {
+          next.qty = imeis.length || 0;
+        }
+      }
+
+      return next;
+    });
   };
 
+  // ======================= SUBMIT TAMBAH (INSERT TRANSAKSI + MASTER BARANG + STOCK) =======================
   const submitTambah = async () => {
     const {
       tanggal,
+      noDo,
       supplier,
       brand,
+      kategoriBrand,
       barang,
       hargaSup,
-      hargaUnit,
-      qty,
       imeiList,
-      noInvoice,
-      namaToko,
+      qty,
     } = tambahForm;
 
-    let qtyInput = Number(qty || 0);
-    const hSup = Number(hargaSup || 0);
-    const hUnit = Number(hargaUnit || 0);
-
-    const imeis = String(imeiList || "")
-      .split("\n")
-      .map((a) => a.trim())
-      .filter(Boolean);
+    const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(kategoriBrand);
+    const isAccessories = kategoriBrand === "ACCESORIES";
 
     if (!tanggal) return alert("Tanggal wajib diisi.");
+    if (!noDo) return alert("No Delivery Order wajib diisi.");
     if (!supplier) return alert("Nama Supplier wajib diisi.");
-    if (!brand) return alert("Brand wajib diisi.");
-    if (!barang) return alert("Nama barang wajib diisi.");
-    if (!hUnit || hUnit <= 0) return alert("Harga Unit harus lebih dari 0.");
-    if (imeis.length === 0 && qtyInput <= 0)
-      return alert("Isi IMEI atau Qty (lebih dari 0).");
+    if (!brand) return alert("Nama Brand wajib diisi.");
+    if (!kategoriBrand) return alert("Kategori Brand wajib dipilih.");
+    if (!barang) return alert("Nama Barang wajib diisi.");
+    const hSup = Number(hargaSup || 0);
+    if (!hSup || hSup <= 0)
+      return alert("Harga Supplier harus lebih dari 0.");
 
-    // validasi IMEI input sendiri (duplikat di form)
-    const seen = new Set();
-    for (const im of imeis) {
-      if (seen.has(im)) return alert(`IMEI duplikat di input: ${im}`);
-      seen.add(im);
+    let finalQty = 0;
+    let imeis = [];
+
+    if (isKategoriImei) {
+      imeis = String(imeiList || "")
+        .split("\n")
+        .map((x) => x.trim())
+        .filter(Boolean);
+
+      if (imeis.length <= 0) {
+        return alert(
+          "Kategori SEPEDA LISTRIK / MOTOR LISTRIK / HANDPHONE wajib isi No IMEI."
+        );
+      }
+
+      const err = validateImeisNew(imeis);
+      if (err.length) {
+        alert(err.join("\n"));
+        return;
+      }
+
+      finalQty = imeis.length;
+    } else if (isAccessories) {
+      finalQty = Number(qty || 0);
+      if (!finalQty || finalQty <= 0) {
+        return alert("Qty wajib diisi untuk ACCESORIES.");
+      }
+    } else {
+      finalQty = Number(qty || 0);
+      if (!finalQty || finalQty <= 0) {
+        return alert("Qty wajib diisi.");
+      }
     }
 
-    // IMEI > QTY tidak boleh
-    if (imeis.length > 0 && qtyInput > 0 && imeis.length > qtyInput) {
-      return alert(
-        `Jumlah IMEI (${imeis.length}) melebihi Qty yang ditulis (${qtyInput}).`
-      );
-    }
-
-    if (imeis.length > 0 && qtyInput < imeis.length) {
-      qtyInput = imeis.length;
-    }
-
-    // cek konflik dengan database (All Transaksi)
-    const dbErrors = validateImeis(imeis, null);
-    if (dbErrors.length) {
-      alert(dbErrors.join("\n"));
-      return;
-    }
+    const tokoId = 1;
+    const namaToko = "CILANGKAP PUSAT";
+    const sku = makeSku(brand, barang);
 
     try {
-      // ✅ Paksa semua pembelian masuk CILANGKAP PUSAT
-      const forcedNamaToko =
-        (namaToko && namaToko.trim() && "CILANGKAP PUSAT") ||
-        "CILANGKAP PUSAT";
-      const tokoIndex = 1; // index 1 = CILANGKAP PUSAT
-
-      // INSERT PER IMEI
-      if (imeis.length > 0) {
+      if (isKategoriImei) {
+        // =======================
+        // KATEGORI WAJIB IMEI
+        // =======================
         for (const im of imeis) {
           const payload = {
             TANGGAL_TRANSAKSI: tanggal,
-            NO_INVOICE: noInvoice || `INV-${Date.now()}`,
+            NO_INVOICE: noDo,
             NAMA_SUPPLIER: supplier,
             NAMA_USER: "SYSTEM",
-            NAMA_TOKO: forcedNamaToko,
+            NAMA_TOKO: namaToko,
             NAMA_BRAND: brand,
+            KATEGORI_BRAND: kategoriBrand,
             NAMA_BARANG: barang,
             QTY: 1,
             IMEI: im,
-            NOMOR_UNIK: im,
-            HARGA_UNIT: hUnit,
+            NOMOR_UNIK: `PEMBELIAN|${brand}|${barang}|${im}`,
             HARGA_SUPLAYER: hSup,
-            TOTAL: hUnit * 1,
+            HARGA_UNIT: hSup,
+            TOTAL: hSup,
             PAYMENT_METODE: "PEMBELIAN",
             SYSTEM_PAYMENT: "SYSTEM",
             KETERANGAN: "Pembelian",
             STATUS: "Approved",
           };
-
-          if (typeof addTransaksi === "function") {
-            await addTransaksi(tokoIndex, payload);
-          }
-          // update lokal supaya tabel langsung bertambah
-          setAllTransaksi((prev) => [...prev, payload]);
+          await addTransaksi(tokoId, payload);
         }
-      }
+      } else {
+        // =======================
+        // NON IMEI → OVERWRITE DATA LAMA
+        // =======================
+        const sama = (allTransaksi || []).filter(
+          (t) =>
+            (t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
+            t.NAMA_BRAND === brand &&
+            t.NAMA_BARANG === barang &&
+            !t.IMEI &&
+            t.NAMA_SUPPLIER === supplier &&
+            t.NO_INVOICE === noDo
+        );
 
-      // INSERT NON IMEI (QTY besar)
-      if (imeis.length === 0 && qtyInput > 0) {
+        // Hapus data lama yang sama (barang + supplier + DO + tanpa IMEI)
+        for (const s of sama) {
+          const tId = s.tokoId || 1;
+          if (s.id) {
+            await deleteTransaksi(tId, s.id);
+          }
+        }
+
+        // Input data baru (overwrite)
         const payload = {
           TANGGAL_TRANSAKSI: tanggal,
-          NO_INVOICE: noInvoice || `INV-${Date.now()}`,
+          NO_INVOICE: noDo,
           NAMA_SUPPLIER: supplier,
           NAMA_USER: "SYSTEM",
-          NAMA_TOKO: forcedNamaToko,
+          NAMA_TOKO: namaToko,
           NAMA_BRAND: brand,
+          KATEGORI_BRAND: kategoriBrand,
           NAMA_BARANG: barang,
-          QTY: qtyInput,
-          NOMOR_UNIK: `${brand}|${barang}|${Date.now()}`,
-          HARGA_UNIT: hUnit,
+          QTY: finalQty,
+          IMEI: "",
+          NOMOR_UNIK: `PEMBELIAN|${brand}|${barang}|${Date.now()}`,
           HARGA_SUPLAYER: hSup,
-          TOTAL: qtyInput * hUnit,
+          HARGA_UNIT: hSup,
+          TOTAL: hSup * finalQty,
           PAYMENT_METODE: "PEMBELIAN",
           SYSTEM_PAYMENT: "SYSTEM",
-          KETERANGAN: "Pembelian",
+          KETERANGAN: "Pembelian (Overwrite)",
           STATUS: "Approved",
         };
 
-        if (typeof addTransaksi === "function") {
-          await addTransaksi(tokoIndex, payload);
-        }
-        setAllTransaksi((prev) => [...prev, payload]);
+        await addTransaksi(tokoId, payload);
       }
 
-      alert("Pembelian berhasil ditambahkan ke STOCK CILANGKAP PUSAT.");
+      await addStock("CILANGKAP PUSAT", sku, {
+        namaBrand: brand,
+        namaBarang: barang,
+        kategoriBrand,
+        qty: finalQty,
+      });
+
+      alert(
+        "✅ Pembelian berhasil disimpan.\n• Data masuk MASTER PEMBELIAN\n• Otomatis masuk MASTER BARANG\n• Stok CILANGKAP PUSAT bertambah."
+      );
+
       setShowTambah(false);
       setTambahForm({
-        tanggal: "",
+        tanggal: new Date().toISOString().slice(0, 10),
+        noDo: "",
         supplier: "",
         brand: "",
+        kategoriBrand: "",
         barang: "",
         hargaSup: "",
-        hargaUnit: "",
-        qty: 1,
         imeiList: "",
-        noInvoice: "",
-        namaToko: "CILANGKAP PUSAT",
+        qty: 1,
       });
     } catch (err) {
       console.error("submitTambah error:", err);
-      alert("Gagal menambahkan pembelian.");
+      alert("❌ Gagal menyimpan pembelian.");
     }
   };
 
-  // ===================== EXPORT EXCEL =====================
+  // =======================
+  // PART 1 SELESAI
+  // LANJUTAN: PART 2 (UI JSX: TABEL, MODAL, EXPORT EXCEL/PDF, DLL)
+  // =======================
+  // ======================= EXPORT EXCEL =======================
+  const groupedPurchases = groupedPembelian; // ✅ alias agar nama konsisten
+
   const exportExcel = () => {
-    const rows = Object.values(groupedPembelian).map((r) => ({
+    const rows = groupedPurchases.map((r) => ({
       Tanggal: r.tanggal,
+      "No Delivery Order": r.noDo,
       Supplier: r.supplier,
-      Brand: r.brand,
-      Barang: r.barang,
-      Invoice: r.noInvoice,
+      "Nama Brand": r.brand,
+      "Kategori Brand": r.kategoriBrand,
+      "Nama Barang": r.barang,
       IMEI: (r.imeis || []).join(", "),
-      Harga_Supplier: r.hargaSup || 0,
-      Harga_Unit: r.hargaUnit || 0,
-      Total_Qty: r.totalQty || 0,
-      Total_Harga_Supplier: r.totalHargaSup || 0,
-      Total_Harga_Unit: r.totalHargaUnit || 0,
+      "Harga Supplier (Satuan)": r.hargaSup || 0,
+      Qty: r.totalQty || 0,
+      "Total Harga Supplier": r.totalHargaSup || 0,
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -524,7 +691,7 @@ export default function MasterPembelian() {
     );
   };
 
-  // ===================== EXPORT PDF (TABEL) =====================
+  // ======================= EXPORT PDF =======================
   const exportPDF = async () => {
     const el = tableRef.current;
     if (!el) {
@@ -532,7 +699,7 @@ export default function MasterPembelian() {
       return;
     }
 
-    const canvas = await html2canvas(el, { scale: 1.5 });
+    const canvas = await html2canvas(el, { scale: 1.4 });
     const img = canvas.toDataURL("image/png");
     const pdf = new jsPDF("l", "mm", "a4");
     const w = pdf.internal.pageSize.getWidth();
@@ -542,414 +709,250 @@ export default function MasterPembelian() {
     pdf.save(`MasterPembelian_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
-  // ===================== PREVIEW INVOICE =====================
-  const previewInvoiceTambah = () => {
-    const {
-      tanggal,
-      supplier,
-      brand,
-      barang,
-      hargaSup,
-      qty,
-      imeiList,
-      noInvoice,
-    } = tambahForm;
-
-    if (!tanggal || !supplier || !brand || !barang) {
-      return alert(
-        "Lengkapi minimal Tanggal, Supplier, Brand, dan Barang sebelum preview invoice."
-      );
-    }
-
-    const imeis = String(imeiList || "")
-      .split("\n")
-      .map((x) => x.trim())
-      .filter(Boolean);
-
-    const totalQty = imeis.length > 0 ? imeis.length : Number(qty || 0);
-    if (totalQty <= 0) return alert("Qty atau IMEI harus diisi.");
-
-    const totalSup = totalQty * Number(hargaSup || 0);
-
-    const html = `
-      <html>
-      <head>
-        <title>Preview Invoice Pembelian</title>
-        <style>
-          body { font-family: Arial; padding: 20px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-          th, td { border: 1px solid #444; padding: 5px; }
-          th { background: #eee; }
-        </style>
-      </head>
-      <body>
-        <h2 style="text-align:center;">INVOICE PEMBELIAN</h2>
-        <h4 style="text-align:center;">PT. MILA MEDIA TELEKOMUNIKASI</h4>
-        <hr>
-
-        <p><b>No Invoice:</b> ${noInvoice || `INV-${Date.now()}`}</p>
-        <p><b>Tanggal:</b> ${tanggal}</p>
-        <p><b>Supplier:</b> ${supplier}</p>
-
-        <table>
-          <thead>
-            <tr>
-              <th>No</th>
-              <th>IMEI / No Mesin</th>
-              <th>Brand</th>
-              <th>Barang</th>
-              <th>Qty</th>
-              <th>Harga Supplier</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${
-              imeis.length > 0
-                ? imeis
-                    .map(
-                      (im, i) => `
-                <tr>
-                  <td>${i + 1}</td>
-                  <td>${im}</td>
-                  <td>${brand}</td>
-                  <td>${barang}</td>
-                  <td>1</td>
-                  <td>${Number(hargaSup || 0).toLocaleString()}</td>
-                  <td>${Number(hargaSup || 0).toLocaleString()}</td>
-                </tr>`
-                    )
-                    .join("")
-                : `
-                <tr>
-                  <td>1</td>
-                  <td>-</td>
-                  <td>${brand}</td>
-                  <td>${barang}</td>
-                  <td>${qty}</td>
-                  <td>${Number(hargaSup || 0).toLocaleString()}</td>
-                  <td>${(qty * Number(hargaSup || 0)).toLocaleString()}</td>
-                </tr>`
-            }
-          </tbody>
-        </table>
-
-        <h3>Total Harga Supplier: Rp ${totalSup.toLocaleString()}</h3>
-      </body>
-      </html>
-    `;
-
-    const win = window.open("", "_blank");
-    win.document.write(html);
-    win.document.close();
-  };
-
-  // ===================== CETAK INVOICE (PDF) =====================
-  const printInvoiceTambah = async () => {
-    const {
-      tanggal,
-      supplier,
-      brand,
-      barang,
-      hargaSup,
-      qty,
-      imeiList,
-      noInvoice,
-    } = tambahForm;
-
-    if (!tanggal || !supplier || !brand || !barang) {
-      return alert(
-        "Lengkapi minimal Tanggal, Supplier, Brand, dan Barang sebelum mencetak invoice."
-      );
-    }
-
-    const imeis = String(imeiList || "")
-      .split("\n")
-      .map((x) => x.trim())
-      .filter(Boolean);
-
-    const totalQty = imeis.length > 0 ? imeis.length : Number(qty || 0);
-    if (totalQty <= 0) {
-      return alert("Qty atau IMEI harus diisi untuk mencetak invoice.");
-    }
-
-    const totalSup = totalQty * Number(hargaSup || 0);
-
-    const html = `
-      <div style="font-family: Arial; padding: 30px; width: 700px">
-
-        <h2 style="text-align:center; margin:0;">INVOICE PEMBELIAN</h2>
-        <h4 style="text-align:center; margin:3px 0;">PT. MILA MEDIA TELEKOMUNIKASI</h4>
-        <hr>
-
-        <p><b>No Invoice:</b> ${noInvoice || `INV-${Date.now()}`}</p>
-        <p><b>Tanggal:</b> ${tanggal}</p>
-        <p><b>Supplier:</b> ${supplier}</p>
-
-        <hr>
-
-        <table style="width:100%; border-collapse:collapse; margin-top:10px;" border="1">
-          <thead>
-            <tr style="background:#f0f0f0;">
-              <th>No</th>
-              <th>IMEI / No Mesin</th>
-              <th>Brand</th>
-              <th>Barang</th>
-              <th>Qty</th>
-              <th>Harga Supplier</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${
-              imeis.length > 0
-                ? imeis
-                    .map(
-                      (im, i) => `
-              <tr>
-                <td>${i + 1}</td>
-                <td>${im}</td>
-                <td>${brand}</td>
-                <td>${barang}</td>
-                <td>1</td>
-                <td>${Number(hargaSup || 0).toLocaleString()}</td>
-                <td>${Number(hargaSup || 0).toLocaleString()}</td>
-              </tr>`
-                    )
-                    .join("")
-                : `
-              <tr>
-                <td>1</td>
-                <td>-</td>
-                <td>${brand}</td>
-                <td>${barang}</td>
-                <td>${qty}</td>
-                <td>${Number(hargaSup || 0).toLocaleString()}</td>
-                <td>${(qty * Number(hargaSup || 0)).toLocaleString()}</td>
-              </tr>
-            `
-            }
-          </tbody>
-        </table>
-
-        <br>
-        <h3>Total Harga Supplier: Rp ${totalSup.toLocaleString()}</h3>
-      </div>
-    `;
-
-    const wrapper = document.createElement("div");
-    wrapper.innerHTML = html;
-    document.body.appendChild(wrapper);
-
-    const pdf = new jsPDF("p", "pt", "a4");
-    const canvas = await html2canvas(wrapper, { scale: 2 });
-
-    pdf.addImage(
-      canvas.toDataURL("image/png"),
-      "PNG",
-      20,
-      20,
-      pdf.internal.pageSize.getWidth() - 40,
-      0
-    );
-
-    pdf.save(`InvoicePembelian_${supplier}_${tanggal}.pdf`);
-    wrapper.remove();
-  };
-
-  // ===================== RENDER =====================
+  // ======================= RENDER JSX =======================
   return (
-    <div className="p-4 space-y-4">
-      <h2 className="text-xl font-bold">MASTER PEMBELIAN</h2>
-
-      {/* TOOLBAR */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="flex items-center border px-3 py-2 rounded w-72">
-          <FaSearch />
-          <input
-            className="ml-2 flex-1 outline-none text-sm"
-            placeholder="Cari Tanggal / Supplier / Barang / IMEI / Invoice..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 md:p-6">
+      <div className="max-w-7xl mx-auto space-y-4">
+        {/* HEADER */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold text-white tracking-wide">
+              MASTER PEMBELIAN
+            </h2>
+            <p className="text-xs md:text-sm text-slate-200/80 mt-1">
+              Pusat data pembelian barang yang terhubung dengan{" "}
+              <span className="font-semibold">Master Barang</span> &{" "}
+              <span className="font-semibold">Stock CILANGKAP PUSAT</span>{" "}
+              secara realtime.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="px-3 py-1 rounded-full text-xs md:text-sm bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 shadow-sm">
+              ● Realtime Firebase
+            </span>
+            <span className="px-3 py-1 rounded-full text-xs md:text-sm bg-indigo-500/20 text-indigo-100 border border-indigo-400/40 shadow-sm">
+              Master Data Management
+            </span>
+          </div>
         </div>
 
-        <button
-          onClick={() => setShowTambah(true)}
-          className="bg-indigo-600 text-white px-3 py-2 rounded flex items-center text-sm"
-        >
-          <FaPlus className="mr-2" /> Tambah Pembelian
-        </button>
+        {/* CARD UTAMA */}
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-4 md:p-6 space-y-4">
+          {/* TOOLBAR */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center border border-slate-200 rounded-full px-3 py-2 w-full md:w-80 shadow-sm bg-slate-50/60">
+              <FaSearch className="text-gray-500" />
+              <input
+                className="ml-2 flex-1 outline-none text-sm bg-transparent"
+                placeholder="Cari tanggal / DO / supplier / brand / barang / IMEI..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
 
-        <button
-          onClick={exportExcel}
-          className="flex items-center bg-green-600 text-white px-3 py-2 rounded text-sm"
-        >
-          <FaFileExcel className="mr-2" /> Excel
-        </button>
+            <button
+              onClick={() => setShowTambah(true)}
+              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center text-xs md:text-sm shadow-md transition transform hover:-translate-y-[1px]"
+            >
+              <FaPlus className="mr-2" /> Tambah Pembelian
+            </button>
 
-        <button
-          onClick={exportPDF}
-          className="flex items-center bg-red-600 text-white px-3 py-2 rounded text-sm"
-        >
-          <FaFilePdf className="mr-2" /> PDF
-        </button>
-      </div>
+            <button
+              onClick={exportExcel}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center text-xs md:text-sm shadow-md transition transform hover:-translate-y-[1px]"
+            >
+              <FaFileExcel className="mr-2" /> Excel
+            </button>
 
-      {/* TABEL */}
-      <div ref={tableRef} className="bg-white rounded shadow overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
-          <thead className="bg-gray-200">
-            <tr>
-              <th className="border p-2">No</th>
-              <th className="border p-2">Tanggal</th>
-              <th className="border p-2">Supplier</th>
-              <th className="border p-2">Invoice</th>
-              <th className="border p-2">Brand</th>
-              <th className="border p-2">Barang</th>
-              <th className="border p-2">IMEI / No MESIN</th>
-              <th className="border p-2">Harga Supplier</th>
-              <th className="border p-2">Harga Unit</th>
-              <th className="border p-2">Qty</th>
-              <th className="border p-2">Total Harga Supplier</th>
-              <th className="border p-2">Total Harga Unit</th>
-              <th className="border p-2 text-center">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredPurchases.length === 0 ? (
-              <tr>
-                <td colSpan={13} className="text-center text-gray-500 p-3">
-                  Tidak ada data pembelian.
-                </td>
-              </tr>
-            ) : (
-              paginatedPurchases.map(([key, item], i) => {
-                const shownImeis = search.trim()
-                  ? (item.imeis || []).filter((im) =>
-                      im.toLowerCase().includes(search.toLowerCase())
-                    )
-                  : item.imeis || [];
+            <button
+              onClick={exportPDF}
+              className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl flex items-center text-xs md:text-sm shadow-md transition transform hover:-translate-y-[1px]"
+            >
+              <FaFilePdf className="mr-2" /> PDF
+            </button>
 
-                return (
-                  <tr key={key} className="hover:bg-gray-50">
-                    <td className="border p-2 text-center">
-                      {(currentPage - 1) * itemsPerPage + i + 1}
-                    </td>
-                    <td className="border p-2">{item.tanggal}</td>
-                    <td className="border p-2">{item.supplier}</td>
-                    <td className="border p-2">{item.noInvoice || "-"}</td>
-                    <td className="border p-2">{item.brand}</td>
-                    <td className="border p-2">{item.barang}</td>
-                    <td className="border p-2 whitespace-pre-wrap">
-                      {shownImeis.length > 0 ? shownImeis.join("\n") : "-"}
-                    </td>
-                    <td className="border p-2 text-right">
-                      Rp {fmt(item.hargaSup)}
-                    </td>
-                    <td className="border p-2 text-right">
-                      Rp {fmt(item.hargaUnit)}
-                    </td>
-                    <td className="border p-2 text-center">{item.totalQty}</td>
-                    <td className="border p-2 text-right">
-                      Rp {fmt(item.totalHargaSup)}
-                    </td>
-                    <td className="border p-2 text-right">
-                      Rp {fmt(item.totalHargaUnit)}
-                    </td>
-                    <td className="border p-2 text-center space-x-2">
-                      <button
-                        className="text-blue-600"
-                        title="Edit"
-                        onClick={() => openEdit(item)}
-                      >
-                        <FaEdit />
-                      </button>
-                      <button
-                        className="text-red-600"
-                        title="Hapus"
-                        onClick={() => deletePembelian(item)}
-                      >
-                        <FaTrash />
-                      </button>
+            <div className="ml-auto text-[11px] text-slate-500">
+              Total data: {filteredPurchases.length} baris pembelian
+            </div>
+          </div>
+
+          {/* TABEL */}
+          <div
+            ref={tableRef}
+            className="bg-white rounded-2xl shadow-inner overflow-x-auto border border-slate-100 mt-2"
+          >
+            <table className="w-full text-xs md:text-sm border-collapse">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="border p-2">No</th>
+                  <th className="border p-2">Tanggal</th>
+                  <th className="border p-2">No Delivery Order</th>
+                  <th className="border p-2">Nama Supplier</th>
+                  <th className="border p-2">Nama Brand</th>
+                  <th className="border p-2">Kategori Brand</th>
+                  <th className="border p-2">Nama Barang</th>
+                  <th className="border p-2">IMEI / No Mesin</th>
+                  <th className="border p-2 text-right">
+                    Harga Supplier (Satuan)
+                  </th>
+                  <th className="border p-2 text-center">Qty</th>
+                  <th className="border p-2 text-right">
+                    Total Harga Supplier
+                  </th>
+                  <th className="border p-2 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedPurchases.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={12}
+                      className="p-4 border text-center text-gray-500"
+                    >
+                      Tidak ada data pembelian.
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                ) : (
+                  paginatedPurchases.map((item, idx) => {
+                    const shownImeis =
+                      search.trim() === ""
+                        ? item.imeis || []
+                        : (item.imeis || []).filter((im) =>
+                            im.toLowerCase().includes(search.toLowerCase())
+                          );
+
+                    return (
+                      <tr
+                        key={item.key}
+                        className="hover:bg-slate-50/80 transition"
+                      >
+                        <td className="border p-2 text-center">
+                          {(currentPage - 1) * itemsPerPage + idx + 1}
+                        </td>
+                        <td className="border p-2">{item.tanggal}</td>
+                        <td className="border p-2">{item.noDo}</td>
+                        <td className="border p-2">{item.supplier}</td>
+                        <td className="border p-2">{item.brand}</td>
+                        <td className="border p-2">
+                          {item.kategoriBrand || "-"}
+                        </td>
+                        <td className="border p-2">{item.barang}</td>
+                        <td className="border p-2 whitespace-pre-wrap font-mono text-[11px]">
+                          {shownImeis.length > 0 ? (
+                            shownImeis.join("\n")
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                        <td className="border p-2 text-right">
+                          Rp {fmt(item.hargaSup)}
+                        </td>
+                        <td className="border p-2 text-center font-semibold">
+                          {item.totalQty}
+                        </td>
+                        <td className="border p-2 text-right">
+                          Rp {fmt(item.totalHargaSup)}
+                        </td>
+                        <td className="border p-2 text-center space-x-2">
+                          <button
+                            className="inline-flex items-center justify-center p-[6px] rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
+                            title="Edit"
+                            onClick={() => openEdit(item)}
+                          >
+                            <FaEdit />
+                          </button>
+                          <button
+                            className="inline-flex items-center justify-center p-[6px] rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
+                            title="Hapus"
+                            onClick={() => deletePembelian(item)}
+                          >
+                            <FaTrash />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PAGINATION */}
+          <div className="flex justify-between items-center mt-3 text-xs md:text-sm text-slate-600">
+            <div>
+              Halaman {currentPage} dari {totalPages}
+            </div>
+            <div className="flex gap-1">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className={`px-3 py-1 rounded-full border text-xs ${
+                  currentPage === 1
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    : "bg-white hover:bg-slate-50"
+                }`}
+              >
+                Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentPage(i + 1)}
+                  className={`px-3 py-1 rounded-full border text-xs ${
+                    currentPage === i + 1
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white hover:bg-slate-50"
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+                className={`px-3 py-1 rounded-full border text-xs ${
+                  currentPage === totalPages
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    : "bg-white hover:bg-slate-50"
+                }`}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* PAGINATION NAVIGATION */}
-      <div className="flex justify-between items-center mt-4 text-sm">
-        <div>
-          Halaman {currentPage} dari {totalPages || 1}
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            className={`px-3 py-1 rounded border ${
-              currentPage === 1
-                ? "bg-gray-300 text-gray-500"
-                : "bg-white hover:bg-gray-100"
-            }`}
-          >
-            Prev
-          </button>
-
-          {Array.from({ length: totalPages }, (_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrentPage(i + 1)}
-              className={`px-3 py-1 rounded border ${
-                currentPage === i + 1
-                  ? "bg-indigo-600 text-white"
-                  : "bg-white hover:bg-gray-100"
-              }`}
-            >
-              {i + 1}
-            </button>
-          ))}
-
-          <button
-            disabled={currentPage === totalPages}
-            onClick={() =>
-              setCurrentPage((p) => Math.min(totalPages, p + 1))
-            }
-            className={`px-3 py-1 rounded border ${
-              currentPage === totalPages || totalPages === 0
-                ? "bg-gray-300 text-gray-500"
-                : "bg-white hover:bg-gray-100"
-            }`}
-          >
-            Next
-          </button>
-        </div>
-      </div>
-
-      {/* MODAL TAMBAH */}
+      {/* MODAL TAMBAH PEMBELIAN */}
       {showTambah && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-start py-10 z-50 overflow-auto">
-          <div className="bg-white w-full max-w-2xl rounded shadow p-6">
+        <div className="fixed inset-0 bg-black/40 flex justify-center items-start py-10 z-50 overflow-y-auto">
+          <div className="bg-white text-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl p-5">
             <div className="flex justify-between items-center mb-3">
-              <h3 className="font-bold text-lg">Tambah Pembelian</h3>
+              <h3 className="text-lg font-bold text-slate-800">
+                Tambah Pembelian
+              </h3>
               <button
                 onClick={() => setShowTambah(false)}
-                className="text-gray-600"
+                className="text-gray-500 hover:text-gray-700"
               >
                 <FaTimes />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Tanggal */}
               <div>
-                <label className="text-xs">Tanggal</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  Tanggal
+                </label>
                 <input
                   type="date"
-                  className="border p-2 rounded w-full"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
                   value={tambahForm.tanggal}
                   onChange={(e) =>
                     handleTambahChange("tanggal", e.target.value)
@@ -957,40 +960,108 @@ export default function MasterPembelian() {
                 />
               </div>
 
+              {/* No DO */}
               <div>
-                <label className="text-xs">Supplier</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  No Delivery Order
+                </label>
                 <input
-                  className="border p-2 rounded w-full"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
+                  placeholder="No DO / SJ"
+                  value={tambahForm.noDo}
+                  onChange={(e) => handleTambahChange("noDo", e.target.value)}
+                />
+              </div>
+
+              {/* Supplier */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600">
+                  Nama Supplier
+                </label>
+                <input
+                  list="supplier-list"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
+                  placeholder="Pilih / ketik nama supplier"
                   value={tambahForm.supplier}
                   onChange={(e) =>
                     handleTambahChange("supplier", e.target.value)
                   }
                 />
+                <datalist id="supplier-list">
+                  {supplierOptions.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
               </div>
 
+              {/* Brand */}
               <div>
-                <label className="text-xs">Brand</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  Nama Brand
+                </label>
                 <input
-                  className="border p-2 rounded w-full"
+                  list="brand-list"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
+                  placeholder="Pilih / ketik brand"
                   value={tambahForm.brand}
                   onChange={(e) => handleTambahChange("brand", e.target.value)}
                 />
+                <datalist id="brand-list">
+                  {brandOptionsDynamic.map((b) => (
+                    <option key={b} value={b} />
+                  ))}
+                </datalist>
               </div>
 
+              {/* Kategori Brand */}
               <div>
-                <label className="text-xs">Barang</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  Kategori Brand
+                </label>
+                <select
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
+                  value={tambahForm.kategoriBrand}
+                  onChange={(e) =>
+                    handleTambahChange("kategoriBrand", e.target.value)
+                  }
+                >
+                  <option value="">- Pilih Kategori -</option>
+                  {KATEGORI_OPTIONS.map((x) => (
+                    <option key={x} value={x}>
+                      {x}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Nama Barang */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600">
+                  Nama Barang
+                </label>
                 <input
-                  className="border p-2 rounded w-full"
+                  list="barang-list"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
+                  placeholder="Pilih / ketik nama barang"
                   value={tambahForm.barang}
                   onChange={(e) => handleTambahChange("barang", e.target.value)}
                 />
+                <datalist id="barang-list">
+                  {namaBarangOptions.map((n) => (
+                    <option key={n} value={n} />
+                  ))}
+                </datalist>
               </div>
 
+              {/* Harga Supplier */}
               <div>
-                <label className="text-xs">Harga Supplier</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  Harga Supplier
+                </label>
                 <input
                   type="number"
-                  className="border p-2 rounded w-full"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
+                  placeholder="0"
                   value={tambahForm.hargaSup}
                   onChange={(e) =>
                     handleTambahChange("hargaSup", e.target.value)
@@ -998,232 +1069,250 @@ export default function MasterPembelian() {
                 />
               </div>
 
+              {/* Qty */}
               <div>
-                <label className="text-xs">Harga Unit</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  Qty
+                </label>
                 <input
                   type="number"
-                  className="border p-2 rounded w-full"
-                  value={tambahForm.hargaUnit}
-                  onChange={(e) =>
-                    handleTambahChange("hargaUnit", e.target.value)
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">Qty (jika tanpa IMEI)</label>
-                <input
-                  type="number"
-                  className="border p-2 rounded w-full"
+                  className={`w-full border rounded-lg px-2 py-2 text-sm bg-slate-50 ${
+                    KATEGORI_WAJIB_IMEI.includes(tambahForm.kategoriBrand)
+                      ? "text-slate-500"
+                      : ""
+                  }`}
                   value={tambahForm.qty}
-                  onChange={(e) => handleTambahChange("qty", e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">No Invoice</label>
-                <input
-                  className="border p-2 rounded w-full"
-                  value={tambahForm.noInvoice}
                   onChange={(e) =>
-                    handleTambahChange("noInvoice", e.target.value)
+                    !KATEGORI_WAJIB_IMEI.includes(tambahForm.kategoriBrand) &&
+                    handleTambahChange("qty", e.target.value)
                   }
+                  readOnly={KATEGORI_WAJIB_IMEI.includes(
+                    tambahForm.kategoriBrand
+                  )}
                 />
+                {KATEGORI_WAJIB_IMEI.includes(tambahForm.kategoriBrand) && (
+                  <p className="text-[10px] text-amber-600 mt-1">
+                    Qty otomatis mengikuti jumlah baris IMEI.
+                  </p>
+                )}
               </div>
+            </div>
 
-              <div className="col-span-2">
-                <label className="text-xs">
-                  IMEI / No MESIN (opsional, 1 per baris)
+            {/* IMEI hanya jika bukan ACCESORIES */}
+            {tambahForm.kategoriBrand !== "ACCESORIES" && (
+              <div className="mt-3">
+                <label className="text-xs font-semibold text-slate-600">
+                  No IMEI / No Mesin{" "}
+                  <span className="font-normal">
+                    (1 per baris – wajib untuk SEPEDA LISTRIK / MOTOR LISTRIK /
+                    HANDPHONE)
+                  </span>
                 </label>
                 <textarea
-                  rows={5}
-                  className="border p-2 rounded w-full font-mono text-xs"
-                  placeholder={`Contoh:
-6633849364
-ABCD-99383-XYZ`}
+                  rows={4}
+                  className="w-full border rounded-lg px-2 py-2 text-xs font-mono bg-slate-50"
+                  placeholder={`Contoh:\nIMEI-001\nIMEI-002`}
                   value={tambahForm.imeiList}
                   onChange={(e) =>
                     handleTambahChange("imeiList", e.target.value)
                   }
                 />
               </div>
-            </div>
+            )}
 
-            {/* FOOTER BUTTONS */}
             <div className="flex justify-end gap-2 mt-4">
               <button
                 onClick={() => setShowTambah(false)}
-                className="px-3 py-2 bg-gray-500 text-white rounded text-sm"
+                className="px-3 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded-lg text-sm"
               >
-                Batal
+                <FaTimes className="inline mr-1" /> Batal
               </button>
-
               <button
                 onClick={submitTambah}
-                className="px-3 py-2 bg-indigo-600 text-white rounded text-sm"
+                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm flex items-center shadow-md"
               >
-                <FaSave className="inline mr-2" />
-                Simpan
-              </button>
-
-              {/* PREVIEW INVOICE */}
-              <button
-                onClick={previewInvoiceTambah}
-                className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
-              >
-                Preview
-              </button>
-
-              {/* CETAK PDF */}
-              <button
-                onClick={printInvoiceTambah}
-                className="px-3 py-2 bg-yellow-600 text-white rounded text-sm"
-              >
-                <FaFilePdf className="inline mr-2" />
-                Cetak Invoice
+                <FaSave className="inline mr-1" /> Simpan
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL EDIT */}
+      {/* MODAL EDIT PEMBELIAN */}
       {showEdit && editData && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center py-10 z-50 overflow-auto">
-          <div className="bg-white w-full max-w-lg rounded shadow p-6">
+        <div className="fixed inset-0 bg-black/40 flex justify-center items-start py-10 z-50 overflow-y-auto">
+          <div className="bg-white text-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl p-5">
             <div className="flex justify-between items-center mb-3">
-              <h3 className="font-bold text-lg">Edit Pembelian</h3>
+              <h3 className="text-lg font-bold text-slate-800">
+                Edit Pembelian
+              </h3>
               <button
                 onClick={() => setShowEdit(false)}
-                className="text-gray-600"
+                className="text-gray-500 hover:text-gray-700"
               >
                 <FaTimes />
               </button>
             </div>
 
-            <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Tanggal */}
               <div>
-                <label className="text-xs">Tanggal</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  Tanggal
+                </label>
                 <input
                   type="date"
-                  className="border p-2 rounded w-full"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
                   value={editData.tanggal}
                   onChange={(e) =>
-                    setEditData({ ...editData, tanggal: e.target.value })
+                    setEditData((p) => ({ ...p, tanggal: e.target.value }))
                   }
                 />
               </div>
 
+              {/* No DO */}
               <div>
-                <label className="text-xs">Supplier</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  No Delivery Order
+                </label>
                 <input
-                  className="border p-2 rounded w-full"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
+                  value={editData.noDo}
+                  onChange={(e) =>
+                    setEditData((p) => ({ ...p, noDo: e.target.value }))
+                  }
+                />
+              </div>
+
+              {/* Supplier */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600">
+                  Nama Supplier
+                </label>
+                <input
+                  list="supplier-list"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
                   value={editData.supplier}
                   onChange={(e) =>
-                    setEditData({
-                      ...editData,
-                      supplier: e.target.value,
-                    })
+                    setEditData((p) => ({ ...p, supplier: e.target.value }))
                   }
                 />
               </div>
 
+              {/* Brand */}
               <div>
-                <label className="text-xs">Kategori Barang</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  Nama Brand
+                </label>
                 <input
-                  className="border p-2 rounded w-full"
+                  list="brand-list"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
                   value={editData.brand}
                   onChange={(e) =>
-                    setEditData({ ...editData, brand: e.target.value })
+                    setEditData((p) => ({ ...p, brand: e.target.value }))
                   }
                 />
               </div>
 
+              {/* Kategori Brand */}
               <div>
-                <label className="text-xs">Barang</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  Kategori Brand
+                </label>
+                <select
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
+                  value={editData.kategoriBrand}
+                  onChange={(e) =>
+                    setEditData((p) => ({
+                      ...p,
+                      kategoriBrand: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="">- Pilih Kategori -</option>
+                  {KATEGORI_OPTIONS.map((x) => (
+                    <option key={x} value={x}>
+                      {x}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Nama Barang */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600">
+                  Nama Barang
+                </label>
                 <input
-                  className="border p-2 rounded w-full"
+                  list="barang-list"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
                   value={editData.barang}
                   onChange={(e) =>
-                    setEditData({ ...editData, barang: e.target.value })
+                    setEditData((p) => ({ ...p, barang: e.target.value }))
                   }
                 />
               </div>
 
+              {/* Harga Supplier */}
               <div>
-                <label className="text-xs">Harga Supplier</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  Harga Supplier
+                </label>
                 <input
                   type="number"
-                  className="border p-2 rounded w-full"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
                   value={editData.hargaSup}
                   onChange={(e) =>
-                    setEditData({
-                      ...editData,
-                      hargaSup: e.target.value,
-                    })
+                    setEditData((p) => ({ ...p, hargaSup: e.target.value }))
                   }
                 />
               </div>
 
+              {/* Qty Info */}
               <div>
-                <label className="text-xs">Harga Unit</label>
+                <label className="text-xs font-semibold text-slate-600">
+                  Qty Total (informasi)
+                </label>
                 <input
-                  type="number"
-                  className="border p-2 rounded w-full"
-                  value={editData.hargaUnit}
-                  onChange={(e) =>
-                    setEditData({
-                      ...editData,
-                      hargaUnit: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">No Invoice</label>
-                <input
-                  className="border p-2 rounded w-full"
-                  value={editData.noInvoice}
-                  onChange={(e) =>
-                    setEditData({
-                      ...editData,
-                      noInvoice: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs">IMEI / No MESIN (1 per baris)</label>
-                <textarea
-                  rows={4}
-                  className="border p-2 rounded w-full font-mono text-xs"
-                  value={editData.imeiList}
-                  onChange={(e) =>
-                    setEditData({
-                      ...editData,
-                      imeiList: e.target.value,
-                    })
-                  }
+                  disabled
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-100 text-slate-500"
+                  value={editData.totalQty}
                 />
               </div>
             </div>
 
+            {/* IMEI Saat Edit (kecuali ACCESORIES) */}
+            {editData.kategoriBrand !== "ACCESORIES" && (
+              <div className="mt-3">
+                <label className="text-xs font-semibold text-slate-600">
+                  IMEI / No Mesin (1 per baris)
+                </label>
+                <textarea
+                  rows={5}
+                  className="w-full border rounded-lg px-2 py-2 text-xs font-mono bg-slate-50"
+                  value={editData.imeiList}
+                  onChange={(e) =>
+                    setEditData((p) => ({ ...p, imeiList: e.target.value }))
+                  }
+                />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  • Jumlah baris IMEI sebaiknya sama dengan total Qty.
+                </p>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 mt-4">
               <button
                 onClick={() => setShowEdit(false)}
-                className="px-3 py-2 bg-gray-500 text-white rounded text-sm"
+                className="px-3 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded-lg text-sm"
               >
-                Batal
+                <FaTimes className="inline mr-1" /> Batal
               </button>
-
               <button
                 onClick={saveEdit}
-                className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
+                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm flex items-center shadow-md"
               >
-                <FaSave className="inline mr-2" />
-                Simpan
+                <FaSave className="inline mr-1" /> Simpan
               </button>
             </div>
           </div>

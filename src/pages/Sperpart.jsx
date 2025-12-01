@@ -199,31 +199,40 @@ function mapRow(raw) {
 
   const get = (...cands) => {
     for (const c of cands) {
-      if (obj[c] !== undefined && obj[c] !== null && obj[c] !== "") return obj[c];
+      if (obj[c] !== undefined && obj[c] !== null && obj[c] !== "")
+        return obj[c];
     }
     return "";
   };
 
   const code = get("kode", "sku", "id", "kode_barang", "item_code");
-  const name = get("nama", "nama_barang", "barang", "item_name", "nama_sparepart");
+  const name = get(
+    "nama",
+    "nama_barang",
+    "barang",
+    "item_name",
+    "nama_sparepart"
+  );
   const category = get("kategori", "category", "jenis");
   const store = get("toko", "lokasi", "gudang", "cabang");
   const unit = get("satuan", "unit");
   const note = get("keterangan", "note", "catatan");
 
   const date = toDateStr(get("tanggal", "date", "tgl"));
-  const opening = num(get("stock_awal", "stok_awal", "opening", "opening_stock"));
+  const opening = num(
+    get("stock_awal", "stok_awal", "opening", "opening_stock")
+  );
   const inQty = num(get("masuk", "qty_in", "in", "stock_in", "stok_masuk"));
-  const outQty = num(get("keluar", "qty_out", "out", "stock_out", "stok_keluar"));
+  const outQty = num(
+    get("keluar", "qty_out", "out", "stock_out", "stok_keluar")
+  );
   let stock = num(get("stok", "stock", "qty", "jumlah", "kuantitas"));
   if (!stock && (opening || inQty || outQty)) {
     stock = opening + inQty - outQty;
   }
 
   const price = num(get("harga", "price", "harga_satuan"));
-  const statusRaw = String(
-    get("status", "approval", "verifikasi") || ""
-  )
+  const statusRaw = String(get("status", "approval", "verifikasi") || "")
     .trim()
     .toLowerCase();
   let status = "Pending";
@@ -408,7 +417,16 @@ export default function Sperpart() {
     );
     // fallback jika kosong
     if (s.size === 0) {
-      ["CILANGKAP PUSAT", "CIBINONG", "GAS ALAM", "CITEUREUP"].forEach((t) =>
+      [ "CILANGKAP PUSAT",
+        "CIBINONG",
+        "GAS ALAM",
+        "CITEUREUP",
+        "CIRACAS",
+        "METLAND 1",
+        "METLAND 2",
+        "PITARA",
+        "KOTA WISATA",
+        "SAWANGAN",].forEach((t) =>
         s.add(t)
       );
     }
@@ -613,8 +631,7 @@ export default function Sperpart() {
         ...prev,
         [field]: value,
       };
-      const qty =
-        field === "qty" ? Number(value || 0) : Number(next.qty || 0);
+      const qty = field === "qty" ? Number(value || 0) : Number(next.qty || 0);
       const hs =
         field === "hargaSupplier"
           ? Number(value || 0)
@@ -692,8 +709,7 @@ export default function Sperpart() {
   const handlePurchaseDraftChange = (field, value) => {
     setPurchaseDraft((prev) => {
       const next = { ...prev, [field]: value };
-      const qty =
-        field === "qty" ? Number(value || 0) : Number(next.qty || 0);
+      const qty = field === "qty" ? Number(value || 0) : Number(next.qty || 0);
       const hs =
         field === "hargaSupplier"
           ? Number(value || 0)
@@ -779,9 +795,7 @@ export default function Sperpart() {
   );
 
   const badgeStatusBayar = (s) =>
-    s === "LUNAS"
-      ? "bg-emerald-600"
-      : "bg-amber-500"; // PENDING / lainnya
+    s === "LUNAS" ? "bg-emerald-600" : "bg-amber-500"; // PENDING / lainnya
 
   const badgeStatusRequest = (s) =>
     s === "APPROVED"
@@ -795,9 +809,7 @@ export default function Sperpart() {
     <div className="max-w-[1200px] mx-auto py-4">
       {/* Header cantik */}
       <div className="mb-4 rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500 text-white p-4 shadow-lg">
-        <h1 className="text-xl md:text-2xl font-bold">
-          MASTER DATA SPAREPART
-        </h1>
+        <h1 className="text-xl md:text-2xl font-bold">MASTER DATA SPAREPART</h1>
         <p className="text-xs md:text-sm opacity-90 mt-1">
           Kelola master sparepart, pembelian, dan ketersediaan stok secara
           realtime & terintegrasi.
@@ -1005,9 +1017,7 @@ export default function Sperpart() {
                   <input
                     className="w-full border rounded px-2 py-1"
                     value={form.category}
-                    onChange={(e) =>
-                      onChangeForm("category", e.target.value)
-                    }
+                    onChange={(e) => onChangeForm("category", e.target.value)}
                   />
                 </label>
 
@@ -1054,9 +1064,7 @@ export default function Sperpart() {
                     type="number"
                     className="w-full border rounded px-2 py-1"
                     value={form.in}
-                    onChange={(e) =>
-                      onChangeForm("in", Number(e.target.value))
-                    }
+                    onChange={(e) => onChangeForm("in", Number(e.target.value))}
                   />
                 </label>
                 <label className="text-sm">
@@ -1287,10 +1295,7 @@ export default function Sperpart() {
               <div className="bg-white w-full md:max-w-2xl rounded-t-2xl md:rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="font-semibold">Edit Sparepart</h2>
-                  <button
-                    className="text-slate-500"
-                    onClick={closeEdit}
-                  >
+                  <button className="text-slate-500" onClick={closeEdit}>
                     ✕
                   </button>
                 </div>
@@ -1531,9 +1536,7 @@ export default function Sperpart() {
                 <input
                   className="border rounded px-2 py-1"
                   value={purchaseForm.toko}
-                  onChange={(e) =>
-                    handlePurchaseChange("toko", e.target.value)
-                  }
+                  onChange={(e) => handlePurchaseChange("toko", e.target.value)}
                 />
               </label>
 
@@ -1562,9 +1565,7 @@ export default function Sperpart() {
                   type="number"
                   className="border rounded px-2 py-1"
                   value={purchaseForm.qty}
-                  onChange={(e) =>
-                    handlePurchaseChange("qty", e.target.value)
-                  }
+                  onChange={(e) => handlePurchaseChange("qty", e.target.value)}
                   required
                 />
               </label>
@@ -1622,9 +1623,7 @@ export default function Sperpart() {
                 <input
                   className="border rounded px-2 py-1"
                   value={purchaseForm.note}
-                  onChange={(e) =>
-                    handlePurchaseChange("note", e.target.value)
-                  }
+                  onChange={(e) => handlePurchaseChange("note", e.target.value)}
                 />
               </label>
 
@@ -1883,10 +1882,7 @@ export default function Sperpart() {
                       className="border rounded px-2 py-1"
                       value={purchaseDraft.statusBayar || "PENDING"}
                       onChange={(e) =>
-                        handlePurchaseDraftChange(
-                          "statusBayar",
-                          e.target.value
-                        )
+                        handlePurchaseDraftChange("statusBayar", e.target.value)
                       }
                     >
                       <option value="PENDING">PENDING</option>
@@ -1960,9 +1956,7 @@ export default function Sperpart() {
                 APPROVED PENDING
               </span>{" "}
               &{" "}
-              <span className="font-semibold text-rose-600">
-                APPROVED VOID
-              </span>{" "}
+              <span className="font-semibold text-rose-600">APPROVED VOID</span>{" "}
               untuk workflow request, dan tombol{" "}
               <span className="font-semibold text-emerald-600">LUNAS</span>{" "}
               untuk menandai pembayaran.
