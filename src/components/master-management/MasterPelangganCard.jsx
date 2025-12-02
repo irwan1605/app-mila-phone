@@ -4,6 +4,7 @@ import MasterCrudCard from "./MasterCrudCard";
 
 export default function MasterPelangganCard() {
   const fields = [
+    { name: "idPelanggan", label: "ID Pelanggan" },
     { name: "namaPelanggan", label: "Nama Akun / Pelanggan" },
     { name: "nik", label: "No. NIK" },
     { name: "noTelpon", label: "No. Telpon" },

@@ -1,23 +1,22 @@
-// src/pages/TransferBarang.jsx — PRO MAX+ with Approval Admin + IMEI Search + Dark/Light Mode
-import React, { useEffect, useMemo, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+// src/pages/TransferBarang.jsx — FINAL OTOMATIS + UI MODERN ✅
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  FaArrowRight,
   FaExchangeAlt,
-  FaSearch,
   FaFileExcel,
-  FaInfoCircle,
   FaPrint,
+  FaPlus,
   FaCheck,
   FaTimes,
-  FaSun,
-  FaMoon,
+  FaFilePdf,
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import FirebaseService from "../services/FirebaseService";
 
-const fallbackTokoNames = [
+// ===================== TOKO =====================
+const TOKO_TUJUAN = [
   "CILANGKAP PUSAT",
   "CIBINONG",
   "GAS ALAM",
@@ -30,1230 +29,538 @@ const fallbackTokoNames = [
   "SAWANGAN",
 ];
 
-// key untuk simpan form di localStorage (supaya tidak hilang saat pindah halaman / refresh)
-const FORM_STORAGE_KEY = "transferBarangForm_v1";
-const IMEI_STORAGE_KEY = "transferBarangImeiSearch_v1";
+const KATEGORI_OPTIONS = [
+  "SEPEDA LISTRIK",
+  "MOTOR LISTRIK",
+  "HANDPHONE",
+  "ACCESORIES",
+];
 
-// helper format rupiah
-const fmt = (v) => {
-  try {
-    return Number(v || 0).toLocaleString("id-ID");
-  } catch {
-    return String(v || "");
-  }
+// ===================== AUTONUMBER =====================
+const generateNoDO = () => {
+  const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `${d}/${Math.floor(Math.random() * 999)
+    .toString()
+    .padStart(3, "0")}/SL/TF`;
+};
+
+const generateNoSuratJalan = () => {
+  const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `SJ/${d}/${Math.floor(Math.random() * 999)
+    .toString()
+    .padStart(3, "0")}`;
 };
 
 export default function TransferBarang() {
-  const navigate = useNavigate();
-
-  // ================== THEME ==================
-  // Default: terang. Jika sudah pernah pilih, ambil dari localStorage.
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return localStorage.getItem("transferTheme") === "dark";
-    } catch {
-      return false;
-    }
-  });
-
-  // Simpan pilihan theme ke localStorage supaya saat refresh tetap sama
-  useEffect(() => {
-    try {
-      localStorage.setItem("transferTheme", isDark ? "dark" : "light");
-    } catch {
-      // ignore
-    }
-  }, [isDark]);
-
-  // ----------------------- app state -----------------------
-  const [stockAll, setStockAll] = useState({});
-  const [tokoList, setTokoList] = useState(fallbackTokoNames);
-
-  // SEARCH sekarang pakai IMEI
-  const [imeiSearch, setImeiSearch] = useState("");
-  const [imeiDropdownOpen, setImeiDropdownOpen] = useState(false);
-
-  // (sisa dari versi lama, tidak lagi dipakai untuk select "Ke Toko",
-  // tapi dibiarkan agar tidak mengurangi struktur code asli)
-  const [showTokoDropdown, setShowTokoDropdown] = useState(false);
-
-  // form state (sku tetap dipakai backend)
+  // ===================== FORM =====================
   const [form, setForm] = useState({
     tanggal: new Date().toISOString().slice(0, 10),
+    noDo: generateNoDO(),
+    noSuratJalan: generateNoSuratJalan(),
     dari: "CILANGKAP PUSAT",
     ke: "",
-    sku: "",
+    pengirim: "",
+    kategori: "",
     brand: "",
-    nama: "",
-    imei: "",
-    noInvoice: "",
-    qty: 1,
-    harga: "",
-    pic: "",
-    keterangan: "",
+    barang: "",
+    imeis: [],
+    qty: 0,
   });
 
-  const [availableQty, setAvailableQty] = useState(0);
-  const [targetQty, setTargetQty] = useState(0);
+  const [imeiInput, setImeiInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // session local history for quick review
-  const [sessionHistory, setSessionHistory] = useState([]);
+  // ===================== DATA REALTIME =====================
+  const [history, setHistory] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [masterBarang, setMasterBarang] = useState([]);
+  const [allTransaksi, setAllTransaksi] = useState([]);
 
-  // pending requests (from firebase if available)
-  const [pendingRequests, setPendingRequests] = useState([]);
+  const [selectedSJ, setSelectedSJ] = useState(null);
+  const suratJalanRef = useRef(null);
 
-  // admin flag: simple detection from localStorage.user.isAdmin === true
-  const [isAdmin, setIsAdmin] = useState(false);
+  // ===================== FILTER =====================
+  const [filterStatus, setFilterStatus] = useState("ALL");
 
-  // untuk mode edit request pending
-  const [editingRequestId, setEditingRequestId] = useState(null);
-
-  const tableRef = useRef(null);
-
-  // ------------------------------------------------------------------
-  // 0) LOAD FORM DARI LOCALSTORAGE (agar input tidak hilang saat pindah halaman / refresh)
-  // ------------------------------------------------------------------
+  // ===================== AMBIL USER =====================
   useEffect(() => {
-    try {
-      const rawForm = localStorage.getItem(FORM_STORAGE_KEY);
-      if (rawForm) {
-        const saved = JSON.parse(rawForm);
-        setForm((prev) => ({
-          ...prev,
-          ...saved,
-          // fallback default jika tidak ada di storage
-          tanggal:
-            saved.tanggal || prev.tanggal || new Date().toISOString().slice(0, 10),
-          dari: saved.dari || prev.dari || "CILANGKAP PUSAT",
-        }));
-      }
-      const rawImei = localStorage.getItem(IMEI_STORAGE_KEY);
-      if (rawImei) {
-        setImeiSearch(rawImei);
-      }
-    } catch (err) {
-      console.warn("Gagal load form TransferBarang dari localStorage", err);
-    }
-  }, []);
-
-  // SIMPAN FORM & IMEI SEARCH KE LOCALSTORAGE setiap ada perubahan
-  useEffect(() => {
-    try {
-      localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(form));
-      localStorage.setItem(IMEI_STORAGE_KEY, imeiSearch || "");
-    } catch (err) {
-      console.warn("Gagal simpan form TransferBarang ke localStorage", err);
-    }
-  }, [form, imeiSearch]);
-
-  // ------------------------------------------------------------------
-  // 1) realtime stock listener
-  // ------------------------------------------------------------------
-  useEffect(() => {
-    if (typeof FirebaseService.listenStockAll === "function") {
-      const unsub = FirebaseService.listenStockAll((snap) => {
-        setStockAll(snap || {});
-      });
-      return () => unsub && unsub();
-    } else {
-      console.warn(
-        "FirebaseService.listenStockAll not found — stockAll will be empty"
-      );
-      setStockAll({});
-      return;
-    }
-  }, []);
-
-  // keep tokoList synchronized with stockAll
-  useEffect(() => {
-    const keys = Object.keys(stockAll || {});
-    const list = keys.length
-      ? Array.from(new Set([...keys, ...fallbackTokoNames]))
-      : fallbackTokoNames;
-
-    // ensure PUSAT first (kalau ada)
-    list.sort((a, b) => {
-      if (a === "PUSAT") return -1;
-      if (b === "PUSAT") return 1;
-      return a.localeCompare(b);
+    const unsub = FirebaseService.listenUsers((list) => {
+      setUsers(Array.isArray(list) ? list : []);
     });
-    setTokoList(list);
-  }, [stockAll]);
-
-  // --------------------------- detect admin from localStorage ---------------------------
-  useEffect(() => {
-    try {
-      const u = JSON.parse(localStorage.getItem("user") || "{}");
-      setIsAdmin(Boolean(u?.isAdmin));
-    } catch {
-      setIsAdmin(false);
-    }
+    return () => unsub && unsub();
   }, []);
 
-  // ------------------------------------------------------------------
-  // 2) IMEI options (berdasarkan MASTER STOCK / MASTER BARANG di toko asal)
-  //   - Jika dari === "CILANGKAP PUSAT" → pakai stok master pusat
-  //   - Selain itu → pakai stok toko masing-masing
-  // ------------------------------------------------------------------
-  const imeiOptions = useMemo(() => {
-    const perToko = stockAll[form.dari] || {};
-    let items = Object.entries(perToko || {}).map(([skuKey, it]) => ({
-      skuKey,
-      imei: String(it.imei || "").trim(),
-      nama: it.nama || "",
-      brand: it.brand || "",
-      harga: it.harga || "",
-      noInvoice: it.noInvoice || it.NO_INVOICE || "",
-      qty: it.qty || 0,
-    }));
-
-    // hanya yang punya IMEI
-    items = items.filter((it) => it.imei);
-
-    if (imeiSearch && imeiSearch.trim()) {
-      const s = imeiSearch.trim().toLowerCase();
-      items = items.filter(
-        (it) =>
-          it.imei.toLowerCase().includes(s) ||
-          it.nama.toLowerCase().includes(s) ||
-          it.brand.toLowerCase().includes(s) ||
-          it.skuKey.toLowerCase().includes(s)
-      );
-    }
-
-    return items;
-  }, [stockAll, form.dari, imeiSearch]);
-
-  // ------------------------------------------------------------------
-  // 3) load stok untuk SKU tertentu di toko asal (pakai form.sku)
-  // ------------------------------------------------------------------
+  // ===================== AMBIL MASTER PEMBELIAN =====================
   useEffect(() => {
-    const { dari, sku } = form;
-    if (!dari || !sku) {
-      setAvailableQty(0);
-      return;
-    }
+    const unsub = FirebaseService.listenAllTransaksi((rows) => {
+      setAllTransaksi(rows || []);
 
-    if (typeof FirebaseService.getStockForToko === "function") {
-      FirebaseService.getStockForToko(dari, sku)
-        .then((item) => {
-          const qty = item?.qty ? Number(item.qty) : 0;
-          setAvailableQty(qty);
-          if (item) {
-            setForm((f) => ({
-              ...f,
-              brand: f.brand || item.brand || "",
-              nama: f.nama || item.nama || "",
-              imei: f.imei || item.imei || "",
-              harga:
-                f.harga !== "" && f.harga !== undefined
-                  ? f.harga
-                  : item.harga || "",
-              noInvoice:
-                f.noInvoice ||
-                item.noInvoice ||
-                item.NO_INVOICE ||
-                f.noInvoice ||
-                "",
-            }));
-          }
-        })
-        .catch(() => setAvailableQty(0));
-    } else {
-      const it = (stockAll[dari] || {})[sku] || null;
-      const qty = it?.qty ? Number(it.qty) : 0;
-      setAvailableQty(qty);
-      if (it) {
-        setForm((f) => ({
-          ...f,
-          brand: f.brand || it.brand || "",
-          nama: f.nama || it.nama || "",
-          imei: f.imei || it.imei || "",
-          harga:
-            f.harga !== "" && f.harga !== undefined ? f.harga : it.harga || "",
-          noInvoice:
-            f.noInvoice || it.noInvoice || it.NO_INVOICE || f.noInvoice || "",
-        }));
-      }
-    }
-  }, [form.dari, form.sku, stockAll]);
-
-  // ------------------------------------------------------------------
-  // 3b) AUTO ISI FIELD KETIKA INPUT NO IMEI MANUAL (form.imei)
-  //   - Untuk CILANGKAP PUSAT: ambil dari master pusat
-  //   - Untuk toko lain: ambil dari stok toko masing-masing
-  // ------------------------------------------------------------------
-  useEffect(() => {
-    const { dari, imei } = form;
-    if (!dari || !imei) return;
-
-    const perToko = stockAll[dari] || {};
-    const imeiTrim = String(imei).trim();
-
-    let matchSku = null;
-    let matchItem = null;
-
-    Object.entries(perToko).forEach(([skuKey, it]) => {
-      const itemImei = String(it.imei || "").trim();
-      if (!matchSku && itemImei && itemImei === imeiTrim) {
-        matchSku = skuKey;
-        matchItem = it;
-      }
-    });
-
-    if (matchSku && matchItem) {
-      setForm((f) => ({
-        ...f,
-        sku: matchSku,
-        brand: matchItem.brand || f.brand || "",
-        nama: matchItem.nama || f.nama || "",
-        harga:
-          f.harga !== "" && f.harga !== undefined
-            ? f.harga
-            : matchItem.harga || "",
-        noInvoice:
-          f.noInvoice ||
-          matchItem.noInvoice ||
-          matchItem.NO_INVOICE ||
-          f.noInvoice ||
-          "",
-      }));
-    }
-  }, [form.imei, form.dari, stockAll]);
-
-  // ------------------------------------------------------------------
-  // 4) target qty preview
-  // ------------------------------------------------------------------
-  useEffect(() => {
-    const { ke, sku } = form;
-    if (!ke || !sku) {
-      setTargetQty(0);
-      return;
-    }
-    const qty = (stockAll[ke] || {})[sku]?.qty || 0;
-    setTargetQty(Number(qty));
-  }, [form.ke, form.sku, stockAll]);
-
-  // ------------------------------------------------------------------
-  // 5) listen pending requests (admin view) — optional
-  // ------------------------------------------------------------------
-  useEffect(() => {
-    if (typeof FirebaseService.listenTransferRequests === "function") {
-      const unsub = FirebaseService.listenTransferRequests((list) => {
-        setPendingRequests(Array.isArray(list) ? list : list || []);
-      });
-      return () => unsub && unsub();
-    } else {
-      setPendingRequests([]);
-    }
-  }, []);
-
-  // ------------------------------------------------------------------
-  // 6) helper: CEK IMEI LINTAS TOKO (KHUSUS CILANGKAP PUSAT)
-  //   - Mengembalikan nama toko lain jika IMEI sudah ada di toko tersebut
-  // ------------------------------------------------------------------
-  const findImeiInOtherStores = (imeiValue, fromToko) => {
-    const imeiTrim = String(imeiValue || "").trim();
-    if (!imeiTrim) return null;
-
-    for (const [tokoName, items] of Object.entries(stockAll || {})) {
-      if (!items || tokoName === fromToko) continue; // jangan cek toko asal
-      for (const it of Object.values(items)) {
-        const itemImei = String(it?.imei || "").trim();
-        if (itemImei && itemImei === imeiTrim) {
-          return tokoName;
+      const map = {};
+      (rows || []).forEach((t) => {
+        if (!t.NAMA_BRAND || !t.NAMA_BARANG) return;
+        const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+        if (!map[key]) {
+          map[key] = {
+            brand: t.NAMA_BRAND,
+            barang: t.NAMA_BARANG,
+            kategori: t.KATEGORI_BRAND || "",
+          };
         }
-      }
-    }
-    return null;
-  };
-
-  // ------------------------------------------------------------------
-  // 7) handlers
-  // ------------------------------------------------------------------
-  const handleChange = (e) => {
-    const { name, value, type } = e.target;
-    setForm((f) => ({
-      ...f,
-      [name]: type === "number" ? (value === "" ? "" : Number(value)) : value,
-    }));
-  };
-
-  const handleImeiSelect = (item) => {
-    const perToko = stockAll[form.dari] || {};
-    const data = perToko[item.skuKey] || {};
-    setForm((f) => ({
-      ...f,
-      sku: item.skuKey,
-      imei: item.imei,
-      brand: data.brand || item.brand || f.brand || "",
-      nama: data.nama || item.nama || f.nama || "",
-      harga:
-        f.harga !== "" && f.harga !== undefined
-          ? f.harga
-          : data.harga || item.harga || "",
-      noInvoice:
-        f.noInvoice ||
-        data.noInvoice ||
-        data.NO_INVOICE ||
-        item.noInvoice ||
-        "",
-    }));
-    setImeiSearch(item.imei);
-    setImeiDropdownOpen(false);
-  };
-
-  // muat request pending ke form untuk diedit
-  const loadRequestToForm = (req) => {
-    setForm({
-      tanggal:
-        req.tanggal || new Date().toISOString().slice(0, 10),
-      dari: req.dari || "CILANGKAP PUSAT",
-      ke: req.ke || "",
-      sku: req.sku || "",
-      brand: req.brand || "",
-      nama: req.nama || "",
-      imei: req.imei || "",
-      noInvoice: req.noInvoice || "",
-      qty: req.qty || 1,
-      harga: req.harga || "",
-      pic: req.pic || "",
-      keterangan: req.keterangan || "",
+      });
+      setMasterBarang(Object.values(map));
     });
-    setImeiSearch(req.imei || "");
-    setEditingRequestId(req.id || null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    return () => unsub && unsub();
+  }, []);
+
+  // ===================== HISTORY TRANSFER =====================
+  useEffect(() => {
+    const unsub = FirebaseService.listenTransferRequests((rows) => {
+      setHistory(rows || []);
+    });
+    return () => unsub && unsub();
+  }, []);
+
+  // ===================== SOURCE IMEI =====================
+  const imeiSource = useMemo(() => {
+    return Array.from(
+      new Set(
+        allTransaksi.map((t) => String(t.IMEI || "").trim()).filter(Boolean)
+      )
+    );
+  }, [allTransaksi]);
+
+  // ===================== ADD IMEI =====================
+  const addImei = () => {
+    const im = imeiInput.trim();
+    if (!im) return;
+    if (form.imeis.includes(im)) {
+      alert("❌ IMEI tidak boleh duplikat!");
+      return;
+    }
+
+    setForm((f) => ({
+      ...f,
+      imeis: [...f.imeis, im],
+      qty: f.imeis.length + 1,
+    }));
+
+    setImeiInput("");
   };
 
-  // create / update transfer request (for approval)
-  const createTransferRequest = async () => {
-    const {
-      tanggal,
-      dari,
-      ke,
-      sku,
-      qty,
-      nama,
-      brand,
-      imei,
-      harga,
-      pic,
-      keterangan,
-      noInvoice,
-    } = form;
+  const removeImei = (idx) => {
+    const next = [...form.imeis];
+    next.splice(idx, 1);
+    setForm((f) => ({ ...f, imeis: next, qty: next.length }));
+  };
 
-    if (!tanggal || !pic || !harga) {
-      alert("Tanggal, Harga, dan PIC wajib diisi!");
-      return;
-    }
-    if (!dari || !ke || !sku) {
-      alert("Mohon isi: Dari, Ke, dan pilih IMEI / SKU terlebih dahulu.");
-      return;
-    }
-    if (!imei) {
-      alert("IMEI / Nomor Mesin wajib diisi.");
-      return;
-    }
-    if (dari === ke) {
-      alert("Toko asal & tujuan tidak boleh sama.");
-      return;
-    }
-    if (!qty || Number(qty) <= 0) {
-      alert("Qty harus > 0.");
-      return;
-    }
-    if (availableQty < Number(qty)) {
-      alert(`Stok tidak cukup. Tersedia: ${availableQty}`);
+  // ===================== SUBMIT (PENDING) =====================
+  const submitTransfer = async () => {
+    if (!form.ke || !form.pengirim || !form.brand || !form.barang) {
+      alert("❌ Lengkapi semua data wajib!");
       return;
     }
 
-    // VALIDASI LINTAS TOKO KHUSUS CILANGKAP PUSAT:
-    // cek apakah IMEI ini sudah ada di toko lain (selain 'dari')
-    if (dari === "CILANGKAP PUSAT") {
-      const tokoDuplikat = findImeiInOtherStores(imei, dari);
-      if (tokoDuplikat) {
-        alert(
-          `IMEI ${imei} sudah terdaftar di toko ${tokoDuplikat}. ` +
-            "Request transfer dibatalkan untuk menghindari duplikasi IMEI lintas toko."
-        );
-        return;
-      }
+    if (form.imeis.length === 0) {
+      alert("❌ IMEI wajib diisi!");
+      return;
     }
 
-    const performedBy = (() => {
-      try {
-        const u = JSON.parse(localStorage.getItem("user"));
-        return u?.username || u?.name || "system";
-      } catch {
-        return "system";
-      }
-    })();
-
-    const payload = {
-      tanggal,
-      dari,
-      ke,
-      sku,
-      brand,
-      nama,
-      imei,
-      qty: Number(qty),
-      harga: Number(harga),
-      noInvoice: noInvoice || "",
-      pic,
-      keterangan,
-      status: "Pending",
-      createdAt: new Date().toISOString(),
-      requestedBy: performedBy,
-    };
+    const sku = `${form.brand}_${form.barang}`.replace(/\s+/g, "_");
 
     setLoading(true);
     try {
-      // MODE EDIT: jika editingRequestId ada, update request lama
-      if (editingRequestId) {
-        if (typeof FirebaseService.updateTransferRequest === "function") {
-          await FirebaseService.updateTransferRequest(editingRequestId, payload);
-          alert("Request transfer berhasil diperbarui.");
-        } else {
-          // fallback lokal jika updateTransferRequest tidak tersedia
-          setPendingRequests((prev) =>
-            prev.map((r) =>
-              r.id === editingRequestId ? { ...r, ...payload } : r
-            )
-          );
-          alert(
-            "Request transfer diperbarui secara lokal (updateTransferRequest tidak tersedia)."
-          );
-        }
-      } else {
-        // MODE BUAT BARU
-        if (typeof FirebaseService.createTransferRequest === "function") {
-          await FirebaseService.createTransferRequest(payload);
-          alert(
-            "Request transfer berhasil dibuat dan menunggu approval admin."
-          );
-        } else {
-          const id = `local-${Date.now()}`;
-          const r = { id, ...payload };
-          setPendingRequests((p) => [r, ...p]);
-          alert(
-            "Request transfer dibuat secara lokal (FirebaseService.createTransferRequest tidak tersedia)."
-          );
-        }
-      }
+      await FirebaseService.createTransferRequest({
+        ...form,
+        sku,
+        status: "Pending",
+        createdAt: new Date().toISOString(),
+      });
 
-      // update session history lokal (untuk cetak surat jalan)
-      setSessionHistory((h) =>
-        [{ id: `req-${Date.now()}`, ...payload }, ...h].slice(0, 500)
-      );
+      alert("✅ Transfer berhasil disubmit (Pending)");
 
-      // reset form setelah berhasil (supaya input baru bersih)
-      setForm((f) => ({
-        ...f,
-        sku: "",
-        imei: "",
+      setForm({
+        tanggal: new Date().toISOString().slice(0, 10),
+        noDo: generateNoDO(),
+        noSuratJalan: generateNoSuratJalan(),
+        dari: "CILANGKAP PUSAT",
+        ke: "",
+        pengirim: "",
+        kategori: "",
         brand: "",
-        nama: "",
-        harga: "",
-        noInvoice: "",
-        qty: 1,
-        pic: "",
-        keterangan: "",
-      }));
-      setImeiSearch("");
-      setEditingRequestId(null);
-
-      // bersihkan form di localStorage juga
-      try {
-        localStorage.removeItem(FORM_STORAGE_KEY);
-        localStorage.removeItem(IMEI_STORAGE_KEY);
-      } catch {
-        // ignore
-      }
-    } catch (err) {
-      console.error("createTransferRequest error:", err);
-      alert("Gagal memproses request transfer. Cek console.");
+        barang: "",
+        imeis: [],
+        qty: 0,
+      });
+    } catch (e) {
+      console.error(e);
+      alert("❌ Gagal submit");
     } finally {
       setLoading(false);
     }
   };
 
-  // admin: approve request -> perform actual transferStock and mark request approved
-  const approveRequest = async (req) => {
-    if (
-      !window.confirm(
-        `Setujui transfer ${req.sku} ${req.qty} dari ${req.dari} ke ${req.ke}?`
-      )
-    )
-      return;
+  // ===================== APPROVE =====================
+  const approveTransfer = async (row) => {
     try {
-      if (typeof FirebaseService.transferStock === "function") {
-        await FirebaseService.transferStock({
-          fromToko: req.dari,
-          toToko: req.ke,
-          sku: req.sku,
-          qty: Number(req.qty),
-          nama: req.nama,
-          imei: req.imei,
-          keterangan: `APPROVED: ${req.keterangan || ""}`,
-          performedBy: req.requestedBy || "admin",
-        });
-      } else {
-        throw new Error("FirebaseService.transferStock not implemented");
+      await FirebaseService.transferStock({
+        fromToko: row.dari,
+        toToko: row.ke,
+        sku: row.sku,
+        qty: row.qty,
+        nama: row.barang,
+        imei: (row.imeis || []).join(", "),
+        keterangan: `SJ:${row.noSuratJalan}`,
+        performedBy: row.pengirim,
+      });
+
+      if (row.ke === "CILANGKAP PUSAT") {
+        for (const im of row.imeis || []) {
+          await FirebaseService.addTransaksi(1, {
+            TANGGAL_TRANSAKSI: row.tanggal,
+            NO_INVOICE: row.noDo,
+            NAMA_TOKO: row.ke,
+            NAMA_USER: row.pengirim,
+            NAMA_BRAND: row.brand,
+            KATEGORI_BRAND: row.kategori,
+            NAMA_BARANG: row.barang,
+            IMEI: im,
+            QTY: 1,
+            PAYMENT_METODE: "PEMBELIAN",
+            STATUS: "Approved",
+            KETERANGAN: "TRANSFER MASUK",
+          });
+        }
       }
 
-      if (typeof FirebaseService.updateTransferRequest === "function") {
-        await FirebaseService.updateTransferRequest(req.id, {
-          status: "Approved",
-          approvedAt: new Date().toISOString(),
-          approvedBy:
-            JSON.parse(localStorage.getItem("user") || "{}").username ||
-            "admin",
-        });
-      } else {
-        setPendingRequests((p) => p.filter((x) => x.id !== req.id));
-      }
+      await FirebaseService.updateTransferRequest(row.id, {
+        status: "Approved",
+        approvedAt: new Date().toISOString(),
+      });
 
-      alert("Transfer disetujui & stok telah dipindahkan.");
-    } catch (err) {
-      console.error("approveRequest error:", err);
-      alert("Gagal approve request. Cek console.");
+      alert("✅ Transfer Approved");
+    } catch (e) {
+      console.error(e);
+      alert("❌ Gagal Approve");
     }
   };
 
-  // admin: reject request (fungsi ini bisa dianggap VOID sebelum stok benar-benar dipindahkan)
-  const rejectRequest = async (req, reason = "") => {
-    if (
-      !window.confirm(
-        `Tolak (VOID) request ${req.sku} ${req.qty} dari ${req.dari} ke ${req.ke}?`
-      )
-    )
-      return;
-    try {
-      if (typeof FirebaseService.updateTransferRequest === "function") {
-        await FirebaseService.updateTransferRequest(req.id, {
-          status: "Rejected",
-          rejectedAt: new Date().toISOString(),
-          rejectedBy:
-            JSON.parse(localStorage.getItem("user") || "{}").username ||
-            "admin",
-          rejectReason: reason,
-        });
-      } else {
-        setPendingRequests((p) => p.filter((x) => x.id !== req.id));
-      }
-      alert("Request di-VOID / ditolak. Stok tetap pada posisi awal.");
-    } catch (err) {
-      console.error("rejectRequest error:", err);
-      alert("Gagal menolak request.");
-    }
+  // ===================== REJECT =====================
+  const rejectTransfer = async (id) => {
+    await FirebaseService.updateTransferRequest(id, {
+      status: "Rejected",
+      rejectedAt: new Date().toISOString(),
+    });
+
+    alert("✅ Transfer Rejected");
   };
 
-  // export session history as excel
-  const exportHistoryExcel = () => {
-    if (!sessionHistory.length) {
-      alert("Belum ada riwayat.");
-      return;
-    }
-    const rows = sessionHistory.map((h, i) => ({
-      NO: i + 1,
-      TANGGAL: h.tanggal,
-      DARI: h.dari,
-      KE: h.ke,
-      SKU: h.sku,
-      BRAND: h.brand,
-      NAMA: h.nama,
-      IMEI: h.imei,
-      QTY: h.qty,
-      HARGA: h.harga,
-      PIC: h.pic,
-      KETERANGAN: h.keterangan,
-      STATUS: h.status || "Local",
-    }));
-    const ws = XLSX.utils.json_to_sheet(rows);
+  // ===================== FILTER =====================
+  const filteredHistory =
+    filterStatus === "ALL"
+      ? history
+      : history.filter((h) => h.status === filterStatus);
+
+  // ===================== EXPORT EXCEL =====================
+  const exportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filteredHistory);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "TransferSession");
-    XLSX.writeFile(
-      wb,
-      `Transfer_Session_${new Date().toISOString().slice(0, 10)}.xlsx`
-    );
+    XLSX.utils.book_append_sheet(wb, ws, "Transfer");
+    XLSX.writeFile(wb, "History_Transfer.xlsx");
   };
 
-  // print PDF for the latest session transfer
-  const printLatestSuratJalan = () => {
-    if (!sessionHistory.length) {
-      alert("Belum ada riwayat untuk dicetak.");
-      return;
-    }
-    const t = sessionHistory[0];
-    const doc = new jsPDF("p", "mm", "a4");
+  // ===================== EXPORT PDF =====================
+  const exportPDF = async () => {
+    if (!selectedSJ) return alert("Pilih Surat Jalan dulu!");
+    const canvas = await html2canvas(suratJalanRef.current);
+    const img = canvas.toDataURL("image/png");
 
-    doc.setFontSize(12);
-    doc.rect(14, 10, 36, 24); // logo box
-    doc.text("LOGO", 32, 26, { align: "center" });
+    const pdf = new jsPDF("p", "mm", "a4");
+    const w = 210;
+    const h = (canvas.height * w) / canvas.width;
 
-    doc.setFontSize(16);
-    doc.text("SURAT JALAN", 105, 18, { align: "center" });
-    doc.setFontSize(10);
-    doc.text(
-      `No : SJ-${t.tanggal.replace(/-/g, "")}-${t.id?.slice(-4) || "0000"}`,
-      15,
-      40
-    );
-    doc.text(`Tanggal : ${t.tanggal}`, 15, 46);
-    doc.text(`Dari : ${t.dari}`, 15, 52);
-    doc.text(`Ke : ${t.ke}`, 15, 58);
-    doc.text(`PIC : ${t.pic}`, 15, 64);
-    doc.text(
-      `Dibuat : ${t.requestedBy || t.performedBy || "system"}`,
-      15,
-      70
-    );
-
-    let y = 80;
-    doc.setFontSize(10);
-    doc.text("No", 15, y);
-    doc.text("SKU/IMEI", 30, y);
-    doc.text("Barang", 70, y);
-    doc.text("Qty", 150, y);
-    y += 6;
-    doc.text("1", 15, y);
-    doc.text(t.sku || t.imei || "-", 30, y);
-    doc.text(t.nama || "-", 70, y);
-    doc.text(String(t.qty || 0), 150, y);
-    y += 20;
-    doc.text(`Keterangan: ${t.keterangan || "-"}`, 15, y);
-
-    doc.save(`SuratJalan_${t.tanggal}_${t.dari}_to_${t.ke}.pdf`);
+    pdf.addImage(img, "PNG", 0, 0, w, h);
+    pdf.save(`SURAT_JALAN_${selectedSJ.noSuratJalan}.pdf`);
   };
 
-  // ================== THEME CLASS ==================
-  const rootClass = isDark
-    ? "min-h-screen p-4 bg-slate-950 text-slate-100"
-    : "min-h-screen p-4 bg-slate-100 text-slate-900";
+  // ===================== PRINT =====================
+  const printSuratJalan = () => {
+    if (!selectedSJ) return alert("Pilih SJ dulu!");
+    const win = window.open("", "", "width=900,height=700");
+    win.document.write(
+      `<html><body>${suratJalanRef.current.innerHTML}</body></html>`
+    );
+    win.document.close();
+    win.print();
+  };
 
-  const cardClass = isDark
-    ? "bg-slate-900 border border-slate-800"
-    : "bg-white border border-slate-200";
+  const qrValue = selectedSJ
+    ? `${selectedSJ.noSuratJalan}|${selectedSJ.tanggal}|${selectedSJ.dari}|${selectedSJ.ke}|${selectedSJ.barang}|${selectedSJ.qty}`
+    : "";
 
-  const subTextClass = isDark ? "text-slate-400" : "text-slate-500";
-
-  // UI
+  // ===================== UI =====================
   return (
-    <div className={rootClass}>
-      <div
-        className={`rounded-xl shadow-md max-w-7xl mx-auto ${
-          isDark ? "" : ""
-        }`}
-      >
-        {/* HEADER GRADIENT */}
-        <div className="bg-gradient-to-r from-indigo-600 to-blue-500 text-white p-4 rounded-lg mb-4 flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-700 via-blue-700 to-purple-700 p-4">
+      <div className="max-w-7xl mx-auto bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-6 space-y-6">
+        <h2 className="text-2xl font-bold text-indigo-700 flex items-center gap-2">
+          <FaExchangeAlt /> TRANSFER BARANG
+        </h2>
+
+        {/* ================= FORM ================= */}
+        <div className="grid md:grid-cols-4 gap-4">
           <div>
-            <h2 className="text-xl font-bold">
-              Transfer Barang — PRO MAX+ (Approval)
-            </h2>
-            <p className="text-sm text-indigo-100">
-              {isAdmin
-                ? "Mode Admin — approve/reject transfer requests"
-                : "Buat request transfer, menunggu approval admin"}
-            </p>
+            <label className="text-xs font-semibold">Tanggal</label>
+            <input type="date" value={form.tanggal} className="input" />
           </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 text-xs">
-              <FaInfoCircle />
-              <span>Realtime sync via Firebase</span>
-            </div>
-            <button
-              onClick={() => setIsDark((p) => !p)}
-              className="flex items-center gap-2 px-3 py-2 rounded-full bg-black/20 hover:bg-black/30 text-xs border border-white/30"
+
+          <div>
+            <label className="text-xs font-semibold">No DO</label>
+            <input value={form.noDo} readOnly className="input" />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold">No Surat Jalan</label>
+            <input value={form.noSuratJalan} readOnly className="input" />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold">Toko Tujuan</label>
+            <select
+              className="input"
+              value={form.ke}
+              onChange={(e) => setForm({ ...form, ke: e.target.value })}
             >
-              {isDark ? <FaSun /> : <FaMoon />}
-              <span>{isDark ? "Mode Terang" : "Mode Gelap"}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* FORM + SUMMARY */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-          <div className={`lg:col-span-2 p-4 rounded shadow ${cardClass}`}>
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <FaExchangeAlt /> Form Transfer Barang
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-sm mb-1">Tanggal</label>
-                <input
-                  type="date"
-                  name="tanggal"
-                  value={form.tanggal}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded bg-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm mb-1">Dari Toko</label>
-                <select
-                  name="dari"
-                  value={form.dari}
-                  onChange={(e) => {
-                    setForm((f) => ({
-                      ...f,
-                      dari: e.target.value,
-                      sku: "",
-                      brand: "",
-                      nama: "",
-                      imei: "",
-                      noInvoice: "",
-                    }));
-                    setImeiSearch("");
-                  }}
-                  className="w-full p-2 border rounded bg-transparent"
-                >
-                  {tokoList.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* KE TOKO SEKARANG DROPDOWN */}
-              <div>
-                <label className="block text-sm mb-1">
-                  Ke Toko (Tujuan)
-                </label>
-                <select
-                  name="ke"
-                  value={form.ke}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, ke: e.target.value }))
-                  }
-                  className="w-full p-2 border rounded bg-transparent"
-                >
-                  <option value="">- Pilih Toko -</option>
-                  {tokoList
-                    .filter((t) => t !== form.dari)
-                    .map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              {/* IMEI SEARCH */}
-              <div className="md:col-span-1 relative">
-                <label className="block text-sm mb-1">
-                  <FaSearch className="inline mr-1" />
-                  No IMEI / MESIN
-                </label>
-                <input
-                  value={imeiSearch}
-                  onChange={(e) => {
-                    setImeiSearch(e.target.value);
-                    setImeiDropdownOpen(Boolean(e.target.value));
-                  }}
-                  onFocus={() => setImeiDropdownOpen(true)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && imeiOptions.length > 0) {
-                      handleImeiSelect(imeiOptions[0]);
-                    }
-                  }}
-                  className="w-full p-2 border rounded bg-transparent"
-                  placeholder="Ketik / scan IMEI atau MESIN..."
-                />
-                {imeiDropdownOpen && (
-                  <div
-                    className={`absolute z-30 w-full rounded shadow max-h-48 overflow-y-auto mt-1 ${
-                      isDark
-                        ? "bg-slate-900 border border-slate-700"
-                        : "bg-white border"
-                    }`}
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    {imeiOptions.length > 0 ? (
-                      imeiOptions.map((item) => (
-                        <div
-                          key={item.skuKey}
-                          onClick={() => handleImeiSelect(item)}
-                          className={`px-3 py-2 cursor-pointer text-xs sm:text-sm ${
-                            isDark
-                              ? "hover:bg-indigo-900"
-                              : "hover:bg-indigo-100"
-                          }`}
-                        >
-                          <div className="font-mono">IMEI: {item.imei}</div>
-                          <div className="text-xs">
-                            {item.brand} — {item.nama}
-                          </div>
-                          <div className="text-[11px] text-gray-400">
-                            SKU: {item.skuKey} | Stok: {item.qty || 0}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="px-3 py-2 text-xs text-gray-400 italic">
-                        IMEI tidak ditemukan di stok {form.dari}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* NO INVOICE OTOMATIS */}
-              <div className="md:col-span-2">
-                <label className="block text-sm mb-1">
-                  No Invoice (otomatis dari IMEI)
-                </label>
-                <input
-                  name="noInvoice"
-                  value={form.noInvoice}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded bg-transparent"
-                  placeholder="Otomatis terisi setelah pilih IMEI (jika ada di master)"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm mb-1">Brand</label>
-                <input
-                  name="brand"
-                  value={form.brand}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded bg-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm mb-1">Nama Barang</label>
-                <input
-                  name="nama"
-                  value={form.nama}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded bg-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm mb-1">
-                  IMEI / Nomor Unik
-                </label>
-                <input
-                  name="imei"
-                  value={form.imei}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded bg-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm mb-1">
-                  Harga Unit (Rp)
-                </label>
-                <input
-                  type="number"
-                  name="harga"
-                  value={form.harga}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded text-right bg-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm mb-1">Qty Transfer</label>
-                <input
-                  type="number"
-                  min={1}
-                  name="qty"
-                  value={form.qty}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded text-right bg-transparent"
-                />
-                <div className="text-xs text-gray-400 mt-1">
-                  Stok tersedia di {form.dari}: {availableQty}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm mb-1">PIC Pengirim</label>
-                <input
-                  name="pic"
-                  value={form.pic}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded bg-transparent"
-                />
-              </div>
-
-              <div className="md:col-span-3">
-                <label className="block text-sm mb-1">Keterangan</label>
-                <input
-                  name="keterangan"
-                  value={form.keterangan}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded bg-transparent"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2 mt-4">
-              {isAdmin ? (
-                <button
-                  onClick={() => {
-                    alert(
-                      "Admin dapat approve / edit request di tabel Pending Requests di bawah."
-                    );
-                  }}
-                  className="px-4 py-2 bg-green-600 text-white rounded flex items-center text-sm"
-                >
-                  Buat & Setujui
-                </button>
-              ) : (
-                <button
-                  onClick={createTransferRequest}
-                  disabled={loading}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded flex items-center text-sm"
-                >
-                  <FaArrowRight className="mr-2" />
-                  {loading
-                    ? "Memproses..."
-                    : editingRequestId
-                    ? "Update Request"
-                    : "Buat Request"}
-                </button>
-              )}
-
-              <button
-                onClick={() => navigate("/inventory-report")}
-                className={`px-4 py-2 rounded text-sm ${
-                  isDark
-                    ? "border border-slate-600 hover:bg-slate-800"
-                    : "border border-slate-300 hover:bg-slate-100"
-                }`}
-              >
-                Kembali
-              </button>
-            </div>
+              <option value="">Pilih Toko</option>
+              {TOKO_TUJUAN.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
           </div>
 
-          {/* summary */}
-          <div className={`p-4 rounded shadow ${cardClass}`}>
-            <h3 className="font-semibold mb-2">Ringkasan</h3>
-            <div className="mb-2 text-xs text-gray-400">IMEI / SKU</div>
-            <div className="font-mono mb-3 text-sm">
-              {form.imei || form.sku || "-"}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-slate-900/10 p-2 rounded border border-slate-700/40">
-                <div className="text-xs text-gray-400">Dari</div>
-                <div className="font-semibold text-sm">
-                  {form.dari || "-"}
-                </div>
-                <div className="text-xs">
-                  Sistem: <span className="font-mono">{availableQty}</span>
-                </div>
-              </div>
-
-              <div className="bg-emerald-900/10 p-2 rounded border border-emerald-700/40">
-                <div className="text-xs text-gray-400">Ke</div>
-                <div className="font-semibold text-sm">
-                  {form.ke || "-"}
-                </div>
-                <div className="text-xs">
-                  Sistem: <span className="font-mono">{targetQty}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-slate-900/10 p-2 rounded border border-slate-700/40 mt-3 text-xs">
-              <div className="flex justify-between text-gray-400">
-                <span>Qty Transfer</span>
-                <span>Estimasi</span>
-              </div>
-              <div className="flex justify-between items-center mt-1">
-                <span className="font-semibold text-sm">
-                  {form.qty || 0} unit
-                </span>
-                <span className="font-mono text-sm">
-                  {targetQty} → {targetQty + (Number(form.qty) || 0)}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-3">
-              <button
-                onClick={printLatestSuratJalan}
-                className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs sm:text-sm flex items-center"
-              >
-                <FaPrint className="mr-2" />
-                Cetak Surat Jalan (Terbaru)
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* admin pending requests */}
-        <div className={`p-4 rounded shadow mb-6 ${cardClass}`}>
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="font-semibold">
-              Pending Transfer Requests {isAdmin ? "(Admin Mode)" : ""}
-            </h3>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={exportHistoryExcel}
-                className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-xs flex items-center"
-              >
-                <FaFileExcel className="mr-1" /> Export Sesi
-              </button>
-            </div>
+          {/* NAMA PENGIRIM */}
+          <div>
+            <label className="text-xs font-semibold">Nama Pengirim</label>
+            <input
+              list="pengirim-list"
+              value={form.pengirim}
+              onChange={(e) => setForm({ ...form, pengirim: e.target.value })}
+              className="input"
+            />
+            <datalist id="pengirim-list">
+              {users.map((u) => (
+                <option key={u.id || u.username} value={u.name || u.username} />
+              ))}
+            </datalist>
           </div>
 
-          {isAdmin ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs sm:text-sm border-collapse">
-                <thead
-                  className={isDark ? "bg-slate-900/60" : "bg-slate-100"}
-                >
-                  <tr>
-                    <th className="p-2 border">No</th>
-                    <th className="p-2 border">Tanggal</th>
-                    <th className="p-2 border">Dari</th>
-                    <th className="p-2 border">Ke</th>
-                    <th className="p-2 border">SKU</th>
-                    <th className="p-2 border">QTY</th>
-                    <th className="p-2 border">PIC</th>
-                    <th className="p-2 border">Status</th>
-                    <th className="p-2 border">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(pendingRequests || []).length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={9}
-                        className="p-3 border text-center text-xs text-gray-500"
-                      >
-                        Tidak ada request
-                      </td>
-                    </tr>
-                  )}
-                  {(pendingRequests || []).map((req, idx) => (
-                    <tr
-                      key={req.id || idx}
-                      className={
-                        isDark ? "hover:bg-slate-800" : "hover:bg-gray-50"
-                      }
-                    >
-                      <td className="p-2 border text-center">{idx + 1}</td>
-                      <td className="p-2 border">{req.tanggal}</td>
-                      <td className="p-2 border">{req.dari}</td>
-                      <td className="p-2 border">{req.ke}</td>
-                      <td className="p-2 border font-mono">{req.sku}</td>
-                      <td className="p-2 border text-center">{req.qty}</td>
-                      <td className="p-2 border">{req.pic}</td>
-                      <td className="p-2 border">
-                        {req.status || "Pending"}
-                      </td>
-                      <td className="p-2 border text-center space-x-2">
-                        <button
-                          onClick={() => approveRequest(req)}
-                          className="px-2 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-xs inline-flex items-center"
-                        >
-                          <FaCheck className="mr-1" />
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => rejectRequest(req)}
-                          className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-xs inline-flex items-center ml-2"
-                        >
-                          <FaTimes className="mr-1" />
-                          Void / Reject
-                        </button>
-                        <button
-                          onClick={() => loadRequestToForm(req)}
-                          className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs inline-flex items-center ml-2"
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className={`text-sm ${subTextClass}`}>
-              Sebagai user biasa, kamu dapat membuat request transfer.
-              Admin akan melihat halaman ini untuk approve / edit / void.
-            </div>
-          )}
-        </div>
-
-        {/* session history table */}
-        <div className={`p-4 rounded shadow ${cardClass}`}>
-          <h3 className="font-semibold mb-3">Riwayat Transfer (Sesi Ini)</h3>
-          <div className="overflow-x-auto">
-            <table
-              ref={tableRef}
-              className="w-full text-xs sm:text-sm border-collapse"
+          {/* KATEGORI */}
+          <div>
+            <label className="text-xs font-semibold">Kategori</label>
+            <select
+              className="input"
+              value={form.kategori}
+              onChange={(e) => setForm({ ...form, kategori: e.target.value })}
             >
-              <thead
-                className={isDark ? "bg-slate-900/60" : "bg-slate-100"}
-              >
-                <tr>
-                  <th className="p-2 border">No</th>
-                  <th className="p-2 border">Tanggal</th>
-                  <th className="p-2 border">Dari</th>
-                  <th className="p-2 border">Ke</th>
-                  <th className="p-2 border">SKU</th>
-                  <th className="p-2 border">Nama</th>
-                  <th className="p-2 border">Qty</th>
-                  <th className="p-2 border">Harga</th>
-                  <th className="p-2 border">PIC</th>
-                  <th className="p-2 border">Keterangan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessionHistory.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={10}
-                      className="p-3 border text-center text-xs text-gray-500"
-                    >
-                      Belum ada riwayat
-                    </td>
-                  </tr>
-                )}
-                {sessionHistory.map((h, idx) => (
-                  <tr
-                    key={h.id || idx}
-                    className={
-                      isDark ? "hover:bg-slate-800" : "hover:bg-gray-50"
-                    }
-                  >
-                    <td className="p-2 border text-center">{idx + 1}</td>
-                    <td className="p-2 border">{h.tanggal}</td>
-                    <td className="p-2 border">{h.dari}</td>
-                    <td className="p-2 border">{h.ke}</td>
-                    <td className="p-2 border font-mono">{h.sku}</td>
-                    <td className="p-2 border">{h.nama}</td>
-                    <td className="p-2 border text-center">{h.qty}</td>
-                    <td className="p-2 border text-right">
-                      Rp {fmt(h.harga)}
-                    </td>
-                    <td className="p-2 border">{h.pic}</td>
-                    <td className="p-2 border text-xs">{h.keterangan}</td>
-                  </tr>
+              <option value="">Pilih Kategori</option>
+              {KATEGORI_OPTIONS.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* BRAND */}
+          <div>
+            <label className="text-xs font-semibold">Brand</label>
+            <input
+              list="brand-list"
+              value={form.brand}
+              onChange={(e) => setForm({ ...form, brand: e.target.value })}
+              className="input"
+            />
+            <datalist id="brand-list">
+              {[...new Set(masterBarang.map((x) => x.brand))].map((b) => (
+                <option key={b} value={b} />
+              ))}
+            </datalist>
+          </div>
+
+          {/* BARANG */}
+          <div>
+            <label className="text-xs font-semibold">Nama Barang</label>
+            <input
+              list="barang-list"
+              value={form.barang}
+              onChange={(e) => setForm({ ...form, barang: e.target.value })}
+              className="input"
+            />
+            <datalist id="barang-list">
+              {masterBarang
+                .filter((x) => x.brand === form.brand)
+                .map((x) => (
+                  <option key={x.barang} value={x.barang} />
                 ))}
-              </tbody>
-            </table>
+            </datalist>
+          </div>
+
+          {/* IMEI */}
+          <div className="md:col-span-2">
+            <label className="text-xs font-semibold">IMEI</label>
+            <div className="flex gap-2">
+              <input
+                list="imei-list"
+                value={imeiInput}
+                onChange={(e) => setImeiInput(e.target.value)}
+                className="input w-full"
+              />
+              <button
+                onClick={addImei}
+                className="bg-indigo-600 text-white px-4 rounded-lg"
+              >
+                <FaPlus />
+              </button>
+            </div>
+
+            <datalist id="imei-list">
+              {imeiSource.map((i) => (
+                <option key={i} value={i} />
+              ))}
+            </datalist>
+
+            <div className="flex flex-wrap mt-2">
+              {form.imeis.map((im, i) => (
+                <div
+                  key={i}
+                  className="px-2 py-1 bg-indigo-100 rounded mr-2 mb-2"
+                >
+                  {im}
+                  <button
+                    onClick={() => removeImei(i)}
+                    className="ml-2 text-red-600"
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+
+        <button
+          onClick={submitTransfer}
+          disabled={loading}
+          className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-6 py-2 rounded-xl shadow"
+        >
+          {loading ? "Loading..." : "SUBMIT TRANSFER"}
+        </button>
+
+        {/* ================= FILTER ================= */}
+        <div className="flex gap-2 items-center">
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="border p-2 rounded"
+          >
+            <option value="ALL">SEMUA</option>
+            <option value="Pending">Pending</option>
+            <option value="Approved">Approved</option>
+            <option value="Rejected">Rejected</option>
+          </select>
+
+          <button onClick={exportExcel} className="btn-blue">
+            <FaFileExcel /> Excel
+          </button>
+          <button onClick={exportPDF} className="btn-red">
+            <FaFilePdf /> PDF
+          </button>
+          <button onClick={printSuratJalan} className="btn-indigo">
+            <FaPrint /> Print
+          </button>
+        </div>
+
+        {/* ================= TABLE ================= */}
+        <table className="w-full border text-sm">
+          <thead className="bg-slate-100">
+            <tr>
+              <th>No SJ</th>
+              <th>Barang</th>
+              <th>Dari</th>
+              <th>Ke</th>
+              <th>Qty</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredHistory.map((row) => (
+              <tr
+                key={row.id}
+                onClick={() => setSelectedSJ(row)}
+                className="hover:bg-slate-50 cursor-pointer"
+              >
+                <td>{row.noSuratJalan}</td>
+                <td>{row.barang}</td>
+                <td>{row.dari}</td>
+                <td>{row.ke}</td>
+                <td>{row.qty}</td>
+                <td>{row.status}</td>
+                <td>
+                  {row.status === "Pending" && (
+                    <>
+                      <button
+                        onClick={() => approveTransfer(row)}
+                        className="text-green-600 mr-2"
+                      >
+                        <FaCheck />
+                      </button>
+                      <button
+                        onClick={() => rejectTransfer(row.id)}
+                        className="text-red-600"
+                      >
+                        <FaTimes />
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* ================= SURAT JALAN ================= */}
+        {selectedSJ && (
+          <div ref={suratJalanRef} className="bg-white p-4 rounded shadow">
+            <h3 className="font-bold">SURAT JALAN</h3>
+            <p>No: {selectedSJ.noSuratJalan}</p>
+            <p>Dari: {selectedSJ.dari}</p>
+            <p>Ke: {selectedSJ.ke}</p>
+            <p>Barang: {selectedSJ.barang}</p>
+            <p>Qty: {selectedSJ.qty}</p>
+
+            <img
+              className="mt-4"
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+                qrValue
+              )}`}
+              alt="QR"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+/* ===================== STYLE HELPER ===================== */
+const styles = document.createElement("style");
+styles.innerHTML = `
+  .input{
+    width:100%;
+    padding:8px;
+    border:1px solid #cbd5e1;
+    border-radius:8px;
+  }
+  .btn-blue{background:#2563eb;color:white;padding:6px 12px;border-radius:8px}
+  .btn-red{background:#dc2626;color:white;padding:6px 12px;border-radius:8px}
+  .btn-indigo{background:#4f46e5;color:white;padding:6px 12px;border-radius:8px}
+`;
+document.head.appendChild(styles);

@@ -9,7 +9,7 @@
 
 import { db } from "../FirebaseInit";
 import {
-  getDatabase, 
+  getDatabase,
   ref,
   onValue,
   get,
@@ -19,7 +19,6 @@ import {
   remove,
   runTransaction,
 } from "firebase/database";
-
 
 /* ============================================================
    HELPERS
@@ -108,7 +107,9 @@ export const listenTransaksiByToko = (tokoId, callback) => {
     r,
     (snap) => {
       const raw = snap.val() || {};
-      const list = Object.entries(raw).map(([id, item]) => normalizeTransaksi(id, item, tokoId));
+      const list = Object.entries(raw).map(([id, item]) =>
+        normalizeTransaksi(id, item, tokoId)
+      );
       callback(list);
     },
     (err) => {
@@ -128,7 +129,8 @@ export const addTransaksi = async (tokoId, data) => {
   const payload = {
     ...data,
     // if caller didn't include TANGGAL_TRANSAKSI, try to keep consistent timestamp
-    TANGGAL_TRANSAKSI: data.TANGGAL_TRANSAKSI || data.TANGGAL || new Date().toISOString(),
+    TANGGAL_TRANSAKSI:
+      data.TANGGAL_TRANSAKSI || data.TANGGAL || new Date().toISOString(),
   };
   await set(r, payload);
   // Optionally set id inside object for easier migration/read (not strictly necessary)
@@ -182,8 +184,10 @@ export const listenAllTransaksi = (callback) => {
 
       // sort by TANGGAL_TRANSAKSI (newest first), fallback to createdAt or id
       merged.sort((a, b) => {
-        const ta = new Date(a.TANGGAL_TRANSAKSI || a.createdAt || 0).getTime() || 0;
-        const tb = new Date(b.TANGGAL_TRANSAKSI || b.createdAt || 0).getTime() || 0;
+        const ta =
+          new Date(a.TANGGAL_TRANSAKSI || a.createdAt || 0).getTime() || 0;
+        const tb =
+          new Date(b.TANGGAL_TRANSAKSI || b.createdAt || 0).getTime() || 0;
         return tb - ta;
       });
 
@@ -222,7 +226,11 @@ export const forceDeleteTransaksi = async (tokoId, matchFn) => {
           deletes.push(remove(ref(db, `${transaksiPath}/${child.key}`)));
         }
       } catch (e) {
-        console.warn("forceDeleteTransaksi matchFn error for child:", child.key, e);
+        console.warn(
+          "forceDeleteTransaksi matchFn error for child:",
+          child.key,
+          e
+        );
       }
     });
 
@@ -305,9 +313,13 @@ export const listenPenjualan = (callback) => {
     r,
     (snap) => {
       const raw = snap.val() || {};
-      const list = Object.entries(raw).map(([id, item]) => normalizeTransaksi(id, item));
-      list.sort((a, b) =>
-        new Date(b.TANGGAL_TRANSAKSI || 0) - new Date(a.TANGGAL_TRANSAKSI || 0)
+      const list = Object.entries(raw).map(([id, item]) =>
+        normalizeTransaksi(id, item)
+      );
+      list.sort(
+        (a, b) =>
+          new Date(b.TANGGAL_TRANSAKSI || 0) -
+          new Date(a.TANGGAL_TRANSAKSI || 0)
       );
       callback(list);
     },
@@ -502,12 +514,19 @@ export const createTransferRequest = (payload) => {
 // listen transfer requests (for admin)
 export const listenTransferRequests = (callback) => {
   const r = ref(db, "transfer_requests");
-  const unsub = onValue(r, (snap) => {
-    const raw = snap.val() || {};
-    const arr = Object.entries(raw).map(([id, v]) => ({ id, ...v }));
-    // only pending by default
-    callback(arr.filter(x => !x.status || x.status === "Pending"));
-  }, (err) => { console.error(err); callback([]); });
+  const unsub = onValue(
+    r,
+    (snap) => {
+      const raw = snap.val() || {};
+      const arr = Object.entries(raw).map(([id, v]) => ({ id, ...v }));
+      // only pending by default
+      callback(arr.filter((x) => !x.status || x.status === "Pending"));
+    },
+    (err) => {
+      console.error(err);
+      callback([]);
+    }
+  );
   return () => unsub && unsub();
 };
 
@@ -674,13 +693,99 @@ export const restoreStockByImeiRealtime = async (imei, namaToko) => {
       ) {
         const newQty = Number(val.QTY || 0) + 1;
 
-        update(
-          ref(db, `toko/${tokoSnap.key}/transaksi/${child.key}`),
-          { QTY: newQty }
-        );
+        update(ref(db, `toko/${tokoSnap.key}/transaksi/${child.key}`), {
+          QTY: newQty,
+        });
       }
     });
   });
+};
+
+/* ============================================================
+   AUTO-GENERATE & HARD-LOCK ID PELANGGAN
+============================================================ */
+
+const generateNextPelangganId = async () => {
+  const counterRef = ref(db, "counters/masterPelanggan");
+
+  const result = await runTransaction(counterRef, (current) => {
+    return Number(current || 0) + 1;
+  });
+
+  const nextNumber = result.snapshot.val();
+  const padded = String(nextNumber).padStart(3, "0");
+  return `PLG-${padded}`;
+};
+
+const checkDuplicateIdPelanggan = async (idPelanggan) => {
+  const snap = await get(ref(db, "dataManagement/masterPelanggan"));
+  if (!snap.exists()) return false;
+
+  const data = snap.val();
+  return Object.values(data).some(
+    (item) => String(item.idPelanggan) === String(idPelanggan)
+  );
+};
+
+/* ============================================================
+   MASTER PELANGGAN ✅ CUSTOM (AUTO-ID + HARD-LOCK)
+============================================================ */
+
+const masterPelangganBasePath = "dataManagement/masterPelanggan";
+
+export const listenMasterPelanggan = (callback) => {
+  const r = ref(db, masterPelangganBasePath);
+  const unsub = onValue(
+    r,
+    (snap) => {
+      const raw = snap.val() || {};
+      const arr = Object.entries(raw).map(([id, v]) => ({
+        id,
+        ...v,
+      }));
+      callback(arr);
+    },
+    () => callback([])
+  );
+  return () => unsub && unsub();
+};
+
+export const addMasterPelanggan = async (data) => {
+  const idPelanggan = await generateNextPelangganId();
+
+  const duplicate = await checkDuplicateIdPelanggan(idPelanggan);
+  if (duplicate) throw new Error("ID Pelanggan duplikat!");
+
+  const r = push(ref(db, masterPelangganBasePath));
+  await set(r, {
+    ...data,
+    id: r.key,
+    idPelanggan,
+    createdAt: new Date().toISOString(),
+  });
+
+  return r.key;
+};
+
+export const updateMasterPelanggan = async (id, data) => {
+  if (data.idPelanggan) {
+    const duplicate = await checkDuplicateIdPelanggan(data.idPelanggan);
+    if (duplicate) {
+      throw new Error("Update dibatalkan: ID Pelanggan duplikat!");
+    }
+  }
+
+  await update(ref(db, `${masterPelangganBasePath}/${id}`), {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  });
+
+  return true;
+};
+
+export const deleteMasterPelanggan = async (id) => {
+  await remove(ref(db, `${masterPelangganBasePath}/${id}`));
+  return true;
 };
 
 
@@ -741,11 +846,11 @@ const createMasterHelpers = (masterName) => {
 ========================= */
 
 // MASTER PELANGGAN
-const masterPelanggan = createMasterHelpers("masterPelanggan");
-export const listenMasterPelanggan = masterPelanggan.listen;
-export const addMasterPelanggan = masterPelanggan.add;
-export const updateMasterPelanggan = masterPelanggan.update;
-export const deleteMasterPelanggan = masterPelanggan.delete;
+// const masterPelanggan = createMasterHelpers("masterPelanggan");
+// export const listenMasterPelanggan = masterPelanggan.listen;
+// export const addMasterPelanggan = masterPelanggan.add;
+// export const updateMasterPelanggan = masterPelanggan.update;
+// export const deleteMasterPelanggan = masterPelanggan.delete;
 
 // MASTER SALES
 const masterSales = createMasterHelpers("masterSales");
@@ -795,7 +900,6 @@ export const listenMasterSupplier = masterSupplier.listen;
 export const addMasterSupplier = masterSupplier.add;
 export const updateMasterSupplier = masterSupplier.update;
 export const deleteMasterSupplier = masterSupplier.delete;
-
 
 /* ============================================================
    DEFAULT EXPORT
