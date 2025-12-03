@@ -22,7 +22,8 @@ import {
 } from "recharts";
 
 import {
-  listenAllTransaksi,
+  listenPenjualanHemat,
+  listenTransaksiByTokoHemat,
   addTransaksi,
   potongStockMasterByImei,
 } from "../services/FirebaseService";
@@ -94,19 +95,25 @@ export default function DashboardToko(props) {
   const toko = TOKO_LIST.find((t) => t.id === String(tokoId));
 
   // ✅ SIMPAN TOKO LOGIN & ROLE (UNTUK TRANSFER BARANG)
-useEffect(() => {
-  if (toko?.name) {
-    localStorage.setItem("TOKO_LOGIN", toko.name);
-    localStorage.setItem("ROLE_USER", localStorage.getItem("ROLE_USER") || "USER");
-  }
-}, [toko]);
-
+  useEffect(() => {
+    if (toko?.name) {
+      localStorage.setItem("TOKO_LOGIN", toko.name);
+      localStorage.setItem(
+        "ROLE_USER",
+        localStorage.getItem("ROLE_USER") || "USER"
+      );
+    }
+  }, [toko]);
 
   // ======================= STATE GLOBAL =======================
   // ✅ DEFAULT LIGHT MODE (false) + akan dioverride oleh localStorage
   const [isDark, setIsDark] = useState(false);
 
+  // ✅ LIST GLOBAL (HEMAT) UNTUK CHART PENJUALAN & STOK PER TOKO
   const [allTransaksi, setAllTransaksi] = useState([]);
+
+  // ✅ LIST KHUSUS TOKO INI (HEMAT) UNTUK IMEI, VOID, RETURN
+  const [transaksiToko, setTransaksiToko] = useState([]);
 
   // ======================= LAPORAN VOID & RETURN =======================
   const [laporanVoid, setLaporanVoid] = useState([]);
@@ -131,49 +138,47 @@ useEffect(() => {
   }, [quickItems, page, perPage]);
 
   // ======================= CHART VOID & RETURN PER TOKO =======================
-const dataChartVoidReturn = useMemo(() => {
-  const map = {};
-  TOKO_LIST.forEach((t) => {
-    map[t.name] = { VOID: 0, RETURN: 0 };
-  });
+  const dataChartVoidReturn = useMemo(() => {
+    const map = {};
+    TOKO_LIST.forEach((t) => {
+      map[t.name] = { VOID: 0, RETURN: 0 };
+    });
 
-  (allTransaksi || []).forEach((x) => {
-    const tokoName = x.NAMA_TOKO;
-    const total = Number(x.TOTAL || x.HARGA_UNIT || 0);
+    (allTransaksi || []).forEach((x) => {
+      const tokoName = x.NAMA_TOKO;
+      const total = Number(x.TOTAL || x.HARGA_UNIT || 0);
 
-    if (!map[tokoName]) return;
+      if (!map[tokoName]) return;
 
-    if ((x.STATUS || "").toUpperCase() === "VOID") {
-      map[tokoName].VOID += total;
-    }
+      if ((x.STATUS || "").toUpperCase() === "VOID") {
+        map[tokoName].VOID += total;
+      }
 
-    if ((x.STATUS || "").toUpperCase() === "RETURN") {
-      map[tokoName].RETURN += total;
-    }
-  });
+      if ((x.STATUS || "").toUpperCase() === "RETURN") {
+        map[tokoName].RETURN += total;
+      }
+    });
 
-  return Object.entries(map).map(([name, val]) => ({
-    name,
-    VOID: val.VOID,
-    RETURN: val.RETURN,
-  }));
-}, [allTransaksi]);
+    return Object.entries(map).map(([name, val]) => ({
+      name,
+      VOID: val.VOID,
+      RETURN: val.RETURN,
+    }));
+  }, [allTransaksi]);
 
-const exportVoidExcel = () => {
-  const ws = XLSX.utils.json_to_sheet(laporanVoidExport);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Laporan VOID");
-  XLSX.writeFile(wb, `Laporan_VOID_${toko?.name}.xlsx`);
-};
+  const exportVoidExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(laporanVoidExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Laporan VOID");
+    XLSX.writeFile(wb, `Laporan_VOID_${toko?.name}.xlsx`);
+  };
 
-const exportReturnExcel = () => {
-  const ws = XLSX.utils.json_to_sheet(laporanReturnExport);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Laporan RETURN");
-  XLSX.writeFile(wb, `Laporan_RETURN_${toko?.name}.xlsx`);
-};
-
-
+  const exportReturnExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(laporanReturnExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Laporan RETURN");
+    XLSX.writeFile(wb, `Laporan_RETURN_${toko?.name}.xlsx`);
+  };
 
   useEffect(() => {
     // kalau jumlah data berubah & page jadi kebesaran, turunkan ke max
@@ -211,8 +216,8 @@ const exportReturnExcel = () => {
         );
       } catch {}
     }
-  }, [DRAFT_KEY]); 
-  
+  }, [DRAFT_KEY]);
+
   useEffect(() => {
     localStorage.setItem(
       DRAFT_KEY,
@@ -222,8 +227,7 @@ const exportReturnExcel = () => {
         creditForm,
       })
     );
-  }, [DRAFT_KEY, quickItems, paymentType, creditForm]); 
-  
+  }, [DRAFT_KEY, quickItems, paymentType, creditForm]);
 
   // Simpan draft setiap ada perubahan
   useEffect(() => {
@@ -248,17 +252,41 @@ const exportReturnExcel = () => {
     localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
   }, [isDark]);
 
-  // ======================= LISTENER FIREBASE =======================
+  // ======================= LISTENER FIREBASE (HEMAT KUOTA) =======================
   useEffect(() => {
-    const unsub =
-      typeof listenAllTransaksi === "function"
-        ? listenAllTransaksi((list) => {
-            setAllTransaksi(Array.isArray(list) ? list : []);
-          })
+    // ✅ Listener GLOBAL hemat: untuk chart & laporan antar toko
+    const unsubGlobal =
+      typeof listenPenjualanHemat === "function"
+        ? listenPenjualanHemat(
+            (list) => {
+              setAllTransaksi(Array.isArray(list) ? list : []);
+            },
+            {
+              // bisa kamu sesuaikan:
+              limit: 500, // ambil 500 transaksi terakhir secara global
+            }
+          )
         : null;
 
-    return () => unsub && unsub();
-  }, []);
+    // ✅ Listener KHUSUS TOKO: untuk VOID, RETURN & IMEI stok toko ini
+    const unsubToko =
+      typeof listenTransaksiByTokoHemat === "function" && tokoId
+        ? listenTransaksiByTokoHemat(
+            tokoId,
+            {
+              limit: 500, // ambil 500 transaksi terakhir toko ini
+            },
+            (list) => {
+              setTransaksiToko(Array.isArray(list) ? list : []);
+            }
+          )
+        : null;
+
+    return () => {
+      unsubGlobal && unsubGlobal();
+      unsubToko && unsubToko();
+    };
+  }, [tokoId]);
 
   // ======================= DATA CHART PENJUALAN PER TOKO =======================
   const dataPenjualanPerToko = useMemo(() => {
@@ -306,43 +334,43 @@ const exportReturnExcel = () => {
     }));
   }, [allTransaksi]);
 
-  // ======================= FILTER REALTIME VOID & RETURN =======================
+  // ======================= FILTER REALTIME VOID & RETURN (KHUSUS TOKO INI) =======================
   const dataVoidRealtime = useMemo(() => {
-    return (allTransaksi || []).filter(
+    return (transaksiToko || []).filter(
       (x) =>
         (x.STATUS || "").toUpperCase() === "VOID" &&
         (x.PAYMENT_METODE || "").toUpperCase().includes("PENJUALAN") &&
         x.NAMA_TOKO === (toko ? toko.name : "")
     );
-  }, [allTransaksi, toko]);
+  }, [transaksiToko, toko]);
 
   const dataReturnRealtime = useMemo(() => {
-    return (allTransaksi || []).filter(
+    return (transaksiToko || []).filter(
       (x) =>
         (x.STATUS || "").toUpperCase() === "RETURN" &&
         (x.PAYMENT_METODE || "").toUpperCase().includes("PENJUALAN") &&
         x.NAMA_TOKO === (toko ? toko.name : "")
     );
-  }, [allTransaksi, toko]);
+  }, [transaksiToko, toko]);
 
   useEffect(() => {
     setLaporanVoid(dataVoidRealtime);
     setLaporanReturn(dataReturnRealtime);
   }, [dataVoidRealtime, dataReturnRealtime]);
 
-  // ======================= INDEX IMEI DARI DATA PEMBELIAN =======================
+  // ======================= INDEX IMEI DARI DATA PEMBELIAN (KHUSUS TOKO INI) =======================
   const imeiIndex = useMemo(() => {
     const map = {};
-    (allTransaksi || []).forEach((x) => {
+    (transaksiToko || []).forEach((x) => {
       const pm = (x.PAYMENT_METODE || "").toUpperCase();
       const imei = String(x.IMEI || "").trim();
       if (!imei) return;
-      if (pm !== "PEMBELIAN") return; // hanya stok dari pembelian
+      if (pm !== "PEMBELIAN") return; // hanya stok dari pembelian toko ini
 
       map[imei] = x;
     });
     return map;
-  }, [allTransaksi]);
+  }, [transaksiToko]);
 
   // ======================= RINGKASAN PENJUALAN CEPAT =======================
   const totalQty = useMemo(
@@ -364,54 +392,51 @@ const exportReturnExcel = () => {
     [quickItems]
   );
 
-// eslint-disable-next-line no-unused-vars
-const totalVoid = useMemo(() => {
-  return laporanVoid.reduce(
-    (sum, x) => sum + Number(x.TOTAL || x.HARGA_UNIT || 0),
-    0
-  );
-}, [laporanVoid]);
+  // eslint-disable-next-line no-unused-vars
+  const totalVoid = useMemo(() => {
+    return laporanVoid.reduce(
+      (sum, x) => sum + Number(x.TOTAL || x.HARGA_UNIT || 0),
+      0
+    );
+  }, [laporanVoid]);
 
+  // eslint-disable-next-line no-unused-vars
+  const totalReturn = useMemo(() => {
+    return laporanReturn.reduce(
+      (sum, x) => sum + Number(x.TOTAL || x.HARGA_UNIT || 0),
+      0
+    );
+  }, [laporanReturn]);
 
-// eslint-disable-next-line no-unused-vars
-const totalReturn = useMemo(() => {
-  return laporanReturn.reduce(
-    (sum, x) => sum + Number(x.TOTAL || x.HARGA_UNIT || 0),
-    0
-  );
-}, [laporanReturn]);
+  // eslint-disable-next-line no-unused-vars
+  const laporanVoidExport = useMemo(() => {
+    return (laporanVoid || []).map((x, i) => ({
+      No: i + 1,
+      Tanggal: x.TANGGAL_TRANSAKSI,
+      Invoice: x.NO_INVOICE,
+      Brand: x.NAMA_BRAND,
+      Barang: x.NAMA_BARANG,
+      IMEI: x.IMEI,
+      Harga: x.HARGA_UNIT,
+      Status: x.STATUS,
+      Toko: x.NAMA_TOKO,
+    }));
+  }, [laporanVoid]);
 
-
-// eslint-disable-next-line no-unused-vars
-const laporanVoidExport = useMemo(() => {
-  return (laporanVoid || []).map((x, i) => ({
-    No: i + 1,
-    Tanggal: x.TANGGAL_TRANSAKSI,
-    Invoice: x.NO_INVOICE,
-    Brand: x.NAMA_BRAND,
-    Barang: x.NAMA_BARANG,
-    IMEI: x.IMEI,
-    Harga: x.HARGA_UNIT,
-    Status: x.STATUS,
-    Toko: x.NAMA_TOKO,
-  }));
-}, [laporanVoid]);
-
-// eslint-disable-next-line no-unused-vars
-const laporanReturnExport = useMemo(() => {
-  return (laporanReturn || []).map((x, i) => ({
-    No: i + 1,
-    Tanggal: x.TANGGAL_TRANSAKSI,
-    Invoice: x.NO_INVOICE,
-    Brand: x.NAMA_BRAND,
-    Barang: x.NAMA_BARANG,
-    IMEI: x.IMEI,
-    Harga: x.HARGA_UNIT,
-    Status: x.STATUS,
-    Toko: x.NAMA_TOKO,
-  }));
-}, [laporanReturn]);
-
+  // eslint-disable-next-line no-unused-vars
+  const laporanReturnExport = useMemo(() => {
+    return (laporanReturn || []).map((x, i) => ({
+      No: i + 1,
+      Tanggal: x.TANGGAL_TRANSAKSI,
+      Invoice: x.NO_INVOICE,
+      Brand: x.NAMA_BRAND,
+      Barang: x.NAMA_BARANG,
+      IMEI: x.IMEI,
+      Harga: x.HARGA_UNIT,
+      Status: x.STATUS,
+      Toko: x.NAMA_TOKO,
+    }));
+  }, [laporanReturn]);
 
   const statusPembayaran = useMemo(() => {
     if (paymentType === "CASH") return getStatusFromTipeBayar("CASH");
@@ -454,12 +479,12 @@ const laporanReturnExport = useMemo(() => {
     const data = imeiIndex[imei];
 
     if (!data) {
-      alert("❌ IMEI tidak ditemukan di stok pembelian.");
+      alert("❌ IMEI tidak ditemukan di stok pembelian toko ini.");
       return;
     }
 
     // ✅ BLOKIR JIKA IMEI SUDAH TERJUAL
-    const isSold = (allTransaksi || []).some(
+    const isSold = (transaksiToko || []).some(
       (t) =>
         String(t.IMEI || "") === imei &&
         (t.STATUS || "").toUpperCase() === "LUNAS" &&
@@ -568,9 +593,13 @@ const laporanReturnExport = useMemo(() => {
         <p><b>Jenis Pembayaran:</b> ${jenisBayarLabel}</p>
         ${
           paymentType === "KREDIT"
-            ? `<p><b>Payment Method:</b> ${creditForm.paymentMethod || "-"} |
+            ? `<p><b>Payment Method:</b> ${
+                creditForm.paymentMethod || "-"
+              } |
                <b>MDR:</b> ${creditForm.mdr || "-"}% |
-               <b>Kategori Harga:</b> ${creditForm.kategoriHarga || "-"} |
+               <b>Kategori Harga:</b> ${
+                 creditForm.kategoriHarga || "-"
+               } |
                <b>MP Protek:</b> ${creditForm.mpProtec || "-"} |
                <b>Tenor:</b> ${creditForm.tenor || "-"}</p>`
             : ""
@@ -750,7 +779,7 @@ const laporanReturnExport = useMemo(() => {
               </span>
               <span>
                 Dashboard Toko
-                <span className="block text-sm font-normal text-slate-300">
+                <span className="block text-sm text-bold font-normal text-slate-0">
                   {toko.name}
                 </span>
               </span>
@@ -863,8 +892,8 @@ const laporanReturnExport = useMemo(() => {
           </button>
         </div>
 
-          {/* ================= PENJUALAN CEPAT VIA IMEI ================= */}
-          <div
+        {/* ================= PENJUALAN CEPAT VIA IMEI ================= */}
+        <div
           className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl mt-6`}
         >
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-4">
@@ -1151,211 +1180,222 @@ const laporanReturnExport = useMemo(() => {
               >
                 Simpan & Cetak
               </button>
-
-              
             </div>
           </div>
         </div>
       </div>
 
       {/* ===================== TABEL LAPORAN VOID & RETURN ===================== */}
-<div className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl mt-10`}>
-  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
-    <h2 className="font-semibold text-base sm:text-lg">
-      Laporan VOID & RETURN Realtime
-    </h2>
-    <div className="flex gap-2">
-      <button
-        onClick={exportVoidExcel}
-        className="px-3 py-1 rounded-lg bg-red-600 text-white text-xs"
+      <div
+        className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl mt-10`}
       >
-        Export VOID
-      </button>
-      <button
-        onClick={exportReturnExcel}
-        className="px-3 py-1 rounded-lg bg-amber-600 text-white text-xs"
-      >
-        Export RETURN
-      </button>
-    </div>
-  </div>
-
-  {/* ===== TABLE VOID ===== */}
-  <div className="mb-6">
-    <h3 className="font-semibold text-sm mb-2 text-red-400">Tabel VOID</h3>
-    <div className="overflow-x-auto border rounded-lg">
-      <table className="min-w-full text-xs">
-        <thead className={isDark ? "bg-slate-900" : "bg-slate-100"}>
-          <tr>
-            <th className="p-2">Tanggal</th>
-            <th className="p-2">Invoice</th>
-            <th className="p-2">Brand</th>
-            <th className="p-2">Barang</th>
-            <th className="p-2">IMEI</th>
-            <th className="p-2">Harga</th>
-          </tr>
-        </thead>
-        <tbody>
-          {laporanVoid.length === 0 ? (
-            <tr><td colSpan="6" className="text-center p-3">Tidak ada data VOID</td></tr>
-          ) : (
-            laporanVoid.map((x, i) => (
-              <tr key={i}>
-                <td className="p-2">{x.TANGGAL_TRANSAKSI}</td>
-                <td className="p-2">{x.NO_INVOICE}</td>
-                <td className="p-2">{x.NAMA_BRAND}</td>
-                <td className="p-2">{x.NAMA_BARANG}</td>
-                <td className="p-2 font-mono">{x.IMEI}</td>
-                <td className="p-2 text-right">Rp {fmt(x.HARGA_UNIT)}</td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  {/* ===== TABLE RETURN ===== */}
-  <div>
-    <h3 className="font-semibold text-sm mb-2 text-amber-400">Tabel RETURN</h3>
-    <div className="overflow-x-auto border rounded-lg">
-      <table className="min-w-full text-xs">
-        <thead className={isDark ? "bg-slate-900" : "bg-slate-100"}>
-          <tr>
-            <th className="p-2">Tanggal</th>
-            <th className="p-2">Invoice</th>
-            <th className="p-2">Brand</th>
-            <th className="p-2">Barang</th>
-            <th className="p-2">IMEI</th>
-            <th className="p-2">Harga</th>
-          </tr>
-        </thead>
-        <tbody>
-          {laporanReturn.length === 0 ? (
-            <tr><td colSpan="6" className="text-center p-3">Tidak ada data RETURN</td></tr>
-          ) : (
-            laporanReturn.map((x, i) => (
-              <tr key={i}>
-                <td className="p-2">{x.TANGGAL_TRANSAKSI}</td>
-                <td className="p-2">{x.NO_INVOICE}</td>
-                <td className="p-2">{x.NAMA_BRAND}</td>
-                <td className="p-2">{x.NAMA_BARANG}</td>
-                <td className="p-2 font-mono">{x.IMEI}</td>
-                <td className="p-2 text-right">Rp {fmt(x.HARGA_UNIT)}</td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-        {/* ================= CHART PENJUALAN & STOK ================= */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-          <div
-            className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl`}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-semibold text-sm sm:text-base">
-                  Total Penjualan per Toko
-                </h3>
-                <p className={`text-[11px] ${subTextClass}`}>
-                  Berdasarkan transaksi berstatus{" "}
-                  <span className="text-emerald-300">APPROVED</span>
-                </p>
-              </div>
-            </div>
-            <div className="h-64 sm:h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dataPenjualanPerToko}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke={isDark ? "#1f2937" : "#e5e7eb"}
-                  />
-                  <XAxis
-                    dataKey="name"
-                    tick={{
-                      fill: isDark ? "#9ca3af" : "#4b5563",
-                      fontSize: 10,
-                    }}
-                  />
-                  <YAxis
-                    tick={{
-                      fill: isDark ? "#9ca3af" : "#4b5563",
-                      fontSize: 10,
-                    }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: isDark ? "#020617" : "#f9fafb",
-                      border: "1px solid #4b5563",
-                      borderRadius: "0.75rem",
-                      fontSize: 11,
-                      color: "#e5e7eb",
-                    }}
-                  />
-                  <Bar dataKey="total" radius={[8, 8, 2, 2]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div
-            className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl`}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-semibold text-sm sm:text-base">
-                  Stock Barang per Toko
-                </h3>
-                <p className={`text-[11px] ${subTextClass}`}>
-                  Berdasarkan total Qty dari transaksi{" "}
-                  <span className="text-sky-300">PEMBELIAN</span>
-                </p>
-              </div>
-            </div>
-            <div className="h-64 sm:h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dataStockPerToko}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke={isDark ? "#1f2937" : "#e5e7eb"}
-                  />
-                  <XAxis
-                    dataKey="name"
-                    tick={{
-                      fill: isDark ? "#9ca3af" : "#4b5563",
-                      fontSize: 10,
-                    }}
-                  />
-                  <YAxis
-                    tick={{
-                      fill: isDark ? "#9ca3af" : "#4b5563",
-                      fontSize: 10,
-                    }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: isDark ? "#020617" : "#f9fafb",
-                      border: "1px solid #4b5563",
-                      borderRadius: "0.75rem",
-                      fontSize: 11,
-                      color: "#e5e7eb",
-                    }}
-                  />
-                  <Bar dataKey="total" radius={[8, 8, 2, 2]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
+          <h2 className="font-semibold text-base sm:text-lg">
+            Laporan VOID & RETURN Realtime
+          </h2>
+          <div className="flex gap-2">
+            <button
+              onClick={exportVoidExcel}
+              className="px-3 py-1 rounded-lg bg-red-600 text-white text-xs"
+            >
+              Export VOID
+            </button>
+            <button
+              onClick={exportReturnExcel}
+              className="px-3 py-1 rounded-lg bg-amber-600 text-white text-xs"
+            >
+              Export RETURN
+            </button>
           </div>
         </div>
 
-      
+        {/* ===== TABLE VOID ===== */}
+        <div className="mb-6">
+          <h3 className="font-semibold text-sm mb-2 text-red-400">
+            Tabel VOID
+          </h3>
+          <div className="overflow-x-auto border rounded-lg">
+            <table className="min-w-full text-xs">
+              <thead className={isDark ? "bg-slate-900" : "bg-slate-100"}>
+                <tr>
+                  <th className="p-2">Tanggal</th>
+                  <th className="p-2">Invoice</th>
+                  <th className="p-2">Brand</th>
+                  <th className="p-2">Barang</th>
+                  <th className="p-2">IMEI</th>
+                  <th className="p-2">Harga</th>
+                </tr>
+              </thead>
+              <tbody>
+                {laporanVoid.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="text-center p-3">
+                      Tidak ada data VOID
+                    </td>
+                  </tr>
+                ) : (
+                  laporanVoid.map((x, i) => (
+                    <tr key={i}>
+                      <td className="p-2">{x.TANGGAL_TRANSAKSI}</td>
+                      <td className="p-2">{x.NO_INVOICE}</td>
+                      <td className="p-2">{x.NAMA_BRAND}</td>
+                      <td className="p-2">{x.NAMA_BARANG}</td>
+                      <td className="p-2 font-mono">{x.IMEI}</td>
+                      <td className="p-2 text-right">
+                        Rp {fmt(x.HARGA_UNIT)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
+        {/* ===== TABLE RETURN ===== */}
+        <div>
+          <h3 className="font-semibold text-sm mb-2 text-amber-400">
+            Tabel RETURN
+          </h3>
+          <div className="overflow-x-auto border rounded-lg">
+            <table className="min-w-full text-xs">
+              <thead className={isDark ? "bg-slate-900" : "bg-slate-100"}>
+                <tr>
+                  <th className="p-2">Tanggal</th>
+                  <th className="p-2">Invoice</th>
+                  <th className="p-2">Brand</th>
+                  <th className="p-2">Barang</th>
+                  <th className="p-2">IMEI</th>
+                  <th className="p-2">Harga</th>
+                </tr>
+              </thead>
+              <tbody>
+                {laporanReturn.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="text-center p-3">
+                      Tidak ada data RETURN
+                    </td>
+                  </tr>
+                ) : (
+                  laporanReturn.map((x, i) => (
+                    <tr key={i}>
+                      <td className="p-2">{x.TANGGAL_TRANSAKSI}</td>
+                      <td className="p-2">{x.NO_INVOICE}</td>
+                      <td className="p-2">{x.NAMA_BRAND}</td>
+                      <td className="p-2">{x.NAMA_BARANG}</td>
+                      <td className="p-2 font-mono">{x.IMEI}</td>
+                      <td className="p-2 text-right">
+                        Rp {fmt(x.HARGA_UNIT)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
+      {/* ================= CHART PENJUALAN & STOK ================= */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+        <div
+          className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl`}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="font-semibold text-sm sm:text-base">
+                Total Penjualan per Toko
+              </h3>
+              <p className={`text-[11px] ${subTextClass}`}>
+                Berdasarkan transaksi berstatus{" "}
+                <span className="text-emerald-300">APPROVED</span>
+              </p>
+            </div>
+          </div>
+          <div className="h-64 sm:h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dataPenjualanPerToko}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={isDark ? "#1f2937" : "#e5e7eb"}
+                />
+                <XAxis
+                  dataKey="name"
+                  tick={{
+                    fill: isDark ? "#9ca3af" : "#4b5563",
+                    fontSize: 10,
+                  }}
+                />
+                <YAxis
+                  tick={{
+                    fill: isDark ? "#9ca3af" : "#4b5563",
+                    fontSize: 10,
+                  }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: isDark ? "#020617" : "#f9fafb",
+                    border: "1px solid #4b5563",
+                    borderRadius: "0.75rem",
+                    fontSize: 11,
+                    color: "#e5e7eb",
+                  }}
+                />
+                <Bar dataKey="total" radius={[8, 8, 2, 2]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
 
+        <div
+          className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl`}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="font-semibold text-sm sm:text-base">
+                Stock Barang per Toko
+              </h3>
+              <p className={`text-[11px] ${subTextClass}`}>
+                Berdasarkan total Qty dari transaksi{" "}
+                <span className="text-sky-300">PEMBELIAN</span>
+              </p>
+            </div>
+          </div>
+          <div className="h-64 sm:h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dataStockPerToko}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={isDark ? "#1f2937" : "#e5e7eb"}
+                />
+                <XAxis
+                  dataKey="name"
+                  tick={{
+                    fill: isDark ? "#9ca3af" : "#4b5563",
+                    fontSize: 10,
+                  }}
+                />
+                <YAxis
+                  tick={{
+                    fill: isDark ? "#9ca3af" : "#4b5563",
+                    fontSize: 10,
+                  }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: isDark ? "#020617" : "#f9fafb",
+                    border: "1px solid #4b5563",
+                    borderRadius: "0.75rem",
+                    fontSize: 11,
+                    color: "#e5e7eb",
+                  }}
+                />
+                <Bar dataKey="total" radius={[8, 8, 2, 2]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

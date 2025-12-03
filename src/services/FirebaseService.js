@@ -7,7 +7,8 @@
 // - forceDeleteTransaksi to remove legacy rows without id based on matcher
 // - robust helper functions and safer get/set/remove usage
 
-import { db } from "../FirebaseInit";
+// src/services/FirebaseService.js
+import { db } from "./FirebaseInit";
 import {
   getDatabase,
   ref,
@@ -18,7 +19,13 @@ import {
   push,
   remove,
   runTransaction,
+  query,          // ⬅️ TAMBAH
+  orderByChild,   // ⬅️ TAMBAH
+  limitToLast,    // ⬅️ TAMBAH
+  startAt,        // ⬅️ TAMBAH
+  endAt,          // ⬅️ TAMBAH
 } from "firebase/database";
+
 
 /* ============================================================
    HELPERS
@@ -119,6 +126,75 @@ export const listenTransaksiByToko = (tokoId, callback) => {
   );
   return () => unsub && unsub();
 };
+
+/**
+ * Listen transaksi per toko versi hemat kuota
+ * - limit: jumlah data terakhir (default 200)
+ * - startDate / endDate: filter range tanggal (opsional, format "YYYY-MM-DD")
+ */
+export const listenTransaksiByTokoHemat = (
+  tokoId,
+  options = {},
+  callback
+) => {
+  const { limit = 200, startDate, endDate } = options || {};
+
+  const baseRef = ref(db, `toko/${tokoId}/transaksi`);
+
+  // kalau tidak ada filter sama sekali, fallback ke full ref (tapi tetap 1 listener)
+  if (!limit && !startDate && !endDate) {
+    const unsub = onValue(
+      baseRef,
+      (snap) => {
+        const raw = snap.val() || {};
+        const list = Object.entries(raw).map(([id, item]) =>
+          normalizeTransaksi(id, item, tokoId)
+        );
+        callback(list);
+      },
+      (err) => {
+        console.error("listenTransaksiByTokoHemat error:", err);
+        callback([]);
+      }
+    );
+    return () => unsub && unsub();
+  }
+
+  // versi hemat: pakai query orderByChild + limitToLast + startAt/endAt
+  const constraints = [orderByChild("TANGGAL_TRANSAKSI")];
+
+  if (startDate) constraints.push(startAt(startDate));
+  if (endDate) constraints.push(endAt(endDate));
+  if (limit) constraints.push(limitToLast(limit));
+
+  const q = query(baseRef, ...constraints);
+
+  const unsub = onValue(
+    q,
+    (snap) => {
+      const raw = snap.val() || {};
+      const list = Object.entries(raw).map(([id, item]) =>
+        normalizeTransaksi(id, item, tokoId)
+      );
+
+      // untuk jaga-jaga, sort lagi dari terbaru ke lama
+      list.sort(
+        (a, b) =>
+          new Date(b.TANGGAL_TRANSAKSI || 0) -
+          new Date(a.TANGGAL_TRANSAKSI || 0)
+      );
+
+      callback(list);
+    },
+    (err) => {
+      console.error("listenTransaksiByTokoHemat error:", err);
+      callback([]);
+    }
+  );
+
+  return () => unsub && unsub();
+};
+
 
 /**
  * Add transaksi: writes a new transaksi and ensures id is stored in the object.
@@ -330,6 +406,55 @@ export const listenPenjualan = (callback) => {
   );
   return () => unsub && unsub();
 };
+
+/**
+ * Listen penjualan versi hemat kuota
+ * - limit: jumlah data terakhir (default 200)
+ * - startDate / endDate: filter range tanggal (opsional, format "YYYY-MM-DD")
+ */
+export const listenPenjualanHemat = (callback, options = {}) => {
+  const { limit = 200, startDate, endDate } = options || {};
+
+  const baseRef = ref(db, "penjualan");
+
+  // jika tanpa filter & limit, sama seperti listenPenjualan biasa
+  if (!limit && !startDate && !endDate) {
+    return listenPenjualan(callback);
+  }
+
+  const constraints = [orderByChild("TANGGAL_TRANSAKSI")];
+
+  if (startDate) constraints.push(startAt(startDate));
+  if (endDate) constraints.push(endAt(endDate));
+  if (limit) constraints.push(limitToLast(limit));
+
+  const q = query(baseRef, ...constraints);
+
+  const unsub = onValue(
+    q,
+    (snap) => {
+      const raw = snap.val() || {};
+      const list = Object.entries(raw).map(([id, item]) =>
+        normalizeTransaksi(id, item)
+      );
+
+      list.sort(
+        (a, b) =>
+          new Date(b.TANGGAL_TRANSAKSI || 0) -
+          new Date(a.TANGGAL_TRANSAKSI || 0)
+      );
+
+      callback(list);
+    },
+    (err) => {
+      console.error("listenPenjualanHemat error:", err);
+      callback([]);
+    }
+  );
+
+  return () => unsub && unsub();
+};
+
 
 /* ============================================================
    STOCK MANAGEMENT + TRANSFER STOCK
@@ -841,6 +966,9 @@ const createMasterHelpers = (masterName) => {
   };
 };
 
+
+
+
 /* =========================
    INIT MASTER HELPERS
 ========================= */
@@ -904,89 +1032,76 @@ export const deleteMasterSupplier = masterSupplier.delete;
 /* ============================================================
    DEFAULT EXPORT
 ============================================================ */
+// ======================= DEFAULT EXPORT (UNTUK IMPORT FirebaseService) =======================
 const FirebaseService = {
-  getTokoName,
-  listenTransaksiByToko,
-  addTransaksi,
-  updateTransaksi,
-  deleteTransaksi,
-  listenAllTransaksi,
-  forceDeleteTransaksi,
-  deleteMasterBarang,
-
-  addPenjualan,
-  updatePenjualan,
-  deletePenjualan,
-  listenPenjualan,
-
-  saveUserOnline,
-  deleteUserOnline,
-  listenUsers,
-  getAllUsersOnce,
-
-  listenStockAll,
-  getStockForToko,
-  addStock,
-  reduceStock,
-  transferStock,
-
-  getInventoryItem,
-  updateInventory,
-  createInventory,
-  adjustInventoryStock,
-
-  createTransferRequest,
-  listenTransferRequests,
-  updateTransferRequest,
-
-  listenKaryawan,
   addKaryawan,
-  updateKaryawan,
-  deleteKaryawan,
-
-  potongStockMasterByImei,
-  restoreStockByImeiRealtime,
-
-  // ===== MASTER MANAGEMENT EXPORT =====
-  listenMasterPelanggan,
-  addMasterPelanggan,
-  updateMasterPelanggan,
-  deleteMasterPelanggan,
-
-  listenMasterSales,
-  addMasterSales,
-  updateMasterSales,
-  deleteMasterSales,
-
-  listenMasterStoreHead,
-  addMasterStoreHead,
-  updateMasterStoreHead,
-  deleteMasterStoreHead,
-
-  listenMasterStoreLeader,
-  addMasterStoreLeader,
-  updateMasterStoreLeader,
-  deleteMasterStoreLeader,
-
-  listenMasterSalesTitipan,
-  addMasterSalesTitipan,
-  updateMasterSalesTitipan,
-  deleteMasterSalesTitipan,
-
-  listenMasterToko,
-  addMasterToko,
-  updateMasterToko,
-  deleteMasterToko,
-
-  listenMasterBarangHarga,
   addMasterBarangHarga,
-  updateMasterBarangHarga,
-  deleteMasterBarangHarga,
-
-  listenMasterSupplier,
+  addMasterPelanggan,
+  addMasterSales,
+  addMasterSalesTitipan,
+  addMasterStoreHead,
+  addMasterStoreLeader,
   addMasterSupplier,
-  updateMasterSupplier,
+  addMasterToko,
+  addPenjualan,
+  addStock,
+  addTransaksi,
+  adjustInventoryStock,
+  createInventory,
+  createTransferRequest,
+  deleteKaryawan,
+  deleteMasterBarang,
+  deleteMasterBarangHarga,
+  deleteMasterPelanggan,
+  deleteMasterSales,
+  deleteMasterSalesTitipan,
+  deleteMasterStoreHead,
+  deleteMasterStoreLeader,
   deleteMasterSupplier,
+  deleteMasterToko,
+  deletePenjualan,
+  deleteTransaksi,
+  deleteUserOnline,
+  forceDeleteTransaksi,
+  getAllUsersOnce,
+  getInventoryItem,
+  getStockForToko,
+  getTokoName,
+  listenAllTransaksi,
+  listenKaryawan,
+  listenMasterBarangHarga,
+  listenMasterPelanggan,
+  listenMasterSales,
+  listenMasterSalesTitipan,
+  listenMasterStoreHead,
+  listenMasterStoreLeader,
+  listenMasterSupplier,
+  listenMasterToko,
+  listenPenjualan,
+  listenPenjualanHemat,      // ✅ fungsi hemat-kuota baru
+  listenStockAll,
+  listenTransaksiByToko,
+  listenTransaksiByTokoHemat, // ✅ fungsi hemat-kuota baru
+  listenTransferRequests,
+  listenUsers,
+  potongStockMasterByImei,
+  reduceStock,
+  restoreStockByImeiRealtime,
+  saveUserOnline,
+  transferStock,
+  updateInventory,
+  updateKaryawan,
+  updateMasterBarangHarga,
+  updateMasterPelanggan,
+  updateMasterSales,
+  updateMasterSalesTitipan,
+  updateMasterStoreHead,
+  updateMasterStoreLeader,
+  updateMasterSupplier,
+  updateMasterToko,
+  updatePenjualan,
+  updateTransaksi,
+  updateTransferRequest,
 };
 
 export default FirebaseService;
