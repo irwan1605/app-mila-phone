@@ -1,5 +1,4 @@
-// src/pages/TransferBarang.jsx — FINAL OTOMATIS + UI MODERN ✅
-
+// src/pages/TransferBarang.jsx — FINAL OTOMATIS + UI MODERN ✅ CLEAN
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaExchangeAlt,
@@ -14,6 +13,8 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import FirebaseService from "../services/FirebaseService";
+
+
 
 // ===================== TOKO =====================
 const TOKO_TUJUAN = [
@@ -51,13 +52,18 @@ const generateNoSuratJalan = () => {
     .padStart(3, "0")}`;
 };
 
+// ===================== ROLE HELPER =====================
+const getRole = () => localStorage.getItem("ROLE") || "USER";
+
 export default function TransferBarang() {
+  const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "CILANGKAP PUSAT";
+
   // ===================== FORM =====================
   const [form, setForm] = useState({
     tanggal: new Date().toISOString().slice(0, 10),
     noDo: generateNoDO(),
     noSuratJalan: generateNoSuratJalan(),
-    dari: "CILANGKAP PUSAT",
+    dari: TOKO_LOGIN,
     ke: "",
     pengirim: "",
     kategori: "",
@@ -82,50 +88,49 @@ export default function TransferBarang() {
   // ===================== FILTER =====================
   const [filterStatus, setFilterStatus] = useState("ALL");
 
-  // ===================== AMBIL USER =====================
+  // ===================== REALTIME FIREBASE =====================
   useEffect(() => {
-    const unsub = FirebaseService.listenUsers((list) => {
+    const unsubUsers = FirebaseService.listenUsers((list) => {
       setUsers(Array.isArray(list) ? list : []);
     });
-    return () => unsub && unsub();
-  }, []);
-
-  // ===================== AMBIL MASTER PEMBELIAN =====================
-  useEffect(() => {
-    const unsub = FirebaseService.listenAllTransaksi((rows) => {
+    const unsubTransaksi = FirebaseService.listenAllTransaksi((rows) => {
       setAllTransaksi(rows || []);
-
-      const map = {};
-      (rows || []).forEach((t) => {
-        if (!t.NAMA_BRAND || !t.NAMA_BARANG) return;
-        const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-        if (!map[key]) {
-          map[key] = {
-            brand: t.NAMA_BRAND,
-            barang: t.NAMA_BARANG,
-            kategori: t.KATEGORI_BRAND || "",
-          };
-        }
-      });
-      setMasterBarang(Object.values(map));
     });
-
-    return () => unsub && unsub();
-  }, []);
-
-  // ===================== HISTORY TRANSFER =====================
-  useEffect(() => {
-    const unsub = FirebaseService.listenTransferRequests((rows) => {
+    const unsubTransfer = FirebaseService.listenTransferRequests((rows) => {
       setHistory(rows || []);
     });
-    return () => unsub && unsub();
+
+    return () => {
+      unsubUsers && unsubUsers();
+      unsubTransaksi && unsubTransaksi();
+      unsubTransfer && unsubTransfer();
+    };
   }, []);
+
+  // ===================== MASTER BARANG (FROM PEMBELIAN) =====================
+  useEffect(() => {
+    const map = {};
+    (allTransaksi || []).forEach((t) => {
+      if (!t.NAMA_BRAND || !t.NAMA_BARANG) return;
+      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+      if (!map[key]) {
+        map[key] = {
+          brand: t.NAMA_BRAND,
+          barang: t.NAMA_BARANG,
+          kategori: t.KATEGORI_BRAND || "",
+        };
+      }
+    });
+    setMasterBarang(Object.values(map));
+  }, [allTransaksi]);
 
   // ===================== SOURCE IMEI =====================
   const imeiSource = useMemo(() => {
     return Array.from(
       new Set(
-        allTransaksi.map((t) => String(t.IMEI || "").trim()).filter(Boolean)
+        (allTransaksi || [])
+          .map((t) => String(t.IMEI || "").trim())
+          .filter(Boolean)
       )
     );
   }, [allTransaksi]);
@@ -144,7 +149,6 @@ export default function TransferBarang() {
       imeis: [...f.imeis, im],
       qty: f.imeis.length + 1,
     }));
-
     setImeiInput("");
   };
 
@@ -154,22 +158,42 @@ export default function TransferBarang() {
     setForm((f) => ({ ...f, imeis: next, qty: next.length }));
   };
 
-  // ===================== SUBMIT (PENDING) =====================
+  // ===================== SUBMIT TRANSFER (LEVEL 2 SECURITY) =====================
   const submitTransfer = async () => {
-    if (!form.ke || !form.pengirim || !form.brand || !form.barang) {
-      alert("❌ Lengkapi semua data wajib!");
+    if (loading) {
+      alert("⏳ Proses sedang berjalan...");
       return;
     }
-
-    if (form.imeis.length === 0) {
-      alert("❌ IMEI wajib diisi!");
-      return;
-    }
-
-    const sku = `${form.brand}_${form.barang}`.replace(/\s+/g, "_");
 
     setLoading(true);
+
     try {
+      // ✅ VALIDASI TOKO LOGIN
+      if (form.dari !== TOKO_LOGIN) {
+        throw new Error("Anda tidak punya akses transfer dari toko ini!");
+      }
+
+      // ✅ VALIDASI FIELD
+      if (!form.ke || !form.pengirim || !form.brand || !form.barang) {
+        throw new Error("Lengkapi semua field wajib!");
+      }
+
+      if (form.imeis.length === 0) {
+        throw new Error("Minimal 1 IMEI wajib diisi!");
+      }
+
+      // ✅ LIMIT HARIAN PER TOKO
+      const today = new Date().toISOString().slice(0, 10);
+      const transferHariIni = (history || []).filter(
+        (t) => t.dari === TOKO_LOGIN && t.tanggal === today
+      );
+      if (transferHariIni.length >= 20) {
+        throw new Error("Limit transfer harian sudah tercapai!");
+      }
+
+      // ✅ SKU OTOMATIS
+      const sku = `${form.brand}_${form.barang}`.replace(/\s+/g, "_");
+
       await FirebaseService.createTransferRequest({
         ...form,
         sku,
@@ -177,13 +201,25 @@ export default function TransferBarang() {
         createdAt: new Date().toISOString(),
       });
 
-      alert("✅ Transfer berhasil disubmit (Pending)");
+      // ✅ AUDIT LOG
+      if (FirebaseService.addAuditLog) {
+        await FirebaseService.addAuditLog({
+          user: localStorage.getItem("USERNAME") || "USER",
+          role: getRole(),
+          aksi: "SUBMIT TRANSFER",
+          detail: `${form.barang} | ${form.dari} → ${form.ke}`,
+          waktu: new Date().toISOString(),
+        });
+      }
 
+      alert("✅ Transfer berhasil dikirim (Pending)");
+
+      // RESET FORM
       setForm({
         tanggal: new Date().toISOString().slice(0, 10),
         noDo: generateNoDO(),
         noSuratJalan: generateNoSuratJalan(),
-        dari: "CILANGKAP PUSAT",
+        dari: TOKO_LOGIN,
         ke: "",
         pengirim: "",
         kategori: "",
@@ -194,7 +230,7 @@ export default function TransferBarang() {
       });
     } catch (e) {
       console.error(e);
-      alert("❌ Gagal submit");
+      alert("❌ " + (e.message || "Gagal submit transfer"));
     } finally {
       setLoading(false);
     }
@@ -202,7 +238,20 @@ export default function TransferBarang() {
 
   // ===================== APPROVE =====================
   const approveTransfer = async (row) => {
+    const role = getRole();
+
+    if (role !== "ADMIN" && role !== "SUPERADMIN") {
+      alert("❌ Anda tidak punya hak APPROVE!");
+      return;
+    }
+
+    if (row.status !== "Pending") {
+      alert("⚠️ Transfer ini sudah diproses!");
+      return;
+    }
+
     try {
+      // Pindahkan stock antar toko
       await FirebaseService.transferStock({
         fromToko: row.dari,
         toToko: row.ke,
@@ -214,7 +263,8 @@ export default function TransferBarang() {
         performedBy: row.pengirim,
       });
 
-      if (row.ke === "CILANGKAP PUSAT") {
+      // Jika masuk ke CILANGKAP PUSAT → catat juga ke transaksi pembelian
+      if (row.ke === "CILANGKAP PUSAT" && FirebaseService.addTransaksi) {
         for (const im of row.imeis || []) {
           await FirebaseService.addTransaksi(1, {
             TANGGAL_TRANSAKSI: row.tanggal,
@@ -235,13 +285,24 @@ export default function TransferBarang() {
 
       await FirebaseService.updateTransferRequest(row.id, {
         status: "Approved",
+        approvedBy: localStorage.getItem("USERNAME") || "ADMIN",
         approvedAt: new Date().toISOString(),
       });
 
-      alert("✅ Transfer Approved");
+      if (FirebaseService.addAuditLog) {
+        await FirebaseService.addAuditLog({
+          user: localStorage.getItem("USERNAME") || "ADMIN",
+          role,
+          aksi: "APPROVE TRANSFER",
+          detail: `${row.barang} | ${row.dari} → ${row.ke}`,
+          waktu: new Date().toISOString(),
+        });
+      }
+
+      alert("✅ Transfer berhasil di-APPROVE!");
     } catch (e) {
       console.error(e);
-      alert("❌ Gagal Approve");
+      alert("❌ Gagal approve transfer!");
     }
   };
 
@@ -310,7 +371,12 @@ export default function TransferBarang() {
         <div className="grid md:grid-cols-4 gap-4">
           <div>
             <label className="text-xs font-semibold">Tanggal</label>
-            <input type="date" value={form.tanggal} className="input" />
+            <input
+              type="date"
+              value={form.tanggal}
+              onChange={(e) => setForm({ ...form, tanggal: e.target.value })}
+              className="input"
+            />
           </div>
 
           <div>
@@ -332,7 +398,9 @@ export default function TransferBarang() {
             >
               <option value="">Pilih Toko</option>
               {TOKO_TUJUAN.map((t) => (
-                <option key={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </select>
           </div>
@@ -348,7 +416,10 @@ export default function TransferBarang() {
             />
             <datalist id="pengirim-list">
               {users.map((u) => (
-                <option key={u.id || u.username} value={u.name || u.username} />
+                <option
+                  key={u.id || u.username}
+                  value={u.name || u.username || ""}
+                />
               ))}
             </datalist>
           </div>
@@ -363,7 +434,9 @@ export default function TransferBarang() {
             >
               <option value="">Pilih Kategori</option>
               {KATEGORI_OPTIONS.map((t) => (
-                <option key={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </select>
           </div>
@@ -415,6 +488,7 @@ export default function TransferBarang() {
               <button
                 onClick={addImei}
                 className="bg-indigo-600 text-white px-4 rounded-lg"
+                type="button"
               >
                 <FaPlus />
               </button>
@@ -436,6 +510,7 @@ export default function TransferBarang() {
                   <button
                     onClick={() => removeImei(i)}
                     className="ml-2 text-red-600"
+                    type="button"
                   >
                     x
                   </button>
@@ -449,12 +524,13 @@ export default function TransferBarang() {
           onClick={submitTransfer}
           disabled={loading}
           className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-6 py-2 rounded-xl shadow"
+          type="button"
         >
           {loading ? "Loading..." : "SUBMIT TRANSFER"}
         </button>
 
         {/* ================= FILTER ================= */}
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center mt-4">
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
@@ -466,19 +542,19 @@ export default function TransferBarang() {
             <option value="Rejected">Rejected</option>
           </select>
 
-          <button onClick={exportExcel} className="btn-blue">
+          <button onClick={exportExcel} className="btn-blue" type="button">
             <FaFileExcel /> Excel
           </button>
-          <button onClick={exportPDF} className="btn-red">
+          <button onClick={exportPDF} className="btn-red" type="button">
             <FaFilePdf /> PDF
           </button>
-          <button onClick={printSuratJalan} className="btn-indigo">
+          <button onClick={printSuratJalan} className="btn-indigo" type="button">
             <FaPrint /> Print
           </button>
         </div>
 
         {/* ================= TABLE ================= */}
-        <table className="w-full border text-sm">
+        <table className="w-full border text-sm mt-4">
           <thead className="bg-slate-100">
             <tr>
               <th>No SJ</th>
@@ -507,14 +583,22 @@ export default function TransferBarang() {
                   {row.status === "Pending" && (
                     <>
                       <button
-                        onClick={() => approveTransfer(row)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          approveTransfer(row);
+                        }}
                         className="text-green-600 mr-2"
+                        type="button"
                       >
                         <FaCheck />
                       </button>
                       <button
-                        onClick={() => rejectTransfer(row.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          rejectTransfer(row.id);
+                        }}
                         className="text-red-600"
+                        type="button"
                       >
                         <FaTimes />
                       </button>
@@ -528,7 +612,7 @@ export default function TransferBarang() {
 
         {/* ================= SURAT JALAN ================= */}
         {selectedSJ && (
-          <div ref={suratJalanRef} className="bg-white p-4 rounded shadow">
+          <div ref={suratJalanRef} className="bg-white p-4 rounded shadow mt-4">
             <h3 className="font-bold">SURAT JALAN</h3>
             <p>No: {selectedSJ.noSuratJalan}</p>
             <p>Dari: {selectedSJ.dari}</p>
@@ -550,7 +634,7 @@ export default function TransferBarang() {
   );
 }
 
-/* ===================== STYLE HELPER ===================== */
+// ===================== STYLE HELPER =====================
 const styles = document.createElement("style");
 styles.innerHTML = `
   .input{

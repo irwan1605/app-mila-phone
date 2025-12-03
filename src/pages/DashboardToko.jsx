@@ -93,6 +93,15 @@ export default function DashboardToko(props) {
 
   const toko = TOKO_LIST.find((t) => t.id === String(tokoId));
 
+  // ✅ SIMPAN TOKO LOGIN & ROLE (UNTUK TRANSFER BARANG)
+useEffect(() => {
+  if (toko?.name) {
+    localStorage.setItem("TOKO_LOGIN", toko.name);
+    localStorage.setItem("ROLE_USER", localStorage.getItem("ROLE_USER") || "USER");
+  }
+}, [toko]);
+
+
   // ======================= STATE GLOBAL =======================
   // ✅ DEFAULT LIGHT MODE (false) + akan dioverride oleh localStorage
   const [isDark, setIsDark] = useState(false);
@@ -424,7 +433,7 @@ const laporanReturnExport = useMemo(() => {
     } else if (type === "stock") {
       navigate(`/toko/${toko.id}/stock-opname`);
     } else if (type === "transfer") {
-      navigate(`/toko/${toko.id}/transfer-gudang`);
+      navigate("/transfer-barang"); // ✅ LANGSUNG KE TransferBarang.jsx
     }
   };
 

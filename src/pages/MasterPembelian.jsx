@@ -71,6 +71,33 @@ const makeSku = (brand, barang) =>
   `${(brand || "").trim()}_${(barang || "").trim()}`.replace(/\s+/g, "_");
 
 // =======================
+// AUTO GENERATE NO DO (INV-YYYYMMDD-0001)
+// =======================
+const generateNoDo = (allTransaksi, tanggal) => {
+  const tgl = (tanggal || "").replaceAll("-", ""); // YYYYMMDD
+
+  const todayInv = (allTransaksi || []).filter(
+    (t) =>
+      String(t.NO_INVOICE || "").startsWith(`INV-${tgl}`) &&
+      (t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN"
+  );
+
+  const lastNumber = todayInv.length
+    ? Math.max(
+        ...todayInv.map((t) =>
+          Number(String(t.NO_INVOICE || "").split("-").pop() || 0)
+        )
+      )
+    : 0;
+
+  const next = String(lastNumber + 1).padStart(4, "0");
+  return `INV-${tgl}-${next}`;
+};
+
+
+
+
+// =======================
 // KOMPONEN UTAMA
 // =======================
 export default function MasterPembelian() {
@@ -111,6 +138,17 @@ export default function MasterPembelian() {
     return () => unsub && unsub();
   }, []);
 
+  useEffect(() => {
+    if (showTambah && tambahForm.tanggal) {
+      const autoNo = generateNoDo(allTransaksi, tambahForm.tanggal);
+      setTambahForm((prev) => ({
+        ...prev,
+        noDo: autoNo,
+      }));
+    }
+  }, [showTambah, tambahForm.tanggal, allTransaksi]);
+  
+
   // ======================= MASTER BARANG SOURCE (Brand / Barang / Kategori) =======================
   const masterBarangList = useMemo(() => {
     const map = {};
@@ -128,7 +166,7 @@ export default function MasterPembelian() {
     return Object.values(map);
   }, [allTransaksi]);
 
-  // Nama supplier diambil dari histori pembelian
+  /* ======================= SUPPLIER OPTIONS (AMANKAN DARI MASTER BARANG) ======================= */
   const supplierOptions = useMemo(
     () =>
       Array.from(
@@ -137,13 +175,15 @@ export default function MasterPembelian() {
             .filter(
               (t) =>
                 (t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
-                t.NAMA_SUPPLIER
+                t.NAMA_SUPPLIER &&
+                t.NO_INVOICE
             )
             .map((t) => t.NAMA_SUPPLIER)
         )
       ),
     [allTransaksi]
   );
+  
 
   // Brand: gabungan BRAND_OPTIONS + brand dari masterBarangList
   const brandOptionsDynamic = useMemo(() => {
@@ -176,7 +216,12 @@ export default function MasterPembelian() {
     const map = {};
 
     (allTransaksi || []).forEach((t) => {
-      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return;
+      if (
+        (t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN" ||
+        !t.NAMA_SUPPLIER ||
+        !t.NO_INVOICE
+      )
+        return;
 
       const tanggal = t.TANGGAL_TRANSAKSI || "";
       const noDo = t.NO_INVOICE || "";
@@ -396,12 +441,11 @@ export default function MasterPembelian() {
         .map((x) => x.trim())
         .filter(Boolean);
 
-      if (imeis.length <= 0) {
-        alert(
-          "Kategori SEPEDA LISTRIK / MOTOR LISTRIK / HANDPHONE wajib mengisi IMEI."
-        );
-        return;
-      }
+        if (imeis.length <= 0) {
+          alert("Silahkan isi Nomor IMEI Terlebih dahulu");
+          return;
+        }
+        
 
       const err = validateImeisEdit(imeis, editData.originalKey);
       if (err.length) {
@@ -528,11 +572,10 @@ export default function MasterPembelian() {
         .map((x) => x.trim())
         .filter(Boolean);
 
-      if (imeis.length <= 0) {
-        return alert(
-          "Kategori SEPEDA LISTRIK / MOTOR LISTRIK / HANDPHONE wajib isi No IMEI."
-        );
-      }
+        if (imeis.length <= 0) {
+          return alert("Silahkan isi Nomor IMEI Terlebih dahulu");
+        }
+        
 
       const err = validateImeisNew(imeis);
       if (err.length) {
