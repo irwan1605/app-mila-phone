@@ -50,27 +50,33 @@ export default function SalesReport() {
 
   const tableRef = useRef(null);
 
-  // subscribe realtime to all transaksi
-  useEffect(() => {
-    if (typeof listenAllTransaksi === "function") {
-      const unsub = listenAllTransaksi((items = []) => {
-        const normalized = (items || []).map((r) => normalizeRecord(r));
-        // sort by date desc
-        normalized.sort(
-          (a, b) =>
-            new Date(b.TANGGAL_TRANSAKSI || b.TANGGAL || 0) -
-            new Date(a.TANGGAL_TRANSAKSI || a.TANGGAL || 0)
-        );
-        setAllData(normalized);
-        setCurrentPage(1);
-      });
-      return () => unsub && unsub();
-    } else {
-      console.warn("listenAllTransaksi not found in FirebaseService");
-      setAllData([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+ useEffect(() => {
+  if (typeof listenAllTransaksi === "function") {
+    const unsub = listenAllTransaksi((items = []) => {
+
+      // ⛔ BLOK DATA MASTER PEMBELIAN
+      const onlyPenjualan = (items || []).filter(
+        (x) =>
+          (x.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN" &&
+          (x.SYSTEM_PAYMENT || "").toUpperCase() !== "PEMBELIAN"
+      );
+
+      const normalized = onlyPenjualan.map((r) => normalizeRecord(r));
+
+      normalized.sort(
+        (a, b) =>
+          new Date(b.TANGGAL_TRANSAKSI || 0) -
+          new Date(a.TANGGAL_TRANSAKSI || 0)
+      );
+
+      setAllData(normalized);
+      setCurrentPage(1);
+    });
+
+    return () => unsub && unsub();
+  }
+}, []);
+
 
   // normalize record so fields always present
   const normalizeRecord = (r = {}) => {

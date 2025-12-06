@@ -75,6 +75,7 @@ const normalizeTransaksi = (id, row = {}, tokoId = null, tokoName = "") => {
    TOKO HELPERS
 ============================================================ */
 
+
 export const getTokoName = async (tokoId) => {
   try {
     if (!tokoId && tokoId !== 0) return null;
@@ -317,6 +318,7 @@ export const forceDeleteTransaksi = async (tokoId, matchFn) => {
     console.error("forceDeleteTransaksi error", err);
   }
 };
+
 
 /* ============================================================
    USERS MANAGEMENT

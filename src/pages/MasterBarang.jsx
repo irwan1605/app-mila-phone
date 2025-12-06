@@ -55,21 +55,20 @@ export default function MasterBarang() {
   const [showEdit, setShowEdit] = useState(false);
   const [editData, setEditData] = useState(null);
 
-  // ✅ PAGINATION
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   const [form, setForm] = useState({
     tanggal: new Date().toISOString().slice(0, 10),
-    brand: "",
     kategori: "",
+    brand: "",
     barang: "",
     hargaSRP: "",
     hargaGrosir: "",
     hargaReseller: "",
   });
 
-  // ✅ REALTIME FIREBASE (HANYA 1x)
+  // ✅ REALTIME FIREBASE
   useEffect(() => {
     const unsub = listenAllTransaksi((rows) => {
       setAllTransaksi(rows || []);
@@ -109,7 +108,6 @@ export default function MasterBarang() {
     );
   }, [search, masterBarang]);
 
-  // ================== PAGINATION ==================
   const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
 
   const paginatedData = useMemo(() => {
@@ -165,15 +163,6 @@ export default function MasterBarang() {
 
     alert("✅ Master Barang berhasil ditambahkan!");
     setShowTambah(false);
-    setForm({
-      tanggal: new Date().toISOString().slice(0, 10),
-      brand: "",
-      kategori: "",
-      barang: "",
-      hargaSRP: "",
-      hargaGrosir: "",
-      hargaReseller: "",
-    });
   };
 
   // ================== EDIT ==================
@@ -200,6 +189,7 @@ export default function MasterBarang() {
 
     for (const r of rows) {
       await updateTransaksi(r.tokoId || 1, r.id, {
+        TANGGAL_TRANSAKSI: editData.tanggal, // ✅ TANGGAL SEKARANG IKUT TERUPDATE
         HARGA_SRP: Number(editData.hargaSRP || 0),
         HARGA_UNIT: Number(editData.hargaSRP || 0),
         HARGA_GROSIR: Number(editData.hargaGrosir || 0),
@@ -349,9 +339,7 @@ export default function MasterBarang() {
 
             <button
               disabled={currentPage === totalPages}
-              onClick={() =>
-                setCurrentPage((p) => Math.min(totalPages, p + 1))
-              }
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               className="px-3 py-1 border rounded"
             >
               Next
@@ -392,11 +380,6 @@ export default function MasterBarang() {
                 value={form.brand}
                 onChange={(e) => setForm({ ...form, brand: e.target.value })}
               />
-              <datalist id="brand-list">
-                {BRAND_OPTIONS.map((x) => (
-                  <option key={x} value={x} />
-                ))}
-              </datalist>
 
               <input
                 placeholder="Nama Barang"
@@ -410,9 +393,7 @@ export default function MasterBarang() {
                 type="number"
                 className="input"
                 value={form.hargaSRP}
-                onChange={(e) =>
-                  setForm({ ...form, hargaSRP: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, hargaSRP: e.target.value })}
               />
               <input
                 placeholder="Harga Grosir"
@@ -459,11 +440,22 @@ export default function MasterBarang() {
             <h3 className="font-bold mb-3">Edit Master Barang</h3>
 
             <div className="space-y-2">
+              {/* ✅ TANGGAL SEKARANG ADA */}
+              <input
+                type="date"
+                className="input"
+                value={editData.tanggal}
+                onChange={(e) =>
+                  setEditData({ ...editData, tanggal: e.target.value })
+                }
+              />
+
               <input
                 disabled
                 className="input bg-gray-100"
                 value={editData.brand}
               />
+
               <input
                 disabled={editData.isLocked}
                 className={`input ${editData.isLocked ? "bg-gray-100" : ""}`}
@@ -472,6 +464,7 @@ export default function MasterBarang() {
                   setEditData({ ...editData, barang: e.target.value })
                 }
               />
+
               <select
                 className="input"
                 value={editData.kategori}
@@ -483,6 +476,7 @@ export default function MasterBarang() {
                   <option key={x}>{x}</option>
                 ))}
               </select>
+
               <input
                 type="number"
                 className="input"

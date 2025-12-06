@@ -30,7 +30,7 @@ export default function SalesResultTable({
   return (
     <div className="w-full space-y-4">
 
-      {/* HEADER */}
+      {/* ================= HEADER ================= */}
       <div className="flex justify-between items-center mb-2">
         <div>
           <h2 className="font-semibold text-slate-800 text-sm uppercase">
@@ -49,11 +49,12 @@ export default function SalesResultTable({
         </button>
       </div>
 
-      {/* TABLE */}
+      {/* ================= TABLE ================= */}
       <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
         <table className="w-full text-xs sm:text-sm">
           <thead className="bg-slate-100">
             <tr>
+              {/* ✅ KOLOM LAMA TETAP */}
               <th className="p-2 border">Tanggal</th>
               <th className="p-2 border">Invoice</th>
               <th className="p-2 border">Toko</th>
@@ -62,14 +63,23 @@ export default function SalesResultTable({
               <th className="p-2 border">Harga</th>
               <th className="p-2 border">QTY</th>
               <th className="p-2 border">Total</th>
+
+              {/* ✅ TAMBAHAN DP & LIMIT (TANPA HAPUS KOLOM LAMA) */}
+              <th className="p-2 border">DP MERCHANT</th>
+              <th className="p-2 border">DP TOKO</th>
+              <th className="p-2 border">DP TALANGAN</th>
+              <th className="p-2 border">SISA LIMIT</th>
+              <th className="p-2 border">SISA KEMBALIAN</th>
+
               <th className="p-2 border">Status</th>
               <th className="p-2 border">Aksi</th>
             </tr>
           </thead>
+
           <tbody>
             {pagedRows.length === 0 && (
               <tr>
-                <td colSpan={10} className="p-4 text-center text-slate-500">
+                <td colSpan={15} className="p-4 text-center text-slate-500">
                   Belum ada transaksi.
                 </td>
               </tr>
@@ -77,20 +87,88 @@ export default function SalesResultTable({
 
             {pagedRows.map((row) => (
               <tr key={row.id} className="border-t hover:bg-slate-50">
+                
+                {/* ✅ DATA LAMA TETAP */}
                 <td className="p-2 border">{row.tanggal}</td>
                 <td className="p-2 border">{row.invoice}</td>
                 <td className="p-2 border">{row.tokoName}</td>
-                <td className="p-2 border">{row.item?.namaBarang}</td>
+
+                <td className="p-2 border">
+                  {row.item?.namaBarang || row.TIPE_BARANG}
+                </td>
+
                 <td className="p-2 border font-mono text-[11px]">
-                  {(row.item?.imei || "").split("\n").join(", ")}
+                  {(row.item?.imei || row.IMEI || "")
+                    .toString()
+                    .split("\n")
+                    .join(", ")}
                 </td>
+
                 <td className="p-2 border text-right">
-                  Rp {Number(row.item?.hargaUnit || 0).toLocaleString("id-ID")}
+                  Rp{" "}
+                  {Number(
+                    row.item?.hargaUnit || row.HARGA_UNIT || 0
+                  ).toLocaleString("id-ID")}
                 </td>
-                <td className="p-2 border text-center">{row.item?.qty}</td>
+
+                <td className="p-2 border text-center">
+                  {row.item?.qty || row.QTY}
+                </td>
+
                 <td className="p-2 border text-right font-semibold text-indigo-600">
-                  Rp {Number(row.totals?.lineTotal || 0).toLocaleString("id-ID")}
+                  Rp{" "}
+                  {Number(
+                    row.totals?.lineTotal || row.TOTAL || 0
+                  ).toLocaleString("id-ID")}
                 </td>
+
+                {/* ✅ ===== DP & LIMIT TAMPIL OTOMATIS ===== */}
+                <td className="p-2 border text-right">
+                  Rp{" "}
+                  {Number(
+                    row.DP_USER_MERCHANT ||
+                      row.payment?.dpMerchant ||
+                      0
+                  ).toLocaleString("id-ID")}
+                </td>
+
+                <td className="p-2 border text-right">
+                  Rp{" "}
+                  {Number(
+                    row.DP_USER_TOKO ||
+                      row.payment?.dpToko ||
+                      0
+                  ).toLocaleString("id-ID")}
+                </td>
+
+                <td className="p-2 border text-right">
+                  Rp{" "}
+                  {Number(
+                    row.REQUEST_DP_TALANGAN ||
+                      row.payment?.requestTalangan ||
+                      0
+                  ).toLocaleString("id-ID")}
+                </td>
+
+                <td className="p-2 border text-right font-semibold text-blue-600">
+                  Rp{" "}
+                  {Number(
+                    row.SISA_LIMIT_UNIT ||
+                      row.sisaLimit ||
+                      0
+                  ).toLocaleString("id-ID")}
+                </td>
+
+                <td className="p-2 border text-right font-semibold text-green-600">
+                  Rp{" "}
+                  {Number(
+                    row.SISA_KEMBALIAN ||
+                      row.sisaKembalian ||
+                      0
+                  ).toLocaleString("id-ID")}
+                </td>
+
+                {/* ✅ STATUS ASLI */}
                 <td className="p-2 border text-center">
                   <span
                     className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
@@ -104,6 +182,8 @@ export default function SalesResultTable({
                     {row.status}
                   </span>
                 </td>
+
+                {/* ✅ AKSI ASLI TETAP */}
                 <td className="p-2 border text-center">
                   <div className="flex justify-center gap-2">
                     <button
@@ -132,13 +212,14 @@ export default function SalesResultTable({
                     </button>
                   </div>
                 </td>
+
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* PAGINATION */}
+      {/* ================= PAGINATION ================= */}
       <div className="mt-2 flex justify-between items-center text-xs">
         <span>
           Halaman {page} / {totalPages || 1}

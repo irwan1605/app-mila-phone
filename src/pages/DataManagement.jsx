@@ -1,5 +1,5 @@
-// src/pages/DataManagement.jsx
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom"; // ✅ TAMBAHKAN INI
 import {
   FaUsers,
   FaUserTie,
@@ -17,7 +17,8 @@ import MasterStoreHeadCard from "../components/master-management/MasterStoreHead
 import MasterStoreLeaderCard from "../components/master-management/MasterStoreLeaderCard";
 import MasterSalesTitipanCard from "../components/master-management/MasterSalesTitipanCard";
 import MasterTokoCard from "../components/master-management/MasterTokoCard";
-import MasterBarangHargaCard from "../components/master-management/MasterBarangHargaCard";
+// ❌ TIDAK DIPAKAI LAGI:
+// import MasterBarangHargaCard from "../components/master-management/MasterBarangHargaCard";
 import MasterSupplierCard from "../components/master-management/MasterSupplierCard";
 
 const cardsConfig = [
@@ -81,6 +82,7 @@ const cardsConfig = [
 
 export default function MasterManagement() {
   const [activeKey, setActiveKey] = useState("masterPelanggan");
+  const navigate = useNavigate(); // ✅ INI KUNCINYA
 
   const renderActiveCard = () => {
     switch (activeKey) {
@@ -96,12 +98,19 @@ export default function MasterManagement() {
         return <MasterSalesTitipanCard />;
       case "masterToko":
         return <MasterTokoCard />;
-      case "masterBarangHarga":
-        return <MasterBarangHargaCard />;
       case "masterSupplier":
         return <MasterSupplierCard />;
       default:
         return null;
+    }
+  };
+
+  // ✅ KHUSUS UNTUK BARANG & HARGA → REDIRECT KE MASTER BARANG
+  const handleCardClick = (key) => {
+    if (key === "masterBarangHarga") {
+      navigate("/master-barang"); // ✅ SESUAI ROUTE MASTER BARANG
+    } else {
+      setActiveKey(key);
     }
   };
 
@@ -113,8 +122,8 @@ export default function MasterManagement() {
           MASTER MANAGEMENT
         </h1>
         <p className="text-sm md:text-base text-slate-600 mt-1">
-          Kelola seluruh master data (Pelanggan, Sales, Store, Barang, Supplier) secara
-          realtime & terintegrasi Firebase tanpa reload.
+          Kelola seluruh master data (Pelanggan, Sales, Store, Barang, Supplier)
+          secara realtime & terintegrasi Firebase tanpa reload.
         </p>
       </div>
 
@@ -123,10 +132,11 @@ export default function MasterManagement() {
         {cardsConfig.map((card) => {
           const Icon = card.icon;
           const isActive = activeKey === card.key;
+
           return (
             <button
               key={card.key}
-              onClick={() => setActiveKey(card.key)}
+              onClick={() => handleCardClick(card.key)} // ✅ GANTI INI
               className={[
                 "relative w-full text-left rounded-xl shadow-lg overflow-hidden",
                 "bg-gradient-to-br",
@@ -150,7 +160,8 @@ export default function MasterManagement() {
                   </p>
                 </div>
               </div>
-              {isActive && (
+
+              {isActive && card.key !== "masterBarangHarga" && (
                 <div className="relative px-4 pb-3 text-xs text-white/90">
                   <span className="inline-flex items-center gap-1 bg-white/15 px-2 py-1 rounded-full">
                     <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
