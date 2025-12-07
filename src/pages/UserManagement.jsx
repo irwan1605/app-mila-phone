@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import TOKO_LABELS from "../data/TokoLabels";
-
-// Firebase user functions
 import {
   listenUsers,
   saveUserOnline,
@@ -25,9 +23,6 @@ export default function UserManagement() {
     name: "",
   });
 
-  // ================================
-  // MODAL EDIT STATE
-  // ================================
   const [showModal, setShowModal] = useState(false);
   const [editForm, setEditForm] = useState({
     username: "",
@@ -37,7 +32,9 @@ export default function UserManagement() {
     name: "",
   });
 
-  // Realtime listen from Firebase
+  // ✅ FIX: TIDAK BOLEH SET localStorage DI SINI
+  // ❌ BARIS user.role, user.username, user.toko SUDAH DIHAPUS
+
   useEffect(() => {
     const unsub = listenUsers((list) => {
       setUsers(Array.isArray(list) ? list : []);
@@ -45,12 +42,8 @@ export default function UserManagement() {
     return () => unsub();
   }, []);
 
-  // ================================
-  // FILTERING
-  // ================================
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-
     return (Array.isArray(users) ? users : [])
       .filter(
         (u) =>
@@ -66,12 +59,10 @@ export default function UserManagement() {
       .filter((u) => {
         if (tokoFilter === "ALL") return true;
         const tokoId = String(tokoFilter);
-
         if (u.role.startsWith("pic_toko")) {
           const rid = u.role.replace("pic_toko", "");
           return rid === tokoId;
         }
-
         return String(u.toko) === tokoId;
       });
   }, [search, roleFilter, tokoFilter, users]);
@@ -79,16 +70,12 @@ export default function UserManagement() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  // ================================
-  // ADD USER
-  // ================================
   const addUser = async () => {
     if (!form.username || !form.password) {
       alert("Username & Password wajib diisi.");
       return;
     }
 
-    // Cek duplicate
     if (users.some((u) => u.username === form.username)) {
       alert("Username sudah digunakan.");
       return;
@@ -128,17 +115,11 @@ export default function UserManagement() {
     alert("User berhasil ditambahkan.");
   };
 
-  // ================================
-  // DELETE USER
-  // ================================
   const handleDelete = async (username) => {
     if (!window.confirm("Hapus user ini?")) return;
     await deleteUserOnline(username);
   };
 
-  // ================================
-  // OPEN MODAL EDIT
-  // ================================
   const handleEdit = (u) => {
     let role = u.role;
     let toko = u.toko;
@@ -159,9 +140,6 @@ export default function UserManagement() {
     setShowModal(true);
   };
 
-  // ================================
-  // SAVE EDITED USER
-  // ================================
   const updateUser = async () => {
     let role = editForm.role;
     let toko = editForm.toko || null;
@@ -185,15 +163,10 @@ export default function UserManagement() {
     };
 
     await saveUserOnline(updatedUser);
-
     setShowModal(false);
-
     alert("User berhasil diperbarui.");
   };
 
-  // ================================
-  // DISPLAY HELPERS
-  // ================================
   const displayRole = (role) => {
     if (role === "superadmin") return "Superadmin";
     if (role.startsWith("pic_toko")) {

@@ -96,8 +96,7 @@ export default function Dashboard() {
         NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "",
         NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "",
         QTY: Number(r.QTY || 0),
-        NOMOR_UNIK:
-          r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
+        NOMOR_UNIK: r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
         IMEI: r.IMEI || "",
         NO_DINAMO: r.NO_DINAMO || "",
         NO_RANGKA: r.NO_RANGKA || "",
@@ -155,10 +154,15 @@ export default function Dashboard() {
         if (isNaN(d.getTime())) return false;
 
         if (filterType === "hari") {
-          return d.toISOString().slice(0, 10) === val.toISOString().slice(0, 10);
+          return (
+            d.toISOString().slice(0, 10) === val.toISOString().slice(0, 10)
+          );
         }
         if (filterType === "bulan") {
-          return d.getFullYear() === val.getFullYear() && d.getMonth() === val.getMonth();
+          return (
+            d.getFullYear() === val.getFullYear() &&
+            d.getMonth() === val.getMonth()
+          );
         }
         if (filterType === "tahun") {
           return d.getFullYear() === val.getFullYear();
@@ -179,8 +183,7 @@ export default function Dashboard() {
   );
 
   const totalStok = useMemo(
-    () =>
-      stokMaster.reduce((a, b) => a + Number(b.qty || b.QTY || 0), 0),
+    () => stokMaster.reduce((a, b) => a + Number(b.qty || b.QTY || 0), 0),
     [stokMaster]
   );
 
@@ -251,7 +254,10 @@ export default function Dashboard() {
     filteredData.forEach((x) => {
       if (!x.TANGGAL_TRANSAKSI) return;
       const d = new Date(x.TANGGAL_TRANSAKSI);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}`;
       map[key] = (map[key] || 0) + Number(x.TOTAL || 0);
     });
     return Object.entries(map)
@@ -277,7 +283,11 @@ export default function Dashboard() {
       alert("Masukkan IMEI terlebih dahulu");
       return;
     }
-    navigate(`/toko/cilangkap-pusat/penjualan?imei=${encodeURIComponent(searchImei.trim())}`);
+    navigate(
+      `/toko/cilangkap-pusat/penjualan?imei=${encodeURIComponent(
+        searchImei.trim()
+      )}`
+    );
   };
 
   // =======================================================
@@ -334,7 +344,7 @@ export default function Dashboard() {
         </div>
 
         <div
-          onClick={() => navigate("/toko/cilangkap-pusat/transfer-gudang")}
+          onClick={() => navigate("/transfer-barang")}
           className="cursor-pointer bg-gradient-to-br from-orange-500 to-orange-700 text-white p-5 rounded-2xl shadow hover:scale-[1.02] transition transform"
         >
           <FaExchangeAlt size={28} />
@@ -391,9 +401,7 @@ export default function Dashboard() {
             <FaClock className="text-yellow-500" />
             <span className="text-xs text-slate-500">Transaksi Pending</span>
           </div>
-          <div className="text-lg font-bold text-slate-800">
-            {totalPending}
-          </div>
+          <div className="text-lg font-bold text-slate-800">{totalPending}</div>
           <span className="text-[11px] text-slate-500">
             Menunggu proses / approval.
           </span>
@@ -475,9 +483,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
         {/* CHART TOKO */}
         <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="text-center font-semibold mb-2">
-            Omzet Per Toko
-          </h3>
+          <h3 className="text-center font-semibold mb-2">Omzet Per Toko</h3>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={omzetPerToko}>
               <XAxis dataKey="toko" />
@@ -490,9 +496,7 @@ export default function Dashboard() {
 
         {/* CHART SALES */}
         <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="text-center font-semibold mb-2">
-            Omzet Per Sales
-          </h3>
+          <h3 className="text-center font-semibold mb-2">Omzet Per Sales</h3>
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
               <Pie
@@ -515,9 +519,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
         <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="text-center font-semibold mb-2">
-            Omzet Harian
-          </h3>
+          <h3 className="text-center font-semibold mb-2">Omzet Harian</h3>
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={omzetPerHari}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -530,9 +532,7 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="text-center font-semibold mb-2">
-            Omzet Bulanan
-          </h3>
+          <h3 className="text-center font-semibold mb-2">Omzet Bulanan</h3>
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={omzetPerBulan}>
               <CartesianGrid strokeDasharray="3 3" />

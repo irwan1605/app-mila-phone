@@ -1,4 +1,5 @@
-// src/pages/TransferBarang.jsx — FINAL OTOMATIS + UI MODERN ✅ CLEAN
+// src/pages/TransferBarang.jsx — FINAL OTOMATIS + SUPERADMIN APPROVE + VOID + PAGINATION ✅
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaExchangeAlt,
@@ -13,10 +14,8 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import FirebaseService from "../services/FirebaseService";
+import { useLocation } from "react-router-dom";
 
-
-
-// ===================== TOKO =====================
 const TOKO_TUJUAN = [
   "CILANGKAP PUSAT",
   "CIBINONG",
@@ -52,9 +51,6 @@ const generateNoSuratJalan = () => {
     .padStart(3, "0")}`;
 };
 
-// ===================== ROLE HELPER =====================
-const getRole = () => localStorage.getItem("ROLE") || "USER";
-
 export default function TransferBarang() {
   const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "CILANGKAP PUSAT";
 
@@ -65,6 +61,7 @@ export default function TransferBarang() {
     noSuratJalan: generateNoSuratJalan(),
     dari: TOKO_LOGIN,
     ke: "",
+    tokoPengirim: TOKO_LOGIN, // ✅ BARU
     pengirim: "",
     kategori: "",
     brand: "",
@@ -75,12 +72,17 @@ export default function TransferBarang() {
 
   const [imeiInput, setImeiInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const location = useLocation();
 
   // ===================== DATA REALTIME =====================
   const [history, setHistory] = useState([]);
   const [users, setUsers] = useState([]);
+  const [notif, setNotif] = useState(null);
+  const [currentRole, setCurrentRole] = useState("USER");
   const [masterBarang, setMasterBarang] = useState([]);
   const [allTransaksi, setAllTransaksi] = useState([]);
+  const normalizeRole = (r) => String(r || "").toUpperCase();
+  const [stockRealtime, setStockRealtime] = useState({});
 
   const [selectedSJ, setSelectedSJ] = useState(null);
   const suratJalanRef = useRef(null);
@@ -88,26 +90,46 @@ export default function TransferBarang() {
   // ===================== FILTER =====================
   const [filterStatus, setFilterStatus] = useState("ALL");
 
-  // ===================== REALTIME FIREBASE =====================
+  // ===================== PAGINATION =====================
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 10;
+
   useEffect(() => {
     const unsubUsers = FirebaseService.listenUsers((list) => {
-      setUsers(Array.isArray(list) ? list : []);
+      const arr = Array.isArray(list) ? list : [];
+      setUsers(arr);
+
+      // ✅ JANGAN PERCAYA ROLE DARI LOCALSTORAGE
+      const localUser = JSON.parse(localStorage.getItem("user") || "{}");
+      const username = localUser.username || "";
+
+      const me = arr.find(
+        (u) =>
+          String(u.username).toLowerCase() === String(username).toLowerCase()
+      );
+
+      if (me?.role) {
+        setCurrentRole(me.role.toUpperCase()); // ✅ SUPERADMIN REAL
+      } else {
+        setCurrentRole("USER");
+      }
     });
-    const unsubTransaksi = FirebaseService.listenAllTransaksi((rows) => {
-      setAllTransaksi(rows || []);
-    });
-    const unsubTransfer = FirebaseService.listenTransferRequests((rows) => {
-      setHistory(rows || []);
+
+    const unsubTransaksi = FirebaseService.listenAllTransaksi(setAllTransaksi);
+    const unsubTransfer = FirebaseService.listenTransferRequests(setHistory);
+    const unsubStock = FirebaseService.listenStockAll((s) => {
+      setStockRealtime(s || {});
     });
 
     return () => {
       unsubUsers && unsubUsers();
       unsubTransaksi && unsubTransaksi();
       unsubTransfer && unsubTransfer();
+      unsubStock && unsubStock();
     };
   }, []);
 
-  // ===================== MASTER BARANG (FROM PEMBELIAN) =====================
+  // ===================== MASTER BARANG =====================
   useEffect(() => {
     const map = {};
     (allTransaksi || []).forEach((t) => {
@@ -126,14 +148,17 @@ export default function TransferBarang() {
 
   // ===================== SOURCE IMEI =====================
   const imeiSource = useMemo(() => {
-    return Array.from(
-      new Set(
-        (allTransaksi || [])
-          .map((t) => String(t.IMEI || "").trim())
-          .filter(Boolean)
-      )
+    const fromTransaksi = (allTransaksi || [])
+      .filter((t) => String(t.NAMA_BARANG) === String(form.barang))
+      .map((t) => String(t.IMEI || "").trim())
+      .filter(Boolean);
+
+    const fromStock = Object.values(stockRealtime?.[form.dari] || {}).map((v) =>
+      String(v.imei || "").trim()
     );
-  }, [allTransaksi]);
+
+    return Array.from(new Set([...fromTransaksi, ...fromStock]));
+  }, [allTransaksi, stockRealtime, form.barang, form.dari]);
 
   // ===================== ADD IMEI =====================
   const addImei = () => {
@@ -143,7 +168,6 @@ export default function TransferBarang() {
       alert("❌ IMEI tidak boleh duplikat!");
       return;
     }
-
     setForm((f) => ({
       ...f,
       imeis: [...f.imeis, im],
@@ -158,40 +182,14 @@ export default function TransferBarang() {
     setForm((f) => ({ ...f, imeis: next, qty: next.length }));
   };
 
-  // ===================== SUBMIT TRANSFER (LEVEL 2 SECURITY) =====================
+  // ===================== SUBMIT TRANSFER =====================
   const submitTransfer = async () => {
-    if (loading) {
-      alert("⏳ Proses sedang berjalan...");
-      return;
-    }
-
     setLoading(true);
-
     try {
-      // ✅ VALIDASI TOKO LOGIN
-      if (form.dari !== TOKO_LOGIN) {
-        throw new Error("Anda tidak punya akses transfer dari toko ini!");
-      }
+      if (!form.ke || !form.pengirim || !form.brand || !form.barang)
+        throw new Error("Lengkapi semua field!");
+      if (!form.imeis.length) throw new Error("Minimal 1 IMEI!");
 
-      // ✅ VALIDASI FIELD
-      if (!form.ke || !form.pengirim || !form.brand || !form.barang) {
-        throw new Error("Lengkapi semua field wajib!");
-      }
-
-      if (form.imeis.length === 0) {
-        throw new Error("Minimal 1 IMEI wajib diisi!");
-      }
-
-      // ✅ LIMIT HARIAN PER TOKO
-      const today = new Date().toISOString().slice(0, 10);
-      const transferHariIni = (history || []).filter(
-        (t) => t.dari === TOKO_LOGIN && t.tanggal === today
-      );
-      if (transferHariIni.length >= 20) {
-        throw new Error("Limit transfer harian sudah tercapai!");
-      }
-
-      // ✅ SKU OTOMATIS
       const sku = `${form.brand}_${form.barang}`.replace(/\s+/g, "_");
 
       await FirebaseService.createTransferRequest({
@@ -201,26 +199,15 @@ export default function TransferBarang() {
         createdAt: new Date().toISOString(),
       });
 
-      // ✅ AUDIT LOG
-      if (FirebaseService.addAuditLog) {
-        await FirebaseService.addAuditLog({
-          user: localStorage.getItem("USERNAME") || "USER",
-          role: getRole(),
-          aksi: "SUBMIT TRANSFER",
-          detail: `${form.barang} | ${form.dari} → ${form.ke}`,
-          waktu: new Date().toISOString(),
-        });
-      }
+      alert("✅ Transfer dikirim & menunggu APPROVE");
 
-      alert("✅ Transfer berhasil dikirim (Pending)");
-
-      // RESET FORM
       setForm({
         tanggal: new Date().toISOString().slice(0, 10),
         noDo: generateNoDO(),
         noSuratJalan: generateNoSuratJalan(),
         dari: TOKO_LOGIN,
         ke: "",
+        tokoPengirim: TOKO_LOGIN,
         pengirim: "",
         kategori: "",
         brand: "",
@@ -229,42 +216,97 @@ export default function TransferBarang() {
         qty: 0,
       });
     } catch (e) {
-      console.error(e);
-      alert("❌ " + (e.message || "Gagal submit transfer"));
+      alert("❌ " + e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ===================== APPROVE =====================
+  useEffect(() => {
+    if (location?.state?.fromInventory) {
+      const inv = location.state;
+
+      setForm((f) => ({
+        ...f,
+        tanggal: inv.tanggal || f.tanggal,
+        dari: inv.dari || f.dari,
+        tokoPengirim: inv.dari || f.tokoPengirim,
+        brand: inv.brand || "",
+        barang: inv.barang || "",
+        kategori: inv.kategori || "",
+        imeis: inv.imei ? [inv.imei] : [],
+        qty: inv.qty ? Number(inv.qty) : 1,
+      }));
+
+      setImeiInput("");
+    }
+  }, [location]);
+
+  // ===================== ✅ APPROVE (SUPERADMIN ONLY) =====================
   const approveTransfer = async (row) => {
-    const role = getRole();
-
-    if (role !== "ADMIN" && role !== "SUPERADMIN") {
-      alert("❌ Anda tidak punya hak APPROVE!");
-      return;
-    }
-
-    if (row.status !== "Pending") {
-      alert("⚠️ Transfer ini sudah diproses!");
-      return;
-    }
-
     try {
-      // Pindahkan stock antar toko
+      const username = localStorage.getItem("USERNAME");
+
+      if (currentRole !== "SUPERADMIN") {
+        setNotif("❌ Akses ditolak! Anda bukan SUPERADMIN!");
+        return;
+      }
+
+      // ✅ VALIDASI LANGSUNG KE FIREBASE (BUKAN DARI STATE)
+
+      if (currentRole !== "SUPERADMIN") {
+        setNotif("❌ Akses ditolak! Anda bukan SUPERADMIN!");
+        return;
+      }
+
+      if (!row || row.status !== "Pending") {
+        setNotif("⚠️ Transfer ini sudah diproses!");
+        return;
+      }
+
+      const realFromToko = row.tokoPengirim || row.dari;
+      const realQty = Array.isArray(row.imeis)
+        ? row.imeis.length
+        : Number(row.qty || 0);
+
+      const realSKU = row.sku; // ✅ JANGAN DITAMBAH 128GB
+
+      const realStock = Number(
+        stockRealtime?.[realFromToko]?.[row.sku]?.qty || 0
+      );
+      
+      if (realStock < realQty) {
+        setNotif(
+          `❌ Gagal APPROVE: Stok di ${realFromToko} tidak mencukupi! (Stok tersedia: ${realStock})`
+        );
+        return;
+      }
+      const totalStock = await FirebaseService.getStockTotalBySKU(
+        realFromToko,
+        row.sku
+      );
+
+      if (Number(totalStock) < Number(realQty)) {
+        setNotif(
+          `❌ Gagal APPROVE: Stok di ${realFromToko} tidak mencukupi! (Stok tersedia: ${totalStock})`
+        );
+        return;
+      }
+
+      // ✅ PAKAI SKU PERSIS row.sku (tanpa /128GB, biar sama dengan MasterPembelian & StockOpname)
       await FirebaseService.transferStock({
-        fromToko: row.dari,
+        fromToko: realFromToko,
         toToko: row.ke,
         sku: row.sku,
-        qty: row.qty,
+        qty: realQty,
         nama: row.barang,
         imei: (row.imeis || []).join(", "),
         keterangan: `SJ:${row.noSuratJalan}`,
-        performedBy: row.pengirim,
+        performedBy: username,
       });
 
-      // Jika masuk ke CILANGKAP PUSAT → catat juga ke transaksi pembelian
-      if (row.ke === "CILANGKAP PUSAT" && FirebaseService.addTransaksi) {
+      // ✅ CATAT PEMBELIAN JIKA MASUK PUSAT
+      if (row.ke === "CILANGKAP PUSAT") {
         for (const im of row.imeis || []) {
           await FirebaseService.addTransaksi(1, {
             TANGGAL_TRANSAKSI: row.tanggal,
@@ -283,37 +325,63 @@ export default function TransferBarang() {
         }
       }
 
+      // ✅ UPDATE STATUS DI FIREBASE REALTIME
       await FirebaseService.updateTransferRequest(row.id, {
         status: "Approved",
-        approvedBy: localStorage.getItem("USERNAME") || "ADMIN",
+        approvedBy: username,
         approvedAt: new Date().toISOString(),
       });
 
-      if (FirebaseService.addAuditLog) {
-        await FirebaseService.addAuditLog({
-          user: localStorage.getItem("USERNAME") || "ADMIN",
-          role,
-          aksi: "APPROVE TRANSFER",
-          detail: `${row.barang} | ${row.dari} → ${row.ke}`,
-          waktu: new Date().toISOString(),
-        });
-      }
-
-      alert("✅ Transfer berhasil di-APPROVE!");
-    } catch (e) {
-      console.error(e);
-      alert("❌ Gagal approve transfer!");
+      // ✅ NOTIFIKASI DARI STATE (BUKAN ALERT)
+      setNotif("✅ Transfer BERHASIL di-APPROVE oleh SUPERADMIN!");
+    } catch (err) {
+      console.error(err);
+      setNotif("❌ Gagal APPROVE: " + err.message);
     }
   };
 
-  // ===================== REJECT =====================
   const rejectTransfer = async (id) => {
-    await FirebaseService.updateTransferRequest(id, {
-      status: "Rejected",
-      rejectedAt: new Date().toISOString(),
+    try {
+      const username = localStorage.getItem("USERNAME");
+
+      if (currentRole !== "SUPERADMIN") {
+        setNotif("❌ Hanya SUPERADMIN yang boleh menolak transfer!");
+        return;
+      }
+
+      await FirebaseService.updateTransferRequest(id, {
+        status: "Rejected",
+        rejectedBy: username,
+        rejectedAt: new Date().toISOString(),
+      });
+
+      setNotif("✅ Transfer berhasil DITOLAK!");
+    } catch (err) {
+      setNotif("❌ Gagal reject: " + err.message);
+    }
+  };
+
+  // ===================== ✅ VOID (BALIKKAN STOCK) =====================
+  const voidTransfer = async (row) => {
+    if (normalizeRole(currentRole) !== "SUPERADMIN")
+      return alert("❌ Hanya SUPERADMIN yang boleh VOID!");
+
+    await FirebaseService.transferStock({
+      fromToko: row.ke,
+      toToko: row.tokoPengirim || row.dari,
+      sku: row.sku,
+      qty: row.qty,
+      nama: row.barang,
+      imei: (row.imeis || []).join(", "),
+      keterangan: "VOID TRANSFER",
+      performedBy: "SYSTEM",
     });
 
-    alert("✅ Transfer Rejected");
+    await FirebaseService.updateTransferRequest(row.id, {
+      status: "Voided",
+    });
+
+    alert("✅ Transfer di-VOID & stok dikembalikan!");
   };
 
   // ===================== FILTER =====================
@@ -321,6 +389,13 @@ export default function TransferBarang() {
     filterStatus === "ALL"
       ? history
       : history.filter((h) => h.status === filterStatus);
+
+  // ===================== PAGINATION DATA =====================
+  const pagedHistory = filteredHistory.slice(
+    (page - 1) * PER_PAGE,
+    page * PER_PAGE
+  );
+  const totalPages = Math.ceil(filteredHistory.length / PER_PAGE) || 1;
 
   // ===================== EXPORT EXCEL =====================
   const exportExcel = () => {
@@ -366,7 +441,9 @@ export default function TransferBarang() {
         <h2 className="text-2xl font-bold text-indigo-700 flex items-center gap-2">
           <FaExchangeAlt /> TRANSFER BARANG
         </h2>
-
+        <div className="text-xs text-red-600 font-bold">
+          DEBUG ROLE: {currentRole}
+        </div>
         {/* ================= FORM ================= */}
         <div className="grid md:grid-cols-4 gap-4">
           <div>
@@ -389,137 +466,143 @@ export default function TransferBarang() {
             <input value={form.noSuratJalan} readOnly className="input" />
           </div>
 
-          <div>
-            <label className="text-xs font-semibold">Toko Tujuan</label>
-            <select
-              className="input"
-              value={form.ke}
-              onChange={(e) => setForm({ ...form, ke: e.target.value })}
-            >
-              <option value="">Pilih Toko</option>
-              {TOKO_TUJUAN.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* TOKO TUJUAN */}
+          <select
+            className="input"
+            value={form.ke}
+            onChange={(e) => setForm({ ...form, ke: e.target.value })}
+          >
+            <option value="">Toko Tujuan</option>
+            {TOKO_TUJUAN.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+
+          {/* ✅ TOKO PENGIRIM */}
+          <input
+            list="toko-list"
+            value={form.tokoPengirim}
+            onChange={(e) => setForm({ ...form, tokoPengirim: e.target.value })}
+            className="input"
+            placeholder="Toko Pengirim"
+          />
+          <datalist id="toko-list">
+            {TOKO_TUJUAN.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
 
           {/* NAMA PENGIRIM */}
-          <div>
-            <label className="text-xs font-semibold">Nama Pengirim</label>
-            <input
-              list="pengirim-list"
-              value={form.pengirim}
-              onChange={(e) => setForm({ ...form, pengirim: e.target.value })}
-              className="input"
-            />
-            <datalist id="pengirim-list">
-              {users.map((u) => (
-                <option
-                  key={u.id || u.username}
-                  value={u.name || u.username || ""}
-                />
-              ))}
-            </datalist>
-          </div>
-
-          {/* KATEGORI */}
-          <div>
-            <label className="text-xs font-semibold">Kategori</label>
-            <select
-              className="input"
-              value={form.kategori}
-              onChange={(e) => setForm({ ...form, kategori: e.target.value })}
-            >
-              <option value="">Pilih Kategori</option>
-              {KATEGORI_OPTIONS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* BRAND */}
-          <div>
-            <label className="text-xs font-semibold">Brand</label>
-            <input
-              list="brand-list"
-              value={form.brand}
-              onChange={(e) => setForm({ ...form, brand: e.target.value })}
-              className="input"
-            />
-            <datalist id="brand-list">
-              {[...new Set(masterBarang.map((x) => x.brand))].map((b) => (
-                <option key={b} value={b} />
-              ))}
-            </datalist>
-          </div>
-
-          {/* BARANG */}
-          <div>
-            <label className="text-xs font-semibold">Nama Barang</label>
-            <input
-              list="barang-list"
-              value={form.barang}
-              onChange={(e) => setForm({ ...form, barang: e.target.value })}
-              className="input"
-            />
-            <datalist id="barang-list">
-              {masterBarang
-                .filter((x) => x.brand === form.brand)
-                .map((x) => (
-                  <option key={x.barang} value={x.barang} />
-                ))}
-            </datalist>
-          </div>
-
-          {/* IMEI */}
-          <div className="md:col-span-2">
-            <label className="text-xs font-semibold">IMEI</label>
-            <div className="flex gap-2">
-              <input
-                list="imei-list"
-                value={imeiInput}
-                onChange={(e) => setImeiInput(e.target.value)}
-                className="input w-full"
+          <input
+            list="pengirim-list"
+            value={form.pengirim}
+            onChange={(e) => setForm({ ...form, pengirim: e.target.value })}
+            className="input"
+            placeholder="Nama Pengirim"
+          />
+          <datalist id="pengirim-list">
+            {users.map((u) => (
+              <option
+                key={u.id || u.username}
+                value={u.name || u.username || ""}
               />
-              <button
-                onClick={addImei}
-                className="bg-indigo-600 text-white px-4 rounded-lg"
-                type="button"
-              >
-                <FaPlus />
-              </button>
-            </div>
-
-            <datalist id="imei-list">
-              {imeiSource.map((i) => (
-                <option key={i} value={i} />
-              ))}
-            </datalist>
-
-            <div className="flex flex-wrap mt-2">
-              {form.imeis.map((im, i) => (
-                <div
-                  key={i}
-                  className="px-2 py-1 bg-indigo-100 rounded mr-2 mb-2"
-                >
-                  {im}
-                  <button
-                    onClick={() => removeImei(i)}
-                    className="ml-2 text-red-600"
-                    type="button"
-                  >
-                    x
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
+            ))}
+          </datalist>
         </div>
 
+        {/* KATEGORI */}
+        <div>
+          <label className="text-xs font-semibold">Kategori</label>
+          <select
+            className="input"
+            value={form.kategori}
+            onChange={(e) => setForm({ ...form, kategori: e.target.value })}
+          >
+            <option value="">Pilih Kategori</option>
+            {KATEGORI_OPTIONS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* BRAND */}
+        <div>
+          <label className="text-xs font-semibold">Brand</label>
+          <input
+            list="brand-list"
+            value={form.brand}
+            onChange={(e) => setForm({ ...form, brand: e.target.value })}
+            className="input"
+          />
+          <datalist id="brand-list">
+            {[...new Set(masterBarang.map((x) => x.brand))].map((b) => (
+              <option key={b} value={b} />
+            ))}
+          </datalist>
+        </div>
+
+        {/* BARANG */}
+        <div>
+          <label className="text-xs font-semibold">Nama Barang</label>
+          <input
+            list="barang-list"
+            value={form.barang}
+            onChange={(e) => setForm({ ...form, barang: e.target.value })}
+            className="input"
+          />
+          <datalist id="barang-list">
+            {masterBarang
+              .filter((x) => x.brand === form.brand)
+              .map((x) => (
+                <option key={x.barang} value={x.barang} />
+              ))}
+          </datalist>
+        </div>
+
+        {/* IMEI */}
+        <div className="md:col-span-2">
+          <label className="text-xs font-semibold">IMEI</label>
+          <div className="flex gap-2 mt-3">
+            <input
+              list="imei-list"
+              value={imeiInput}
+              onChange={(e) => setImeiInput(e.target.value)}
+              className="input w-full"
+            />
+            <button
+              onClick={addImei}
+              className="bg-indigo-600 text-white px-4 rounded-lg"
+            >
+              <FaPlus />
+            </button>
+          </div>
+
+          <datalist id="imei-list">
+            {imeiSource.map((i) => (
+              <option key={i} value={i} />
+            ))}
+          </datalist>
+
+          <div className="flex flex-wrap mt-2">
+            {form.imeis.map((im, i) => (
+              <div
+                key={i}
+                className="px-2 py-1 bg-indigo-100 rounded mr-2 mb-2"
+              >
+                {im}
+                <button
+                  onClick={() => removeImei(i)}
+                  className="ml-2 text-red-600"
+                  type="button"
+                >
+                  x
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
         <button
           onClick={submitTransfer}
           disabled={loading}
@@ -528,108 +611,114 @@ export default function TransferBarang() {
         >
           {loading ? "Loading..." : "SUBMIT TRANSFER"}
         </button>
-
-        {/* ================= FILTER ================= */}
-        <div className="flex gap-2 items-center mt-4">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="border p-2 rounded"
-          >
-            <option value="ALL">SEMUA</option>
-            <option value="Pending">Pending</option>
-            <option value="Approved">Approved</option>
-            <option value="Rejected">Rejected</option>
-          </select>
-
-          <button onClick={exportExcel} className="btn-blue" type="button">
-            <FaFileExcel /> Excel
-          </button>
-          <button onClick={exportPDF} className="btn-red" type="button">
-            <FaFilePdf /> PDF
-          </button>
-          <button onClick={printSuratJalan} className="btn-indigo" type="button">
-            <FaPrint /> Print
-          </button>
-        </div>
-
-        {/* ================= TABLE ================= */}
-        <table className="w-full border text-sm mt-4">
-          <thead className="bg-slate-100">
-            <tr>
-              <th>No SJ</th>
-              <th>Barang</th>
-              <th>Dari</th>
-              <th>Ke</th>
-              <th>Qty</th>
-              <th>Status</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredHistory.map((row) => (
-              <tr
-                key={row.id}
-                onClick={() => setSelectedSJ(row)}
-                className="hover:bg-slate-50 cursor-pointer"
-              >
-                <td>{row.noSuratJalan}</td>
-                <td>{row.barang}</td>
-                <td>{row.dari}</td>
-                <td>{row.ke}</td>
-                <td>{row.qty}</td>
-                <td>{row.status}</td>
-                <td>
-                  {row.status === "Pending" && (
-                    <>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          approveTransfer(row);
-                        }}
-                        className="text-green-600 mr-2"
-                        type="button"
-                      >
-                        <FaCheck />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          rejectTransfer(row.id);
-                        }}
-                        className="text-red-600"
-                        type="button"
-                      >
-                        <FaTimes />
-                      </button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* ================= SURAT JALAN ================= */}
-        {selectedSJ && (
-          <div ref={suratJalanRef} className="bg-white p-4 rounded shadow mt-4">
-            <h3 className="font-bold">SURAT JALAN</h3>
-            <p>No: {selectedSJ.noSuratJalan}</p>
-            <p>Dari: {selectedSJ.dari}</p>
-            <p>Ke: {selectedSJ.ke}</p>
-            <p>Barang: {selectedSJ.barang}</p>
-            <p>Qty: {selectedSJ.qty}</p>
-
-            <img
-              className="mt-4"
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                qrValue
-              )}`}
-              alt="QR"
-            />
-          </div>
-        )}
       </div>
+
+      {/* ================= FILTER ================= */}
+      <div className="flex gap-2 items-center mt-4">
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="border p-2 rounded"
+        >
+          <option value="ALL">SEMUA</option>
+          <option value="Pending">Pending</option>
+          <option value="Approved">Approved</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+
+        <button onClick={exportExcel} className="btn-blue" type="button">
+          <FaFileExcel /> Excel
+        </button>
+        <button onClick={exportPDF} className="btn-red" type="button">
+          <FaFilePdf /> PDF
+        </button>
+        <button onClick={printSuratJalan} className="btn-indigo" type="button">
+          <FaPrint /> Print
+        </button>
+      </div>
+
+      {notif && (
+        <div className="bg-indigo-100 text-indigo-800 p-3 rounded mb-3 font-semibold">
+          {notif}
+        </div>
+      )}
+
+      {/* ================= TABLE ================= */}
+      <table className="w-full border text-sm mt-4">
+        <thead className="bg-slate-100">
+          <tr>
+            <th>No SJ</th>
+            <th>Barang</th>
+            <th>Dari</th>
+            <th>Ke</th>
+            <th>Qty</th>
+            <th>Status</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pagedHistory.map((row) => (
+            <tr
+              key={row.id}
+              onClick={() => setSelectedSJ(row)}
+              className="hover:bg-slate-50 cursor-pointer"
+            >
+              <td>{row.noSuratJalan}</td>
+              <td>{row.barang}</td>
+              <td>{row.dari}</td>
+              <td>{row.ke}</td>
+              <td>{row.qty}</td>
+              <td>{row.status}</td>
+              <td>
+                {row.status === "Pending" && (
+                  <>
+                    <button onClick={() => approveTransfer(row)}>
+                      <FaCheck />
+                    </button>
+                    <button onClick={() => rejectTransfer(row.id)}>
+                      <FaTimes />
+                    </button>
+                  </>
+                )}
+                {row.status === "Approved" && (
+                  <button onClick={() => voidTransfer(row)}>VOID</button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* ✅ PAGINATION */}
+      <div className="flex gap-4 justify-center">
+        <button onClick={() => setPage(Math.max(1, page - 1))}>Prev</button>
+        <span>
+          {page} / {totalPages}
+        </span>
+        <button onClick={() => setPage(Math.min(totalPages, page + 1))}>
+          Next
+        </button>
+      </div>
+
+      {/* ================= SURAT JALAN ================= */}
+      {selectedSJ && (
+        <div ref={suratJalanRef} className="bg-white p-4 rounded shadow mt-4">
+          <h3 className="font-bold">SURAT JALAN</h3>
+          <p>No SJ: {selectedSJ.noSuratJalan}</p>
+          <p>Dari: {selectedSJ.tokoPengirim}</p>
+          <p>Ke: {selectedSJ.ke}</p>
+          <p>Barang: {selectedSJ.barang}</p>
+          <p>Qty: {selectedSJ.qty}</p>
+
+          <img
+            className="mt-4"
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+              qrValue
+            )}`}
+            alt="QR"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -637,14 +726,55 @@ export default function TransferBarang() {
 // ===================== STYLE HELPER =====================
 const styles = document.createElement("style");
 styles.innerHTML = `
-  .input{
-    width:100%;
-    padding:8px;
-    border:1px solid #cbd5e1;
-    border-radius:8px;
-  }
-  .btn-blue{background:#2563eb;color:white;padding:6px 12px;border-radius:8px}
-  .btn-red{background:#dc2626;color:white;padding:6px 12px;border-radius:8px}
-  .btn-indigo{background:#4f46e5;color:white;padding:6px 12px;border-radius:8px}
+.input{
+  width:100%;
+  padding:10px;
+  border:1px solid #cbd5e1;
+  border-radius:10px;
+  transition:all .2s ease;
+}
+.input:focus{
+  outline:none;
+  border-color:#4f46e5;
+  box-shadow:0 0 0 2px rgba(79,70,229,.2);
+}
+
+.btn-blue{
+  background:linear-gradient(135deg,#2563eb,#1d4ed8);
+  color:white;
+  padding:8px 16px;
+  border-radius:10px;
+  font-weight:600;
+}
+
+.btn-red{
+  background:linear-gradient(135deg,#dc2626,#991b1b);
+  color:white;
+  padding:8px 16px;
+  border-radius:10px;
+  font-weight:600;
+}
+
+.btn-indigo{
+  background:linear-gradient(135deg,#4f46e5,#4338ca);
+  color:white;
+  padding:8px 16px;
+  border-radius:10px;
+  font-weight:600;
+}
+
+table{
+  border-radius:12px;
+  overflow:hidden;
+}
+
+thead{
+  background:linear-gradient(135deg,#e0e7ff,#c7d2fe);
+}
+
+tr:hover{
+  background:#eef2ff;
+  transition:.15s;
+}
 `;
 document.head.appendChild(styles);

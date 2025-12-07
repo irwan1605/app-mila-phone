@@ -184,9 +184,20 @@ export default function InventoryReport() {
   };
 
   const handleTransferClick = (tx) => {
-    // Bisa kirim data awal jika mau, untuk sekarang cukup arahkan saja
-    navigate("/transfer-barang");
+    navigate("/transfer-barang", {
+      state: {
+        fromInventory: true,
+        tanggal: tx.TANGGAL_TRANSAKSI || tx.TANGGAL || "",
+        dari: tx.NAMA_TOKO || tx.TOKO,
+        brand: tx.NAMA_BRAND,
+        barang: tx.NAMA_BARANG,
+        kategori: tx.KATEGORI_BRAND || "",
+        imei: tx.IMEI || tx.NOMOR_UNIK || "",
+        qty: tx.QTY || 1,
+      },
+    });
   };
+  
 
   // ======================= RENDER =======================
   return (

@@ -31,16 +31,16 @@ import * as XLSX from "xlsx";
 
 // ======================= KONSTAN =======================
 const TOKO_LIST = [
-  { id: "1", name: "CILANGKAP PUSAT", code: "cilangkap-pusat" },
-  { id: "2", name: "CIBINONG", code: "cibinong" },
-  { id: "3", name: "GAS ALAM", code: "gas-alam" },
-  { id: "4", name: "CITEUREUP", code: "citeureup" },
-  { id: "5", name: "CIRACAS", code: "ciracas" },
-  { id: "6", name: "METLAND 1", code: "metland-1" },
-  { id: "7", name: "METLAND 2", code: "metland-2" },
-  { id: "8", name: "PITARA", code: "pitara" },
-  { id: "9", name: "KOTA WISATA", code: "kota-wisata" },
-  { id: "10", name: "SAWANGAN", code: "sawangan" },
+  { id: "1", tokoName: "CILANGKAP PUSAT", code: "cilangkap-pusat" },
+  { id: "2", tokoName: "CIBINONG", code: "cibinong" },
+  { id: "3", tokoName: "GAS ALAM", code: "gas-alam" },
+  { id: "4", tokoName: "CITEUREUP", code: "citeureup" },
+  { id: "5", tokoName: "CIRACAS", code: "ciracas" },
+  { id: "6", tokoName: "METLAND 1", code: "metland-1" },
+  { id: "7", tokoName: "METLAND 2", code: "metland-2" },
+  { id: "8", tokoName: "PITARA", code: "pitara" },
+  { id: "9", tokoName: "KOTA WISATA", code: "kota-wisata" },
+  { id: "10", tokoName: "SAWANGAN", code: "sawangan" },
 ];
 
 // Sama seperti MasterPenjualan
@@ -96,8 +96,8 @@ export default function DashboardToko(props) {
 
   // ✅ SIMPAN TOKO LOGIN & ROLE (UNTUK TRANSFER BARANG)
   useEffect(() => {
-    if (toko?.name) {
-      localStorage.setItem("TOKO_LOGIN", toko.name);
+    if (toko?.tokoName) {
+      localStorage.setItem("TOKO_LOGIN", toko.tokoName);
       localStorage.setItem(
         "ROLE_USER",
         localStorage.getItem("ROLE_USER") || "USER"
@@ -138,10 +138,11 @@ export default function DashboardToko(props) {
   }, [quickItems, page, perPage]);
 
   // ======================= CHART VOID & RETURN PER TOKO =======================
+  // eslint-disable-next-line no-unused-vars
   const dataChartVoidReturn = useMemo(() => {
     const map = {};
     TOKO_LIST.forEach((t) => {
-      map[t.name] = { VOID: 0, RETURN: 0 };
+      map[t.tokoName] = { VOID: 0, RETURN: 0 };
     });
 
     (allTransaksi || []).forEach((x) => {
@@ -159,8 +160,8 @@ export default function DashboardToko(props) {
       }
     });
 
-    return Object.entries(map).map(([name, val]) => ({
-      name,
+    return Object.entries(map).map(([tokoName, val]) => ({
+      tokoName,
       VOID: val.VOID,
       RETURN: val.RETURN,
     }));
@@ -170,14 +171,14 @@ export default function DashboardToko(props) {
     const ws = XLSX.utils.json_to_sheet(laporanVoidExport);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Laporan VOID");
-    XLSX.writeFile(wb, `Laporan_VOID_${toko?.name}.xlsx`);
+    XLSX.writeFile(wb, `Laporan_VOID_${toko?.tokoName}.xlsx`);
   };
 
   const exportReturnExcel = () => {
     const ws = XLSX.utils.json_to_sheet(laporanReturnExport);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Laporan RETURN");
-    XLSX.writeFile(wb, `Laporan_RETURN_${toko?.name}.xlsx`);
+    XLSX.writeFile(wb, `Laporan_RETURN_${toko?.tokoName}.xlsx`);
   };
 
   useEffect(() => {
@@ -239,7 +240,7 @@ export default function DashboardToko(props) {
         creditForm,
       })
     );
-  }, [quickItems, paymentType, creditForm, tokoId]);
+  }, [DRAFT_KEY, quickItems, paymentType, creditForm]);
 
   // ======================= THEME PERSIST (TIDAK BERUBAH SAAT REFRESH) =======================
   useEffect(() => {
@@ -292,7 +293,7 @@ export default function DashboardToko(props) {
   const dataPenjualanPerToko = useMemo(() => {
     const map = {};
     TOKO_LIST.forEach((t) => {
-      map[t.name] = 0;
+      map[t.tokoName] = 0;
     });
 
     (allTransaksi || []).forEach((x) => {
@@ -305,8 +306,8 @@ export default function DashboardToko(props) {
       map[tokoName] += total;
     });
 
-    return Object.entries(map).map(([name, total]) => ({
-      name,
+    return Object.entries(map).map(([tokoName, total]) => ({
+      tokoName,
       total,
     }));
   }, [allTransaksi]);
@@ -315,7 +316,7 @@ export default function DashboardToko(props) {
   const dataStockPerToko = useMemo(() => {
     const map = {};
     TOKO_LIST.forEach((t) => {
-      map[t.name] = 0;
+      map[t.tokoName] = 0;
     });
 
     (allTransaksi || []).forEach((x) => {
@@ -328,8 +329,8 @@ export default function DashboardToko(props) {
       map[tokoName] += qty;
     });
 
-    return Object.entries(map).map(([name, total]) => ({
-      name,
+    return Object.entries(map).map(([tokoName, total]) => ({
+      tokoName,
       total,
     }));
   }, [allTransaksi]);
@@ -340,7 +341,7 @@ export default function DashboardToko(props) {
       (x) =>
         (x.STATUS || "").toUpperCase() === "VOID" &&
         (x.PAYMENT_METODE || "").toUpperCase().includes("PENJUALAN") &&
-        x.NAMA_TOKO === (toko ? toko.name : "")
+        x.NAMA_TOKO === (toko ? toko.tokoName : "")
     );
   }, [transaksiToko, toko]);
 
@@ -349,7 +350,7 @@ export default function DashboardToko(props) {
       (x) =>
         (x.STATUS || "").toUpperCase() === "RETURN" &&
         (x.PAYMENT_METODE || "").toUpperCase().includes("PENJUALAN") &&
-        x.NAMA_TOKO === (toko ? toko.name : "")
+        x.NAMA_TOKO === (toko ? toko.tokoName : "")
     );
   }, [transaksiToko, toko]);
 
@@ -453,14 +454,23 @@ export default function DashboardToko(props) {
 
   const handleOpen = (type) => {
     if (!toko) return;
+  
+    // ✅ PAKAI CODE / SLUG TOKO, BUKAN ID ANGKA
+    const tokoSlug =
+      toko.code ||
+      (toko.tokoName || "")
+        .toLowerCase()
+        .replace(/\s+/g, "-");
+  
     if (type === "penjualan") {
-      navigate(`/toko/${toko.id}/penjualan`);
+      navigate(`/toko/${tokoSlug}/penjualan`);
     } else if (type === "stock") {
-      navigate(`/toko/${toko.id}/stock-opname`);
+      navigate(`/toko/${tokoSlug}/stock-opname`);
     } else if (type === "transfer") {
-      navigate("/transfer-barang"); // ✅ LANGSUNG KE TransferBarang.jsx
+      navigate("/transfer-barang");
     }
   };
+  
 
   const handleAddItemByImei = () => {
     const imei = searchImei.trim();
@@ -587,19 +597,15 @@ export default function DashboardToko(props) {
       </head>
       <body>
         <h2>INVOICE PENJUALAN</h2>
-        <h3>${toko ? toko.name : "-"}</h3>
+        <h3>${toko ? toko.tokoName : "-"}</h3>
         <p><b>No Invoice:</b> ${invoiceNo}</p>
         <p><b>Tanggal:</b> ${tanggal}</p>
         <p><b>Jenis Pembayaran:</b> ${jenisBayarLabel}</p>
         ${
           paymentType === "KREDIT"
-            ? `<p><b>Payment Method:</b> ${
-                creditForm.paymentMethod || "-"
-              } |
+            ? `<p><b>Payment Method:</b> ${creditForm.paymentMethod || "-"} |
                <b>MDR:</b> ${creditForm.mdr || "-"}% |
-               <b>Kategori Harga:</b> ${
-                 creditForm.kategoriHarga || "-"
-               } |
+               <b>Kategori Harga:</b> ${creditForm.kategoriHarga || "-"} |
                <b>MP Protek:</b> ${creditForm.mpProtec || "-"} |
                <b>Tenor:</b> ${creditForm.tenor || "-"}</p>`
             : ""
@@ -679,7 +685,7 @@ export default function DashboardToko(props) {
         const payload = {
           TANGGAL_TRANSAKSI: tanggal,
           NO_INVOICE: invoiceNo,
-          NAMA_TOKO: toko ? toko.name : "",
+          NAMA_TOKO: toko ? toko.tokoName : "",
           NAMA_BRAND: it.namaBrand || "",
           NAMA_BARANG: it.namaBarang || "",
           IMEI: it.imei || "",
@@ -779,8 +785,8 @@ export default function DashboardToko(props) {
               </span>
               <span>
                 Dashboard Toko
-                <span className="block text-sm text-bold font-normal text-slate-0">
-                  {toko.name}
+                <span className="block text-sm font-semibold text-slate-300">
+                  {toko.tokoName}
                 </span>
               </span>
             </h1>
@@ -816,9 +822,9 @@ export default function DashboardToko(props) {
               } border text-xs sm:text-sm flex flex-col items-end shadow-lg`}
             >
               <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                Toko ID
+                Nama Toko ID
               </span>
-              <span className="font-semibold">{toko.id}</span>
+              <span className="font-semibold">{toko.tokoName}</span>
             </div>
           </div>
         </div>
@@ -1021,9 +1027,7 @@ export default function DashboardToko(props) {
                 </span>
                 <button
                   disabled={page === totalPage}
-                  onClick={() =>
-                    setPage((p) => Math.min(totalPage, p + 1))
-                  }
+                  onClick={() => setPage((p) => Math.min(totalPage, p + 1))}
                   className={`px-3 py-1 rounded-lg border text-xs ${
                     page === totalPage || totalPage === 0
                       ? "opacity-40 cursor-not-allowed"
@@ -1241,9 +1245,7 @@ export default function DashboardToko(props) {
                       <td className="p-2">{x.NAMA_BRAND}</td>
                       <td className="p-2">{x.NAMA_BARANG}</td>
                       <td className="p-2 font-mono">{x.IMEI}</td>
-                      <td className="p-2 text-right">
-                        Rp {fmt(x.HARGA_UNIT)}
-                      </td>
+                      <td className="p-2 text-right">Rp {fmt(x.HARGA_UNIT)}</td>
                     </tr>
                   ))
                 )}
@@ -1284,9 +1286,7 @@ export default function DashboardToko(props) {
                       <td className="p-2">{x.NAMA_BRAND}</td>
                       <td className="p-2">{x.NAMA_BARANG}</td>
                       <td className="p-2 font-mono">{x.IMEI}</td>
-                      <td className="p-2 text-right">
-                        Rp {fmt(x.HARGA_UNIT)}
-                      </td>
+                      <td className="p-2 text-right">Rp {fmt(x.HARGA_UNIT)}</td>
                     </tr>
                   ))
                 )}

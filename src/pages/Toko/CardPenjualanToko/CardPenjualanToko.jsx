@@ -147,9 +147,9 @@ export default function CardPenjualanToko() {
 
     (async () => {
       try {
-        const name = await getTokoName?.(tokoId);
+        const tokoName = await getTokoName?.(tokoId);
         const finalName =
-          name || (tokoId || "").replace(/-/g, " ").toUpperCase();
+        tokoName || (tokoId || "").replace(/-/g, " ").toUpperCase();
 
         setTokoName(finalName);
         setUserForm((prev) => ({

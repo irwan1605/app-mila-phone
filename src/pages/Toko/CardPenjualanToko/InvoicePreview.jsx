@@ -22,20 +22,30 @@ export default function InvoicePreview({ data, logoUrl, tokoName }) {
         <img src={logoUrl} alt="Logo" style={{ height: 60 }} />
         <div>
           <h2>PT MILA MEDIA TELEKOMUNIKASI</h2>
-          <p>{tokoName}</p>
+          <h2 className="font-bold text-lg">{tokoName}</h2>
         </div>
       </div>
 
       <hr />
 
-      <p><b>Tanggal:</b> {tanggal}</p>
-      <p><b>No Invoice:</b> {invoice}</p>
-      <p><b>Status:</b> {status}</p>
+      <p>
+        <b>Tanggal:</b> {tanggal}
+      </p>
+      <p>
+        <b>No Invoice:</b> {invoice}
+      </p>
+      <p>
+        <b>Status:</b> {status}
+      </p>
 
       <hr />
 
-      <p><b>ID Pelanggan:</b> {user?.idPelanggan}</p>
-      <p><b>Nama Sales:</b> {user?.namaSales}</p>
+      <p>
+        <b>ID Pelanggan:</b> {user?.idPelanggan}
+      </p>
+      <p>
+        <b>Nama Sales:</b> {user?.namaSales}
+      </p>
 
       <table className="invoice-table">
         <thead>
@@ -55,9 +65,7 @@ export default function InvoicePreview({ data, logoUrl, tokoName }) {
               <td>{it?.namaBarang}</td>
               <td>{it?.imei}</td>
               <td>{it?.qty}</td>
-              <td>
-                Rp {Number(it?.hargaUnit || 0).toLocaleString("id-ID")}
-              </td>
+              <td>Rp {Number(it?.hargaUnit || 0).toLocaleString("id-ID")}</td>
               <td>
                 Rp{" "}
                 {Number(

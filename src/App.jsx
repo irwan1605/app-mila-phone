@@ -27,7 +27,6 @@ import PenjualanHandphone from "./pages/PenjualanHandphone";
 import PenjualanMotorListrik from "./pages/PenjualanMotorListrik";
 import PenjualanAccessories from "./pages/PenjualanAccessories";
 import DataManagement from "./pages/DataManagement";
-import TransferBarangPusat from "./pages/Reports/TransferBarangPusat";
 import StockAccessories from "./pages/stock/StockAccessories";
 import StockHandphone from "./pages/stock/StockHandphone";
 import StockMotorListrik from "./pages/stock/StockMotorListrik";

@@ -27,6 +27,9 @@ import {
 } from "firebase/database";
 
 
+
+
+
 /* ============================================================
    HELPERS
 ============================================================ */
@@ -74,6 +77,8 @@ const normalizeTransaksi = (id, row = {}, tokoId = null, tokoName = "") => {
 /* ============================================================
    TOKO HELPERS
 ============================================================ */
+
+
 
 
 export const getTokoName = async (tokoId) => {
@@ -498,20 +503,55 @@ export const addStock = (tokoName, sku, payload) => {
 };
 
 // Kurangi stok
+// Kurangi stok (mendukung model qty langsung & model varian / child)
 export const reduceStock = async (tokoName, sku, qty) => {
   const r = ref(db, `stock/${tokoName}/${sku}`);
 
   const result = await runTransaction(r, (cur) => {
-    const curQty = Number(cur?.qty || 0);
-    const remaining = curQty - Number(qty);
+    const nQty = Number(qty || 0);
+    if (!cur || nQty <= 0) return cur;
 
-    if (remaining < 0) return; // abort
+    // ✅ CASE 1: qty langsung di root
+    if (typeof cur.qty === "number") {
+      const remaining = Number(cur.qty) - nQty;
+      if (remaining < 0) return; // abort → insufficient
+      return {
+        ...cur,
+        qty: remaining,
+        updatedAt: new Date().toISOString(),
+      };
+    }
 
-    return {
-      ...cur,
-      qty: remaining,
-      updatedAt: new Date().toISOString(),
-    };
+    // ✅ CASE 2: varian anak yang punya field qty masing-masing
+    let total = 0;
+    Object.values(cur).forEach((v) => {
+      if (v && typeof v.qty === "number") {
+        total += Number(v.qty);
+      }
+    });
+
+    // kalau total stok semua varian < qty yang diminta → abort
+    if (total < nQty) return;
+
+    // Kurangi stok dari varian-varian sampai habis nQty
+    let toReduce = nQty;
+    const next = { ...cur };
+
+    Object.keys(next).forEach((key) => {
+      if (toReduce <= 0) return;
+      const item = next[key];
+      if (!item || typeof item.qty !== "number") return;
+
+      const canTake = Math.min(Number(item.qty), toReduce);
+      next[key] = {
+        ...item,
+        qty: Number(item.qty) - canTake,
+        updatedAt: new Date().toISOString(),
+      };
+      toReduce -= canTake;
+    });
+
+    return next;
   });
 
   if (!result.committed) {
@@ -520,6 +560,7 @@ export const reduceStock = async (tokoName, sku, qty) => {
 
   return result.snapshot.val();
 };
+
 
 // Transfer stok antar toko
 export const transferStock = async ({
@@ -916,6 +957,30 @@ export const deleteMasterPelanggan = async (id) => {
 };
 
 
+
+export const getStockTotalBySKU = async (toko, sku) => {
+  const snap = await get(ref(db, `stock/${toko}/${sku}`));
+  if (!snap.exists()) return 0;
+
+  const data = snap.val();
+
+  // ✅ Jika langsung punya qty
+  if (typeof data.qty === "number") return data.qty;
+
+  // ✅ Jika pakai varian (128GB, 256GB, dll)
+  let total = 0;
+  Object.values(data).forEach((v) => {
+    if (typeof v?.qty === "number") {
+      total += Number(v.qty);
+    }
+  });
+
+  return total;
+};
+
+
+
+
 /* ============================================================
    MASTER MANAGEMENT (REALTIME CRUD)
    Path: /dataManagement/{masterName}/{id}
@@ -1104,6 +1169,7 @@ const FirebaseService = {
   updatePenjualan,
   updateTransaksi,
   updateTransferRequest,
+  getStockTotalBySKU,
 };
 
 export default FirebaseService;
