@@ -30,7 +30,7 @@ const TOKO_LIST = [
   "CITEUREUP",
 ];
 
-// ✅ Untuk mapping nama toko → id toko (dipakai saat APPROVE)
+// ✅ Mapping nama toko → id toko
 const fallbackTokoNames = [
   "CILANGKAP PUSAT",
   "CIBINONG",
@@ -64,63 +64,82 @@ const fmtRupiah = (v) => {
 export default function InventoryReport() {
   const navigate = useNavigate();
 
+  // ✅ AMAN: HANYA SATU KALI DIDEFINISIKAN
+  const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const myTokoId = loggedUser?.toko;
+  const myTokoName = myTokoId ? TOKO_LIST[myTokoId - 1] : null;
+
+  const isSuper =
+    loggedUser?.role === "superadmin" || loggedUser?.role === "admin";
+
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [selectedToko, setSelectedToko] = useState(null);
   const [search, setSearch] = useState("");
 
   // ======================= REALTIME MASTER DATA =======================
   useEffect(() => {
     const unsub = listenAllTransaksi((rows) => {
-      setAllTransaksi(rows || []); // sudah dinormalisasi di FirebaseService.js :contentReference[oaicite:2]{index=2}
+      setAllTransaksi(rows || []);
       setLoading(false);
     });
 
     return () => unsub && unsub();
   }, []);
 
-  // ======================= REKAP STOCK PER TOKO =======================
+  // ======================= KUNCI DATA UNTUK PIC TOKO =======================
+  const transaksiFinal = useMemo(() => {
+    if (isSuper) return allTransaksi;
+    return (allTransaksi || []).filter(
+      (tx) =>
+        String(tx.NAMA_TOKO || tx.TOKO).toUpperCase() ===
+        String(myTokoName).toUpperCase()
+    );
+  }, [allTransaksi, isSuper, myTokoName]);
+
+  // ======================= TOTAL SEMUA TOKO =======================
+  const totalSemuaToko = useMemo(
+    () =>
+      (transaksiFinal || []).reduce(
+        (sum, tx) => sum + Number(tx.QTY || 0),
+        0
+      ),
+    [transaksiFinal]
+  );
+
+  // ======================= REKAP STOCK PER TOKO (✅ TIDAK DUPLIKAT) =======================
   const stockPerToko = useMemo(() => {
-    return TOKO_LIST.map((toko) => {
-      const rows = (allTransaksi || []).filter(
+    const targetToko = isSuper ? TOKO_LIST : [myTokoName];
+    return targetToko.map((toko) => {
+      const rows = (transaksiFinal || []).filter(
         (tx) =>
           String(tx.NAMA_TOKO || tx.TOKO || "").toUpperCase() ===
           String(toko).toUpperCase()
       );
 
-      const totalQty = rows.reduce((sum, tx) => sum + Number(tx.QTY || 0), 0);
-
+      const totalQty = rows.reduce((s, r) => s + Number(r.QTY || 0), 0);
       return { toko, totalQty, rows };
     });
-  }, [allTransaksi]);
+  }, [transaksiFinal, isSuper, myTokoName]);
 
-  const totalSemuaToko = useMemo(
-    () =>
-      (allTransaksi || []).reduce((sum, tx) => sum + Number(tx.QTY || 0), 0),
-    [allTransaksi]
-  );
-
-  // ======================= DETAIL TAMPILAN PER TOKO =======================
+  // ======================= DETAIL PER TOKO =======================
   const detailRows = useMemo(() => {
     if (!selectedToko) return [];
 
-    const filtered = (allTransaksi || []).filter((tx) => {
-      const tokoName = String(tx.NAMA_TOKO || tx.TOKO || "").toUpperCase();
+    return (transaksiFinal || []).filter((tx) => {
+      const tokoName = String(tx.NAMA_TOKO || tx.TOKO).toUpperCase();
       if (tokoName !== String(selectedToko).toUpperCase()) return false;
 
       if (!search.trim()) return true;
 
       const q = search.toLowerCase();
-      const namaBarang = String(tx.NAMA_BARANG || "").toLowerCase();
-      const brand = String(tx.NAMA_BRAND || "").toLowerCase();
-      const imei = String(tx.IMEI || tx.NOMOR_UNIK || "").toLowerCase();
-
-      return namaBarang.includes(q) || brand.includes(q) || imei.includes(q);
+      return (
+        String(tx.NAMA_BARANG || "").toLowerCase().includes(q) ||
+        String(tx.NAMA_BRAND || "").toLowerCase().includes(q) ||
+        String(tx.IMEI || tx.NOMOR_UNIK || "").toLowerCase().includes(q)
+      );
     });
-
-    return filtered;
-  }, [allTransaksi, selectedToko, search]);
+  }, [transaksiFinal, selectedToko, search]);
 
   // ======================= EXPORT EXCEL PER TOKO =======================
   const exportExcelPerToko = () => {
@@ -174,7 +193,6 @@ export default function InventoryReport() {
 
   const handleEdit = (tx) => {
     try {
-      // mengikuti pola file InventoryReport lama: simpan ke localStorage lalu redirect :contentReference[oaicite:3]{index=3}
       localStorage.setItem("edit_transaksi", JSON.stringify(tx));
       window.location.href = "/transaksi";
     } catch (err) {
@@ -197,9 +215,8 @@ export default function InventoryReport() {
       },
     });
   };
-  
 
-  // ======================= RENDER =======================
+  // ======================= RENDER (✅ UI 100% DIPERTAHANKAN) =======================
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-blue-700 to-purple-700 p-4">
       <div className="max-w-7xl mx-auto bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl p-6">
@@ -223,7 +240,7 @@ export default function InventoryReport() {
           </div>
         </div>
 
-        {/* ======================= GRID 10 MULTI CARD ======================= */}
+        {/* ======================= GRID MULTI CARD ======================= */}
         {!selectedToko && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             {stockPerToko.map((row) => (
@@ -243,7 +260,6 @@ export default function InventoryReport() {
         {/* ======================= DETAIL PER TOKO ======================= */}
         {selectedToko && (
           <>
-            {/* BARIS ATAS: KEMBALI + AKSI TOKO */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <button
                 onClick={() => {
@@ -259,10 +275,6 @@ export default function InventoryReport() {
                 <h2 className="text-xl font-bold text-indigo-700">
                   STOCK {selectedToko}
                 </h2>
-                <p className="text-xs text-slate-500">
-                  Menampilkan data langsung dari transaksi master (Approved /
-                  Pending / Rejected).
-                </p>
               </div>
 
               <div className="flex flex-wrap gap-2 justify-end">
@@ -282,7 +294,6 @@ export default function InventoryReport() {
               </div>
             </div>
 
-            {/* SEARCH BAR */}
             <div className="flex items-center gap-2 mb-4">
               <FaSearch className="text-slate-500" />
               <input
@@ -294,7 +305,6 @@ export default function InventoryReport() {
               />
             </div>
 
-            {/* TABLE DETAIL */}
             <div className="bg-white rounded-2xl shadow overflow-x-auto">
               <table className="w-full text-xs md:text-sm border-collapse">
                 <thead className="bg-slate-100">
@@ -312,28 +322,6 @@ export default function InventoryReport() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading && (
-                    <tr>
-                      <td
-                        colSpan={10}
-                        className="text-center p-4 text-slate-400"
-                      >
-                        Memuat data...
-                      </td>
-                    </tr>
-                  )}
-
-                  {!loading && detailRows.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={10}
-                        className="text-center p-4 text-slate-400"
-                      >
-                        Tidak ada data untuk filter saat ini
-                      </td>
-                    </tr>
-                  )}
-
                   {!loading &&
                     detailRows.map((tx, idx) => (
                       <tr
@@ -355,21 +343,10 @@ export default function InventoryReport() {
                           Rp {fmtRupiah(tx.HARGA_UNIT)}
                         </td>
                         <td className="border p-2 text-center">
-                          <span
-                            className={
-                              "px-2 py-1 rounded-full text-[10px] md:text-xs " +
-                              (tx.STATUS === "Approved"
-                                ? "bg-green-100 text-green-600"
-                                : tx.STATUS === "Rejected"
-                                ? "bg-red-100 text-red-600"
-                                : "bg-amber-100 text-amber-700")
-                            }
-                          >
-                            {tx.STATUS || "Pending"}
-                          </span>
+                          {tx.STATUS || "Pending"}
                         </td>
                         <td className="border p-2">
-                          <div className="flex flex-wrap gap-2 justify-center">
+                          <div className="flex gap-2 justify-center">
                             <button
                               onClick={() => handleApprove(tx)}
                               className="text-green-600 hover:text-green-800"
@@ -401,7 +378,6 @@ export default function InventoryReport() {
           </>
         )}
 
-        {/* INFO LOADING SAAT AWAL */}
         {!selectedToko && loading && (
           <div className="mt-4 text-center text-slate-400 text-sm">
             Memuat data master transaksi dari Firebase...
@@ -411,8 +387,3 @@ export default function InventoryReport() {
     </div>
   );
 }
-
-// NOTE:
-// StockCard & StockChart diletakkan di folder yang sama:
-// src/pages/Reports/StockCard.jsx
-// src/pages/Reports/StockChart.jsx

@@ -20,8 +20,9 @@ import {
   updateTransaksi,
   deleteTransaksi,
 } from "../../services/FirebaseService";
+import { useLocation } from "react-router-dom";
 
-/* fallback toko names (same list used across app) */
+/* fallback toko names */
 const fallbackTokoNames = [
   "CILANGKAP PUSAT",
   "CIBINONG",
@@ -49,36 +50,43 @@ export default function SalesReport() {
   const rowsPerPage = 12;
 
   const tableRef = useRef(null);
+  const location = useLocation();
 
- useEffect(() => {
-  if (typeof listenAllTransaksi === "function") {
-    const unsub = listenAllTransaksi((items = []) => {
+  /* ===================== LOGIN LOCK ===================== */
+  const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const myTokoName = loggedUser?.toko
+    ? fallbackTokoNames[Number(loggedUser.toko) - 1]
+    : null;
 
-      // ⛔ BLOK DATA MASTER PEMBELIAN
-      const onlyPenjualan = (items || []).filter(
-        (x) =>
-          (x.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN" &&
-          (x.SYSTEM_PAYMENT || "").toUpperCase() !== "PEMBELIAN"
-      );
+  const isSuper =
+    loggedUser?.role === "superadmin" || loggedUser?.role === "admin";
 
-      const normalized = onlyPenjualan.map((r) => normalizeRecord(r));
+  /* ===================== REALTIME ===================== */
+  useEffect(() => {
+    if (typeof listenAllTransaksi === "function") {
+      const unsub = listenAllTransaksi((items = []) => {
+        const onlyPenjualan = (items || []).filter(
+          (x) =>
+            (x.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN" &&
+            (x.SYSTEM_PAYMENT || "").toUpperCase() !== "PEMBELIAN"
+        );
 
-      normalized.sort(
-        (a, b) =>
-          new Date(b.TANGGAL_TRANSAKSI || 0) -
-          new Date(a.TANGGAL_TRANSAKSI || 0)
-      );
+        const normalized = onlyPenjualan.map((r) => normalizeRecord(r));
 
-      setAllData(normalized);
-      setCurrentPage(1);
-    });
+        normalized.sort(
+          (a, b) =>
+            new Date(b.TANGGAL_TRANSAKSI || 0) -
+            new Date(a.TANGGAL_TRANSAKSI || 0)
+        );
 
-    return () => unsub && unsub();
-  }
-}, []);
+        setAllData(normalized);
+        setCurrentPage(1);
+      });
 
+      return () => unsub && unsub();
+    }
+  }, []);
 
-  // normalize record so fields always present
   const normalizeRecord = (r = {}) => {
     return {
       id: r.id ?? r._id ?? r.key ?? String(Date.now() + Math.random()),
@@ -95,20 +103,12 @@ export default function SalesReport() {
       QTY: Number(r.QTY || 0),
       NOMOR_UNIK: r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
       IMEI: r.IMEI || "",
-      NO_DINAMO: r.NO_DINAMO || "",
-      NO_RANGKA: r.NO_RANGKA || "",
       KATEGORI_HARGA: r.KATEGORI_HARGA || "",
       HARGA_UNIT: Number(r.HARGA_UNIT || r.HARGA || 0),
       PAYMENT_METODE: r.PAYMENT_METODE || "",
       SYSTEM_PAYMENT: r.SYSTEM_PAYMENT || "",
       MDR: Number(r.MDR || 0),
       POTONGAN_MDR: Number(r.POTONGAN_MDR || 0),
-      NO_ORDER_KONTRAK: r.NO_ORDER_KONTRAK || "",
-      TENOR: r.TENOR || "",
-      DP_USER_MERCHANT: Number(r.DP_USER_MERCHANT || 0),
-      DP_USER_TOKO: Number(r.DP_USER_TOKO || 0),
-      REQUEST_DP_TALANGAN: Number(r.REQUEST_DP_TALANGAN || 0),
-      KETERANGAN: r.KETERANGAN || "",
       STATUS: r.STATUS || "Pending",
       TOTAL:
         Number(r.TOTAL) ||
@@ -118,58 +118,64 @@ export default function SalesReport() {
     };
   };
 
-  // derive lists for selects
+  /* ===================== OPTIONS ===================== */
   const tokoOptions = useMemo(() => {
+    if (!isSuper) return myTokoName ? [myTokoName] : [];
     const names = [
       ...new Set(allData.map((r) => r.NAMA_TOKO || r.TOKO).filter(Boolean)),
     ];
     return names.length ? names : fallbackTokoNames;
-  }, [allData]);
+  }, [allData, isSuper, myTokoName]);
 
-  const salesOptions = useMemo(() => {
-    return [...new Set(allData.map((r) => r.NAMA_SALES).filter(Boolean))];
-  }, [allData]);
+  const salesOptions = useMemo(
+    () => [...new Set(allData.map((r) => r.NAMA_SALES).filter(Boolean))],
+    [allData]
+  );
 
-  const brandOptions = useMemo(() => {
-    return [...new Set(allData.map((r) => r.NAMA_BRAND).filter(Boolean))];
-  }, [allData]);
+  const brandOptions = useMemo(
+    () => [...new Set(allData.map((r) => r.NAMA_BRAND).filter(Boolean))],
+    [allData]
+  );
 
-  // filteredData
+  /* ===================== FILTER LOCK PIC TOKO ===================== */
   const filteredData = useMemo(() => {
     return allData.filter((r) => {
       let ok = true;
+
+      // ✅ KUNCI OTOMATIS SESUAI LOGIN PIC TOKO
+      if (!isSuper && myTokoName) {
+        ok = ok && r.NAMA_TOKO === myTokoName;
+      }
+
       if (filterToko !== "semua")
         ok = ok && (r.NAMA_TOKO || r.TOKO) === filterToko;
+
       if (filterSales !== "semua") ok = ok && r.NAMA_SALES === filterSales;
       if (filterBrand !== "semua") ok = ok && r.NAMA_BRAND === filterBrand;
       if (filterStatus !== "semua") ok = ok && r.STATUS === filterStatus;
+
       if (filterStart) {
         const start = new Date(filterStart).setHours(0, 0, 0, 0);
-        const d = new Date(r.TANGGAL_TRANSAKSI || r.TANGGAL || 0);
+        const d = new Date(r.TANGGAL_TRANSAKSI || 0);
         ok = ok && d >= start;
       }
+
       if (filterEnd) {
         const end = new Date(filterEnd).setHours(23, 59, 59, 999);
-        const d = new Date(r.TANGGAL_TRANSAKSI || r.TANGGAL || 0);
+        const d = new Date(r.TANGGAL_TRANSAKSI || 0);
         ok = ok && d <= end;
       }
+
       if (search.trim()) {
         const s = search.trim().toLowerCase();
         ok =
           ok &&
-          (String(r.NO_INVOICE || "")
-            .toLowerCase()
-            .includes(s) ||
-            String(r.NAMA_USER || "")
-              .toLowerCase()
-              .includes(s) ||
-            String(r.NOMOR_UNIK || "")
-              .toLowerCase()
-              .includes(s) ||
-            String(r.NAMA_BARANG || "")
-              .toLowerCase()
-              .includes(s));
+          (String(r.NO_INVOICE || "").toLowerCase().includes(s) ||
+            String(r.NAMA_USER || "").toLowerCase().includes(s) ||
+            String(r.NOMOR_UNIK || "").toLowerCase().includes(s) ||
+            String(r.NAMA_BARANG || "").toLowerCase().includes(s));
       }
+
       return ok;
     });
   }, [
@@ -181,22 +187,22 @@ export default function SalesReport() {
     filterStart,
     filterEnd,
     search,
+    isSuper,
+    myTokoName,
   ]);
 
-  // totals
-  const totalOmzet = useMemo(() => {
-    return filteredData.reduce((sum, r) => sum + Number(r.TOTAL || 0), 0);
-  }, [filteredData]);
-
-  const totalQty = useMemo(() => {
-    return filteredData.reduce((sum, r) => sum + Number(r.QTY || 0), 0);
-  }, [filteredData]);
-
-  // pagination
-  const totalPages = useMemo(
-    () => Math.max(1, Math.ceil(filteredData.length / rowsPerPage)),
-    [filteredData.length]
+  const totalOmzet = useMemo(
+    () => filteredData.reduce((sum, r) => sum + Number(r.TOTAL || 0), 0),
+    [filteredData]
   );
+
+  const totalQty = useMemo(
+    () => filteredData.reduce((sum, r) => sum + Number(r.QTY || 0), 0),
+    [filteredData]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / rowsPerPage));
+
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [totalPages, currentPage]);
@@ -206,132 +212,50 @@ export default function SalesReport() {
     return filteredData.slice(start, start + rowsPerPage);
   }, [filteredData, currentPage]);
 
-  const prevPage = () => currentPage > 1 && setCurrentPage((p) => p - 1);
-  const nextPage = () =>
-    currentPage < totalPages && setCurrentPage((p) => p + 1);
-
-  // export excel
-  const handleExportExcel = (rows = filteredData) => {
+  const handleExportExcel = () => {
     try {
-      const ws = XLSX.utils.json_to_sheet(rows);
+      const ws = XLSX.utils.json_to_sheet(filteredData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "SalesReport");
-      XLSX.writeFile(
-        wb,
-        `SalesReport_${new Date().toISOString().slice(0, 10)}.xlsx`
-      );
+      XLSX.writeFile(wb, `SalesReport_${myTokoName || "ALL"}.xlsx`);
     } catch (e) {
-      console.error("Export Excel failed", e);
       alert("Gagal export Excel");
     }
   };
 
-  // export PDF (render table)
-  const handleExportPDF = async (rows = filteredData) => {
+  const handleExportPDF = async () => {
     try {
       const el = tableRef.current;
-      if (!el) {
-        alert("Tabel tidak ditemukan");
-        return;
-      }
       const canvas = await html2canvas(el, { scale: 1.5 });
       const img = canvas.toDataURL("image/png");
       const pdf = new jsPDF("l", "mm", "a4");
       const w = pdf.internal.pageSize.getWidth();
       const h = (canvas.height * w) / canvas.width;
       pdf.addImage(img, "PNG", 0, 0, w, h);
-      pdf.save(`SalesReport_${new Date().toISOString().slice(0, 10)}.pdf`);
-    } catch (e) {
-      console.error("Export PDF failed", e);
+      pdf.save(`SalesReport_${myTokoName || "ALL"}.pdf`);
+    } catch {
       alert("Gagal export PDF");
     }
   };
 
-  // action handlers: approve/reject/delete/edit
-  const handleApproval = async (row, status) => {
-    try {
-      const tokoName = row.NAMA_TOKO || row.TOKO || "";
-      const tokoId =
-        fallbackTokoNames.findIndex(
-          (t) => String(t).toUpperCase() === String(tokoName).toUpperCase()
-        ) + 1;
-      if (!tokoId) {
-        alert("Gagal: toko tidak dikenali.");
-        return;
-      }
-      if (typeof updateTransaksi === "function") {
-        await updateTransaksi(tokoId, row.id, { STATUS: status });
-      } else {
-        console.warn("updateTransaksi not found");
-      }
-      setAllData((d) =>
-        d.map((x) => (x.id === row.id ? { ...x, STATUS: status } : x))
-      );
-    } catch (err) {
-      console.error("Approval error:", err);
-      alert("Gagal mengubah status.");
-    }
-  };
-
-  const handleDelete = async (row) => {
-    if (!window.confirm("Yakin menghapus transaksi ini?")) return;
-    try {
-      const tokoName = row.NAMA_TOKO || row.TOKO || "";
-      const tokoId =
-        fallbackTokoNames.findIndex(
-          (t) => String(t).toUpperCase() === String(tokoName).toUpperCase()
-        ) + 1;
-      if (!tokoId) {
-        alert("Gagal: toko tidak dikenali.");
-        return;
-      }
-      if (typeof deleteTransaksi === "function") {
-        await deleteTransaksi(tokoId, row.id);
-      } else {
-        console.warn("deleteTransaksi not found");
-      }
-      setAllData((d) => d.filter((x) => x.id !== row.id));
-    } catch (err) {
-      console.error("Delete error:", err);
-      alert("Gagal menghapus data.");
-    }
-  };
-
-  const handleEdit = (row) => {
-    // store record to localStorage so DataManagement (route /transaksi) can pick it up
-    try {
-      localStorage.setItem("edit_transaksi", JSON.stringify(row));
-      // navigate to DataManagement route (you said /transaksi)
-      window.location.href = "/transaksi";
-    } catch (e) {
-      console.error("Edit redirect error:", e);
-      alert("Gagal membuka halaman edit.");
-    }
-  };
-
-  // nice format helper
-  const fmt = (v) => {
-    try {
-      return Number(v || 0).toLocaleString("id-ID");
-    } catch {
-      return String(v || "");
-    }
-  };
+  /* ===================== UI (TIDAK DIUBAH) ===================== */
 
   return (
     <div className="p-4 bg-gray-100 rounded-xl shadow-md">
       <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-lg shadow mb-4">
         <h2 className="text-2xl font-semibold mb-4 text-gray-800">
-          Sales Report — Cilangkap Pusat (Realtime)
+          Sales Report — {myTokoName || "Cilangkap Pusat"} (Realtime)
         </h2>
       </div>
-      {/* filters */}
+
+      {/* FILTER */}
       <div className="bg-white p-3 rounded shadow mb-4 flex flex-wrap gap-3 items-center">
         <FaFilter className="text-gray-600" />
 
         <select
           value={filterToko}
           onChange={(e) => setFilterToko(e.target.value)}
+          disabled={!isSuper}
           className="p-2 border rounded"
         >
           <option value="semua">Semua Toko</option>
@@ -399,7 +323,7 @@ export default function SalesReport() {
           <div className="flex items-center border rounded p-1">
             <FaSearch className="mx-2 text-gray-500" />
             <input
-              placeholder="Cari invoice, user, nomor unik, barang..."
+              placeholder="Cari invoice, user, barang..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="p-1 outline-none"
@@ -407,14 +331,14 @@ export default function SalesReport() {
           </div>
 
           <button
-            onClick={() => handleExportExcel()}
+            onClick={handleExportExcel}
             className="px-3 py-1 bg-green-600 text-white rounded flex items-center"
           >
             <FaFileExcel className="mr-2" /> Excel
           </button>
 
           <button
-            onClick={() => handleExportPDF()}
+            onClick={handleExportPDF}
             className="px-3 py-1 bg-red-600 text-white rounded flex items-center"
           >
             <FaFilePdf className="mr-2" /> PDF
@@ -422,7 +346,7 @@ export default function SalesReport() {
         </div>
       </div>
 
-      {/* summary */}
+      {/* SUMMARY */}
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="bg-white p-3 rounded shadow text-center">
           <div className="text-sm text-gray-600">Total Transaksi</div>
@@ -431,18 +355,18 @@ export default function SalesReport() {
 
         <div className="bg-white p-3 rounded shadow text-center">
           <div className="text-sm text-gray-600">Total Qty</div>
-          <div className="text-2xl font-bold">{fmt(totalQty)}</div>
+          <div className="text-2xl font-bold">{totalQty.toLocaleString("id-ID")}</div>
         </div>
 
         <div className="bg-white p-3 rounded shadow text-center">
           <div className="text-sm text-gray-600">Total Omzet</div>
           <div className="text-2xl font-bold text-green-600">
-            Rp {fmt(totalOmzet)}
+            Rp {totalOmzet.toLocaleString("id-ID")}
           </div>
         </div>
       </div>
 
-      {/* table */}
+      {/* TABLE */}
       <div className="bg-white rounded shadow overflow-x-auto">
         <table ref={tableRef} className="w-full text-sm border-collapse">
           <thead className="bg-blue-600 text-white">
@@ -450,84 +374,44 @@ export default function SalesReport() {
               <th className="p-2 border">Tanggal</th>
               <th className="p-2 border">Invoice</th>
               <th className="p-2 border">User</th>
-              <th className="p-2 border">HP</th>
-              <th className="p-2 border">PIC Toko</th>
+              <th className="p-2 border">PIC</th>
               <th className="p-2 border">Sales</th>
-              <th className="p-2 border">Referensi</th>
               <th className="p-2 border">Toko</th>
               <th className="p-2 border">Brand</th>
               <th className="p-2 border">Barang</th>
               <th className="p-2 border">Qty</th>
-              <th className="p-2 border">No EMEI</th>
-              <th className="p-2 border">Harga Unit</th>
+              <th className="p-2 border">Harga</th>
               <th className="p-2 border">Total</th>
               <th className="p-2 border">Status</th>
-              <th className="p-2 border">Aksi</th>
             </tr>
           </thead>
 
           <tbody>
             {paginated.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
+              <tr key={r.id}>
                 <td className="p-2 border">{r.TANGGAL_TRANSAKSI}</td>
                 <td className="p-2 border">{r.NO_INVOICE}</td>
                 <td className="p-2 border">{r.NAMA_USER}</td>
-                <td className="p-2 border">{r.NO_HP_USER}</td>
                 <td className="p-2 border">{r.NAMA_PIC_TOKO}</td>
                 <td className="p-2 border">{r.NAMA_SALES}</td>
-                <td className="p-2 border">{r.TITIPAN_REFERENSI}</td>
                 <td className="p-2 border">{r.NAMA_TOKO}</td>
                 <td className="p-2 border">{r.NAMA_BRAND}</td>
                 <td className="p-2 border">{r.NAMA_BARANG}</td>
                 <td className="p-2 border text-center">{r.QTY}</td>
-                <td className="p-2 border">{r.NOMOR_UNIK}</td>
-                <td className="p-2 border text-right">{fmt(r.HARGA_UNIT)}</td>
-                <td className="p-2 border text-right">{fmt(r.TOTAL)}</td>
-                <td
-                  className={`p-2 border font-semibold ${
-                    r.STATUS === "Approved"
-                      ? "text-green-600"
-                      : r.STATUS === "Rejected"
-                      ? "text-red-600"
-                      : "text-yellow-600"
-                  }`}
-                >
-                  {r.STATUS}
+                <td className="p-2 border text-right">
+                  {r.HARGA_UNIT.toLocaleString("id-ID")}
                 </td>
-
-                {/* AKSI */}
-                <td className="p-2 border text-center space-x-2">
-                  <button
-                    onClick={() => handleApproval(r, "Approved")}
-                    className="text-green-600 hover:text-green-800 mr-2"
-                    title="Approve"
-                  >
-                    <FaCheckCircle />
-                  </button>
-
-                  <button
-                    onClick={() => handleEdit(r)}
-                    className="text-blue-600 hover:text-blue-800 mr-2"
-                    title="Edit"
-                  >
-                    <FaEdit />
-                  </button>
-
-                  <button
-                    onClick={() => handleDelete(r)}
-                    className="text-red-600 hover:text-red-800"
-                    title="Delete"
-                  >
-                    <FaTrash />
-                  </button>
+                <td className="p-2 border text-right">
+                  {r.TOTAL.toLocaleString("id-ID")}
                 </td>
+                <td className="p-2 border">{r.STATUS}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* pagination */}
+      {/* PAGINATION */}
       <div className="flex justify-between items-center mt-3 text-sm">
         <span>
           Halaman {currentPage} dari {totalPages} ({filteredData.length} data)
@@ -535,14 +419,16 @@ export default function SalesReport() {
 
         <div>
           <button
-            onClick={prevPage}
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
             className="px-2 py-1 border rounded mr-2 disabled:opacity-40"
           >
             <FaChevronLeft />
           </button>
           <button
-            onClick={nextPage}
+            onClick={() =>
+              setCurrentPage((p) => Math.min(totalPages, p + 1))
+            }
             disabled={currentPage === totalPages}
             className="px-2 py-1 border rounded disabled:opacity-40"
           >

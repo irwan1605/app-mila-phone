@@ -440,7 +440,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
             {showSubMenuMasterData && (
               <ul className="pl-6">
-                   <li>
+                <li>
                   <Link
                     to="/master-barang"
                     className={`flex items-center p-2 hover:bg-blue-500 ${
@@ -452,7 +452,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
                   </Link>
                 </li>
 
-                
                 <li>
                   <Link
                     to="/master-pembelian"
@@ -492,7 +491,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
                   </Link>
                 </li>
 
-
                 <li>
                   <Link
                     to="/data-management"
@@ -504,11 +502,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     <span className="ml-2">Master Management</span>
                   </Link>
                 </li>
-
-             
-
-
-              
               </ul>
             )}
           </>
@@ -546,14 +539,33 @@ const Sidebar = ({ role, toko, onLogout }) => {
               </ul>
             )}
 
+            {/* 2️⃣ LAPORAN PENJUALAN TOKO SENDIRI */}
             <Link
-              to="/service-handphone"
-              className={`flex items-center p-3 hover:bg-blue-500 ${
-                activePath === "/service-handphone" ? "bg-blue-600" : ""
-              }`}
+              to="/sales-report"
+              state={{ onlyMyToko: true }}
+              className="flex items-center p-3 hover:bg-blue-500"
             >
-              <MdBuild className="text-xl" />
-              <span className="ml-2">SERVICE</span>
+              <BsGraphUp className="text-xl" />
+              <span className="ml-2">LAPORAN PENJUALAN</span>
+            </Link>
+
+            {/* 3️⃣ LAPORAN STOK TOKO SENDIRI */}
+            <Link
+              to="/inventory-report"
+              state={{ onlyMyToko: true }}
+              className="flex items-center p-3 hover:bg-blue-500"
+            >
+              <BsTagsFill className="text-xl" />
+              <span className="ml-2">LAPORAN PERSEDIAAN</span>
+            </Link>
+
+            {/* 4️⃣ TRANSFER & MUTASI TOKO SENDIRI */}
+            <Link
+              to={`/toko/${picTokoId}/stock-opname`}
+              className="flex items-center p-3 hover:bg-blue-500"
+            >
+              <AiOutlineDatabase className="text-xl" />
+              <span className="ml-2">TRANSFER BARANG</span>
             </Link>
           </>
         )}

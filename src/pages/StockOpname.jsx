@@ -83,6 +83,9 @@ export default function StockOpname() {
 
   const tableRef = useRef(null);
 
+  const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const myTokoId = loggedUser?.toko;
+
   // ===================== LOAD DRAFT FORM DARI LOCALSTORAGE =====================
   useEffect(() => {
     try {
@@ -148,7 +151,7 @@ export default function StockOpname() {
         r.id ??
         r._id ??
         r.key ??
-        (Date.now().toString() + Math.random().toString(36).slice(2)),
+        Date.now().toString() + Math.random().toString(36).slice(2),
       TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || r.TANGGAL || "",
       NO_INVOICE: r.NO_INVOICE || "",
       NAMA_USER: r.NAMA_USER || "",
@@ -266,14 +269,11 @@ export default function StockOpname() {
     let found = null;
 
     // Prioritas 1: stok di toko yang dipilih
+    if (!myTokoId) return;
     if (stokAll[tokoName]) {
       for (const [sku, item] of Object.entries(stokAll[tokoName] || {})) {
         const imeiItem = String(
-          item.imei ||
-            item.NOMOR_UNIK ||
-            item.no_imei ||
-            item.NO_IMEI ||
-            ""
+          item.imei || item.NOMOR_UNIK || item.no_imei || item.NO_IMEI || ""
         ).trim();
         if (imeiItem && imeiItem === imeiInput) {
           found = { sku, ...item };
@@ -292,11 +292,7 @@ export default function StockOpname() {
         stokAll["CILANGKAP PUSAT"] || {}
       )) {
         const imeiItem = String(
-          item.imei ||
-            item.NOMOR_UNIK ||
-            item.no_imei ||
-            item.NO_IMEI ||
-            ""
+          item.imei || item.NOMOR_UNIK || item.no_imei || item.NO_IMEI || ""
         ).trim();
         if (imeiItem && imeiItem === imeiInput) {
           found = { sku, ...item };
@@ -370,6 +366,7 @@ export default function StockOpname() {
 
     // pastikan CILANGKAP PUSAT jadi toko pusat (di urutan pertama)
     merged.sort((a, b) => {
+      if (!myTokoId) return;
       if (a === "CILANGKAP PUSAT") return -1;
       if (b === "CILANGKAP PUSAT") return 1;
       return String(a).localeCompare(String(b));
@@ -381,10 +378,9 @@ export default function StockOpname() {
   const filteredRows = useMemo(() => {
     return allTransaksi.filter((r) => {
       let ok = true;
+      if (!myTokoId) return;
       if (filterToko !== "semua") {
-        ok =
-          ok &&
-          String(r.NAMA_TOKO || "") === String(filterToko || "");
+        ok = ok && String(r.NAMA_TOKO || "") === String(filterToko || "");
       }
       if (filterStatus !== "semua") {
         ok =
@@ -411,6 +407,7 @@ export default function StockOpname() {
   );
 
   useEffect(() => {
+    if (!myTokoId) return;
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [totalPages, currentPage]);
 
@@ -430,6 +427,7 @@ export default function StockOpname() {
 
   // ===================== CEK IMEI DUPLIKAT (HARUS UNIK) =====================
   const isDuplicateIMEI = (imei, excludeId = null) => {
+    if (!myTokoId) return;
     if (!imei) return false;
     const cleaned = String(imei).trim();
     if (!cleaned) return false;
@@ -443,8 +441,7 @@ export default function StockOpname() {
   // ===================== Form Handlers =====================
   const handleChange = (e) => {
     const { name, value, type } = e.target;
-    const val =
-      type === "number" ? (value === "" ? "" : Number(value)) : value;
+    const val = type === "number" ? (value === "" ? "" : Number(value)) : value;
     setForm((f) => ({ ...f, [name]: val }));
   };
 
@@ -458,7 +455,7 @@ export default function StockOpname() {
     const tokoName = form.NAMA_TOKO || "CILANGKAP PUSAT";
     const qty = Number(form.QTY || 0);
     const hargaUnit = Number(form.HARGA_UNIT || form.HARGA || 0);
-
+    if (!myTokoId) return;
     if (!tanggal || !brand || !barang || !tokoName) {
       alert("Isi minimal: Tanggal, Toko, Nama Brand, Nama Barang");
       return;
@@ -500,9 +497,7 @@ export default function StockOpname() {
         }
         setAllTransaksi((d) =>
           d.map((x) =>
-            x.id === editId
-              ? normalizeRecord({ id: editId, ...payload })
-              : x
+            x.id === editId ? normalizeRecord({ id: editId, ...payload }) : x
           )
         );
       } else {
@@ -577,8 +572,7 @@ export default function StockOpname() {
 
       // 3. Update status transaksi → VOID (tidak dihapus)
       const tokoIndex = fallbackTokoNames.findIndex(
-        (n) =>
-          String(n).toUpperCase() === String(tokoName || "").toUpperCase()
+        (n) => String(n).toUpperCase() === String(tokoName || "").toUpperCase()
       );
       const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
 
@@ -617,10 +611,10 @@ export default function StockOpname() {
     try {
       const tokoIndex = fallbackTokoNames.findIndex(
         (n) =>
-          String(n).toUpperCase() ===
-          String(row.NAMA_TOKO || "").toUpperCase()
+          String(n).toUpperCase() === String(row.NAMA_TOKO || "").toUpperCase()
       );
       const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
+      if (!myTokoId) return;
       if (typeof updateTransaksi === "function") {
         await updateTransaksi(tokoId, row.id, { STATUS: status });
       } else {
@@ -666,13 +660,14 @@ export default function StockOpname() {
     const sistemQty = Number(
       record.QTY || record.QTY_SYSTEM || record.totalQty || 0
     );
-
+    if (!myTokoId) return;
     if (Number.isNaN(fisik)) {
       alert("Masukkan angka stok fisik yang valid");
       return;
     }
 
     const selisih = fisik - sistemQty;
+    if (!myTokoId) return;
     if (selisih === 0) {
       alert("Tidak ada selisih - tidak perlu disimpan");
       return;
@@ -688,8 +683,7 @@ export default function StockOpname() {
       QTY: Math.abs(selisih),
       NOMOR_UNIK: record.NOMOR_UNIK || key,
       HARGA_UNIT: record.HARGA_UNIT || record.lastPrice || 0,
-      TOTAL:
-        Math.abs(selisih) * (record.HARGA_UNIT || record.lastPrice || 0),
+      TOTAL: Math.abs(selisih) * (record.HARGA_UNIT || record.lastPrice || 0),
       PAYMENT_METODE: "STOK OPNAME",
       SYSTEM_PAYMENT: "SYSTEM",
       KETERANGAN:
@@ -700,7 +694,8 @@ export default function StockOpname() {
     };
 
     try {
-      const tokoId = fallbackTokoNames.findIndex((n) => n === "PUSAT") + 1;
+      const tokoId = fallbackTokoNames.findIndex((n) => n === "CILANGKAP PUSAT") + 1;
+      if (!myTokoId) return;
       if (typeof addTransaksi === "function") {
         await addTransaksi(tokoId, payload);
       } else {
@@ -743,9 +738,7 @@ export default function StockOpname() {
   const openEditSku = (key) => {
     setEditSku(key);
     const sample = allTransaksi.find(
-      (x) =>
-        x.NOMOR_UNIK === key ||
-        `${x.NAMA_BRAND}|${x.NAMA_BARANG}` === key
+      (x) => x.NOMOR_UNIK === key || `${x.NAMA_BRAND}|${x.NAMA_BARANG}` === key
     );
 
     setEditHargaSuplayer(sample?.HARGA_SUPLAYER || 0);
@@ -755,6 +748,7 @@ export default function StockOpname() {
   };
 
   const saveEditSku = async () => {
+    if (!myTokoId) return;
     if (!editSku) return;
 
     const list = allTransaksi.filter(
@@ -766,8 +760,7 @@ export default function StockOpname() {
     for (const row of list) {
       const tokoIndex = fallbackTokoNames.findIndex(
         (n) =>
-          String(n).toUpperCase() ===
-          String(row.NAMA_TOKO || "").toUpperCase()
+          String(n).toUpperCase() === String(row.NAMA_TOKO || "").toUpperCase()
       );
       const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
 
@@ -785,6 +778,7 @@ export default function StockOpname() {
     // update lokal juga
     setAllTransaksi((prev) =>
       prev.map((r) => {
+        if (!myTokoId) return;
         if (
           r.NOMOR_UNIK === editSku ||
           `${r.NAMA_BRAND}|${r.NAMA_BARANG}` === editSku
@@ -807,19 +801,17 @@ export default function StockOpname() {
   };
 
   const deleteSku = async (key) => {
+    if (!myTokoId) return;
     if (!window.confirm("Hapus semua transaksi untuk SKU ini?")) return;
 
     const list = allTransaksi.filter(
-      (r) =>
-        r.NOMOR_UNIK === key ||
-        `${r.NAMA_BRAND}|${r.NAMA_BARANG}` === key
+      (r) => r.NOMOR_UNIK === key || `${r.NAMA_BRAND}|${r.NAMA_BARANG}` === key
     );
 
     for (const row of list) {
       const tokoIndex = fallbackTokoNames.findIndex(
         (n) =>
-          String(n).toUpperCase() ===
-          String(row.NAMA_TOKO || "").toUpperCase()
+          String(n).toUpperCase() === String(row.NAMA_TOKO || "").toUpperCase()
       );
       const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
       await deleteTransaksi(tokoId, row.id);
@@ -828,10 +820,7 @@ export default function StockOpname() {
     setAllTransaksi((prev) =>
       prev.filter(
         (r) =>
-          !(
-            r.NOMOR_UNIK === key ||
-            `${r.NAMA_BRAND}|${r.NAMA_BARANG}` === key
-          )
+          !(r.NOMOR_UNIK === key || `${r.NAMA_BRAND}|${r.NAMA_BARANG}` === key)
       )
     );
 
@@ -845,6 +834,7 @@ export default function StockOpname() {
       const key =
         (r.NOMOR_UNIK && r.NOMOR_UNIK.trim()) ||
         `${(r.NAMA_BRAND || "").trim()}|${(r.NAMA_BARANG || "").trim()}`;
+        if (!myTokoId) return;
       if (!map.has(key))
         map.set(key, {
           key,
@@ -895,6 +885,7 @@ export default function StockOpname() {
   const exportPDF = async () => {
     try {
       const el = tableRef.current;
+      if (!myTokoId) return;
       if (!el) {
         alert("Tabel tidak ditemukan");
         return;
@@ -914,6 +905,7 @@ export default function StockOpname() {
 
   const importExcel = async (e) => {
     const file = e.target.files?.[0];
+    if (!myTokoId) return;
     if (!file) return;
     try {
       const reader = new FileReader();
@@ -927,8 +919,7 @@ export default function StockOpname() {
           const tokoName = row.NAMA_TOKO || row.TOKO || "CILANGKAP PUSAT";
           const tokoIndex = fallbackTokoNames.findIndex(
             (t) =>
-              String(t).toUpperCase() ===
-              String(tokoName || "").toUpperCase()
+              String(t).toUpperCase() === String(tokoName || "").toUpperCase()
           );
           const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
           const payload = {
@@ -1376,9 +1367,7 @@ export default function StockOpname() {
                 <td className="p-2 border text-right">
                   Rp {fmt(r.HARGA_UNIT)}
                 </td>
-                <td className="p-2 border text-right">
-                  Rp {fmt(r.TOTAL)}
-                </td>
+                <td className="p-2 border text-right">Rp {fmt(r.TOTAL)}</td>
                 <td
                   className={`p-2 border font-semibold ${
                     r.STATUS === "Approved"
@@ -1485,9 +1474,7 @@ export default function StockOpname() {
 
                   return (
                     <tr key={key} className="hover:bg-gray-50">
-                      <td className="p-2 border text-center">
-                        {idx + 1}
-                      </td>
+                      <td className="p-2 border text-center">{idx + 1}</td>
                       <td className="p-2 border font-mono">{key}</td>
                       <td className="p-2 border">{ag.brand}</td>
                       <td className="p-2 border">{ag.barang}</td>
@@ -1497,9 +1484,7 @@ export default function StockOpname() {
                       <td className="p-2 border text-right">
                         Rp {fmt(hargaUnit)}
                       </td>
-                      <td className="p-2 border text-center">
-                        {sistem}
-                      </td>
+                      <td className="p-2 border text-center">{sistem}</td>
                       <td className="p-2 border">
                         <input
                           className="w-24 p-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -1569,16 +1554,12 @@ export default function StockOpname() {
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs block mb-1">
-                  Harga Suplayer
-                </label>
+                <label className="text-xs block mb-1">Harga Suplayer</label>
                 <input
                   type="number"
                   className="w-full border p-2 rounded"
                   value={editHargaSuplayer}
-                  onChange={(e) =>
-                    setEditHargaSuplayer(e.target.value)
-                  }
+                  onChange={(e) => setEditHargaSuplayer(e.target.value)}
                 />
               </div>
 
