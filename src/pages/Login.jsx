@@ -10,6 +10,8 @@ const normalizeDefaultUsers = () => {
   return [];
 };
 
+
+
 export default function Login({ onLogin, users: usersProp }) {
   const navigate = useNavigate();
 
@@ -18,6 +20,7 @@ export default function Login({ onLogin, users: usersProp }) {
   const [onlineUsers, setOnlineUsers] = useState([]);
 
   const defaultUsers = useMemo(() => normalizeDefaultUsers(), []);
+  
 
   // ✅ LISTENER REALTIME FIREBASE USERS
   useEffect(() => {
@@ -29,6 +32,8 @@ export default function Login({ onLogin, users: usersProp }) {
 
     return () => unsub && unsub();
   }, []);
+
+  
 
   // ✅ PRIORITAS DATA USER:
   // 1. props users dari App.jsx

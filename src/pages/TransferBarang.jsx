@@ -102,6 +102,8 @@ export default function TransferBarang() {
       // ✅ JANGAN PERCAYA ROLE DARI LOCALSTORAGE
       const localUser = JSON.parse(localStorage.getItem("user") || "{}");
       const username = localUser.username || "";
+      localStorage.getItem("TOKO_LOGIN")
+
 
       const me = arr.find(
         (u) =>

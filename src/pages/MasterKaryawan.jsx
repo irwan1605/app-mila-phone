@@ -20,6 +20,20 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
+/* ✅ MASTER TOKO (UNTUK DROPDOWN) */
+const TOKO_OPTIONS = [
+  "CILANGKAP PUSAT",
+  "CIBINONG",
+  "GAS ALAM",
+  "CITEUREUP",
+  "CIRACAS",
+  "METLAND 1",
+  "METLAND 2",
+  "PITARA",
+  "KOTA WISATA",
+  "SAWANGAN",
+];
+
 const JABATAN_OPTIONS = [
   "DIREKTUR",
   "OWNER",
@@ -30,7 +44,8 @@ const JABATAN_OPTIONS = [
 ];
 
 const fmtRupiah = (v) =>
-  "Rp " + Number(v || 0).toLocaleString("id-ID", {
+  "Rp " +
+  Number(v || 0).toLocaleString("id-ID", {
     minimumFractionDigits: 0,
   });
 
@@ -41,12 +56,14 @@ export default function MasterKaryawan() {
   const [showTambah, setShowTambah] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
 
+  /* ✅ FORM TAMBAH (DITAMBAH TOKO_BERTUGAS) */
   const [formTambah, setFormTambah] = useState({
     tanggalMasuk: "",
     nik: "",
     namaKaryawan: "",
     jabatan: "",
     gaji: "",
+    tokoBertugas: "", // ✅ BARU
   });
 
   const [formEdit, setFormEdit] = useState(null);
@@ -60,50 +77,47 @@ export default function MasterKaryawan() {
     return () => unsub && unsub();
   }, []);
 
-  // FILTER SEARCH
+  /* ✅ SEARCH DITAMBAH TOKO */
   const filteredList = useMemo(() => {
     const q = (search || "").toLowerCase();
     return (list || []).filter((x) => {
       const nik = (x.NIK || "").toLowerCase();
       const nama = (x.NAMA || "").toLowerCase();
       const jabatan = (x.JABATAN || "").toLowerCase();
-      const gaji = String(x.GAJI ?? "")
-        .toLowerCase()
-        .replace(/rp|\.|,/g, "");
+      const toko = (x.TOKO_BERTUGAS || "").toLowerCase();
       return (
         nik.includes(q) ||
         nama.includes(q) ||
         jabatan.includes(q) ||
-        gaji.includes(q)
+        toko.includes(q)
       );
     });
   }, [list, search]);
 
   // TOTAL GAJI (FITUR GAJI)
   const totalGaji = useMemo(
-    () =>
-      (list || []).reduce((sum, x) => sum + Number(x.GAJI || 0), 0),
+    () => (list || []).reduce((sum, x) => sum + Number(x.GAJI || 0), 0),
     [list]
   );
 
-  // EXPORT EXCEL
+  /* =================== EXPORT EXCEL =================== */
   const handleExcel = () => {
     const data = filteredList.map((x) => ({
       Tanggal_Masuk: x.TANGGAL_MASUK,
       NIK: x.NIK,
       Nama_Karyawan: x.NAMA,
       Jabatan: x.JABATAN,
+      Toko_Bertugas: x.TOKO_BERTUGAS, // ✅ BARU
       Gaji: Number(x.GAJI || 0),
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-
     XLSX.utils.book_append_sheet(wb, ws, "MASTER_KARYAWAN");
     XLSX.writeFile(wb, "MASTER_KARYAWAN.xlsx");
   };
 
-  // EXPORT PDF (TABEL)
+  /* =================== EXPORT PDF =================== */
   const handlePDF = async () => {
     const input = tableRef.current;
     if (!input) return;
@@ -125,8 +139,7 @@ export default function MasterKaryawan() {
     const defaultMonth = new Date().toISOString().slice(0, 7);
     const bulanInput =
       window.prompt(
-        "Masukkan bulan slip gaji (format: YYYY-MM), contoh: " +
-          defaultMonth,
+        "Masukkan bulan slip gaji (format: YYYY-MM), contoh: " + defaultMonth,
         defaultMonth
       ) || defaultMonth;
 
@@ -166,26 +179,19 @@ export default function MasterKaryawan() {
     pdf.text("Bagian HRD / Keuangan", 20, 126);
     pdf.text("Karyawan,", 140, 120);
 
-    pdf.save(
-      `SLIP_GAJI_${row.NAMA || "KARYAWAN"}_${bulanInput}.pdf`
-    );
+    pdf.save(`SLIP_GAJI_${row.NAMA || "KARYAWAN"}_${bulanInput}.pdf`);
   };
 
-  // ADD
+  /* =================== TAMBAH KARYAWAN =================== */
   const submitTambah = async () => {
     try {
       if (
         !formTambah.tanggalMasuk ||
         !formTambah.nik ||
-        !formTambah.namaKaryawan
+        !formTambah.namaKaryawan ||
+        !formTambah.tokoBertugas
       ) {
         alert("Semua field wajib diisi");
-        return;
-      }
-
-      const gajiNumber = Number(formTambah.gaji || 0);
-      if (Number.isNaN(gajiNumber) || gajiNumber < 0) {
-        alert("Gaji harus berupa angka dan tidak boleh negatif.");
         return;
       }
 
@@ -194,7 +200,8 @@ export default function MasterKaryawan() {
         NIK: formTambah.nik,
         NAMA: formTambah.namaKaryawan,
         JABATAN: formTambah.jabatan,
-        GAJI: gajiNumber,
+        GAJI: Number(formTambah.gaji || 0),
+        TOKO_BERTUGAS: formTambah.tokoBertugas, // ✅ SIMPAN KE FIREBASE
       };
 
       await addKaryawan(payload);
@@ -206,15 +213,15 @@ export default function MasterKaryawan() {
         namaKaryawan: "",
         jabatan: "",
         gaji: "",
+        tokoBertugas: "",
       });
       setShowTambah(false);
     } catch (e) {
-      console.error(e);
       alert("Gagal menambah karyawan");
     }
   };
 
-  // OPEN EDIT
+  /* =================== OPEN EDIT =================== */
   const openEdit = (row) => {
     setFormEdit({
       id: row.id,
@@ -223,46 +230,31 @@ export default function MasterKaryawan() {
       namaKaryawan: row.NAMA || "",
       jabatan: row.JABATAN || "",
       gaji: row.GAJI ?? "",
+      tokoBertugas: row.TOKO_BERTUGAS || "", // ✅ BARU
     });
     setShowEdit(true);
   };
 
-  // SUBMIT EDIT
+  /* =================== SUBMIT EDIT =================== */
   const submitEdit = async () => {
     try {
-      if (
-        !formEdit.tanggalMasuk ||
-        !formEdit.nik ||
-        !formEdit.namaKaryawan
-      ) {
-        alert("Semua field wajib diisi");
-        return;
-      }
-
-      const gajiNumber = Number(formEdit.gaji || 0);
-      if (Number.isNaN(gajiNumber) || gajiNumber < 0) {
-        alert("Gaji harus berupa angka dan tidak boleh negatif.");
-        return;
-      }
-
       const payload = {
         TANGGAL_MASUK: formEdit.tanggalMasuk,
         NIK: formEdit.nik,
         NAMA: formEdit.namaKaryawan,
         JABATAN: formEdit.jabatan,
-        GAJI: gajiNumber,
+        GAJI: Number(formEdit.gaji || 0),
+        TOKO_BERTUGAS: formEdit.tokoBertugas, // ✅ UPDATE
       };
 
       await updateKaryawan(formEdit.id, payload);
       alert("Data berhasil diupdate");
       setShowEdit(false);
     } catch (e) {
-      console.error(e);
       alert("Gagal update karyawan");
     }
   };
 
-  // DELETE
   const handleDelete = async (id) => {
     if (!window.confirm("Hapus data ini?")) return;
     await deleteKaryawan(id);
@@ -337,9 +329,11 @@ export default function MasterKaryawan() {
               <th className="px-3 py-2 border text-left text-xs">
                 Nama Karyawan
               </th>
-              <th className="px-3 py-2 border text-left text-xs">Jabatan</th>
-              <th className="px-3 py-2 border text-right text-xs">Gaji</th>
-              <th className="px-3 py-2 border text-center text-xs">Aksi</th>
+              <th className="px-3 py-2 border">Jabatan</th>
+              <th className="px-3 py-2 border">Toko Bertugas</th>{" "}
+              {/* ✅ BARU */}
+              <th className="px-3 py-2 border">Gaji</th>
+              <th className="px-3 py-2 border">Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -361,6 +355,9 @@ export default function MasterKaryawan() {
                   <td className="px-3 py-2 border text-xs">{row.NIK}</td>
                   <td className="px-3 py-2 border text-xs">{row.NAMA}</td>
                   <td className="px-3 py-2 border text-xs">{row.JABATAN}</td>
+                  <td className="px-3 py-2 border font-semibold text-indigo-700">
+                    {row.TOKO_BERTUGAS}
+                  </td>
                   <td className="px-3 py-2 border text-xs text-right">
                     {fmtRupiah(row.GAJI)}
                   </td>
@@ -600,6 +597,36 @@ export default function MasterKaryawan() {
                 </datalist>
               </div>
 
+            
+                <div className="bg-white p-4 rounded w-full max-w-md">
+                  <label className="block text-xs mb-1">Toko Bertugas</label>
+                  <select
+                    className="w-full border px-2 py-1 text-sm"
+                    value={
+                      showTambah
+                        ? formTambah.tokoBertugas
+                        : formEdit?.tokoBertugas
+                    }
+                    onChange={(e) =>
+                      showTambah
+                        ? setFormTambah((p) => ({
+                            ...p,
+                            tokoBertugas: e.target.value,
+                          }))
+                        : setFormEdit((p) => ({
+                            ...p,
+                            tokoBertugas: e.target.value,
+                          }))
+                    }
+                  >
+                    <option value="">Pilih Toko</option>
+                    {TOKO_OPTIONS.map((t) => (
+                      <option key={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+           
+
               <div>
                 <label className="block mb-1 text-gray-700 text-xs">
                   Gaji (Rp)
@@ -618,6 +645,10 @@ export default function MasterKaryawan() {
                 />
               </div>
             </div>
+
+         
+            
+     
 
             <div className="mt-4 flex justify-end gap-2">
               <button

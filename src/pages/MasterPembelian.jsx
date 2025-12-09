@@ -53,11 +53,7 @@ const BRAND_OPTIONS = [
   "INFINIX",
 ];
 
-const KATEGORI_WAJIB_IMEI = [
-  "SEPEDA LISTRIK",
-  "MOTOR LISTRIK",
-  "HANDPHONE",
-];
+const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
 
 const fmt = (n) => {
   try {
@@ -85,7 +81,11 @@ const generateNoDo = (allTransaksi, tanggal) => {
   const lastNumber = todayInv.length
     ? Math.max(
         ...todayInv.map((t) =>
-          Number(String(t.NO_INVOICE || "").split("-").pop() || 0)
+          Number(
+            String(t.NO_INVOICE || "")
+              .split("-")
+              .pop() || 0
+          )
         )
       )
     : 0;
@@ -93,9 +93,6 @@ const generateNoDo = (allTransaksi, tanggal) => {
   const next = String(lastNumber + 1).padStart(4, "0");
   return `INV-${tgl}-${next}`;
 };
-
-
-
 
 // =======================
 // KOMPONEN UTAMA
@@ -111,9 +108,10 @@ export default function MasterPembelian() {
 
   const [showTambah, setShowTambah] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const TODAY = new Date().toISOString().slice(0, 10);
 
   const [tambahForm, setTambahForm] = useState({
-    tanggal: new Date().toISOString().slice(0, 10),
+    tanggal: TODAY,
     noDo: "",
     supplier: "",
     brand: "", // ✅ Nama Brand
@@ -147,7 +145,6 @@ export default function MasterPembelian() {
       }));
     }
   }, [showTambah, tambahForm.tanggal, allTransaksi]);
-  
 
   // ======================= MASTER BARANG SOURCE (Brand / Barang / Kategori) =======================
   const masterBarangList = useMemo(() => {
@@ -166,6 +163,15 @@ export default function MasterPembelian() {
     return Object.values(map);
   }, [allTransaksi]);
 
+  const selectedMasterBarang = useMemo(() => {
+    return masterBarangList.find(
+      (x) => x.brand === tambahForm.brand && x.barang === tambahForm.barang
+    );
+  }, [masterBarangList, tambahForm.brand, tambahForm.barang]);
+
+  const isBandlingItem = selectedMasterBarang?.IS_BANDLING === true;
+  const tipeBandling = selectedMasterBarang?.TIPE_BANDLING || "";
+
   /* ======================= SUPPLIER OPTIONS (AMANKAN DARI MASTER BARANG) ======================= */
   const supplierOptions = useMemo(
     () =>
@@ -183,7 +189,6 @@ export default function MasterPembelian() {
       ),
     [allTransaksi]
   );
-  
 
   // Brand: gabungan BRAND_OPTIONS + brand dari masterBarangList
   const brandOptionsDynamic = useMemo(() => {
@@ -249,11 +254,14 @@ export default function MasterPembelian() {
       }
 
       const qty = Number(t.QTY || 0);
-      const hSup = Number(t.HARGA_SUPLAYER || map[key].hargaSup || 0);
 
+      // ✅ AMBIL LANGSUNG DARI DATA TRANSAKSI
+      const hSup = Number(t.HARGA_SUPLAYER || 0);
+      
       map[key].totalQty += qty;
       map[key].totalHargaSup += qty * hSup;
       map[key].hargaSup = hSup;
+      
 
       if (t.IMEI && String(t.IMEI).trim() !== "") {
         map[key].imeis.push(String(t.IMEI).trim());
@@ -274,14 +282,28 @@ export default function MasterPembelian() {
 
     return groupedPembelian.filter((v) => {
       return (
-        String(v.tanggal || "").toLowerCase().includes(q) ||
-        String(v.noDo || "").toLowerCase().includes(q) ||
-        String(v.supplier || "").toLowerCase().includes(q) ||
-        String(v.brand || "").toLowerCase().includes(q) ||
-        String(v.barang || "").toLowerCase().includes(q) ||
-        String(v.kategoriBrand || "").toLowerCase().includes(q) ||
+        String(v.tanggal || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(v.noDo || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(v.supplier || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(v.brand || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(v.barang || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(v.kategoriBrand || "")
+          .toLowerCase()
+          .includes(q) ||
         (v.imeis || []).some((im) =>
-          String(im || "").toLowerCase().includes(q)
+          String(im || "")
+            .toLowerCase()
+            .includes(q)
         )
       );
     });
@@ -317,9 +339,9 @@ export default function MasterPembelian() {
 
       if (conflict) {
         errors.push(
-          `IMEI / No MESIN ${im} sudah dipakai di ${conflict.NAMA_BRAND} - ${conflict.NAMA_BARANG} (Supplier: ${
-            conflict.NAMA_SUPPLIER || "-"
-          })`
+          `IMEI / No MESIN ${im} sudah dipakai di ${conflict.NAMA_BRAND} - ${
+            conflict.NAMA_BARANG
+          } (Supplier: ${conflict.NAMA_SUPPLIER || "-"})`
         );
         break;
       }
@@ -354,9 +376,9 @@ export default function MasterPembelian() {
 
       if (conflict) {
         errors.push(
-          `IMEI / No MESIN ${im} sudah dipakai di ${conflict.NAMA_BRAND} - ${conflict.NAMA_BARANG} (Supplier: ${
-            conflict.NAMA_SUPPLIER || "-"
-          })`
+          `IMEI / No MESIN ${im} sudah dipakai di ${conflict.NAMA_BRAND} - ${
+            conflict.NAMA_BARANG
+          } (Supplier: ${conflict.NAMA_SUPPLIER || "-"})`
         );
         break;
       }
@@ -368,11 +390,7 @@ export default function MasterPembelian() {
   const deletePembelian = async (item) => {
     if (
       !window.confirm(
-        `Hapus semua transaksi pembelian untuk:\n${item.tanggal} - DO: ${
-          item.noDo
-        }\nSupplier: ${item.supplier}\n${item.brand} - ${
-          item.barang
-        }\n(Qty: ${item.totalQty}) ?`
+        `Hapus semua transaksi pembelian untuk:\n${item.tanggal} - DO: ${item.noDo}\nSupplier: ${item.supplier}\n${item.brand} - ${item.barang}\n(Qty: ${item.totalQty}) ?`
       )
     ) {
       return;
@@ -429,9 +447,7 @@ export default function MasterPembelian() {
   const saveEdit = async () => {
     if (!editData) return;
 
-    const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(
-      editData.kategoriBrand
-    );
+    const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(editData.kategoriBrand);
     const isAccessories = editData.kategoriBrand === "ACCESORIES";
 
     let imeis = [];
@@ -441,11 +457,10 @@ export default function MasterPembelian() {
         .map((x) => x.trim())
         .filter(Boolean);
 
-        if (imeis.length <= 0) {
-          alert("Silahkan isi Nomor IMEI Terlebih dahulu");
-          return;
-        }
-        
+      if (imeis.length <= 0) {
+        alert("Silahkan isi Nomor IMEI Terlebih dahulu");
+        return;
+      }
 
       const err = validateImeisEdit(imeis, editData.originalKey);
       if (err.length) {
@@ -520,9 +535,7 @@ export default function MasterPembelian() {
       );
 
       if (key === "imeiList" || key === "kategoriBrand") {
-        const imeis = String(
-          key === "imeiList" ? value : prev.imeiList || ""
-        )
+        const imeis = String(key === "imeiList" ? value : prev.imeiList || "")
           .split("\n")
           .map((x) => x.trim())
           .filter(Boolean);
@@ -560,8 +573,7 @@ export default function MasterPembelian() {
     if (!kategoriBrand) return alert("Kategori Brand wajib dipilih.");
     if (!barang) return alert("Nama Barang wajib diisi.");
     const hSup = Number(hargaSup || 0);
-    if (!hSup || hSup <= 0)
-      return alert("Harga Supplier harus lebih dari 0.");
+    if (!hSup || hSup <= 0) return alert("Harga Supplier harus lebih dari 0.");
 
     let finalQty = 0;
     let imeis = [];
@@ -572,10 +584,9 @@ export default function MasterPembelian() {
         .map((x) => x.trim())
         .filter(Boolean);
 
-        if (imeis.length <= 0) {
-          return alert("Silahkan isi Nomor IMEI Terlebih dahulu");
-        }
-        
+      if (imeis.length <= 0) {
+        return alert("Silahkan isi Nomor IMEI Terlebih dahulu");
+      }
 
       const err = validateImeisNew(imeis);
       if (err.length) {
@@ -685,6 +696,20 @@ export default function MasterPembelian() {
       alert(
         "✅ Pembelian berhasil disimpan.\n• Data masuk MASTER PEMBELIAN\n• Otomatis masuk MASTER BARANG\n• Stok CILANGKAP PUSAT bertambah."
       );
+
+      // =======================
+      // ✅ AUTO MASUK STOCK ACCESORIES JIKA BANDLING
+      // =======================
+      if (isBandlingItem) {
+        const skuBandling = `BANDLING-${tipeBandling}`;
+
+        await addStock("CILANGKAP PUSAT", skuBandling, {
+          namaBrand: "BANDLING",
+          namaBarang: `Bandling ${tipeBandling}`,
+          kategoriBrand: "ACCESORIES",
+          qty: finalQty,
+        });
+      }
 
       setShowTambah(false);
       setTambahForm({
@@ -995,11 +1020,11 @@ export default function MasterPembelian() {
                 </label>
                 <input
                   type="date"
-                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-100 cursor-not-allowed"
                   value={tambahForm.tanggal}
-                  onChange={(e) =>
-                    handleTambahChange("tanggal", e.target.value)
-                  }
+                  min={TODAY}
+                  max={TODAY}
+                  readOnly
                 />
               </div>
 

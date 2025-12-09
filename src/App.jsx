@@ -226,10 +226,7 @@ export default function App() {
                     element={<MasterPembelian />}
                   />
                   {/* Master Penjualan – BARU */}
-                  <Route
-                    path="/master-payment"
-                    element={<MasterPayment />}
-                  />
+                  <Route path="/master-payment" element={<MasterPayment />} />
                   <Route path="/master-karyawan" element={<MasterKaryawan />} />
 
                   {/* Produk */}
@@ -286,14 +283,7 @@ export default function App() {
                   <Route path="/modul-sparepart" element={<Sperpart />} />
 
                   {/* ✨ Fitur Baru — Transfer Barang */}
-                  <Route
-                    path="/transfer-barang"
-                    element={
-                      <ProtectedRoute allowedRoles={["superadmin", "admin"]}>
-                        <TransferBarang />
-                      </ProtectedRoute>
-                    }
-                  />
+                  <Route path="/transfer-barang" element={<TransferBarang />} />
 
                   {/* Stok */}
                   <Route

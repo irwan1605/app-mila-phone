@@ -21,13 +21,13 @@ const TOKO_LIST = [
   "CILANGKAP PUSAT",
   "CIBINONG",
   "GAS ALAM",
+  "CITEUREUP",
   "CIRACAS",
   "METLAND 1",
   "METLAND 2",
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
-  "CITEUREUP",
 ];
 
 // ✅ Mapping nama toko → id toko
@@ -64,10 +64,11 @@ const fmtRupiah = (v) => {
 export default function InventoryReport() {
   const navigate = useNavigate();
 
-  // ✅ AMAN: HANYA SATU KALI DIDEFINISIKAN
+  // ✅ LOGIN USER
   const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
   const myTokoId = loggedUser?.toko;
   const myTokoName = myTokoId ? TOKO_LIST[myTokoId - 1] : null;
+  const myUsername = loggedUser?.username || "UNKNOWN";
 
   const isSuper =
     loggedUser?.role === "superadmin" || loggedUser?.role === "admin";
@@ -107,7 +108,7 @@ export default function InventoryReport() {
     [transaksiFinal]
   );
 
-  // ======================= REKAP STOCK PER TOKO (✅ TIDAK DUPLIKAT) =======================
+  // ======================= REKAP STOCK PER TOKO =======================
   const stockPerToko = useMemo(() => {
     const targetToko = isSuper ? TOKO_LIST : [myTokoName];
     return targetToko.map((toko) => {
@@ -141,9 +142,40 @@ export default function InventoryReport() {
     });
   }, [transaksiFinal, selectedToko, search]);
 
-  // ======================= EXPORT EXCEL PER TOKO =======================
+  // ======================= ✅ FUNGSI LOG AKTIVITAS KE FIREBASE =======================
+  const appendLog = async (tx, action) => {
+    try {
+      const tokoName = tx.NAMA_TOKO || tx.TOKO || "";
+      const tokoId = getTokoIdFromName(tokoName);
+      if (!tokoId) return;
+
+      const oldLogs = Array.isArray(tx.LOG_HISTORY) ? tx.LOG_HISTORY : [];
+
+      const newLog = {
+        action,
+        by: myUsername,
+        role: loggedUser?.role,
+        toko: myTokoName,
+        time: new Date().toISOString(),
+      };
+
+      await updateTransaksi(tokoId, tx.id, {
+        LOG_HISTORY: [...oldLogs, newLog],
+      });
+    } catch (err) {
+      console.error("Gagal menulis LOG_HISTORY:", err);
+    }
+  };
+
+  // ======================= EXPORT EXCEL + WATERMARK =======================
   const exportExcelPerToko = () => {
     if (!selectedToko) return;
+
+    const headerWatermark = [
+      { A: `INVENTORY REPORT — ${selectedToko}` },
+      { A: `Dicetak oleh: ${isSuper ? "SUPERADMIN" : "PIC " + selectedToko}` },
+      {},
+    ];
 
     const rows = detailRows.map((tx, idx) => ({
       No: idx + 1,
@@ -158,17 +190,23 @@ export default function InventoryReport() {
       Keterangan: tx.KETERANGAN || "",
     }));
 
-    const ws = XLSX.utils.json_to_sheet(rows);
+    const ws1 = XLSX.utils.sheet_add_json(
+      XLSX.utils.json_to_sheet(headerWatermark, { skipHeader: true }),
+      rows,
+      { origin: "A4" }
+    );
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(
       wb,
-      ws,
+      ws1,
       `STOCK_${selectedToko.replace(/\s+/g, "_")}`
     );
+
     XLSX.writeFile(wb, `STOCK_${selectedToko}.xlsx`);
   };
 
-  // ======================= APPROVE & EDIT =======================
+  // ======================= APPROVE (SUPERADMIN ONLY + LOG) =======================
   const handleApprove = async (tx) => {
     try {
       const tokoName = tx.NAMA_TOKO || tx.TOKO || "";
@@ -179,6 +217,8 @@ export default function InventoryReport() {
       }
 
       await updateTransaksi(tokoId, tx.id, { STATUS: "Approved" });
+      await appendLog(tx, "APPROVE");
+
       setAllTransaksi((prev) =>
         prev.map((row) =>
           row.id === tx.id ? { ...row, STATUS: "Approved" } : row
@@ -191,8 +231,10 @@ export default function InventoryReport() {
     }
   };
 
-  const handleEdit = (tx) => {
+  // ======================= EDIT (LOG) =======================
+  const handleEdit = async (tx) => {
     try {
+      await appendLog(tx, "EDIT");
       localStorage.setItem("edit_transaksi", JSON.stringify(tx));
       window.location.href = "/transaksi";
     } catch (err) {
@@ -201,7 +243,10 @@ export default function InventoryReport() {
     }
   };
 
-  const handleTransferClick = (tx) => {
+  // ======================= TRANSFER (LOG) =======================
+  const handleTransferClick = async (tx) => {
+    await appendLog(tx, "TRANSFER");
+
     navigate("/transfer-barang", {
       state: {
         fromInventory: true,
@@ -216,31 +261,29 @@ export default function InventoryReport() {
     });
   };
 
-  // ======================= RENDER (✅ UI 100% DIPERTAHANKAN) =======================
+  // ======================= RENDER (UI TETAP) =======================
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-blue-700 to-purple-700 p-4">
       <div className="max-w-7xl mx-auto bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl p-6">
-        {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-indigo-700 flex items-center gap-2">
               <FaWarehouse />
-              INVENTORY REPORT — CILANGKAP PUSAT & ANTAR TOKO
+              INVENTORY REPORT —{" "}
+              {isSuper ? "CILANGKAP PUSAT & ANTAR TOKO" : myTokoName}
             </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Sumber data: MASTER TRANSAKSI (Firebase, realtime).
-            </p>
           </div>
 
           <div className="text-right text-sm">
-            <p className="text-slate-500">Total stock semua toko</p>
+            <p className="text-slate-500">
+              {isSuper ? "Total stock semua toko" : `Total stock ${myTokoName}`}
+            </p>
             <p className="text-xl font-bold text-indigo-700">
               {totalSemuaToko.toLocaleString("id-ID")} Unit
             </p>
           </div>
         </div>
 
-        {/* ======================= GRID MULTI CARD ======================= */}
         {!selectedToko && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             {stockPerToko.map((row) => (
@@ -257,7 +300,6 @@ export default function InventoryReport() {
           </div>
         )}
 
-        {/* ======================= DETAIL PER TOKO ======================= */}
         {selectedToko && (
           <>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
@@ -268,14 +310,8 @@ export default function InventoryReport() {
                 }}
                 className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm"
               >
-                ← Kembali ke 10 Multi Card
+                ← Kembali
               </button>
-
-              <div className="text-center md:text-left">
-                <h2 className="text-xl font-bold text-indigo-700">
-                  STOCK {selectedToko}
-                </h2>
-              </div>
 
               <div className="flex flex-wrap gap-2 justify-end">
                 <button
@@ -292,17 +328,6 @@ export default function InventoryReport() {
                   <FaExchangeAlt /> Transfer Barang
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2 mb-4">
-              <FaSearch className="text-slate-500" />
-              <input
-                type="text"
-                placeholder="Cari Nama Barang, Brand, atau IMEI"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="border border-slate-300 rounded-xl px-3 py-2 w-full text-sm"
-              />
             </div>
 
             <div className="bg-white rounded-2xl shadow overflow-x-auto">
@@ -324,10 +349,7 @@ export default function InventoryReport() {
                 <tbody>
                   {!loading &&
                     detailRows.map((tx, idx) => (
-                      <tr
-                        key={tx.id || idx}
-                        className="hover:bg-slate-50 transition"
-                      >
+                      <tr key={tx.id || idx}>
                         <td className="border p-2 text-center">{idx + 1}</td>
                         <td className="border p-2">
                           {tx.TANGGAL_TRANSAKSI || tx.TANGGAL || "-"}
@@ -347,24 +369,25 @@ export default function InventoryReport() {
                         </td>
                         <td className="border p-2">
                           <div className="flex gap-2 justify-center">
-                            <button
-                              onClick={() => handleApprove(tx)}
-                              className="text-green-600 hover:text-green-800"
-                              title="Approve"
-                            >
-                              <FaCheckCircle />
-                            </button>
-                            <button
-                              onClick={() => handleEdit(tx)}
-                              className="text-blue-600 hover:text-blue-800"
-                              title="Edit"
-                            >
-                              <FaEdit />
-                            </button>
+                            {isSuper && (
+                              <>
+                                <button
+                                  onClick={() => handleApprove(tx)}
+                                  className="text-green-600"
+                                >
+                                  <FaCheckCircle />
+                                </button>
+                                <button
+                                  onClick={() => handleEdit(tx)}
+                                  className="text-blue-600"
+                                >
+                                  <FaEdit />
+                                </button>
+                              </>
+                            )}
                             <button
                               onClick={() => handleTransferClick(tx)}
-                              className="text-amber-600 hover:text-amber-800"
-                              title="Transfer Barang"
+                              className="text-amber-600"
                             >
                               <FaExchangeAlt />
                             </button>
@@ -376,12 +399,6 @@ export default function InventoryReport() {
               </table>
             </div>
           </>
-        )}
-
-        {!selectedToko && loading && (
-          <div className="mt-4 text-center text-slate-400 text-sm">
-            Memuat data master transaksi dari Firebase...
-          </div>
         )}
       </div>
     </div>

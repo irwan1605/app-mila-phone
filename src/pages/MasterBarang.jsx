@@ -12,7 +12,6 @@ import {
   FaSave,
   FaSearch,
   FaPlus,
-  FaTimes,
   FaFileExcel,
 } from "react-icons/fa";
 
@@ -54,27 +53,48 @@ export default function MasterBarang() {
   const [showTambah, setShowTambah] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editData, setEditData] = useState(null);
+  const TODAY = new Date().toISOString().slice(0, 10);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   const [form, setForm] = useState({
-    tanggal: new Date().toISOString().slice(0, 10),
+    tanggal: TODAY,
     kategori: "",
     brand: "",
     barang: "",
     hargaSRP: "",
     hargaGrosir: "",
     hargaReseller: "",
+
+    // ✅ TAMBAHAN UNTUK BANDLING
+    isBandling: false,
+    tipeBandling: "", // "1" | "2" | "3"
   });
 
-  // ✅ REALTIME FIREBASE
+  // =======================
+  // ✅ REALTIME FIREBASE MASTER BARANG
+  // =======================
   useEffect(() => {
     const unsub = listenAllTransaksi((rows) => {
       setAllTransaksi(rows || []);
     });
-    return () => unsub && unsub();
+
+    return () => typeof unsub === "function" && unsub();
   }, []);
+
+  useEffect(() => {
+    if (
+      form.kategori !== "SEPEDA LISTRIK" &&
+      form.kategori !== "MOTOR LISTRIK"
+    ) {
+      setForm((prev) => ({
+        ...prev,
+        isBandling: false,
+        tipeBandling: "",
+      }));
+    }
+  }, [form.kategori]);
 
   // ================== REKAP MASTER BARANG ==================
   const masterBarang = useMemo(() => {
@@ -150,10 +170,15 @@ export default function MasterBarang() {
       NAMA_BRAND: form.brand,
       KATEGORI_BRAND: form.kategori,
       NAMA_BARANG: form.barang,
-      HARGA_SRP: Number(form.hargaSRP || 0),
-      HARGA_UNIT: Number(form.hargaSRP || 0),
-      HARGA_GROSIR: Number(form.hargaGrosir || 0),
-      HARGA_RESELLER: Number(form.hargaReseller || 0),
+
+      HARGA_SRP: form.isBandling ? 0 : Number(form.hargaSRP || 0),
+      HARGA_UNIT: form.isBandling ? 0 : Number(form.hargaSRP || 0),
+      HARGA_GROSIR: form.isBandling ? 0 : Number(form.hargaGrosir || 0),
+      HARGA_RESELLER: form.isBandling ? 0 : Number(form.hargaReseller || 0),
+
+      IS_BANDLING: form.isBandling,
+      TIPE_BANDLING: form.tipeBandling,
+
       QTY: 1,
       PAYMENT_METODE: "PEMBELIAN",
       STATUS: "Approved",
@@ -267,6 +292,7 @@ export default function MasterBarang() {
                 <th className="p-2 border text-right">Harga SRP</th>
                 <th className="p-2 border text-right">Harga Grosir</th>
                 <th className="p-2 border text-right">Harga Reseller</th>
+                <th className="p-2 border">Bandling</th>
                 <th className="p-2 border">Aksi</th>
               </tr>
             </thead>
@@ -289,6 +315,10 @@ export default function MasterBarang() {
                   <td className="border p-2 text-right">
                     Rp {fmt(x.hargaReseller)}
                   </td>
+                  <td className="border p-2 text-center">
+                    {x.IS_BANDLING ? `Bandling ${x.TIPE_BANDLING}` : "-"}
+                  </td>
+
                   <td className="border p-2 text-center space-x-2">
                     <button
                       onClick={() => openEdit(x)}
@@ -359,7 +389,9 @@ export default function MasterBarang() {
                 type="date"
                 className="input"
                 value={form.tanggal}
-                onChange={(e) => setForm({ ...form, tanggal: e.target.value })}
+                min={TODAY}
+                max={TODAY}
+                readOnly
               />
 
               <select
@@ -387,6 +419,11 @@ export default function MasterBarang() {
                 value={form.barang}
                 onChange={(e) => setForm({ ...form, barang: e.target.value })}
               />
+              <datalist id="brand-list">
+                {BRAND_OPTIONS.map((b) => (
+                  <option key={b} value={b} />
+                ))}
+              </datalist>
 
               <input
                 placeholder="Harga SRP"
@@ -414,6 +451,42 @@ export default function MasterBarang() {
                 }
               />
             </div>
+            {/* ✅ BANDLING KHUSUS SEPEDA & MOTOR */}
+            {(form.kategori === "SEPEDA LISTRIK" ||
+              form.kategori === "MOTOR LISTRIK") && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">
+                  Barang Bandling (FREE)
+                </label>
+
+                <select
+                  className="input"
+                  value={form.tipeBandling}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setForm((prev) => ({
+                      ...prev,
+                      isBandling: !!v,
+                      tipeBandling: v,
+                      hargaSRP: v ? 0 : prev.hargaSRP,
+                      hargaGrosir: v ? 0 : prev.hargaGrosir,
+                      hargaReseller: v ? 0 : prev.hargaReseller,
+                    }));
+                  }}
+                >
+                  <option value="">-- Tidak Bandling --</option>
+                  <option value="1">Bandling 1 (Gratis)</option>
+                  <option value="2">Bandling 2 (Gratis)</option>
+                  <option value="3">Bandling 3 (Gratis)</option>
+                </select>
+
+                {form.isBandling && (
+                  <p className="text-[11px] text-emerald-600">
+                    ✅ Harga otomatis diset Rp 0 (FREE)
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 mt-4">
               <button

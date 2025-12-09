@@ -6,13 +6,11 @@ import { Link, useLocation } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import "./Sidebar.css";
 import { useGlobalSearch } from "../context/GlobalSearchContext";
-import { FaCashRegister } from "react-icons/fa";
+import FirebaseService from "../services/FirebaseService";
 
 import {
   FaHome,
-  FaMobileAlt,
   FaMotorcycle,
-  FaClipboardList,
   FaStore,
   FaUsers,
   FaShoppingCart,
@@ -23,7 +21,8 @@ import {
 } from "react-icons/fa";
 import { BsGraphUp, BsTagsFill, BsFileEarmarkText } from "react-icons/bs";
 import { AiOutlineDatabase } from "react-icons/ai";
-import { MdBuild } from "react-icons/md";
+
+const notifSound = new Audio("/notif.mp3");
 
 // =======================
 // TOKO LIST (UPDATED + PUSAT)
@@ -46,6 +45,9 @@ const ALL_TOKO_IDS = Object.keys(TOKO_LABELS).map(Number);
 const Sidebar = ({ role, toko, onLogout }) => {
   const location = useLocation();
   const activePath = location.pathname;
+  const [transferNotif, setTransferNotif] = useState(0);
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupData, setPopupData] = useState(null);
 
   const { searchQuery } = useGlobalSearch();
 
@@ -68,6 +70,54 @@ const Sidebar = ({ role, toko, onLogout }) => {
   const scrollRefDesktop = useRef(null);
   const listRefMobile = useRef(null);
   const listRefDesktop = useRef(null);
+
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    const role = String(user?.role || "").toLowerCase();
+    const tokoId = user?.toko;
+
+    // ✅ Hanya untuk PIC TOKO
+    if (!role.startsWith("pic_toko") || !tokoId) return;
+
+    const TOKO_LIST = [
+      "CILANGKAP PUSAT",
+      "CIBINONG",
+      "GAS ALAM",
+      "CITEUREUP",
+      "CIRACAS",
+      "METLAND 1",
+      "METLAND 2",
+      "PITARA",
+      "KOTA WISATA",
+      "SAWANGAN",
+    ];
+
+    const tokoName = TOKO_LIST[tokoId - 1];
+
+    const unsub = FirebaseService.listenTransferRequests((rows) => {
+      const pending = (rows || []).filter(
+        (t) =>
+          t.status === "Pending" &&
+          String(t.ke).toUpperCase() === String(tokoName).toUpperCase()
+      );
+
+      // ✅ UPDATE BADGE JUMLAH
+      setTransferNotif(pending.length);
+
+      // ✅ POPUP & SUARA JIKA ADA TRANSFER BARU
+      if (pending.length > 0) {
+        const last = pending[pending.length - 1];
+
+        setPopupData(last);
+        setShowPopup(true);
+
+        // ✅ BUNYIKAN SUARA
+        notifSound.play().catch(() => {});
+      }
+    });
+
+    return () => unsub && unsub();
+  }, []);
 
   // ESC Close
   useEffect(() => {
@@ -559,13 +609,23 @@ const Sidebar = ({ role, toko, onLogout }) => {
               <span className="ml-2">LAPORAN PERSEDIAAN</span>
             </Link>
 
-            {/* 4️⃣ TRANSFER & MUTASI TOKO SENDIRI */}
+            {/* 4️⃣ TRANSFER GUDANG TOKO SENDIRI (REALTIME LOGIN PIC) */}
             <Link
-              to={`/toko/${picTokoId}/stock-opname`}
-              className="flex items-center p-3 hover:bg-blue-500"
+              to="/transfer-barang"
+              state={{
+                onlyMyToko: true,
+                tokoId: picTokoId,
+              }}
+              className="flex items-center p-3 hover:bg-blue-500 relative"
             >
               <AiOutlineDatabase className="text-xl" />
-              <span className="ml-2">TRANSFER BARANG</span>
+              <span className="ml-2 font-bold">TRANSFER GUDANG</span>
+
+              {transferNotif > 0 && (
+                <span className="absolute right-3 top-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">
+                  {transferNotif}
+                </span>
+              )}
             </Link>
           </>
         )}
@@ -647,6 +707,27 @@ const Sidebar = ({ role, toko, onLogout }) => {
           </div>
         </div>
       </aside>
+      {/* ================= POPUP NOTIFIKASI TRANSFER PIC ================= */}
+      {showPopup && popupData && (
+        <div className="fixed bottom-6 right-6 z-[9999] bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-4 rounded-xl shadow-2xl w-72 animate-bounce">
+          <div className="font-bold text-sm mb-1">📦 TRANSFER BARU MASUK!</div>
+          <div className="text-xs">
+            <div>
+              <b>Dari:</b> {popupData.dari}
+            </div>
+            <div>
+              <b>Barang:</b> {popupData.barang}
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowPopup(false)}
+            className="mt-2 w-full bg-white text-indigo-700 py-1 rounded text-xs font-bold hover:bg-indigo-100"
+          >
+            TUTUP
+          </button>
+        </div>
+      )}
     </>
   );
 };
