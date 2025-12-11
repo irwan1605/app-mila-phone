@@ -757,6 +757,7 @@ export default function MasterPembelian() {
       }
 
       // Simpan stok di CILANGKAP PUSAT menggunakan SKU
+      // Tambah stok pusat (selalu dilakukan)
       await addStock("CILANGKAP PUSAT", sku, {
         namaBrand: brand,
         namaBarang: barang,
@@ -764,12 +765,12 @@ export default function MasterPembelian() {
         qty: finalQty,
       });
 
-      // AUTO UPDATE STOK TOKO → PASS SKU (fix)
-      if (tokoTujuan) {
+      // Tambah stok toko tujuan (TAPI JANGAN lakukan jika tokoTujuan = CILANGKAP PUSAT)
+      if (tokoTujuan && tokoTujuan !== "CILANGKAP PUSAT") {
         await addStock(tokoTujuan, sku, {
           brand: tambahForm.brand,
           barang: tambahForm.barang,
-          qty: Number(tambahForm.qty || 1),
+          qty: finalQty,
           NAMA_BANDLING_1: selectedMasterBarang?.NAMA_BANDLING_1 || "",
           HARGA_BANDLING_1: selectedMasterBarang?.HARGA_BANDLING_1 || 0,
           NAMA_BANDLING_2: selectedMasterBarang?.NAMA_BANDLING_2 || "",

@@ -496,7 +496,7 @@ export const addStock = (tokoName, sku, payload) => {
       ...cur,
       nama: payload.nama || cur?.nama || "",
       imei: payload.imei || cur?.imei || "",
-      qty: curQty + Number(payload.qty || 0),
+      qty: curQty + (payload.qty ? Number(payload.qty) : 0),
       updatedAt: new Date().toISOString(),
     };
   });

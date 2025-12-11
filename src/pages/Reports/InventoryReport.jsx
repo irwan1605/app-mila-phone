@@ -132,15 +132,15 @@ export default function InventoryReport() {
   // ======================================================================
   // HITUNG STOCK PEMBELIAN CILANGKAP PUSAT
   // ======================================================================
-  const stockPembelianPusat = useMemo(() => {
-    return transaksi
-      .filter(
-        (t) =>
-          String(t.NAMA_TOKO || "").toUpperCase() === "CILANGKAP PUSAT" &&
-          (t.PAYMENT_METODE || "PEMBELIAN").toUpperCase() === "PEMBELIAN"
-      )
-      .reduce((sum, r) => sum + Number(r.QTY || 1), 0);
-  }, [transaksi]);
+ // Hitung stok pusat langsung dari Firebase stock path
+const stockPembelianPusat = useMemo(() => {
+  const pusat = stockData["CILANGKAP PUSAT"] || {};
+  return Object.values(pusat).reduce(
+    (sum, item) => sum + Number(item.qty || 0),
+    0
+  );
+}, [stockData]);
+
 
   // ======================================================================
   // CARD STOK PER TOKO
@@ -191,7 +191,7 @@ export default function InventoryReport() {
     const rows = transaksi.filter(
       (t) =>
         String(t.NAMA_TOKO || "").toUpperCase() ===
-        String(selectedToko).toUpperCase()
+        String(selectedToko || "").toUpperCase()
     );
 
     let expanded = rows.map((t) => {
@@ -213,27 +213,27 @@ export default function InventoryReport() {
         imei: t.IMEI,
         qty,
 
-        hargaSRP: t.HARGA_SRP,
-        totalSRP: qty * t.HARGA_SRP,
+        hargaSRP: Number(t.HARGA_SRP || 0),
+        totalSRP: qty * Number(t.HARGA_SRP || 0),
 
-        hargaGrosir: t.HARGA_GROSIR,
-        totalGrosir: qty * t.HARGA_GROSIR,
+        hargaGrosir: Number(t.HARGA_GROSIR || 0),
+        totalGrosir: qty * Number(t.HARGA_GROSIR || 0),
 
-        hargaReseller: t.HARGA_RESELLER,
-        totalReseller: qty * t.HARGA_RESELLER,
+        hargaReseller: Number(t.HARGA_RESELLER || 0),
+        totalReseller: qty * Number(t.HARGA_RESELLER || 0),
 
-        // BANDLING realtime
+        // Bandling realtime dari MasterBarang
         band1: master.NAMA_BANDLING_1 || "-",
-        hband1: master.HARGA_BANDLING_1 || 0,
-        totalBand1: qty * (master.HARGA_BANDLING_1 || 0),
+        hband1: Number(master.HARGA_BANDLING_1 || 0),
+        totalBand1: qty * Number(master.HARGA_BANDLING_1 || 0),
 
         band2: master.NAMA_BANDLING_2 || "-",
-        hband2: master.HARGA_BANDLING_2 || 0,
-        totalBand2: qty * (master.HARGA_BANDLING_2 || 0),
+        hband2: Number(master.HARGA_BANDLING_2 || 0),
+        totalBand2: qty * Number(master.HARGA_BANDLING_2 || 0),
 
         band3: master.NAMA_BANDLING_3 || "-",
-        hband3: master.HARGA_BANDLING_3 || 0,
-        totalBand3: qty * (master.HARGA_BANDLING_3 || 0),
+        hband3: Number(master.HARGA_BANDLING_3 || 0),
+        totalBand3: qty * Number(master.HARGA_BANDLING_3 || 0),
       };
     });
 
