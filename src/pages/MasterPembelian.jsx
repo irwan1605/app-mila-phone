@@ -36,6 +36,22 @@ const KATEGORI_OPTIONS = [
   "ACCESORIES",
 ];
 
+// =======================
+// ✅ DAFTAR TOKO (WAJIB UNTUK KIRIM KE CABANG)
+// =======================
+const TOKO_LIST = [
+  "CILANGKAP PUSAT",
+  "CIBINONG",
+  "GAS ALAM",
+  "CITEUREUP",
+  "CIRACAS",
+  "METLAND 1",
+  "METLAND 2",
+  "PITARA",
+  "KOTA WISATA",
+  "SAWANGAN",
+];
+
 const BRAND_OPTIONS = [
   "OFERO",
   "UWNFLY",
@@ -109,6 +125,7 @@ export default function MasterPembelian() {
   const [showTambah, setShowTambah] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const TODAY = new Date().toISOString().slice(0, 10);
+  const [tokoTujuan, setTokoTujuan] = useState("CILANGKAP PUSAT");
 
   const [tambahForm, setTambahForm] = useState({
     tanggal: TODAY,
@@ -157,6 +174,19 @@ export default function MasterPembelian() {
           brand: t.NAMA_BRAND,
           barang: t.NAMA_BARANG,
           kategoriBrand: t.KATEGORI_BRAND || "",
+
+          // Tambahan sinkron bandling
+          NAMA_BANDLING_1: t.NAMA_BANDLING_1 || "",
+          HARGA_BANDLING_1: Number(t.HARGA_BANDLING_1 || 0),
+
+          NAMA_BANDLING_2: t.NAMA_BANDLING_2 || "",
+          HARGA_BANDLING_2: Number(t.HARGA_BANDLING_2 || 0),
+
+          NAMA_BANDLING_3: t.NAMA_BANDLING_3 || "",
+          HARGA_BANDLING_3: Number(t.HARGA_BANDLING_3 || 0),
+
+          IS_BANDLING: t.IS_BANDLING || false,
+          TIPE_BANDLING: t.TIPE_BANDLING || "",
         };
       }
     });
@@ -257,11 +287,10 @@ export default function MasterPembelian() {
 
       // ✅ AMBIL LANGSUNG DARI DATA TRANSAKSI
       const hSup = Number(t.HARGA_SUPLAYER || 0);
-      
+
       map[key].totalQty += qty;
       map[key].totalHargaSup += qty * hSup;
       map[key].hargaSup = hSup;
-      
 
       if (t.IMEI && String(t.IMEI).trim() !== "") {
         map[key].imeis.push(String(t.IMEI).trim());
@@ -607,8 +636,27 @@ export default function MasterPembelian() {
       }
     }
 
-    const tokoId = 1;
-    const namaToko = "CILANGKAP PUSAT";
+    let hargaBandlingDipakai = 0;
+
+    if (isBandlingItem && tipeBandling === "1") {
+      hargaBandlingDipakai = Number(
+        selectedMasterBarang?.HARGA_BANDLING_1 || 0
+      );
+    }
+    if (isBandlingItem && tipeBandling === "2") {
+      hargaBandlingDipakai = Number(
+        selectedMasterBarang?.HARGA_BANDLING_2 || 0
+      );
+    }
+    if (isBandlingItem && tipeBandling === "3") {
+      hargaBandlingDipakai = Number(
+        selectedMasterBarang?.HARGA_BANDLING_3 || 0
+      );
+    }
+
+    const namaToko = tokoTujuan;
+    const tokoId = TOKO_LIST.indexOf(tokoTujuan) + 1;
+
     const sku = makeSku(brand, barang);
 
     try {
@@ -693,6 +741,25 @@ export default function MasterPembelian() {
         qty: finalQty,
       });
 
+      // === AUTO UPDATE STOK TOKO ===
+      if (tokoTujuan) {
+        await addStock(tokoTujuan, {
+          brand: tambahForm.brand,
+          barang: tambahForm.barang,
+          qty: Number(tambahForm.qty || 1),
+
+          // Simpan bandling juga supaya terbaca inventory
+          NAMA_BANDLING_1: selectedMasterBarang?.NAMA_BANDLING_1 || "",
+          HARGA_BANDLING_1: selectedMasterBarang?.HARGA_BANDLING_1 || 0,
+
+          NAMA_BANDLING_2: selectedMasterBarang?.NAMA_BANDLING_2 || "",
+          HARGA_BANDLING_2: selectedMasterBarang?.HARGA_BANDLING_2 || 0,
+
+          NAMA_BANDLING_3: selectedMasterBarang?.NAMA_BANDLING_3 || "",
+          HARGA_BANDLING_3: selectedMasterBarang?.HARGA_BANDLING_3 || 0,
+        });
+      }
+
       alert(
         "✅ Pembelian berhasil disimpan.\n• Data masuk MASTER PEMBELIAN\n• Otomatis masuk MASTER BARANG\n• Stok CILANGKAP PUSAT bertambah."
       );
@@ -705,7 +772,12 @@ export default function MasterPembelian() {
 
         await addStock("CILANGKAP PUSAT", skuBandling, {
           namaBrand: "BANDLING",
-          namaBarang: `Bandling ${tipeBandling}`,
+          namaBarang:
+            tipeBandling === "1"
+              ? selectedMasterBarang?.NAMA_BANDLING_1
+              : tipeBandling === "2"
+              ? selectedMasterBarang?.NAMA_BANDLING_2
+              : selectedMasterBarang?.NAMA_BANDLING_3,
           kategoriBrand: "ACCESORIES",
           qty: finalQty,
         });
@@ -1041,6 +1113,23 @@ export default function MasterPembelian() {
                 />
               </div>
 
+              <select
+                className="input"
+                value={tokoTujuan}
+                onChange={(e) => setTokoTujuan(e.target.value)}
+              >
+                <option>CILANGKAP PUSAT</option>
+                <option>CIBINONG</option>
+                <option>GAS ALAM</option>
+                <option>CITEUREUP</option>
+                <option>CIRACAS</option>
+                <option>METLAND 1</option>
+                <option>METLAND 2</option>
+                <option>PITARA</option>
+                <option>KOTA WISATA</option>
+                <option>SAWANGAN</option>
+              </select>
+
               {/* Supplier */}
               <div>
                 <label className="text-xs font-semibold text-slate-600">
@@ -1166,6 +1255,43 @@ export default function MasterPembelian() {
               </div>
             </div>
 
+            {(tambahForm.kategoriBrand === "SEPEDA LISTRIK" ||
+              tambahForm.kategoriBrand === "MOTOR LISTRIK") &&
+              selectedMasterBarang?.IS_BANDLING && (
+                <div className="mt-3 p-3 border rounded-lg bg-slate-50">
+                  <h4 className="font-semibold text-sm mb-2">
+                    Bandling Barang
+                  </h4>
+
+                  {selectedMasterBarang?.NAMA_BANDLING_1 && (
+                    <div className="flex justify-between text-sm mb-1">
+                      <span>{selectedMasterBarang.NAMA_BANDLING_1}</span>
+                      <span>
+                        Rp {fmt(selectedMasterBarang.HARGA_BANDLING_1)}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedMasterBarang?.NAMA_BANDLING_2 && (
+                    <div className="flex justify-between text-sm mb-1">
+                      <span>{selectedMasterBarang.NAMA_BANDLING_2}</span>
+                      <span>
+                        Rp {fmt(selectedMasterBarang.HARGA_BANDLING_2)}
+                      </span>
+                    </div>
+                  )}
+
+                  {selectedMasterBarang?.NAMA_BANDLING_3 && (
+                    <div className="flex justify-between text-sm">
+                      <span>{selectedMasterBarang.NAMA_BANDLING_3}</span>
+                      <span>
+                        Rp {fmt(selectedMasterBarang.HARGA_BANDLING_3)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
             {/* IMEI hanya jika bukan ACCESORIES */}
             {tambahForm.kategoriBrand !== "ACCESORIES" && (
               <div className="mt-3">
@@ -1187,6 +1313,8 @@ export default function MasterPembelian() {
                 />
               </div>
             )}
+
+  
 
             <div className="flex justify-end gap-2 mt-4">
               <button

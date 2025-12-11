@@ -54,6 +54,8 @@ export default function MasterBarang() {
   const [showEdit, setShowEdit] = useState(false);
   const [editData, setEditData] = useState(null);
   const TODAY = new Date().toISOString().slice(0, 10);
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastCount, setLastCount] = useState(0);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -72,12 +74,32 @@ export default function MasterBarang() {
     tipeBandling: "", // "1" | "2" | "3"
   });
 
+  useEffect(() => {
+    if (lastCount === 0 && allTransaksi.length > 0) {
+      setLastCount(allTransaksi.length);
+      return;
+    }
+
+    if (allTransaksi.length > lastCount) {
+      alert("✅ Data Master Barang bertambah (Realtime)");
+    }
+
+    if (allTransaksi.length < lastCount) {
+      alert("🗑️ Data Master Barang berkurang (Realtime)");
+    }
+
+    setLastCount(allTransaksi.length);
+  }, [allTransaksi, lastCount]);
+
   // =======================
   // ✅ REALTIME FIREBASE MASTER BARANG
   // =======================
   useEffect(() => {
+    setIsLoading(true);
+
     const unsub = listenAllTransaksi((rows) => {
       setAllTransaksi(rows || []);
+      setIsLoading(false);
     });
 
     return () => typeof unsub === "function" && unsub();
@@ -92,9 +114,25 @@ export default function MasterBarang() {
         ...prev,
         isBandling: false,
         tipeBandling: "",
+
+        namaBandling1: "",
+        hargaBandling1: "",
+        namaBandling2: "",
+        hargaBandling2: "",
+        namaBandling3: "",
+        hargaBandling3: "",
       }));
     }
   }, [form.kategori]);
+
+  const counterKategori = useMemo(() => {
+    const map = {};
+    allTransaksi.forEach((t) => {
+      const kat = t.KATEGORI_BRAND || "TANPA KATEGORI";
+      map[kat] = (map[kat] || 0) + 1;
+    });
+    return map;
+  }, [allTransaksi]);
 
   // ================== REKAP MASTER BARANG ==================
   const masterBarang = useMemo(() => {
@@ -111,6 +149,19 @@ export default function MasterBarang() {
           hargaSRP: Number(t.HARGA_SRP || t.HARGA_UNIT || 0),
           hargaGrosir: Number(t.HARGA_GROSIR || 0),
           hargaReseller: Number(t.HARGA_RESELLER || 0),
+
+          // ✅ TAMBAHAN DATA BANDLING
+          IS_BANDLING: t.IS_BANDLING || false,
+          TIPE_BANDLING: t.TIPE_BANDLING || "",
+
+          NAMA_BANDLING_1: t.NAMA_BANDLING_1 || "",
+          HARGA_BANDLING_1: Number(t.HARGA_BANDLING_1 || 0),
+
+          NAMA_BANDLING_2: t.NAMA_BANDLING_2 || "",
+          HARGA_BANDLING_2: Number(t.HARGA_BANDLING_2 || 0),
+
+          NAMA_BANDLING_3: t.NAMA_BANDLING_3 || "",
+          HARGA_BANDLING_3: Number(t.HARGA_BANDLING_3 || 0),
         };
       }
     });
@@ -160,6 +211,16 @@ export default function MasterBarang() {
 
   // ================== TAMBAH MASTER BARANG ==================
   const submitTambah = async () => {
+    const sudahAda = allTransaksi.some(
+      (t) =>
+        t.NAMA_BRAND?.toLowerCase() === form.brand.toLowerCase() &&
+        t.NAMA_BARANG?.toLowerCase() === form.barang.toLowerCase()
+    );
+
+    if (sudahAda) {
+      return alert("❌ Barang dengan Brand & Nama ini sudah terdaftar!");
+    }
+
     if (!form.brand || !form.barang || !form.kategori) {
       alert("Lengkapi semua field wajib!");
       return;
@@ -179,10 +240,23 @@ export default function MasterBarang() {
       IS_BANDLING: form.isBandling,
       TIPE_BANDLING: form.tipeBandling,
 
+      NAMA_BANDLING_1: form.namaBandling1 || "",
+      HARGA_BANDLING_1: Number(form.hargaBandling1 || 0),
+
+      NAMA_BANDLING_2: form.namaBandling2 || "",
+      HARGA_BANDLING_2: Number(form.hargaBandling2 || 0),
+
+      NAMA_BANDLING_3: form.namaBandling3 || "",
+      HARGA_BANDLING_3: Number(form.hargaBandling3 || 0),
+
       QTY: 1,
       PAYMENT_METODE: "PEMBELIAN",
       STATUS: "Approved",
     };
+
+    const totalAfter = masterBarang.length + 1;
+    const lastPage = Math.ceil(totalAfter / itemsPerPage);
+    setCurrentPage(lastPage);
 
     await addTransaksi(1, payload);
 
@@ -221,6 +295,14 @@ export default function MasterBarang() {
         HARGA_RESELLER: Number(editData.hargaReseller || 0),
         KATEGORI_BRAND: editData.kategori,
         ...(editData.isLocked ? {} : { NAMA_BARANG: editData.barang }),
+        NAMA_BANDLING_1: editData.NAMA_BANDLING_1 || "",
+        HARGA_BANDLING_1: Number(editData.HARGA_BANDLING_1 || 0),
+
+        NAMA_BANDLING_2: editData.NAMA_BANDLING_2 || "",
+        HARGA_BANDLING_2: Number(editData.HARGA_BANDLING_2 || 0),
+
+        NAMA_BANDLING_3: editData.NAMA_BANDLING_3 || "",
+        HARGA_BANDLING_3: Number(editData.HARGA_BANDLING_3 || 0),
       });
     }
 
@@ -279,6 +361,23 @@ export default function MasterBarang() {
           </div>
         </div>
 
+        {isLoading && (
+          <div className="mb-3 text-sm text-indigo-600 font-semibold animate-pulse">
+            🔄 Sinkronisasi data dengan MASTER DATA
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 mb-3 text-xs font-semibold">
+          {Object.entries(counterKategori).map(([kat, total]) => (
+            <div
+              key={kat}
+              className="px-3 py-1 rounded-full bg-indigo-100 text-indigo-700"
+            >
+              {kat}: {total}
+            </div>
+          ))}
+        </div>
+
         {/* TABLE */}
         <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
@@ -292,7 +391,13 @@ export default function MasterBarang() {
                 <th className="p-2 border text-right">Harga SRP</th>
                 <th className="p-2 border text-right">Harga Grosir</th>
                 <th className="p-2 border text-right">Harga Reseller</th>
-                <th className="p-2 border">Bandling</th>
+                <th className="p-2 border">Nama Bandling 1</th>
+                <th className="p-2 border">Harga 1</th>
+                <th className="p-2 border">Nama Bandling 2</th>
+                <th className="p-2 border">Harga 2</th>
+                <th className="p-2 border">Nama Bandling 3</th>
+                <th className="p-2 border">Harga 3</th>
+
                 <th className="p-2 border">Aksi</th>
               </tr>
             </thead>
@@ -315,8 +420,19 @@ export default function MasterBarang() {
                   <td className="border p-2 text-right">
                     Rp {fmt(x.hargaReseller)}
                   </td>
-                  <td className="border p-2 text-center">
-                    {x.IS_BANDLING ? `Bandling ${x.TIPE_BANDLING}` : "-"}
+                  <td className="border p-2">{x.NAMA_BANDLING_1}</td>
+                  <td className="border p-2 text-right">
+                    Rp {fmt(x.HARGA_BANDLING_1)}
+                  </td>
+
+                  <td className="border p-2">{x.NAMA_BANDLING_2}</td>
+                  <td className="border p-2 text-right">
+                    Rp {fmt(x.HARGA_BANDLING_2)}
+                  </td>
+
+                  <td className="border p-2">{x.NAMA_BANDLING_3}</td>
+                  <td className="border p-2 text-right">
+                    Rp {fmt(x.HARGA_BANDLING_3)}
                   </td>
 
                   <td className="border p-2 text-center space-x-2">
@@ -385,6 +501,7 @@ export default function MasterBarang() {
             <h3 className="font-bold mb-3">Tambah Master Barang</h3>
 
             <div className="space-y-2">
+              <td className="font-bold mb-3"> TANGGAL</td>
               <input
                 type="date"
                 className="input"
@@ -393,7 +510,7 @@ export default function MasterBarang() {
                 max={TODAY}
                 readOnly
               />
-
+              <td className="font-bold mb-3"> Kategori Barang</td>
               <select
                 className="input"
                 value={form.kategori}
@@ -404,7 +521,7 @@ export default function MasterBarang() {
                   <option key={x}>{x}</option>
                 ))}
               </select>
-
+              <td className="font-bold mb-3"> Nama Brand</td>
               <input
                 list="brand-list"
                 placeholder="Nama Brand"
@@ -412,7 +529,7 @@ export default function MasterBarang() {
                 value={form.brand}
                 onChange={(e) => setForm({ ...form, brand: e.target.value })}
               />
-
+              <td className="font-bold mb-3"> Nama Barang</td>
               <input
                 placeholder="Nama Barang"
                 className="input"
@@ -424,7 +541,7 @@ export default function MasterBarang() {
                   <option key={b} value={b} />
                 ))}
               </datalist>
-
+              <td className="font-bold mb-3"> Harga SRP</td>
               <input
                 placeholder="Harga SRP"
                 type="number"
@@ -432,6 +549,7 @@ export default function MasterBarang() {
                 value={form.hargaSRP}
                 onChange={(e) => setForm({ ...form, hargaSRP: e.target.value })}
               />
+              <td className="font-bold mb-3"> Harga Grosir</td>
               <input
                 placeholder="Harga Grosir"
                 type="number"
@@ -441,6 +559,7 @@ export default function MasterBarang() {
                   setForm({ ...form, hargaGrosir: e.target.value })
                 }
               />
+              <td className="font-bold mb-3"> Harga Reseller</td>
               <input
                 placeholder="Harga Reseller"
                 type="number"
@@ -450,41 +569,71 @@ export default function MasterBarang() {
                   setForm({ ...form, hargaReseller: e.target.value })
                 }
               />
+              <td className="font-bold mb-3"> Barang Bandling </td>
             </div>
             {/* ✅ BANDLING KHUSUS SEPEDA & MOTOR */}
             {(form.kategori === "SEPEDA LISTRIK" ||
               form.kategori === "MOTOR LISTRIK") && (
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600">
-                  Barang Bandling (FREE)
-                </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                <div>
+                  <label className="text-xs">Bandling 1 (Nama)</label>
+                  <input
+                    className="input"
+                    value={form.namaBandling1}
+                    onChange={(e) =>
+                      setForm({ ...form, namaBandling1: e.target.value })
+                    }
+                  />
+                  <input
+                    type="number"
+                    className="input mt-1"
+                    placeholder="Harga Jual Bandling 1"
+                    value={form.hargaBandling1}
+                    onChange={(e) =>
+                      setForm({ ...form, hargaBandling1: e.target.value })
+                    }
+                  />
+                </div>
 
-                <select
-                  className="input"
-                  value={form.tipeBandling}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setForm((prev) => ({
-                      ...prev,
-                      isBandling: !!v,
-                      tipeBandling: v,
-                      hargaSRP: v ? 0 : prev.hargaSRP,
-                      hargaGrosir: v ? 0 : prev.hargaGrosir,
-                      hargaReseller: v ? 0 : prev.hargaReseller,
-                    }));
-                  }}
-                >
-                  <option value="">-- Tidak Bandling --</option>
-                  <option value="1">Bandling 1 (Gratis)</option>
-                  <option value="2">Bandling 2 (Gratis)</option>
-                  <option value="3">Bandling 3 (Gratis)</option>
-                </select>
+                <div>
+                  <label className="text-xs">Bandling 2 (Nama)</label>
+                  <input
+                    className="input"
+                    value={form.namaBandling2}
+                    onChange={(e) =>
+                      setForm({ ...form, namaBandling2: e.target.value })
+                    }
+                  />
+                  <input
+                    type="number"
+                    className="input mt-1"
+                    placeholder="Harga Jual Bandling 2"
+                    value={form.hargaBandling2}
+                    onChange={(e) =>
+                      setForm({ ...form, hargaBandling2: e.target.value })
+                    }
+                  />
+                </div>
 
-                {form.isBandling && (
-                  <p className="text-[11px] text-emerald-600">
-                    ✅ Harga otomatis diset Rp 0 (FREE)
-                  </p>
-                )}
+                <div>
+                  <label className="text-xs">Bandling 3 (Nama)</label>
+                  <input
+                    className="input"
+                    value={form.namaBandling3}
+                    onChange={(e) =>
+                      setForm({ ...form, namaBandling3: e.target.value })
+                    }
+                  />
+                  <input
+                    type="number"
+                    className="input mt-1"
+                    placeholder="Harga Jual Bandling 3"
+                    value={form.hargaBandling3}
+                    onChange={(e) =>
+                      setForm({ ...form, hargaBandling3: e.target.value })
+                    }
+                  />
+                </div>
               </div>
             )}
 
@@ -506,93 +655,106 @@ export default function MasterBarang() {
         </div>
       )}
 
-      {/* ================= MODAL EDIT ================= */}
-      {showEdit && editData && (
-        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
-          <div className="bg-white text-slate-800 w-full max-w-md rounded-xl p-5">
-            <h3 className="font-bold mb-3">Edit Master Barang</h3>
+     {/* ================= MODAL EDIT (LEBAR SAMPING, RESPONSIF) ================= */}
+{showEdit && editData && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="w-full max-w-5xl bg-white text-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="flex flex-col md:flex-row">
+        {/* LEFT: EDIT FORM */}
+        <div className="w-full md:w-3/5 p-6">
+          <div className="flex items-start justify-between mb-4">
+            <h3 className="text-lg font-semibold">Edit Master Barang</h3>
+            <button onClick={() => setShowEdit(false)} className="text-slate-400 hover:text-slate-700">✕</button>
+          </div>
 
-            <div className="space-y-2">
-              {/* ✅ TANGGAL SEKARANG ADA */}
-              <input
-                type="date"
-                className="input"
-                value={editData.tanggal}
-                onChange={(e) =>
-                  setEditData({ ...editData, tanggal: e.target.value })
-                }
-              />
-
-              <input
-                disabled
-                className="input bg-gray-100"
-                value={editData.brand}
-              />
-
-              <input
-                disabled={editData.isLocked}
-                className={`input ${editData.isLocked ? "bg-gray-100" : ""}`}
-                value={editData.barang}
-                onChange={(e) =>
-                  setEditData({ ...editData, barang: e.target.value })
-                }
-              />
-
-              <select
-                className="input"
-                value={editData.kategori}
-                onChange={(e) =>
-                  setEditData({ ...editData, kategori: e.target.value })
-                }
-              >
-                {KATEGORI_OPTIONS.map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </select>
-
-              <input
-                type="number"
-                className="input"
-                value={editData.hargaSRP}
-                onChange={(e) =>
-                  setEditData({ ...editData, hargaSRP: e.target.value })
-                }
-              />
-              <input
-                type="number"
-                className="input"
-                value={editData.hargaGrosir}
-                onChange={(e) =>
-                  setEditData({ ...editData, hargaGrosir: e.target.value })
-                }
-              />
-              <input
-                type="number"
-                className="input"
-                value={editData.hargaReseller}
-                onChange={(e) =>
-                  setEditData({ ...editData, hargaReseller: e.target.value })
-                }
-              />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500">Tanggal</label>
+              <input type="date" className="input mt-1" value={editData.tanggal} onChange={(e) => setEditData({ ...editData, tanggal: e.target.value })} />
             </div>
 
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                onClick={() => setShowEdit(false)}
-                className="bg-gray-400 text-white px-3 py-1 rounded"
-              >
-                Batal
-              </button>
-              <button
-                onClick={submitEdit}
-                className="bg-indigo-600 text-white px-3 py-1 rounded flex items-center"
-              >
-                <FaSave className="mr-1" /> Simpan
-              </button>
+            <div>
+              <label className="text-xs text-slate-500">Kategori</label>
+              <select className="input mt-1" value={editData.kategori} onChange={(e) => setEditData({ ...editData, kategori: e.target.value })}>
+                {KATEGORI_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-500">Nama Brand</label>
+              <input disabled className="input mt-1 bg-gray-100" value={editData.brand} />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-500">Nama Barang</label>
+              <input disabled={editData.isLocked} className={`input mt-1 ${editData.isLocked ? "bg-gray-100" : ""}`} value={editData.barang} onChange={(e) => setEditData({ ...editData, barang: e.target.value })} />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-500">Harga SRP</label>
+              <input type="number" className="input mt-1" value={editData.hargaSRP} onChange={(e) => setEditData({ ...editData, hargaSRP: e.target.value })} />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-500">Harga Grosir</label>
+              <input type="number" className="input mt-1" value={editData.hargaGrosir} onChange={(e) => setEditData({ ...editData, hargaGrosir: e.target.value })} />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-500">Harga Reseller</label>
+              <input type="number" className="input mt-1" value={editData.hargaReseller} onChange={(e) => setEditData({ ...editData, hargaReseller: e.target.value })} />
             </div>
           </div>
+
+          {/* Bandling edit — rapi di baris/kolom */}
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-slate-500">Nama Bandling 1</label>
+              <input className="input mt-1" value={editData.NAMA_BANDLING_1 || ""} onChange={(e) => setEditData({ ...editData, NAMA_BANDLING_1: e.target.value })} />
+              <label className="text-xs text-slate-500 mt-2">Harga Bandling 1</label>
+              <input type="number" className="input mt-1" value={editData.HARGA_BANDLING_1 || ""} onChange={(e) => setEditData({ ...editData, HARGA_BANDLING_1: e.target.value })} />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-500">Nama Bandling 2</label>
+              <input className="input mt-1" value={editData.NAMA_BANDLING_2 || ""} onChange={(e) => setEditData({ ...editData, NAMA_BANDLING_2: e.target.value })} />
+              <label className="text-xs text-slate-500 mt-2">Harga Bandling 2</label>
+              <input type="number" className="input mt-1" value={editData.HARGA_BANDLING_2 || ""} onChange={(e) => setEditData({ ...editData, HARGA_BANDLING_2: e.target.value })} />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-500">Nama Bandling 3</label>
+              <input className="input mt-1" value={editData.NAMA_BANDLING_3 || ""} onChange={(e) => setEditData({ ...editData, NAMA_BANDLING_3: e.target.value })} />
+              <label className="text-xs text-slate-500 mt-2">Harga Bandling 3</label>
+              <input type="number" className="input mt-1" value={editData.HARGA_BANDLING_3 || ""} onChange={(e) => setEditData({ ...editData, HARGA_BANDLING_3: e.target.value })} />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <button onClick={() => setShowEdit(false)} className="px-4 py-2 rounded-lg bg-gray-200 text-slate-700">Batal</button>
+            <button onClick={submitEdit} className="px-4 py-2 rounded-lg bg-indigo-600 text-white flex items-center">
+              <FaSave className="mr-2" /> Simpan
+            </button>
+          </div>
         </div>
-      )}
+
+        {/* RIGHT: INFO SINGKAT / NOTE */}
+        <div className="w-full md:w-2/5 p-6 bg-slate-50 border-l hidden md:block">
+          <h4 className="text-sm font-semibold text-indigo-700 mb-3">Catatan Edit</h4>
+          <p className="text-sm text-slate-600">
+            Jika produk sudah memiliki pembelian tercatat, beberapa field akan dikunci (tidak bisa diubah).
+            Perubahan harga akan diterapkan ke semua entri master barang yang relevan (realtime).
+          </p>
+
+          <div className="mt-4 text-xs text-slate-400">
+            <div>Tip: Gunakan preview untuk cek bandling sebelum menyimpan.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
 
       <style jsx>{`
         .input {

@@ -55,6 +55,10 @@ export default function MasterKaryawan() {
 
   const [showTambah, setShowTambah] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  // ✅ DETEKSI USER LOGIN & TOKO (UNTUK FILTER PIC)
+  const userLogin = JSON.parse(localStorage.getItem("user") || "{}");
+  const roleLogin = String(userLogin?.role || "").toLowerCase();
+  const tokoLogin = userLogin?.tokoBertugas || userLogin?.toko || null;
 
   /* ✅ FORM TAMBAH (DITAMBAH TOKO_BERTUGAS) */
   const [formTambah, setFormTambah] = useState({
@@ -77,22 +81,37 @@ export default function MasterKaryawan() {
     return () => unsub && unsub();
   }, []);
 
-  /* ✅ SEARCH DITAMBAH TOKO */
   const filteredList = useMemo(() => {
     const q = (search || "").toLowerCase();
+
     return (list || []).filter((x) => {
-      const nik = (x.NIK || "").toLowerCase();
-      const nama = (x.NAMA || "").toLowerCase();
-      const jabatan = (x.JABATAN || "").toLowerCase();
-      const toko = (x.TOKO_BERTUGAS || "").toLowerCase();
+      const matchText =
+        String(x.NIK || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(x.NAMA || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(x.JABATAN || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(x.TOKO_BERTUGAS || "")
+          .toLowerCase()
+          .includes(q);
+
+      // ✅ JIKA SUPERADMIN / ADMIN → TIDAK DIKUNCI
+      if (roleLogin === "superadmin" || roleLogin === "admin") {
+        return matchText;
+      }
+
+      // ✅ JIKA PIC → HANYA TOKO SENDIRI
       return (
-        nik.includes(q) ||
-        nama.includes(q) ||
-        jabatan.includes(q) ||
-        toko.includes(q)
+        matchText &&
+        String(x.TOKO_BERTUGAS || "").toUpperCase() ===
+          String(tokoLogin || "").toUpperCase()
       );
     });
-  }, [list, search]);
+  }, [list, search, roleLogin, tokoLogin]);
 
   // TOTAL GAJI (FITUR GAJI)
   const totalGaji = useMemo(
@@ -116,6 +135,26 @@ export default function MasterKaryawan() {
     XLSX.utils.book_append_sheet(wb, ws, "MASTER_KARYAWAN");
     XLSX.writeFile(wb, "MASTER_KARYAWAN.xlsx");
   };
+
+  // ✅ STATISTIK KARYAWAN PER TOKO (REALTIME)
+  const statistikPerToko = useMemo(() => {
+    const map = {};
+
+    (filteredList || []).forEach((k) => {
+      const toko = k.TOKO_BERTUGAS || "TANPA TOKO";
+      if (!map[toko]) {
+        map[toko] = {
+          jumlah: 0,
+          totalGaji: 0,
+        };
+      }
+
+      map[toko].jumlah += 1;
+      map[toko].totalGaji += Number(k.GAJI || 0);
+    });
+
+    return map;
+  }, [filteredList]);
 
   /* =================== EXPORT PDF =================== */
   const handlePDF = async () => {
@@ -304,8 +343,8 @@ export default function MasterKaryawan() {
           <div className="font-semibold text-slate-700">
             Total Gaji Seluruh Karyawan
           </div>
-          <div className="text-lg sm:text-xl font-bold text-emerald-700">
-            {fmtRupiah(totalGaji)}
+          <div className="bg-slate-100 p-3 rounded">
+            Total Gaji: <b>{fmtRupiah(totalGaji)}</b>
           </div>
         </div>
         <div className="text-[11px] text-slate-500 mt-2 sm:mt-0">
@@ -390,9 +429,9 @@ export default function MasterKaryawan() {
 
       {/* MODAL TAMBAH */}
       {showTambah && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-70">
           <div className="bg-white rounded-lg shadow-lg p-4 w-full max-w-md">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-lg">Tambah Karyawan</h3>
               <button
                 onClick={() => setShowTambah(false)}
@@ -491,6 +530,29 @@ export default function MasterKaryawan() {
                   placeholder="0"
                 />
               </div>
+            </div>
+
+            {/* ================= STATISTIK PER TOKO ================= */}
+            <div className="grid md:grid-cols-4 gap-3 p-1">
+              {Object.keys(statistikPerToko).map((toko) => (
+                <div
+                  key={toko}
+                  className="bg-gradient-to-br from-indigo-500 to-blue-500 text-white p-3 rounded-xl shadow"
+                >
+                  <div className="text-xs opacity-90">TOKO</div>
+                  <div className="font-bold text-sm">{toko}</div>
+
+                  <div className="mt-2 text-xs">
+                    Jumlah Karyawan:{" "}
+                    <b>{statistikPerToko[toko]?.jumlah || 0}</b>
+                  </div>
+
+                  <div className="text-xs">
+                    Total Gaji:{" "}
+                    <b>{fmtRupiah(statistikPerToko[toko]?.totalGaji || 0)}</b>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
@@ -597,35 +659,33 @@ export default function MasterKaryawan() {
                 </datalist>
               </div>
 
-            
-                <div className="bg-white p-4 rounded w-full max-w-md">
-                  <label className="block text-xs mb-1">Toko Bertugas</label>
-                  <select
-                    className="w-full border px-2 py-1 text-sm"
-                    value={
-                      showTambah
-                        ? formTambah.tokoBertugas
-                        : formEdit?.tokoBertugas
-                    }
-                    onChange={(e) =>
-                      showTambah
-                        ? setFormTambah((p) => ({
-                            ...p,
-                            tokoBertugas: e.target.value,
-                          }))
-                        : setFormEdit((p) => ({
-                            ...p,
-                            tokoBertugas: e.target.value,
-                          }))
-                    }
-                  >
-                    <option value="">Pilih Toko</option>
-                    {TOKO_OPTIONS.map((t) => (
-                      <option key={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-           
+              <div className="bg-white p-4 rounded w-full max-w-md">
+                <label className="block text-xs mb-1">Toko Bertugas</label>
+                <select
+                  className="w-full border px-2 py-1 text-sm"
+                  value={
+                    showTambah
+                      ? formTambah.tokoBertugas
+                      : formEdit?.tokoBertugas
+                  }
+                  onChange={(e) =>
+                    showTambah
+                      ? setFormTambah((p) => ({
+                          ...p,
+                          tokoBertugas: e.target.value,
+                        }))
+                      : setFormEdit((p) => ({
+                          ...p,
+                          tokoBertugas: e.target.value,
+                        }))
+                  }
+                >
+                  <option value="">Pilih Toko</option>
+                  {TOKO_OPTIONS.map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
 
               <div>
                 <label className="block mb-1 text-gray-700 text-xs">
@@ -645,10 +705,6 @@ export default function MasterKaryawan() {
                 />
               </div>
             </div>
-
-         
-            
-     
 
             <div className="mt-4 flex justify-end gap-2">
               <button
