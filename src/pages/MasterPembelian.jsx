@@ -115,6 +115,7 @@ export default function MasterPembelian() {
     tanggal: TODAY,
     noDo: "",
     supplier: "",
+    namaToko: "",
     brand: "",
     kategoriBrand: "",
     barang: "",
@@ -251,11 +252,12 @@ export default function MasterPembelian() {
       const tanggal = t.TANGGAL_TRANSAKSI || "";
       const noDo = t.NO_INVOICE || "";
       const supplier = t.NAMA_SUPPLIER || "";
+      const namaToko = t.NAMA_TOKO || "";
       const brand = t.NAMA_BRAND || "";
       const barang = t.NAMA_BARANG || "";
       const kategoriBrand = t.KATEGORI_BRAND || "";
 
-      const key = `${tanggal}|${noDo}|${supplier}|${brand}|${barang}`;
+      const key = `${tanggal}|${noDo}|${supplier}|${namaToko}|${brand}|${barang}`;
 
       if (!map[key]) {
         map[key] = {
@@ -263,6 +265,7 @@ export default function MasterPembelian() {
           tanggal,
           noDo,
           supplier,
+          namaToko,
           brand,
           barang,
           kategoriBrand,
@@ -801,6 +804,7 @@ export default function MasterPembelian() {
         tanggal: new Date().toISOString().slice(0, 10),
         noDo: "",
         supplier: "",
+        namaToko: "",
         brand: "",
         kategoriBrand: "",
         barang: "",
@@ -840,6 +844,7 @@ export default function MasterPembelian() {
           Tanggal: r.tanggal,
           "No Delivery Order": r.noDo,
           Supplier: r.supplier,
+          "Nama Toko": r.namaToko,
           "Nama Brand": r.brand,
           "Kategori Brand": r.kategoriBrand,
           "Nama Barang": r.barang,
@@ -855,6 +860,7 @@ export default function MasterPembelian() {
             Tanggal: r.tanggal,
             "No Delivery Order": r.noDo,
             Supplier: r.supplier,
+            "Nama Toko": r.namaToko,
             "Nama Brand": r.brand,
             "Kategori Brand": r.kategoriBrand,
             "Nama Barang": r.barang,
@@ -875,6 +881,7 @@ export default function MasterPembelian() {
       "Tanggal",
       "No Delivery Order",
       "Supplier",
+      "Nama Toko",
       "Nama Brand",
       "Kategori Brand",
       "Nama Barang",
@@ -1015,6 +1022,7 @@ export default function MasterPembelian() {
                   <th className="border p-2">Tanggal</th>
                   <th className="border p-2">No Delivery Order</th>
                   <th className="border p-2">Nama Supplier</th>
+                  <th className="border p-2">Nama Toko</th>
                   <th className="border p-2">Nama Brand</th>
                   <th className="border p-2">Kategori Brand</th>
                   <th className="border p-2">Nama Barang</th>
@@ -1066,6 +1074,7 @@ export default function MasterPembelian() {
                         <td className="border p-2">{item.tanggal}</td>
                         <td className="border p-2">{item.noDo}</td>
                         <td className="border p-2">{item.supplier}</td>
+                        <td className="border p-2">{item.namaToko || "-"}</td>
                         <td className="border p-2">{item.brand}</td>
                         <td className="border p-2">
                           {item.kategoriBrand || "-"}
@@ -1229,22 +1238,27 @@ export default function MasterPembelian() {
                 />
               </div>
 
-              <select
-                className="input"
-                value={tokoTujuan}
-                onChange={(e) => setTokoTujuan(e.target.value)}
-              >
-                <option>CILANGKAP PUSAT</option>
-                <option>CIBINONG</option>
-                <option>GAS ALAM</option>
-                <option>CITEUREUP</option>
-                <option>CIRACAS</option>
-                <option>METLAND 1</option>
-                <option>METLAND 2</option>
-                <option>PITARA</option>
-                <option>KOTA WISATA</option>
-                <option>SAWANGAN</option>
-              </select>
+              <div>
+                <label className="text-xs font-semibold text-slate-600">
+                  Nama Toko
+                </label>
+                <select
+                  className="input"
+                  value={tokoTujuan}
+                  onChange={(e) => setTokoTujuan(e.target.value)}
+                >
+                  <option>CILANGKAP PUSAT</option>
+                  <option>CIBINONG</option>
+                  <option>GAS ALAM</option>
+                  <option>CITEUREUP</option>
+                  <option>CIRACAS</option>
+                  <option>METLAND 1</option>
+                  <option>METLAND 2</option>
+                  <option>PITARA</option>
+                  <option>KOTA WISATA</option>
+                  <option>SAWANGAN</option>
+                </select>
+              </div>
 
               {/* Supplier */}
               <div>
@@ -1566,6 +1580,25 @@ export default function MasterPembelian() {
                     setEditData((p) => ({ ...p, supplier: e.target.value }))
                   }
                 />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-600">
+                  Nama Toko
+                </label>
+                <input
+                  list="toko-list"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
+                  value={editData.namaToko}
+                  onChange={(e) =>
+                    setEditData((p) => ({ ...p, namaToko: e.target.value }))
+                  }
+                />
+                <datalist id="toko-list">
+                  {TOKO_LIST.map((toko) => (
+                    <option key={toko} value={toko} />
+                  ))}
+                </datalist>
               </div>
 
               {/* Brand */}

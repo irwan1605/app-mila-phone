@@ -1033,6 +1033,32 @@ const createMasterHelpers = (masterName) => {
   };
 };
 
+// ===========================
+// LISTENER REALTIME MASTER BARANG
+// ===========================
+export const listenMasterBarang = (callback) => {
+  const r = ref(db, "dataManagement/masterBarang");
+
+  const unsub = onValue(
+    r,
+    (snap) => {
+      const raw = snap.val() || {};
+      const arr = Object.entries(raw).map(([id, item]) => ({
+        id,
+        ...item,
+      }));
+      callback(arr);
+    },
+    (err) => {
+      console.error("listenMasterBarang error:", err);
+      callback([]);
+    }
+  );
+
+  return () => unsub && unsub();
+};
+
+
 
 
 
