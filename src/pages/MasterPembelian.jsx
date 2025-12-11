@@ -1,6 +1,4 @@
-// =======================
-// MasterPembelian.jsx - FINAL
-// =======================
+// MasterPembelian.jsx — fixed addStock signature (ensure sku passed)
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   listenAllTransaksi,
@@ -26,9 +24,8 @@ import {
   FaTimes,
 } from "react-icons/fa";
 
-// =======================
-// KONFIGURASI
-// =======================
+// (omitting repeated comments for brevity in this preview)
+
 const KATEGORI_OPTIONS = [
   "SEPEDA LISTRIK",
   "MOTOR LISTRIK",
@@ -36,9 +33,6 @@ const KATEGORI_OPTIONS = [
   "ACCESORIES",
 ];
 
-// =======================
-// ✅ DAFTAR TOKO (WAJIB UNTUK KIRIM KE CABANG)
-// =======================
 const TOKO_LIST = [
   "CILANGKAP PUSAT",
   "CIBINONG",
@@ -82,12 +76,8 @@ const fmt = (n) => {
 const makeSku = (brand, barang) =>
   `${(brand || "").trim()}_${(barang || "").trim()}`.replace(/\s+/g, "_");
 
-// =======================
-// AUTO GENERATE NO DO (INV-YYYYMMDD-0001)
-// =======================
 const generateNoDo = (allTransaksi, tanggal) => {
-  const tgl = (tanggal || "").replaceAll("-", ""); // YYYYMMDD
-
+  const tgl = (tanggal || "").replaceAll("-", "");
   const todayInv = (allTransaksi || []).filter(
     (t) =>
       String(t.NO_INVOICE || "").startsWith(`INV-${tgl}`) &&
@@ -110,18 +100,12 @@ const generateNoDo = (allTransaksi, tanggal) => {
   return `INV-${tgl}-${next}`;
 };
 
-// =======================
-// KOMPONEN UTAMA
-// =======================
 export default function MasterPembelian() {
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [search, setSearch] = useState("");
-
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-
   const tableRef = useRef(null);
-
   const [showTambah, setShowTambah] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const TODAY = new Date().toISOString().slice(0, 10);
@@ -131,17 +115,22 @@ export default function MasterPembelian() {
     tanggal: TODAY,
     noDo: "",
     supplier: "",
-    brand: "", // ✅ Nama Brand
+    brand: "",
     kategoriBrand: "",
-    barang: "", // ✅ Nama Barang
+    barang: "",
     hargaSup: "",
     imeiList: "",
     qty: 1,
+    namaBandling1: "",
+    hargaBandling1: 0,
+    namaBandling2: "",
+    hargaBandling2: 0,
+    namaBandling3: "",
+    hargaBandling3: 0,
   });
 
   const [editData, setEditData] = useState(null);
 
-  // ======================= REALTIME FIREBASE =======================
   useEffect(() => {
     const unsub =
       typeof listenAllTransaksi === "function"
@@ -156,14 +145,10 @@ export default function MasterPembelian() {
   useEffect(() => {
     if (showTambah && tambahForm.tanggal) {
       const autoNo = generateNoDo(allTransaksi, tambahForm.tanggal);
-      setTambahForm((prev) => ({
-        ...prev,
-        noDo: autoNo,
-      }));
+      setTambahForm((prev) => ({ ...prev, noDo: autoNo }));
     }
   }, [showTambah, tambahForm.tanggal, allTransaksi]);
 
-  // ======================= MASTER BARANG SOURCE (Brand / Barang / Kategori) =======================
   const masterBarangList = useMemo(() => {
     const map = {};
     (allTransaksi || []).forEach((t) => {
@@ -174,17 +159,12 @@ export default function MasterPembelian() {
           brand: t.NAMA_BRAND,
           barang: t.NAMA_BARANG,
           kategoriBrand: t.KATEGORI_BRAND || "",
-
-          // Tambahan sinkron bandling
           NAMA_BANDLING_1: t.NAMA_BANDLING_1 || "",
           HARGA_BANDLING_1: Number(t.HARGA_BANDLING_1 || 0),
-
           NAMA_BANDLING_2: t.NAMA_BANDLING_2 || "",
           HARGA_BANDLING_2: Number(t.HARGA_BANDLING_2 || 0),
-
           NAMA_BANDLING_3: t.NAMA_BANDLING_3 || "",
           HARGA_BANDLING_3: Number(t.HARGA_BANDLING_3 || 0),
-
           IS_BANDLING: t.IS_BANDLING || false,
           TIPE_BANDLING: t.TIPE_BANDLING || "",
         };
@@ -199,10 +179,23 @@ export default function MasterPembelian() {
     );
   }, [masterBarangList, tambahForm.brand, tambahForm.barang]);
 
+  useEffect(() => {
+    if (!selectedMasterBarang) return;
+
+    setTambahForm((prev) => ({
+      ...prev,
+      namaBandling1: selectedMasterBarang.NAMA_BANDLING_1 || "",
+      hargaBandling1: Number(selectedMasterBarang.HARGA_BANDLING_1 || 0),
+      namaBandling2: selectedMasterBarang.NAMA_BANDLING_2 || "",
+      hargaBandling2: Number(selectedMasterBarang.HARGA_BANDLING_2 || 0),
+      namaBandling3: selectedMasterBarang.NAMA_BANDLING_3 || "",
+      hargaBandling3: Number(selectedMasterBarang.HARGA_BANDLING_3 || 0),
+    }));
+  }, [selectedMasterBarang]);
+
   const isBandlingItem = selectedMasterBarang?.IS_BANDLING === true;
   const tipeBandling = selectedMasterBarang?.TIPE_BANDLING || "";
 
-  /* ======================= SUPPLIER OPTIONS (AMANKAN DARI MASTER BARANG) ======================= */
   const supplierOptions = useMemo(
     () =>
       Array.from(
@@ -220,7 +213,6 @@ export default function MasterPembelian() {
     [allTransaksi]
   );
 
-  // Brand: gabungan BRAND_OPTIONS + brand dari masterBarangList
   const brandOptionsDynamic = useMemo(() => {
     const set = new Set(BRAND_OPTIONS);
     masterBarangList.forEach((x) => {
@@ -229,7 +221,6 @@ export default function MasterPembelian() {
     return Array.from(set);
   }, [masterBarangList]);
 
-  // Nama Barang: dari MasterBarang, bisa difilter by Brand
   const namaBarangOptions = useMemo(() => {
     if (!tambahForm.brand) {
       return Array.from(
@@ -246,7 +237,6 @@ export default function MasterPembelian() {
     );
   }, [masterBarangList, tambahForm.brand]);
 
-  // ======================= GROUP DATA PEMBELIAN UNTUK TABEL =======================
   const groupedPembelian = useMemo(() => {
     const map = {};
 
@@ -277,6 +267,12 @@ export default function MasterPembelian() {
           barang,
           kategoriBrand,
           hargaSup: Number(t.HARGA_SUPLAYER || 0),
+          namaBandling1: t.NAMA_BANDLING_1 || "",
+          hargaBandling1: Number(t.HARGA_BANDLING_1 || 0),
+          namaBandling2: t.NAMA_BANDLING_2 || "",
+          hargaBandling2: Number(t.HARGA_BANDLING_2 || 0),
+          namaBandling3: t.NAMA_BANDLING_3 || "",
+          hargaBandling3: Number(t.HARGA_BANDLING_3 || 0),
           imeis: [],
           totalQty: 0,
           totalHargaSup: 0,
@@ -284,8 +280,6 @@ export default function MasterPembelian() {
       }
 
       const qty = Number(t.QTY || 0);
-
-      // ✅ AMBIL LANGSUNG DARI DATA TRANSAKSI
       const hSup = Number(t.HARGA_SUPLAYER || 0);
 
       map[key].totalQty += qty;
@@ -304,7 +298,6 @@ export default function MasterPembelian() {
     });
   }, [allTransaksi]);
 
-  // ======================= FILTER & PAGINATION =======================
   const filteredPurchases = useMemo(() => {
     const q = String(search || "").toLowerCase();
     if (!q) return groupedPembelian;
@@ -346,7 +339,6 @@ export default function MasterPembelian() {
     return filteredPurchases.slice(start, start + itemsPerPage);
   }, [filteredPurchases, currentPage]);
 
-  // ======================= VALIDASI IMEI =======================
   const validateImeisNew = (imeiLines) => {
     const errors = [];
     const seen = new Set();
@@ -415,7 +407,6 @@ export default function MasterPembelian() {
     return errors;
   };
 
-  // ======================= HAPUS PEMBELIAN (DELETE + REDUCE STOCK) =======================
   const deletePembelian = async (item) => {
     if (
       !window.confirm(
@@ -459,7 +450,6 @@ export default function MasterPembelian() {
     }
   };
 
-  // ======================= OPEN EDIT =======================
   const openEdit = (item) => {
     setEditData({
       ...item,
@@ -472,7 +462,6 @@ export default function MasterPembelian() {
     setShowEdit(true);
   };
 
-  // ======================= SAVE EDIT =======================
   const saveEdit = async () => {
     if (!editData) return;
 
@@ -480,6 +469,7 @@ export default function MasterPembelian() {
     const isAccessories = editData.kategoriBrand === "ACCESORIES";
 
     let imeis = [];
+
     if (isKategoriImei) {
       imeis = String(editData.imeiList || "")
         .split("\n")
@@ -487,7 +477,7 @@ export default function MasterPembelian() {
         .filter(Boolean);
 
       if (imeis.length <= 0) {
-        alert("Silahkan isi Nomor IMEI Terlebih dahulu");
+        alert("Silahkan isi IMEI terlebih dahulu.");
         return;
       }
 
@@ -506,55 +496,80 @@ export default function MasterPembelian() {
       return k === editData.originalKey;
     });
 
-    if (rows.length === 0) {
-      alert("Data transaksi untuk pembelian ini tidak ditemukan.");
+    if (!rows.length) {
+      alert("Data pembelian tidak ditemukan.");
       return;
     }
 
-    try {
+    const originalQty = rows.length;
+    const newQty = imeis.length;
+    const sku = makeSku(editData.brand, editData.barang);
+
+    // QTY BERKURANG
+    if (newQty < originalQty) {
+      const toDelete = originalQty - newQty;
+
+      for (let i = 0; i < toDelete; i++) {
+        const r = rows[rows.length - 1 - i];
+        await deleteTransaksi(r.tokoId || 1, r.id);
+      }
+
+      await reduceStock(editData.namaToko || "CILANGKAP PUSAT", sku, toDelete);
+    }
+
+    // QTY BERTAMBAH
+    if (newQty > originalQty) {
+      const toAdd = newQty - originalQty;
+
+      for (let i = 0; i < toAdd; i++) {
+        const newImei = imeis[originalQty + i];
+
+        await addTransaksi(1, {
+          PAYMENT_METODE: "PEMBELIAN",
+          TANGGAL_TRANSAKSI: editData.tanggal,
+          NO_INVOICE: editData.noDo,
+          NAMA_SUPPLIER: editData.supplier,
+          NAMA_BRAND: editData.brand,
+          NAMA_BARANG: editData.barang,
+          KATEGORI_BRAND: editData.kategoriBrand,
+          QTY: 1,
+          IMEI: newImei,
+          HARGA_SUPLAYER: Number(editData.hargaSup),
+          TOTAL: Number(editData.hargaSup),
+          NAMA_TOKO: editData.namaToko || "CILANGKAP PUSAT",
+        });
+      }
+
+      await addStock(editData.namaToko || "CILANGKAP PUSAT", sku, {
+        brand: editData.brand,
+        barang: editData.barang,
+        qty: newQty - originalQty,
+      });
+    }
+
+    // QTY SAMA → update transaksi IMEI
+    if (newQty === originalQty) {
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
-        const tokoId = r.tokoId || 1;
-
-        let newIMEI = r.IMEI || "";
-        if (isKategoriImei) {
-          if (imeis.length === rows.length) {
-            newIMEI = imeis[i] || "";
-          } else if (imeis.length === 1) {
-            newIMEI = imeis[0];
-          }
-        } else if (isAccessories) {
-          newIMEI = "";
-        }
-
-        const payload = {
+        await updateTransaksi(r.tokoId || 1, r.id, {
           ...r,
           TANGGAL_TRANSAKSI: editData.tanggal,
           NO_INVOICE: editData.noDo,
           NAMA_SUPPLIER: editData.supplier,
-          NAMA_BRAND: editData.brand, // ✅ Brand bener
-          NAMA_BARANG: editData.barang, // ✅ Barang bener
+          NAMA_BRAND: editData.brand,
+          NAMA_BARANG: editData.barang,
           KATEGORI_BRAND: editData.kategoriBrand,
-          HARGA_SUPLAYER: Number(editData.hargaSup || 0),
-          TOTAL: Number(r.QTY || 0) * Number(editData.hargaSup || 0),
-          IMEI: newIMEI,
-          NAMA_TOKO: "CILANGKAP PUSAT",
-        };
-
-        if (r.id && typeof updateTransaksi === "function") {
-          await updateTransaksi(tokoId, r.id, payload);
-        }
+          HARGA_SUPLAYER: Number(editData.hargaSup),
+          TOTAL: Number(editData.hargaSup),
+          IMEI: imeis[i],
+        });
       }
-
-      alert("✅ Perubahan pembelian berhasil disimpan.");
-      setShowEdit(false);
-    } catch (err) {
-      console.error("saveEdit error:", err);
-      alert("❌ Gagal menyimpan perubahan.");
     }
+
+    alert("✅ Edit pembelian berhasil disimpan & stok sinkron realtime.");
+    setShowEdit(false);
   };
 
-  // ======================= HANDLE FORM TAMBAH (AUTO QTY) =======================
   const handleTambahChange = (key, value) => {
     setTambahForm((prev) => {
       const next = { ...prev, [key]: value };
@@ -578,7 +593,6 @@ export default function MasterPembelian() {
     });
   };
 
-  // ======================= SUBMIT TAMBAH (INSERT TRANSAKSI + MASTER BARANG + STOCK) =======================
   const submitTambah = async () => {
     const {
       tanggal,
@@ -661,9 +675,6 @@ export default function MasterPembelian() {
 
     try {
       if (isKategoriImei) {
-        // =======================
-        // KATEGORI WAJIB IMEI
-        // =======================
         for (const im of imeis) {
           const payload = {
             TANGGAL_TRANSAKSI: tanggal,
@@ -680,6 +691,13 @@ export default function MasterPembelian() {
             HARGA_SUPLAYER: hSup,
             HARGA_UNIT: hSup,
             TOTAL: hSup,
+            NAMA_BANDLING_1: tambahForm.namaBandling1,
+            HARGA_BANDLING_1: Number(tambahForm.hargaBandling1),
+            NAMA_BANDLING_2: tambahForm.namaBandling2,
+            HARGA_BANDLING_2: Number(tambahForm.hargaBandling2),
+            NAMA_BANDLING_3: tambahForm.namaBandling3,
+            HARGA_BANDLING_3: Number(tambahForm.hargaBandling3),
+            HARGA_BANDLING_DIPAKAI: hargaBandlingDipakai,
             PAYMENT_METODE: "PEMBELIAN",
             SYSTEM_PAYMENT: "SYSTEM",
             KETERANGAN: "Pembelian",
@@ -688,9 +706,6 @@ export default function MasterPembelian() {
           await addTransaksi(tokoId, payload);
         }
       } else {
-        // =======================
-        // NON IMEI → OVERWRITE DATA LAMA
-        // =======================
         const sama = (allTransaksi || []).filter(
           (t) =>
             (t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
@@ -701,7 +716,6 @@ export default function MasterPembelian() {
             t.NO_INVOICE === noDo
         );
 
-        // Hapus data lama yang sama (barang + supplier + DO + tanpa IMEI)
         for (const s of sama) {
           const tId = s.tokoId || 1;
           if (s.id) {
@@ -709,7 +723,6 @@ export default function MasterPembelian() {
           }
         }
 
-        // Input data baru (overwrite)
         const payload = {
           TANGGAL_TRANSAKSI: tanggal,
           NO_INVOICE: noDo,
@@ -727,6 +740,12 @@ export default function MasterPembelian() {
           TOTAL: hSup * finalQty,
           PAYMENT_METODE: "PEMBELIAN",
           SYSTEM_PAYMENT: "SYSTEM",
+          NAMA_BANDLING_1: tambahForm.namaBandling1,
+          HARGA_BANDLING_1: Number(tambahForm.hargaBandling1),
+          NAMA_BANDLING_2: tambahForm.namaBandling2,
+          HARGA_BANDLING_2: Number(tambahForm.hargaBandling2),
+          NAMA_BANDLING_3: tambahForm.namaBandling3,
+          HARGA_BANDLING_3: Number(tambahForm.hargaBandling3),
           KETERANGAN: "Pembelian (Overwrite)",
           STATUS: "Approved",
         };
@@ -734,6 +753,7 @@ export default function MasterPembelian() {
         await addTransaksi(tokoId, payload);
       }
 
+      // Simpan stok di CILANGKAP PUSAT menggunakan SKU
       await addStock("CILANGKAP PUSAT", sku, {
         namaBrand: brand,
         namaBarang: barang,
@@ -741,20 +761,16 @@ export default function MasterPembelian() {
         qty: finalQty,
       });
 
-      // === AUTO UPDATE STOK TOKO ===
+      // AUTO UPDATE STOK TOKO → PASS SKU (fix)
       if (tokoTujuan) {
-        await addStock(tokoTujuan, {
+        await addStock(tokoTujuan, sku, {
           brand: tambahForm.brand,
           barang: tambahForm.barang,
           qty: Number(tambahForm.qty || 1),
-
-          // Simpan bandling juga supaya terbaca inventory
           NAMA_BANDLING_1: selectedMasterBarang?.NAMA_BANDLING_1 || "",
           HARGA_BANDLING_1: selectedMasterBarang?.HARGA_BANDLING_1 || 0,
-
           NAMA_BANDLING_2: selectedMasterBarang?.NAMA_BANDLING_2 || "",
           HARGA_BANDLING_2: selectedMasterBarang?.HARGA_BANDLING_2 || 0,
-
           NAMA_BANDLING_3: selectedMasterBarang?.NAMA_BANDLING_3 || "",
           HARGA_BANDLING_3: selectedMasterBarang?.HARGA_BANDLING_3 || 0,
         });
@@ -764,9 +780,6 @@ export default function MasterPembelian() {
         "✅ Pembelian berhasil disimpan.\n• Data masuk MASTER PEMBELIAN\n• Otomatis masuk MASTER BARANG\n• Stok CILANGKAP PUSAT bertambah."
       );
 
-      // =======================
-      // ✅ AUTO MASUK STOCK ACCESORIES JIKA BANDLING
-      // =======================
       if (isBandlingItem) {
         const skuBandling = `BANDLING-${tipeBandling}`;
 
@@ -801,37 +814,108 @@ export default function MasterPembelian() {
     }
   };
 
-  // =======================
-  // PART 1 SELESAI
-  // LANJUTAN: PART 2 (UI JSX: TABEL, MODAL, EXPORT EXCEL/PDF, DLL)
-  // =======================
-  // ======================= EXPORT EXCEL =======================
-  const groupedPurchases = groupedPembelian; // ✅ alias agar nama konsisten
+  const groupedPurchases = groupedPembelian;
 
+  // ------------------------
+  // exportExcel (FINAL FIX)
+  // ------------------------
+  // ------------------------
+  // exportExcel (FINAL FIX - per-IMEI rows, Qty/Harga/Total konsisten)
+  // ------------------------
   const exportExcel = () => {
-    const rows = groupedPurchases.map((r) => ({
-      Tanggal: r.tanggal,
-      "No Delivery Order": r.noDo,
-      Supplier: r.supplier,
-      "Nama Brand": r.brand,
-      "Kategori Brand": r.kategoriBrand,
-      "Nama Barang": r.barang,
-      IMEI: (r.imeis || []).join(", "),
-      "Harga Supplier (Satuan)": r.hargaSup || 0,
-      Qty: r.totalQty || 0,
-      "Total Harga Supplier": r.totalHargaSup || 0,
-    }));
+    const expandedRows = [];
 
-    const ws = XLSX.utils.json_to_sheet(rows);
+    groupedPurchases.forEach((r) => {
+      const hargaSatuan = Number(r.hargaSup || 0);
+      const totalQty = Number(r.totalQty || 0);
+      const totalHargaGroup = Number(r.totalHargaSup || 0);
+
+      const imeiList = (r.imeis || [])
+        .map((x) => (x || "").toString().trim())
+        .filter(Boolean);
+
+      if (imeiList.length === 0) {
+        // no IMEI: single row representing the whole purchase (bulk)
+        expandedRows.push({
+          Tanggal: r.tanggal,
+          "No Delivery Order": r.noDo,
+          Supplier: r.supplier,
+          "Nama Brand": r.brand,
+          "Kategori Brand": r.kategoriBrand,
+          "Nama Barang": r.barang,
+          "No IMEI": "",
+          "Harga Supplier (Satuan)": hargaSatuan || "",
+          Qty: totalQty || "",
+          "Total Harga Supplier": totalHargaGroup || "",
+        });
+      } else {
+        // Has IMEIs: create one row per IMEI, each with qty=1 and harga satuan
+        imeiList.forEach((imei) => {
+          expandedRows.push({
+            Tanggal: r.tanggal,
+            "No Delivery Order": r.noDo,
+            Supplier: r.supplier,
+            "Nama Brand": r.brand,
+            "Kategori Brand": r.kategoriBrand,
+            "Nama Barang": r.barang,
+            "No IMEI": imei,
+            "Harga Supplier (Satuan)": hargaSatuan || "",
+            Qty: 1,
+            "Total Harga Supplier": hargaSatuan || "",
+          });
+        });
+      }
+    });
+
+    // create sheet from expanded rows
+    const ws = XLSX.utils.json_to_sheet(expandedRows, { skipHeader: false });
+
+    // ensure header order we want:
+    const headerOrder = [
+      "Tanggal",
+      "No Delivery Order",
+      "Supplier",
+      "Nama Brand",
+      "Kategori Brand",
+      "Nama Barang",
+      "No IMEI",
+      "Harga Supplier (Satuan)",
+      "Qty",
+      "Total Harga Supplier",
+    ];
+    XLSX.utils.sheet_add_aoa(ws, [headerOrder], { origin: "A1" });
+    XLSX.utils.sheet_add_json(ws, expandedRows, {
+      origin: "A2",
+      skipHeader: true,
+    });
+
+    // set column widths for readability
+    ws["!cols"] = [
+      { width: 15 }, // Tanggal
+      { width: 20 }, // No DO
+      { width: 25 }, // Supplier
+      { width: 20 }, // Nama Brand
+      { width: 18 }, // Kategori
+      { width: 26 }, // Nama Barang
+      { width: 36 }, // No IMEI (buat lebar agar rapi)
+      { width: 20 }, // Harga Supplier (Satuan)
+      { width: 8 }, // Qty
+      { width: 22 }, // Total Harga Supplier
+    ];
+
+    // row height (opsional) agar tampilan lebih rapih
+    ws["!rows"] = expandedRows.map(() => ({ hpt: 18 }));
+
+    // build workbook and write file
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "MasterPembelian");
-    XLSX.writeFile(
-      wb,
-      `MasterPembelian_${new Date().toISOString().slice(0, 10)}.xlsx`
-    );
+
+    const filename = `MasterPembelian_${new Date()
+      .toISOString()
+      .slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, filename);
   };
 
-  // ======================= EXPORT PDF =======================
   const exportPDF = async () => {
     const el = tableRef.current;
     if (!el) {
@@ -935,6 +1019,13 @@ export default function MasterPembelian() {
                   <th className="border p-2">Kategori Brand</th>
                   <th className="border p-2">Nama Barang</th>
                   <th className="border p-2">IMEI / No Mesin</th>
+                  <th className="border p-2">Bandling 1</th>
+                  <th className="border p-2">Harga</th>
+                  <th className="border p-2">Bandling 2</th>
+                  <th className="border p-2">Harga</th>
+                  <th className="border p-2">Bandling 3</th>
+                  <th className="border p-2">Harga</th>
+
                   <th className="border p-2 text-right">
                     Harga Supplier (Satuan)
                   </th>
@@ -981,21 +1072,46 @@ export default function MasterPembelian() {
                         </td>
                         <td className="border p-2">{item.barang}</td>
                         <td className="border p-2 whitespace-pre-wrap font-mono text-[11px]">
-                          {shownImeis.length > 0 ? (
-                            shownImeis.join("\n")
-                          ) : (
-                            <span className="text-slate-400">-</span>
-                          )}
+                          {shownImeis.length ? shownImeis.join("\n") : "-"}
                         </td>
+
+                        {/* === BANDLING 1 === */}
+                        <td className="border p-2">
+                          {item.namaBandling1 || "-"}
+                        </td>
+                        <td className="border p-2 text-right">
+                          {fmt(item.hargaBandling1 || 0)}
+                        </td>
+
+                        {/* === BANDLING 2 === */}
+                        <td className="border p-2">
+                          {item.namaBandling2 || "-"}
+                        </td>
+                        <td className="border p-2 text-right">
+                          {fmt(item.hargaBandling2 || 0)}
+                        </td>
+
+                        {/* === BANDLING 3 === */}
+                        <td className="border p-2">
+                          {item.namaBandling3 || "-"}
+                        </td>
+                        <td className="border p-2 text-right">
+                          {fmt(item.hargaBandling3 || 0)}
+                        </td>
+
+                        {/* === HARGA SUPPLIER === */}
                         <td className="border p-2 text-right">
                           Rp {fmt(item.hargaSup)}
                         </td>
-                        <td className="border p-2 text-center font-semibold">
+
+                        <td className="border p-2 text-center">
                           {item.totalQty}
                         </td>
+
                         <td className="border p-2 text-right">
                           Rp {fmt(item.totalHargaSup)}
                         </td>
+
                         <td className="border p-2 text-center space-x-2">
                           <button
                             className="inline-flex items-center justify-center p-[6px] rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
@@ -1255,43 +1371,6 @@ export default function MasterPembelian() {
               </div>
             </div>
 
-            {(tambahForm.kategoriBrand === "SEPEDA LISTRIK" ||
-              tambahForm.kategoriBrand === "MOTOR LISTRIK") &&
-              selectedMasterBarang?.IS_BANDLING && (
-                <div className="mt-3 p-3 border rounded-lg bg-slate-50">
-                  <h4 className="font-semibold text-sm mb-2">
-                    Bandling Barang
-                  </h4>
-
-                  {selectedMasterBarang?.NAMA_BANDLING_1 && (
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>{selectedMasterBarang.NAMA_BANDLING_1}</span>
-                      <span>
-                        Rp {fmt(selectedMasterBarang.HARGA_BANDLING_1)}
-                      </span>
-                    </div>
-                  )}
-
-                  {selectedMasterBarang?.NAMA_BANDLING_2 && (
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>{selectedMasterBarang.NAMA_BANDLING_2}</span>
-                      <span>
-                        Rp {fmt(selectedMasterBarang.HARGA_BANDLING_2)}
-                      </span>
-                    </div>
-                  )}
-
-                  {selectedMasterBarang?.NAMA_BANDLING_3 && (
-                    <div className="flex justify-between text-sm">
-                      <span>{selectedMasterBarang.NAMA_BANDLING_3}</span>
-                      <span>
-                        Rp {fmt(selectedMasterBarang.HARGA_BANDLING_3)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
             {/* IMEI hanya jika bukan ACCESORIES */}
             {tambahForm.kategoriBrand !== "ACCESORIES" && (
               <div className="mt-3">
@@ -1314,7 +1393,101 @@ export default function MasterPembelian() {
               </div>
             )}
 
-  
+            {/* ================== BANDLING SECTION ================== */}
+
+            <h4 className="mt-3 font-bold text-blue-600">Bandling Produk</h4>
+
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <div>
+                <label>Nama Bandling 1</label>
+                <input
+                  type="text"
+                  value={tambahForm.namaBandling1}
+                  onChange={(e) =>
+                    setTambahForm((p) => ({
+                      ...p,
+                      namaBandling1: e.target.value,
+                    }))
+                  }
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label>Harga Bandling 1</label>
+                <input
+                  type="number"
+                  value={tambahForm.hargaBandling1}
+                  onChange={(e) =>
+                    setTambahForm((p) => ({
+                      ...p,
+                      hargaBandling1: e.target.value,
+                    }))
+                  }
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label>Nama Bandling 2</label>
+                <input
+                  type="text"
+                  value={tambahForm.namaBandling2}
+                  onChange={(e) =>
+                    setTambahForm((p) => ({
+                      ...p,
+                      namaBandling2: e.target.value,
+                    }))
+                  }
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label>Harga Bandling 2</label>
+                <input
+                  type="number"
+                  value={tambahForm.hargaBandling2}
+                  onChange={(e) =>
+                    setTambahForm((p) => ({
+                      ...p,
+                      hargaBandling2: e.target.value,
+                    }))
+                  }
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label>Nama Bandling 3</label>
+                <input
+                  type="text"
+                  value={tambahForm.namaBandling3}
+                  onChange={(e) =>
+                    setTambahForm((p) => ({
+                      ...p,
+                      namaBandling3: e.target.value,
+                    }))
+                  }
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label>Harga Bandling 3</label>
+                <input
+                  type="number"
+                  value={tambahForm.hargaBandling3}
+                  onChange={(e) =>
+                    setTambahForm((p) => ({
+                      ...p,
+                      hargaBandling3: e.target.value,
+                    }))
+                  }
+                  className="input"
+                />
+              </div>
+            </div>
 
             <div className="flex justify-end gap-2 mt-4">
               <button
