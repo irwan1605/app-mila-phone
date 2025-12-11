@@ -132,15 +132,14 @@ export default function InventoryReport() {
   // ======================================================================
   // HITUNG STOCK PEMBELIAN CILANGKAP PUSAT
   // ======================================================================
- // Hitung stok pusat langsung dari Firebase stock path
-const stockPembelianPusat = useMemo(() => {
-  const pusat = stockData["CILANGKAP PUSAT"] || {};
-  return Object.values(pusat).reduce(
-    (sum, item) => sum + Number(item.qty || 0),
-    0
-  );
-}, [stockData]);
-
+  // Hitung stok pusat langsung dari Firebase stock path
+  const stockPembelianPusat = useMemo(() => {
+    const pusat = stockData["CILANGKAP PUSAT"] || {};
+    return Object.values(pusat).reduce(
+      (sum, item) => sum + Number(item.qty || 0),
+      0
+    );
+  }, [stockData]);
 
   // ======================================================================
   // CARD STOK PER TOKO
@@ -250,6 +249,8 @@ const stockPembelianPusat = useMemo(() => {
     return expanded;
   }, [selectedToko, transaksi, masterBarang, search]);
 
+
+
   // ======================================================================
   // PAGINATION
   // ======================================================================
@@ -278,7 +279,6 @@ const stockPembelianPusat = useMemo(() => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white">
       <div className="max-w-7xl mx-auto">
-
         <h1 className="text-3xl font-bold mb-6">INVENTORY REPORT — PRO MAX</h1>
 
         {/* ================================================================== */}
@@ -362,7 +362,6 @@ const stockPembelianPusat = useMemo(() => {
         {/* ================================================================== */}
         {selectedToko && (
           <div className="bg-blue-900 p-6 rounded-2xl shadow-2xl overflow-auto">
-
             {/* EXPORT BUTTON */}
             <div className="flex justify-between mb-4">
               <h2 className="text-xl font-bold">Detail Stok: {selectedToko}</h2>
@@ -411,6 +410,8 @@ const stockPembelianPusat = useMemo(() => {
                   <th className="p-2">Bandling 3</th>
                   <th className="p-2 text-right">Harga</th>
                   <th className="p-2 text-right">Total</th>
+                  <th className="p-2">Transfer Masuk</th>
+                  <th className="p-2">Transfer Keluar</th>
 
                   <th className="p-2">Aksi</th>
                 </tr>
@@ -455,6 +456,8 @@ const stockPembelianPusat = useMemo(() => {
                     <td className="p-2">{row.band3}</td>
                     <td className="p-2 text-right">{rupiah(row.hband3)}</td>
                     <td className="p-2 text-right">{rupiah(row.totalBand3)}</td>
+                    <td className="p-2 text-center">{row.transferIn}</td>
+                    <td className="p-2 text-center">{row.transferOut}</td>
 
                     {/* ACTION BUTTON PREMIUM */}
                     <td className="p-2 text-center">
@@ -495,7 +498,7 @@ const stockPembelianPusat = useMemo(() => {
                       {/* TRANSFER */}
                       <button
                         onClick={() =>
-                          navigate("/transferbarang", {
+                          navigate("/transfer-barang", {
                             state: {
                               brand: row.brand,
                               barang: row.barang,
