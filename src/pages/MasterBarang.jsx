@@ -208,6 +208,12 @@ export default function MasterBarang() {
       `MasterBarang_${new Date().toISOString().slice(0, 10)}.xlsx`
     );
   };
+  const [notif, setNotif] = useState({ show: false, message: "" });
+
+  const showNotif = (message) => {
+    setNotif({ show: true, message });
+    setTimeout(() => setNotif({ show: false, message: "" }), 2000);
+  };
 
   // ================== TAMBAH MASTER BARANG ==================
   const submitTambah = async () => {
@@ -260,7 +266,8 @@ export default function MasterBarang() {
 
     await addTransaksi(1, payload);
 
-    alert("✅ Master Barang berhasil ditambahkan!");
+    showNotif("✅ Master Barang berhasil ditambahkan!");
+
     setShowTambah(false);
   };
 
@@ -306,7 +313,8 @@ export default function MasterBarang() {
       });
     }
 
-    alert("✅ Data berhasil diperbarui!");
+    showNotif("✅ Data Master Barang berhasil diperbarui!");
+
     setShowEdit(false);
   };
 
@@ -494,6 +502,12 @@ export default function MasterBarang() {
         </div>
       </div>
 
+      {notif.show && (
+        <div className="fixed top-5 right-5 bg-green-600 text-white px-4 py-2 rounded-xl shadow-lg z-[9999] animate-fade-in">
+          {notif.message}
+        </div>
+      )}
+
       {/* ================= MODAL TAMBAH ================= */}
       {showTambah && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50">
@@ -655,106 +669,256 @@ export default function MasterBarang() {
         </div>
       )}
 
-     {/* ================= MODAL EDIT (LEBAR SAMPING, RESPONSIF) ================= */}
-{showEdit && editData && (
-  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-    <div className="w-full max-w-5xl bg-white text-slate-800 rounded-2xl shadow-2xl overflow-hidden">
-      <div className="flex flex-col md:flex-row">
-        {/* LEFT: EDIT FORM */}
-        <div className="w-full md:w-3/5 p-6">
-          <div className="flex items-start justify-between mb-4">
-            <h3 className="text-lg font-semibold">Edit Master Barang</h3>
-            <button onClick={() => setShowEdit(false)} className="text-slate-400 hover:text-slate-700">✕</button>
-          </div>
+      {/* ================= MODAL EDIT (LEBAR SAMPING, RESPONSIF) ================= */}
+      {showEdit && editData && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-5xl bg-white text-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex flex-col md:flex-row">
+              {/* LEFT: EDIT FORM */}
+              <div className="w-full md:w-3/5 p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Edit Master Barang</h3>
+                  <button
+                    onClick={() => setShowEdit(false)}
+                    className="text-slate-400 hover:text-slate-700"
+                  >
+                    ✕
+                  </button>
+                </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-slate-500">Tanggal</label>
-              <input type="date" className="input mt-1" value={editData.tanggal} onChange={(e) => setEditData({ ...editData, tanggal: e.target.value })} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-500">Tanggal</label>
+                    <input
+                      type="date"
+                      className="input mt-1"
+                      value={editData.tanggal}
+                      onChange={(e) =>
+                        setEditData({ ...editData, tanggal: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-500">Kategori</label>
+                    <select
+                      className="input mt-1"
+                      value={editData.kategori}
+                      onChange={(e) =>
+                        setEditData({ ...editData, kategori: e.target.value })
+                      }
+                    >
+                      {KATEGORI_OPTIONS.map((x) => (
+                        <option key={x} value={x}>
+                          {x}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-500">Nama Brand</label>
+                    <input
+                      disabled
+                      className="input mt-1 bg-gray-100"
+                      value={editData.brand}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-500">
+                      Nama Barang
+                    </label>
+                    <input
+                      disabled={editData.isLocked}
+                      className={`input mt-1 ${
+                        editData.isLocked ? "bg-gray-100" : ""
+                      }`}
+                      value={editData.barang}
+                      onChange={(e) =>
+                        setEditData({ ...editData, barang: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-500">Harga SRP</label>
+                    <input
+                      type="number"
+                      className="input mt-1"
+                      value={editData.hargaSRP}
+                      onChange={(e) =>
+                        setEditData({ ...editData, hargaSRP: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-500">
+                      Harga Grosir
+                    </label>
+                    <input
+                      type="number"
+                      className="input mt-1"
+                      value={editData.hargaGrosir}
+                      onChange={(e) =>
+                        setEditData({
+                          ...editData,
+                          hargaGrosir: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-500">
+                      Harga Reseller
+                    </label>
+                    <input
+                      type="number"
+                      className="input mt-1"
+                      value={editData.hargaReseller}
+                      onChange={(e) =>
+                        setEditData({
+                          ...editData,
+                          hargaReseller: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* Bandling edit — rapi di baris/kolom */}
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-500">
+                      Nama Bandling 1
+                    </label>
+                    <input
+                      className="input mt-1"
+                      value={editData.NAMA_BANDLING_1 || ""}
+                      onChange={(e) =>
+                        setEditData({
+                          ...editData,
+                          NAMA_BANDLING_1: e.target.value,
+                        })
+                      }
+                    />
+                    <label className="text-xs text-slate-500 mt-2">
+                      Harga Bandling 1
+                    </label>
+                    <input
+                      type="number"
+                      className="input mt-1"
+                      value={editData.HARGA_BANDLING_1 || ""}
+                      onChange={(e) =>
+                        setEditData({
+                          ...editData,
+                          HARGA_BANDLING_1: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-500">
+                      Nama Bandling 2
+                    </label>
+                    <input
+                      className="input mt-1"
+                      value={editData.NAMA_BANDLING_2 || ""}
+                      onChange={(e) =>
+                        setEditData({
+                          ...editData,
+                          NAMA_BANDLING_2: e.target.value,
+                        })
+                      }
+                    />
+                    <label className="text-xs text-slate-500 mt-2">
+                      Harga Bandling 2
+                    </label>
+                    <input
+                      type="number"
+                      className="input mt-1"
+                      value={editData.HARGA_BANDLING_2 || ""}
+                      onChange={(e) =>
+                        setEditData({
+                          ...editData,
+                          HARGA_BANDLING_2: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-500">
+                      Nama Bandling 3
+                    </label>
+                    <input
+                      className="input mt-1"
+                      value={editData.NAMA_BANDLING_3 || ""}
+                      onChange={(e) =>
+                        setEditData({
+                          ...editData,
+                          NAMA_BANDLING_3: e.target.value,
+                        })
+                      }
+                    />
+                    <label className="text-xs text-slate-500 mt-2">
+                      Harga Bandling 3
+                    </label>
+                    <input
+                      type="number"
+                      className="input mt-1"
+                      value={editData.HARGA_BANDLING_3 || ""}
+                      onChange={(e) =>
+                        setEditData({
+                          ...editData,
+                          HARGA_BANDLING_3: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    onClick={() => setShowEdit(false)}
+                    className="px-4 py-2 rounded-lg bg-gray-200 text-slate-700"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={submitEdit}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white flex items-center"
+                  >
+                    <FaSave className="mr-2" /> Simpan
+                  </button>
+                </div>
+              </div>
+
+              {/* RIGHT: INFO SINGKAT / NOTE */}
+              <div className="w-full md:w-2/5 p-6 bg-slate-50 border-l hidden md:block">
+                <h4 className="text-sm font-semibold text-indigo-700 mb-3">
+                  Catatan Edit
+                </h4>
+                <p className="text-sm text-slate-600">
+                  Jika produk sudah memiliki pembelian tercatat, beberapa field
+                  akan dikunci (tidak bisa diubah). Perubahan harga akan
+                  diterapkan ke semua entri master barang yang relevan
+                  (realtime).
+                </p>
+
+                <div className="mt-4 text-xs text-slate-400">
+                  <div>
+                    Tip: Gunakan preview untuk cek bandling sebelum menyimpan.
+                  </div>
+                </div>
+              </div>
             </div>
-
-            <div>
-              <label className="text-xs text-slate-500">Kategori</label>
-              <select className="input mt-1" value={editData.kategori} onChange={(e) => setEditData({ ...editData, kategori: e.target.value })}>
-                {KATEGORI_OPTIONS.map((x) => <option key={x} value={x}>{x}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500">Nama Brand</label>
-              <input disabled className="input mt-1 bg-gray-100" value={editData.brand} />
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500">Nama Barang</label>
-              <input disabled={editData.isLocked} className={`input mt-1 ${editData.isLocked ? "bg-gray-100" : ""}`} value={editData.barang} onChange={(e) => setEditData({ ...editData, barang: e.target.value })} />
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500">Harga SRP</label>
-              <input type="number" className="input mt-1" value={editData.hargaSRP} onChange={(e) => setEditData({ ...editData, hargaSRP: e.target.value })} />
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500">Harga Grosir</label>
-              <input type="number" className="input mt-1" value={editData.hargaGrosir} onChange={(e) => setEditData({ ...editData, hargaGrosir: e.target.value })} />
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500">Harga Reseller</label>
-              <input type="number" className="input mt-1" value={editData.hargaReseller} onChange={(e) => setEditData({ ...editData, hargaReseller: e.target.value })} />
-            </div>
-          </div>
-
-          {/* Bandling edit — rapi di baris/kolom */}
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs text-slate-500">Nama Bandling 1</label>
-              <input className="input mt-1" value={editData.NAMA_BANDLING_1 || ""} onChange={(e) => setEditData({ ...editData, NAMA_BANDLING_1: e.target.value })} />
-              <label className="text-xs text-slate-500 mt-2">Harga Bandling 1</label>
-              <input type="number" className="input mt-1" value={editData.HARGA_BANDLING_1 || ""} onChange={(e) => setEditData({ ...editData, HARGA_BANDLING_1: e.target.value })} />
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500">Nama Bandling 2</label>
-              <input className="input mt-1" value={editData.NAMA_BANDLING_2 || ""} onChange={(e) => setEditData({ ...editData, NAMA_BANDLING_2: e.target.value })} />
-              <label className="text-xs text-slate-500 mt-2">Harga Bandling 2</label>
-              <input type="number" className="input mt-1" value={editData.HARGA_BANDLING_2 || ""} onChange={(e) => setEditData({ ...editData, HARGA_BANDLING_2: e.target.value })} />
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500">Nama Bandling 3</label>
-              <input className="input mt-1" value={editData.NAMA_BANDLING_3 || ""} onChange={(e) => setEditData({ ...editData, NAMA_BANDLING_3: e.target.value })} />
-              <label className="text-xs text-slate-500 mt-2">Harga Bandling 3</label>
-              <input type="number" className="input mt-1" value={editData.HARGA_BANDLING_3 || ""} onChange={(e) => setEditData({ ...editData, HARGA_BANDLING_3: e.target.value })} />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 mt-6">
-            <button onClick={() => setShowEdit(false)} className="px-4 py-2 rounded-lg bg-gray-200 text-slate-700">Batal</button>
-            <button onClick={submitEdit} className="px-4 py-2 rounded-lg bg-indigo-600 text-white flex items-center">
-              <FaSave className="mr-2" /> Simpan
-            </button>
           </div>
         </div>
-
-        {/* RIGHT: INFO SINGKAT / NOTE */}
-        <div className="w-full md:w-2/5 p-6 bg-slate-50 border-l hidden md:block">
-          <h4 className="text-sm font-semibold text-indigo-700 mb-3">Catatan Edit</h4>
-          <p className="text-sm text-slate-600">
-            Jika produk sudah memiliki pembelian tercatat, beberapa field akan dikunci (tidak bisa diubah).
-            Perubahan harga akan diterapkan ke semua entri master barang yang relevan (realtime).
-          </p>
-
-          <div className="mt-4 text-xs text-slate-400">
-            <div>Tip: Gunakan preview untuk cek bandling sebelum menyimpan.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-
+      )}
 
       <style jsx>{`
         .input {
@@ -763,6 +927,19 @@ export default function MasterBarang() {
           padding: 8px;
           border-radius: 8px;
           font-size: 14px;
+        }
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0px);
+          }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out;
         }
       `}</style>
     </div>

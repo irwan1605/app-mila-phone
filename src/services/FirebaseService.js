@@ -1058,7 +1058,24 @@ export const listenMasterBarang = (callback) => {
   return () => unsub && unsub();
 };
 
+// ==============================
+// LISTEN INVENTORY REPORT by Toko
+// ==============================
+export const listenInventoryReport = (namaToko, callback) => {
+  return onValue(
+    ref(db, `inventory`),
+    (snap) => {
+      const data = snap.val() || {};
 
+      const list = Object.values(data).filter(
+        (row) => row.namaToko === namaToko
+      );
+
+      callback(list);
+    },
+    (err) => console.error("ERROR LISTEN INVENTORY:", err)
+  );
+};
 
 
 

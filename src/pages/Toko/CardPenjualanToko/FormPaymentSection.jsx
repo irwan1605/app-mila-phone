@@ -1,197 +1,137 @@
-// src/pages/Toko/CardPenjualanToko/FormPaymentSection.jsx
-
+// ========================================
+// FormPaymentSection.jsx — FINAL TAHAP 3
+// ========================================
 import React, { useEffect } from "react";
 
-/*
-  Props:
-  - value: {
-      kategoriBayar,
-      paymentMethod,
-      mdr,
-      dpUser,
-      tenor,
-      status
-    }
-  - onChange: function(nextValue)
-*/
+export default function FormPaymentSection({
+  value,
+  onChange,
+  tahap,
+  tahap2Complete,
+  grandTotal,
+}) {
+  const disabled = tahap < 3; // 🔒 Kunci pembayaran sebelum Tahap 2 complete
 
-const KATEGORI_BAYAR = ["CASH", "KREDIT", "DEBIT CARD"];
-
-const PAYMENT_METHOD = [
-  "BLIBLI INSTORE",
-  "AKULAKU MARKETPLACE",
-  "TOKOPEDIA MARKETPLACE",
-  "LAZADA MARKETPLACE",
-  "TIKTOK MARKETPLACE",
-  "SHOPEE MARKETPLACE",
-  "HOME CREDIT MARKETPLACE",
-  "KREDIVO BARCODE VOUCER PROMO",
-  "KREDIVO MARKETPLACE",
-];
-
-const MDR_OPTIONS = ["5%", "6%"];
-
-export default function FormPaymentSection({ value, onChange }) {
-  // Auto set status saat kategori bayar berubah
-  useEffect(() => {
-    if (value.kategoriBayar === "CASH" || value.kategoriBayar === "DEBIT CARD") {
-      onChange({
-        ...value,
-        status: "LUNAS",
-        dpUser: "",
-        tenor: "",
-      });
-    } else if (value.kategoriBayar === "KREDIT") {
-      onChange({
-        ...value,
-        status: "PIUTANG",
-      });
-    }
-    // eslint-disable-next-line
-  }, [value.kategoriBayar]);
-
-  const handleChange = (field, val) => {
-    onChange({
-      ...value,
-      [field]: val,
-    });
+  const handleChange = (key, val) => {
+    const next = { ...value, [key]: val };
+    onChange(next);
   };
 
-  const showKreditField = value.kategoriBayar === "KREDIT";
+  // Adjust status & auto behavior
+  useEffect(() => {
+    if (value.status === "LUNAS") {
+      handleChange("paymentMethod", "");
+      handleChange("dpUser", grandTotal || 0);
+    }
+  }, [value.status, grandTotal]);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="mb-3">
-        <h2 className="font-semibold text-slate-800 text-sm uppercase tracking-wide">
-          Skema 2 — Payment
-        </h2>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Pengaturan kategori bayar, metode, serta status pembayaran.
-        </p>
+    <div className="relative">
+      {/* 🔥 Indikator Tahap 3 */}
+      <div className="absolute top-1 right-2 text-[11px] font-semibold">
+        {tahap >= 3 ? (
+          <span className="text-green-600">🟢 Tahap 3 Aktif</span>
+        ) : (
+          <span className="text-red-500">🔒 Tahap 3 Terkunci</span>
+        )}
       </div>
 
-      {/* Form */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+      <h2 className="font-bold text-slate-700 text-sm mb-2">
+        PEMBAYARAN (TAHAP 3)
+      </h2>
 
-        {/* Kategori Bayar */}
+      <div className="space-y-3">
+
+        {/* ==========================
+            STATUS PEMBAYARAN
+        ========================== */}
         <div>
-          <label className="block mb-1 text-slate-600">
-            Kategori Bayar
-          </label>
+          <label className="text-xs font-semibold">Status Pembayaran *</label>
           <select
-            value={value.kategoriBayar || ""}
-            onChange={(e) =>
-              handleChange("kategoriBayar", e.target.value)
-            }
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            className="w-full border rounded-lg px-2 py-1 text-sm"
+            disabled={disabled}
+            value={value.status}
+            onChange={(e) => handleChange("status", e.target.value)}
           >
-            <option value="">Pilih Kategori</option>
-            {KATEGORI_BAYAR.map((k) => (
-              <option key={k} value={k}>
-                {k}
-              </option>
-            ))}
+            <option value="">-- PILIH STATUS --</option>
+            <option value="LUNAS">LUNAS</option>
+            <option value="PIUTANG">PIUTANG</option>
           </select>
         </div>
 
-        {/* Status (Auto) */}
+        {/* ==========================
+            PAYMENT METHOD — MUNCUL HANYA JIKA PIUTANG
+        ========================== */}
+        {value.status === "PIUTANG" && (
+          <div>
+            <label className="text-xs font-semibold">Payment Method *</label>
+            <select
+              className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
+              disabled={disabled}
+              value={value.paymentMethod}
+              onChange={(e) => handleChange("paymentMethod", e.target.value)}
+            >
+              <option value="">-- PILIH METODE --</option>
+              <option value="CASH">CASH</option>
+              <option value="TRANSFER">TRANSFER</option>
+              <option value="QRIS">QRIS</option>
+            </select>
+          </div>
+        )}
+
+        {/* ==========================
+            DP USER
+        ========================== */}
         <div>
-          <label className="block mb-1 text-slate-600">
-            Status
+          <label className="text-xs font-semibold">
+            DP (Uang Muka) — Jika LUNAS otomatis = Grand Total
           </label>
           <input
-            type="text"
-            value={value.status || ""}
-            readOnly
-            className="w-full border border-slate-200 rounded-lg p-2 bg-slate-100 text-slate-500 cursor-not-allowed"
+            type="number"
+            disabled={disabled}
+            className="w-full border rounded-lg px-2 py-1 text-sm"
+            value={value.dpUser}
+            onChange={(e) =>
+              handleChange("dpUser", Number(e.target.value || 0))
+            }
           />
         </div>
 
-        {/* Payment Method */}
-        <div>
-          <label className="block mb-1 text-slate-600">
-            Payment Method
-          </label>
-          <select
-            value={value.paymentMethod || ""}
-            onChange={(e) =>
-              handleChange("paymentMethod", e.target.value)
-            }
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          >
-            <option value="">Pilih Method</option>
-            {PAYMENT_METHOD.map((pm) => (
-              <option key={pm} value={pm}>
-                {pm}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* MDR */}
-        <div>
-          <label className="block mb-1 text-slate-600">
-            MDR
-          </label>
-          <select
-            value={value.mdr || ""}
-            onChange={(e) =>
-              handleChange("mdr", e.target.value)
-            }
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          >
-            <option value="">Pilih MDR</option>
-            {MDR_OPTIONS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* DP USER (muncul hanya jika KREDIT) */}
-        {showKreditField && (
+        {/* ==========================
+            TENOR (JIKA PIUTANG)
+        ========================== */}
+        {value.status === "PIUTANG" && (
           <div>
-            <label className="block mb-1 text-slate-600">
-              DP User
-            </label>
-            <input
-              type="number"
-              value={value.dpUser || ""}
-              onChange={(e) =>
-                handleChange("dpUser", e.target.value)
-              }
-              className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-            />
-          </div>
-        )}
-
-        {/* TENOR (muncul hanya jika KREDIT) */}
-        {showKreditField && (
-          <div>
-            <label className="block mb-1 text-slate-600">
-              Tenor
-            </label>
-            <input
-              type="text"
+            <label className="text-xs font-semibold">Tenor (bulan)</label>
+            <select
+              className="w-full border rounded-lg px-2 py-1 text-sm"
+              disabled={disabled}
               value={value.tenor || ""}
-              onChange={(e) =>
-                handleChange("tenor", e.target.value)
-              }
-              placeholder="Contoh: 6x, 12x"
-              className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-            />
+              onChange={(e) => handleChange("tenor", e.target.value)}
+            >
+              <option value="">-- PILIH TENOR --</option>
+              <option value="1">1 Bulan</option>
+              <option value="2">2 Bulan</option>
+              <option value="3">3 Bulan</option>
+              <option value="6">6 Bulan</option>
+              <option value="9">9 Bulan</option>
+              <option value="12">12 Bulan</option>
+            </select>
           </div>
         )}
-      </div>
 
-      {/* Hint */}
-      <div className="mt-auto pt-3">
-        <p className="text-[11px] text-slate-400">
-          * STATUS otomatis: <b>LUNAS</b> untuk CASH & DEBIT, <b>PIUTANG</b> untuk KREDIT.  
-          * DP & Tenor hanya muncul jika memilih KREDIT.
-        </p>
+        {/* ==========================
+            GRAND TOTAL (READONLY)
+        ========================== */}
+        <div>
+          <label className="text-xs font-semibold">Grand Total</label>
+          <input
+            type="text"
+            readOnly
+            className="w-full border rounded-lg px-2 py-1 text-sm bg-gray-100"
+            value={Number(grandTotal || 0).toLocaleString("id-ID")}
+          />
+        </div>
       </div>
     </div>
   );

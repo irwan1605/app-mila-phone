@@ -1,172 +1,152 @@
-// src/pages/Toko/CardPenjualanToko/FormUserSection.jsx
+// =======================
+// FormUserSection.jsx — FINAL PATCH TAHAP 1
+// =======================
+import React from "react";
 
-import React, { useEffect } from "react";
 
-/*
-  Props:
-  - value: object {
-      tanggalPembelian,
-      noFaktur,
-      idPelanggan,
-      noTelepon,
-      namaToko,
-      namaSales,
-      salesTitipan
-    }
-  - onChange: function(nextValue)
-  - users: array dari Master Karyawan / Users (untuk autocomplete Sales)
-*/
+export default function FormUserSection({
+  value,
+  onChange,
+  users = [],
+  tahap,
+  tahap1Complete,
+  isDateValid,
+}) {
+  const disabled = tahap < 1; // always false tetapi aman untuk future control
 
-export default function FormUserSection({ value, onChange, users = [] }) {
-  // Update nama toko otomatis jika kosong
-  useEffect(() => {
-    if (!value.tanggalPembelian) {
-      handleChange("tanggalPembelian", new Date().toISOString().slice(0, 10));
-    }
-    // eslint-disable-next-line
-  }, []);
-
-  const handleChange = (field, val) => {
-    onChange({
-      ...value,
-      [field]: val,
-    });
+  const handleChange = (key, val) => {
+    const next = { ...value, [key]: val };
+    onChange(next);
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="mb-3">
-        <h2 className="font-semibold text-slate-800 text-sm uppercase tracking-wide">
-          Skema 1 — Data User
-        </h2>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Informasi pelanggan, toko, dan sales.
-        </p>
+    <div className="relative">
+      {/* 🔥 INDIKATOR TAHAP 1 */}
+      <div className="absolute top-1 right-2 text-[11px] font-semibold">
+        {tahap1Complete ? (
+          <span className="text-green-600">🟢 Tahap 1 Selesai</span>
+        ) : (
+          <span className="text-red-500">🔴 Tahap 1 Belum Lengkap</span>
+        )}
       </div>
 
-      {/* Form */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+      <h2 className="font-bold text-slate-700 text-sm mb-2">
+        DATA PELANGGAN (TAHAP 1)
+      </h2>
 
-        {/* Tanggal Pembelian */}
+      <div className="space-y-2">
+
+        {/* =======================
+            TANGGAL (LOCK TIDAK BOLEH MUNDUR)
+        ======================== */}
         <div>
-          <label className="block mb-1 text-slate-600">
-            Tanggal Pembelian
-          </label>
+          <label className="text-xs font-semibold">Tanggal</label>
           <input
             type="date"
-            value={value.tanggalPembelian || ""}
-            onChange={(e) =>
-              handleChange("tanggalPembelian", e.target.value)
-            }
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
+            value={value.tanggalPembelian}
+            onChange={(e) => {
+              if (!isDateValid(e.target.value)) {
+                alert("❌ Tanggal tidak boleh mundur.");
+                return;
+              }
+              handleChange("tanggalPembelian", e.target.value);
+            }}
+            disabled={disabled}
           />
         </div>
 
-        {/* No Faktur / Invoice */}
+        {/* =======================
+            NO FAKTUR — AUTO, TIDAK BISA DI EDIT
+        ======================== */}
         <div>
-          <label className="block mb-1 text-slate-600">
-            No Faktur / Invoice
-          </label>
+          <label className="text-xs font-semibold">No Faktur (Auto)</label>
           <input
             type="text"
-            value={value.noFaktur || ""}
-            onChange={(e) => handleChange("noFaktur", e.target.value)}
-            placeholder="Auto jika dikosongkan"
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-        </div>
-
-        {/* ID Pelanggan */}
-        <div>
-          <label className="block mb-1 text-slate-600">
-            ID Pelanggan
-          </label>
-          <input
-            type="text"
-            value={value.idPelanggan || ""}
-            onChange={(e) =>
-              handleChange("idPelanggan", e.target.value)
-            }
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-        </div>
-
-        {/* No Telepon */}
-        <div>
-          <label className="block mb-1 text-slate-600">
-            No Telepon
-          </label>
-          <input
-            type="text"
-            value={value.noTelepon || ""}
-            onChange={(e) =>
-              handleChange("noTelepon", e.target.value)
-            }
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-        </div>
-
-        {/* Nama Toko (Auto, Readonly) */}
-        <div>
-          <label className="block mb-1 text-slate-600">
-            Nama Toko
-          </label>
-          <input
-            type="text"
-            value={value.namaToko || ""}
+            className="w-full border rounded-lg px-2 py-1 text-sm bg-gray-100"
+            value={value.noFaktur}
             readOnly
-            className="w-full border border-slate-200 rounded-lg p-2 bg-slate-100 text-slate-500 cursor-not-allowed"
           />
         </div>
 
-        {/* Nama Sales (Autocomplete dari Master Karyawan / Users) */}
+        {/* =======================
+            NAMA PELANGGAN — WAJIB
+        ======================== */}
         <div>
-          <label className="block mb-1 text-slate-600">
-            Nama Sales
-          </label>
-          <input
-            list="list-sales"
-            value={value.namaSales || ""}
-            onChange={(e) =>
-              handleChange("namaSales", e.target.value)
-            }
-            placeholder="Pilih dari data karyawan"
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-          <datalist id="list-sales">
-            {users.map((u) => (
-              <option
-                key={u.id || u.uid || u.email}
-                value={u.NAMA || u.name || u.nama || ""}
-              />
-            ))}
-          </datalist>
-        </div>
-
-        {/* Sales Titipan */}
-        <div className="sm:col-span-2">
-          <label className="block mb-1 text-slate-600">
-            Sales Titipan
-          </label>
+          <label className="text-xs font-semibold">Nama Pelanggan *</label>
           <input
             type="text"
-            value={value.salesTitipan || ""}
+            className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
+            value={value.namaPelanggan}
             onChange={(e) =>
-              handleChange("salesTitipan", e.target.value)
+              handleChange("namaPelanggan", e.target.value.toUpperCase())
             }
-            placeholder="Jika ada sales titipan"
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
           />
         </div>
-      </div>
 
-      {/* Hint */}
-      <div className="mt-auto pt-3">
-        <p className="text-[11px] text-slate-400">
-          * Nama toko otomatis dari dashboard.  
-          * Nama Sales bisa dipilih dari Master Karyawan.
-        </p>
+        {/* =======================
+            ID PELANGGAN — WAJIB
+        ======================== */}
+        <div>
+          <label className="text-xs font-semibold">ID Pelanggan *</label>
+          <input
+            type="text"
+            className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
+            value={value.idPelanggan}
+            onChange={(e) =>
+              handleChange("idPelanggan", e.target.value.toUpperCase())
+            }
+          />
+        </div>
+
+        {/* =======================
+            NO TELEPON — WAJIB
+        ======================== */}
+        <div>
+          <label className="text-xs font-semibold">No Telepon *</label>
+          <input
+            type="text"
+            className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
+            value={value.noTelepon}
+            onChange={(e) =>
+              handleChange("noTelepon", e.target.value.toUpperCase())
+            }
+          />
+        </div>
+
+        {/* =======================
+            SALES — WAJIB
+        ======================== */}
+        <div>
+          <label className="text-xs font-semibold">Nama Sales *</label>
+          <select
+            className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
+            value={value.namaSales}
+            onChange={(e) => handleChange("namaSales", e.target.value)}
+          >
+            <option value="">-- PILIH SALES --</option>
+            {users.map((u) => (
+              <option key={u.username} value={u.name}>
+              {u.name}
+            </option>
+            ))}
+          </select>
+        </div>
+
+        {/* =======================
+            SALES TITIPAN — WAJIB
+        ======================== */}
+        <div>
+          <label className="text-xs font-semibold">Sales Titipan *</label>
+          <input
+            type="text"
+            className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
+            value={value.salesTitipan}
+            onChange={(e) =>
+              handleChange("salesTitipan", e.target.value.toUpperCase())
+            }
+          />
+        </div>
       </div>
     </div>
   );

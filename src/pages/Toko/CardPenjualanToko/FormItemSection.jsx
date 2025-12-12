@@ -1,252 +1,227 @@
-// src/pages/Toko/CardPenjualanToko/FormItemSection.jsx
+// ===================================
+// FormItemSection.jsx — FINAL TAHAP 2
+// ===================================
+import React, { useMemo } from "react";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { FaPlus, FaTrash } from "react-icons/fa";
+export default function FormItemSection({
+  value,
+  onChange,
+  onAddRow,
+  tahap,
+  tahap1Complete,
+  masterBarang = [],
+}) {
+  const disabled = tahap < 2; // 🔒 Kunci TAHAP 2 sebelum TAHAP 1 selesai
 
-/*
-  Props:
-  - value: array of items dari parent (optional, bisa dikosongkan)
-  - onChange: function(nextItems)
-  - onAddRow: function(item) -> untuk masuk ke tabel transaksi
-*/
-
-const KATEGORI_OPTIONS = [
-  "MOTOR LISTRIK",
-  "SEPEDA LISTRIK",
-  "HANDPHONE",
-  "ACCESSORIES",
-];
-
-export default function FormItemSection({ value = [], onChange, onAddRow }) {
-  const [localItem, setLocalItem] = useState({
-    kategoriBarang: "",
-    namaBrand: "",
-    namaBarang: "",
-    qty: 1,
-    imei: "",
-    hargaUnit: 0,
-    discount: 0,
-  });
-
-  // =============================
-  // AUTO HITUNG QTY DARI IMEI
-  // =============================
-  useEffect(() => {
-    const lines = localItem.imei
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
-
-    if (lines.length > 0) {
-      setLocalItem((prev) => ({
-        ...prev,
-        qty: lines.length,
-      }));
-    }
-  }, [localItem.imei]);
-
-  // =============================
-  // HITUNG TOTAL OTOMATIS
-  // =============================
-  const total = useMemo(() => {
-    const qty = Number(localItem.qty || 0);
-    const harga = Number(localItem.hargaUnit || 0);
-    const disc = Number(localItem.discount || 0);
-
-    const subtotal = qty * harga;
-    const potongan = (disc / 100) * subtotal;
-    return subtotal - potongan;
-  }, [localItem.qty, localItem.hargaUnit, localItem.discount]);
-
-  const handleChange = (field, val) => {
-    setLocalItem((prev) => ({
-      ...prev,
-      [field]:
-        field === "qty" || field === "hargaUnit" || field === "discount"
-          ? Number(val)
-          : val,
-    }));
+  const handleItemChange = (id, key, val) => {
+    const updated = value.map((item) =>
+      item.id === id ? { ...item, [key]: val } : item
+    );
+    onChange(updated);
   };
 
-  // =============================
-  // TAMBAH KE TABEL TRANSAKSI
-  // =============================
-  const handleAdd = () => {
-    if (!localItem.namaBarang || !localItem.hargaUnit) {
-      alert("Nama barang dan Harga Unit wajib diisi!");
+  const handleAddItem = (item) => {
+    if (disabled) {
+      alert("❌ Lengkapi TAHAP 1 terlebih dahulu.");
       return;
     }
 
-    onAddRow({
-      ...localItem,
-    });
+    if (!item.kategoriBarang || !item.namaBrand || !item.namaBarang) {
+      alert("Lengkapi kategori, brand, dan nama barang.");
+      return;
+    }
 
-    // Reset form item
-    setLocalItem({
-      kategoriBarang: "",
-      namaBrand: "",
-      namaBarang: "",
-      qty: 1,
-      imei: "",
-      hargaUnit: 0,
-      discount: 0,
-    });
+    // IMEI rules
+    const imeis = (item.imei || "")
+      .split(/\r?\n/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+    // kategori wajib IMEI
+    const mustImei = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"].includes(
+      item.kategoriBarang.toUpperCase()
+    );
+
+    if (mustImei) {
+      if (imeis.length === 0) {
+        alert("Kategori ini wajib IMEI. Minimal 1 IMEI harus diinput.");
+        return;
+      }
+      item.qty = imeis.length; // qty otomatis
+    }
+
+    onAddRow(item);
+  };
+
+  // harga otomatis dari master barang
+  const getHarga = (brand, barang, tipeHarga) => {
+    const found = masterBarang.find(
+      (x) => x.NAMA_BRAND === brand && x.NAMA_BARANG === barang
+    );
+    if (!found) return 0;
+
+    if (tipeHarga === "SRP") return Number(found.HARGA_SRP || 0);
+    if (tipeHarga === "GROSIR") return Number(found.HARGA_GROSIR || 0);
+    if (tipeHarga === "RESELLER") return Number(found.HARGA_RESELLER || 0);
+
+    return Number(found.HARGA_SRP || 0);
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h2 className="font-semibold text-slate-800 text-sm uppercase tracking-wide">
-            Skema 3 — Kategori Barang
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Input barang, IMEI, jumlah, harga & diskon.
-          </p>
-        </div>
-        <button
-          onClick={handleAdd}
-          className="px-3 py-2 text-xs rounded-lg bg-indigo-600 text-white flex items-center gap-1 hover:bg-indigo-700"
+    <div className="relative">
+      {/* 🔥 Indikator Tahap 2 */}
+      <div className="absolute top-1 right-2 text-[11px] font-semibold">
+        {tahap >= 2 ? (
+          <span className="text-green-600">🟢 Tahap 2 Aktif</span>
+        ) : (
+          <span className="text-red-500">🔒 Tahap 2 Terkunci</span>
+        )}
+      </div>
+
+      <h2 className="font-bold text-slate-700 text-sm mb-2">
+        INPUT BARANG (TAHAP 2)
+      </h2>
+
+      {value.map((item) => (
+        <div
+          key={item.id}
+          className="border p-3 rounded-xl mb-3 bg-white/70 space-y-2"
         >
-          <FaPlus /> Tambah
-        </button>
-      </div>
+          {/* KATEGORI */}
+          <div>
+            <label className="text-xs font-semibold">Kategori Barang *</label>
+            <select
+              className="w-full border rounded-lg px-2 py-1 text-sm"
+              value={item.kategoriBarang}
+              disabled={disabled}
+              onChange={(e) =>
+                handleItemChange(item.id, "kategoriBarang", e.target.value)
+              }
+            >
+              <option value="">-- PILIH KATEGORI --</option>
+              <option value="MOTOR LISTRIK">MOTOR LISTRIK</option>
+              <option value="SEPEDA LISTRIK">SEPEDA LISTRIK</option>
+              <option value="HANDPHONE">HANDPHONE</option>
+              <option value="ACCESSORIES">ACCESSORIES</option>
+            </select>
+          </div>
 
-      {/* FORM BARANG */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+          {/* BRAND */}
+          <div>
+            <label className="text-xs font-semibold">Brand *</label>
+            <input
+              className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
+              disabled={disabled}
+              value={item.namaBrand}
+              onChange={(e) =>
+                handleItemChange(item.id, "namaBrand", e.target.value.toUpperCase())
+              }
+            />
+          </div>
 
-        {/* Kategori Barang */}
-        <div>
-          <label className="block mb-1 text-slate-600">
-            Kategori Barang
-          </label>
-          <input
-            list="kategori-barang-list"
-            value={localItem.kategoriBarang}
-            onChange={(e) =>
-              handleChange("kategoriBarang", e.target.value)
-            }
-            placeholder="Pilih / ketik manual"
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-          <datalist id="kategori-barang-list">
-            {KATEGORI_OPTIONS.map((k) => (
-              <option key={k} value={k} />
-            ))}
-          </datalist>
+          {/* NAMA BARANG */}
+          <div>
+            <label className="text-xs font-semibold">Nama Barang *</label>
+            <input
+              className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
+              disabled={disabled}
+              value={item.namaBarang}
+              onChange={(e) =>
+                handleItemChange(item.id, "namaBarang", e.target.value.toUpperCase())
+              }
+            />
+          </div>
+
+          {/* IMEI / SERIAL */}
+          {["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"].includes(
+            item.kategoriBarang.toUpperCase()
+          ) && (
+            <div>
+              <label className="text-xs font-semibold">
+                IMEI / Serial Number (1 IMEI = 1 Unit)
+              </label>
+              <textarea
+                className="w-full border rounded-lg px-2 py-1 text-sm bg-white whitespace-pre"
+                rows={3}
+                disabled={disabled}
+                placeholder="Masukkan 1 IMEI per baris"
+                value={item.imei || ""}
+                onChange={(e) => {
+                  const list = e.target.value
+                    .split(/\r?\n/)
+                    .map((x) => x.trim())
+                    .filter(Boolean);
+                  handleItemChange(item.id, "imei", e.target.value);
+                  handleItemChange(item.id, "qty", list.length);
+                }}
+              />
+            </div>
+          )}
+
+          {/* QTY (manual hanya untuk aksesories) */}
+          {item.kategoriBarang.toUpperCase() === "ACCESSORIES" && (
+            <div>
+              <label className="text-xs font-semibold">Qty *</label>
+              <input
+                type="number"
+                className="w-full border rounded-lg px-2 py-1 text-sm"
+                disabled={disabled}
+                value={item.qty}
+                onChange={(e) =>
+                  handleItemChange(item.id, "qty", Number(e.target.value || 0))
+                }
+              />
+            </div>
+          )}
+
+          {/* SKEMA HARGA */}
+          <div>
+            <label className="text-xs font-semibold">Skema Harga *</label>
+            <select
+              className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
+              disabled={disabled}
+              value={item.skemaHarga || "SRP"}
+              onChange={(e) => {
+                const harga = getHarga(
+                  item.namaBrand,
+                  item.namaBarang,
+                  e.target.value
+                );
+                handleItemChange(item.id, "skemaHarga", e.target.value);
+                handleItemChange(item.id, "hargaUnit", harga);
+              }}
+            >
+              <option value="SRP">SRP</option>
+              <option value="GROSIR">GROSIR</option>
+              <option value="RESELLER">RESELLER</option>
+            </select>
+          </div>
+
+          {/* HARGA UNIT */}
+          <div>
+            <label className="text-xs font-semibold">Harga Unit</label>
+            <input
+              className="w-full border rounded-lg px-2 py-1 text-sm bg-gray-100"
+              value={item.hargaUnit}
+              readOnly
+            />
+          </div>
+
+          {/* BUTTON TAMBAH BARANG */}
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => handleAddItem(item)}
+            className={`w-full py-2 rounded-lg text-white text-sm ${
+              disabled
+                ? "bg-gray-300 cursor-not-allowed"
+                : "bg-indigo-600 hover:bg-indigo-700"
+            }`}
+          >
+            Tambahkan Barang
+          </button>
         </div>
-
-        {/* Nama Brand */}
-        <div>
-          <label className="block mb-1 text-slate-600">
-            Nama Brand
-          </label>
-          <input
-            type="text"
-            value={localItem.namaBrand}
-            onChange={(e) =>
-              handleChange("namaBrand", e.target.value)
-            }
-            placeholder="Bisa otomatis / manual"
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-        </div>
-
-        {/* Nama Barang */}
-        <div className="sm:col-span-2">
-          <label className="block mb-1 text-slate-600">
-            Nama Barang
-          </label>
-          <input
-            type="text"
-            value={localItem.namaBarang}
-            onChange={(e) =>
-              handleChange("namaBarang", e.target.value)
-            }
-            placeholder="Contoh: iPhone 12 128GB"
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-        </div>
-
-        {/* QTY */}
-        <div>
-          <label className="block mb-1 text-slate-600">
-            QTY
-          </label>
-          <input
-            type="number"
-            min={1}
-            value={localItem.qty}
-            onChange={(e) =>
-              handleChange("qty", e.target.value)
-            }
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-        </div>
-
-        {/* Harga Unit */}
-        <div>
-          <label className="block mb-1 text-slate-600">
-            Harga Unit
-          </label>
-          <input
-            type="number"
-            value={localItem.hargaUnit}
-            onChange={(e) =>
-              handleChange("hargaUnit", e.target.value)
-            }
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-        </div>
-
-        {/* Diskon */}
-        <div>
-          <label className="block mb-1 text-slate-600">
-            Diskon (%)
-          </label>
-          <input
-            type="number"
-            value={localItem.discount}
-            onChange={(e) =>
-              handleChange("discount", e.target.value)
-            }
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-        </div>
-
-        {/* Harga Total */}
-        <div>
-          <label className="block mb-1 text-slate-600">
-            Harga Total
-          </label>
-          <input
-            type="text"
-            readOnly
-            value={`Rp ${Number(total).toLocaleString("id-ID")}`}
-            className="w-full border border-slate-200 rounded-lg p-2 bg-slate-100 text-slate-600"
-          />
-        </div>
-
-        {/* IMEI */}
-        <div className="sm:col-span-2">
-          <label className="block mb-1 text-slate-600">
-            No IMEI / No Mesin (Bisa Banyak)
-          </label>
-          <textarea
-            rows={4}
-            value={localItem.imei}
-            onChange={(e) =>
-              handleChange("imei", e.target.value)
-            }
-            placeholder="1 IMEI per baris"
-            className="w-full border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-          <p className="text-[10px] text-slate-400 mt-1">
-            * Jumlah baris IMEI otomatis menentukan QTY.
-          </p>
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
