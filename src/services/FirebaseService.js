@@ -1140,6 +1140,87 @@ export const updateMasterSupplier = masterSupplier.update;
 export const deleteMasterSupplier = masterSupplier.delete;
 
 /* ============================================================
+   SEARCH INVENTORY BY NAMA BARANG (UNTUK NAMA BARANG SEARCH MODAL)
+============================================================ */
+
+/* ============================================================
+   SUPER SEARCH — Nama Barang / Brand / Kategori / SKU
+   Cepat, kompatibel semua toko, hasil akurat untuk modal search.
+============================================================ */
+
+export const getInventoryByName = async (keyword) => {
+  if (!keyword) return [];
+
+  keyword = keyword.toLowerCase().trim();
+
+  try {
+    const snap = await get(ref(db, "stock"));
+    if (!snap.exists()) return [];
+
+    const stock = snap.val();
+    const results = [];
+
+    Object.entries(stock).forEach(([tokoName, skuList]) => {
+      if (!skuList) return;
+
+      Object.entries(skuList).forEach(([sku, item]) => {
+        if (!item) return;
+
+        const nama = String(item.nama || item.namaBarang || "").toLowerCase();
+        const brand = String(item.brand || item.namaBrand || "").toLowerCase();
+        const kategori = String(item.kategori || item.kategoriBarang || "").toLowerCase();
+        const imei = String(item.imei || "").toLowerCase();
+
+        // MATCH LOGIC (lebih akurat)
+        const match =
+          nama.includes(keyword) ||
+          brand.includes(keyword) ||
+          kategori.includes(keyword) ||
+          sku.toLowerCase().includes(keyword) ||
+          imei.includes(keyword);
+
+        if (match) {
+          results.push({
+            sku,
+            namaBarang: item.nama || item.namaBarang || "",
+            namaBrand: item.brand || item.namaBrand || "",
+            kategoriBarang: item.kategori || item.kategoriBarang || "",
+            imei: item.imei || "",
+            hargaUnit: Number(item.hargaUnit || item.harga || 0),
+            qty: 1, // default qty
+            tokoName,
+          });
+        }
+      });
+    });
+
+    return results;
+  } catch (err) {
+    console.error("getInventoryByName ERROR:", err);
+    return [];
+  }
+};
+
+export const listenStockByCategory = (tokoName, kategori, callback) => {
+  return onValue(
+    ref(db, `stock/${tokoName}/byKategori/${kategori}`),
+    (snap) => callback(snap.val() || [])
+  );
+};
+
+export const listenStockByName = (tokoName, namaBarang, callback) => {
+  return onValue(
+    ref(db, `stock/${tokoName}/byNamaBarang/${namaBarang}`),
+    (snap) => callback(snap.val() || [])
+  );
+};
+
+export const getBundlingItems = async (sku) => {
+  const snap = await get(ref(db, `bundling/${sku}`));
+  return snap.val() || [];
+};
+
+/* ============================================================
    DEFAULT EXPORT
 ============================================================ */
 // ======================= DEFAULT EXPORT (UNTUK IMPORT FirebaseService) =======================

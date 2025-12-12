@@ -1,4 +1,7 @@
-// src/pages/Toko/CardPenjualanToko/CardPenjualanToko.jsx
+// ============================================================
+// CARDPENJUALANTOKO.JSX — FINAL FIX + STOCK TYPE A + BUNDLING OPSI 2
+// ============================================================
+
 import React, {
   useCallback,
   useEffect,
@@ -6,1106 +9,776 @@ import React, {
   useRef,
   useState,
 } from "react";
+
 import { useNavigate, useParams } from "react-router-dom";
-import { FaSave, FaSearch } from "react-icons/fa";
 
 import FormUserSection from "./FormUserSection";
 import FormPaymentSection from "./FormPaymentSection";
 import FormItemSection from "./FormItemSection";
 import IMEISearchModal from "./IMEISearchModal";
-import SalesResultTable from "./SalesResultTable";
-import InvoicePreview from "./InvoicePreview";
+import NamaBarangSearchModal from "./NamaBarangSearchModal";
 
 import {
-  addTransaksi,
-  addPenjualan,
   getTokoName,
   listenUsers,
-  adjustInventoryStock,
-  updateTransaksi,
+  addTransaksi,
+  reduceStock,
 } from "../../../services/FirebaseService";
+
+// FIX IMPORT (SESUAI FILE KAMU)
+import { db } from "../../../services/FirebaseInit";
+
+import { ref, onValue, get } from "firebase/database";
 
 import logoUrl from "../../../assets/logoMMT.png";
 
+// UI PRESET
 const glassCard =
   "bg-white/60 backdrop-blur-md border border-white/30 rounded-2xl shadow-md p-4";
 
-const formatRupiah = (num) => {
-  const n = Number(num || 0);
-  return n.toLocaleString("id-ID", {
+const formatRupiah = (num) =>
+  Number(num || 0).toLocaleString("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
   });
+
+// ============================================================
+// LISTEN STOCK TYPE A
+// ============================================================
+
+const listenStockByCategory = (tokoName, kategori, callback) => {
+  const path = `stock/${tokoName}`;
+  return onValue(ref(db, path), (snap) => {
+    const data = snap.val() || {};
+
+    const filtered = Object.values(data).filter(
+      (item) =>
+        item?.kategori?.toUpperCase() === kategori?.toUpperCase() &&
+        item?.qty > 0
+    );
+
+    callback(filtered);
+  });
 };
 
+const listenStockByName = (tokoName, namaBarang, callback) => {
+  const path = `stock/${tokoName}`;
+  return onValue(ref(db, path), (snap) => {
+    const data = snap.val() || {};
+
+    const filtered = Object.values(data).filter(
+      (item) =>
+        item?.namaBarang?.toUpperCase().includes(namaBarang.toUpperCase()) &&
+        item?.qty > 0
+    );
+
+    callback(filtered);
+  });
+};
+
+// ============================================================
+// GET BUNDLING MODEL OPSI 2
+// ============================================================
+
+const getBundlingItems = async (namaBarang) => {
+  const snap = await get(ref(db, `bundling/${namaBarang}`));
+  const data = snap.val() || {};
+
+  return Object.keys(data).map((key) => ({
+    sku: data[key].sku,
+    nama: data[key].nama,
+    harga: data[key].harga ?? 0,
+    bolehDijualTerpisah: data[key].bolehDijualTerpisah ?? false,
+  }));
+};
+
+// ============================================================
+// HITUNG TOTAL SATU ITEM
+// ============================================================
+
+const calcLineTotal = (item) => {
+  const price = Number(item.hargaUnit || 0);
+  const disc = Number(item.discount || 0);
+  const subtotal = price;
+  const discValue = (disc / 100) * subtotal;
+  const lineTotal = subtotal - discValue;
+
+  return { subtotal, discValue, lineTotal };
+};
+
+// ============================================================
+// COMPONENT UTAMA
+// ============================================================
+
 export default function CardPenjualanToko() {
-  const { tokoId } = useParams(); // /toko/:tokoId/penjualan
+  const { tokoId } = useParams();
   const navigate = useNavigate();
 
   const [tokoName, setTokoName] = useState(
-    (tokoId || "").replace(/-/g, " ").toUpperCase() || "TOKO"
+    (tokoId || "").replace(/-/g, " ").toUpperCase()
   );
 
-  // ========== STATE FORM GLOBAL ==========
+  // ============================================================
+  // STATE — TAHAP 1
+  // ============================================================
 
   const [userForm, setUserForm] = useState({
     tanggalPembelian: new Date().toISOString().slice(0, 10),
     noFaktur: "",
     idPelanggan: "",
     noTelepon: "",
-    namaToko: (tokoId || "").replace(/-/g, " ").toUpperCase(),
+    namaToko: tokoName,
     namaSales: "",
     salesTitipan: "",
     namaPelanggan: "",
   });
 
+  // ============================================================
+  // STATE — TAHAP 3
+  // ============================================================
+
   const [paymentForm, setPaymentForm] = useState({
-    kategoriBayar: "", // CASH / TRANSFER / PIUTANG
+    kategoriBayar: "",
     paymentMethod: "",
-    mdr: "", // persen (manual input)
-    mpProteck: "", // ✅ TAMBAHAN: MP PROTECK
+    mdr: "",
+    mpProteck: "",
     dpUser: "",
     tenor: "",
     status: "PIUTANG",
   });
 
+  // ============================================================
+  // STATE — TAHAP 2 (ITEM)
+  // ============================================================
+
   const [items, setItems] = useState([
     {
       id: Date.now(),
+      sku: "",
       kategoriBarang: "",
       namaBrand: "",
       namaBarang: "",
-      qty: 1,
       imei: "",
+      qty: 1,
       hargaUnit: 0,
       discount: 0,
     },
   ]);
 
-  // isi tabel hasil transaksi (draft + approved)
-  // ✅ SIMPAN KE LOCALSTORAGE AGAR TIDAK HILANG SAAT REFRESH
-  const [cartRows, setCartRows] = useState(() => {
-    try {
-      const key = `CART_PENJUALAN_TOKO_${tokoId || "GLOBAL"}`;
-      const saved = localStorage.getItem(key);
-      return saved ? JSON.parse(saved) : [];
-    } catch (err) {
-      console.error("Gagal load cartRows dari localStorage:", err);
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    try {
-      const key = `CART_PENJUALAN_TOKO_${tokoId || "GLOBAL"}`;
-      localStorage.setItem(key, JSON.stringify(cartRows));
-    } catch (err) {
-      console.error("Gagal simpan cartRows ke localStorage:", err);
-    }
-  }, [cartRows, tokoId]);
-
-  // tabel cepat dari pencarian IMEI
-  const [quickRows, setQuickRows] = useState([]);
-
-  // modal cari IMEI
+  // MODAL STATE
   const [imeiModalOpen, setImeiModalOpen] = useState(false);
+  const [namaBarangModalOpen, setNamaBarangModalOpen] = useState(false);
 
-  // preview invoice untuk 1 row
-  const [previewData, setPreviewData] = useState(null);
+  // REALTIME STOCK STATE
+  const [stockKategori, setStockKategori] = useState([]);
+  const [stockNamaBarang, setStockNamaBarang] = useState([]);
+  const [activeItemIndex, setActiveItemIndex] = useState(null);
+
+  // PREVIEW
   const previewRef = useRef(null);
+  const [previewData, setPreviewData] = useState(null);
 
-  // preview invoice global dengan form input pelanggan
-  const [globalPreviewOpen, setGlobalPreviewOpen] = useState(false);
-  const [invoiceForm, setInvoiceForm] = useState({
-    idPelanggan: "",
-    namaPelanggan: "",
-    noTlp: "",
-    namaSales: "",
-  });
+  // ============================================================
+  // USERS LIST
+  // ============================================================
 
-  const [saving, setSaving] = useState(false);
-
-  // data user (karyawan / sales) untuk autocomplete
   const [users, setUsers] = useState([]);
 
-  // mode pembayaran (CASH / TRANSFER / PIUTANG)
-  const [paymentMode, setPaymentMode] = useState("");
-  const [cashAmount, setCashAmount] = useState("");
-
-  // ✅✅✅ RESET CASH SAAT MODE BUKAN CASH
   useEffect(() => {
-    if (paymentMode !== "CASH") {
-      setCashAmount("");
-    }
-  }, [paymentMode]);
+    const unsub = listenUsers?.((list) => {
+      setUsers(Array.isArray(list) ? list : []);
+    });
 
-  // ========== AMBIL NAMA TOKO DARI FIREBASE ==========
+    return () => unsub && unsub();
+  }, []);
+
+  // ============================================================
+  // GET TOKO NAME
+  // ============================================================
 
   useEffect(() => {
     if (!tokoId) return;
 
     (async () => {
-      try {
-        const tokoName = await getTokoName?.(tokoId);
-        const finalName =
-        tokoName || (tokoId || "").replace(/-/g, " ").toUpperCase();
-
-        setTokoName(finalName);
-        setUserForm((prev) => ({
-          ...prev,
-          namaToko: finalName,
-        }));
-      } catch (e) {
-        console.error("Gagal ambil nama toko:", e);
-        const fallback = (tokoId || "").replace(/-/g, " ").toUpperCase();
-        setTokoName(fallback);
-        setUserForm((prev) => ({
-          ...prev,
-          namaToko: fallback,
-        }));
-      }
+      const nm = await getTokoName(tokoId);
+      setTokoName(nm || tokoName);
+      setUserForm((p) => ({ ...p, namaToko: nm || tokoName }));
     })();
   }, [tokoId]);
 
-  // listen user list
-  useEffect(() => {
-    const unsub = listenUsers?.((list) => {
-      setUsers(Array.isArray(list) ? list : []);
-    });
-    return () => unsub && unsub();
+  // ============================================================
+  // AUTO FAKTUR
+  // ============================================================
+
+  const generateAutoFaktur = useCallback(() => {
+    const t = new Date();
+    const prefix = `${t.getFullYear().toString().slice(-2)}${String(
+      t.getMonth() + 1
+    ).padStart(2, "0")}${String(t.getDate()).padStart(2, "0")}`;
+
+    const key = `FAKTUR_${prefix}`;
+    let next = Number(localStorage.getItem(key) || 0) + 1;
+
+    localStorage.setItem(key, next);
+
+    return `${prefix}${String(next).padStart(3, "0")}`;
   }, []);
 
-  // ========== HELPER ==========
+  useEffect(() => {
+    setUserForm((p) => ({
+      ...p,
+      noFaktur: generateAutoFaktur(),
+    }));
+  }, [generateAutoFaktur]);
 
-  const generateInvoiceNo = useCallback(() => {
-    return `INV-${tokoId || "X"}-${Date.now()}`;
-  }, [tokoId]);
+  // ============================================================
+  // VALIDASI
+  // ============================================================
 
-  const parseImeiLines = (imeiStr) =>
-    (imeiStr || "")
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+  const tahap1Complete = useMemo(
+    () =>
+      userForm.namaPelanggan &&
+      userForm.idPelanggan &&
+      userForm.noTelepon &&
+      userForm.namaSales &&
+      userForm.salesTitipan,
+    [userForm]
+  );
 
-  const calcLineTotal = (item) => {
-    const qty = Number(item.qty || 0);
-    const price = Number(item.hargaUnit || 0);
-    const disc = Number(item.discount || 0);
-    const subtotal = qty * price;
-    const discValue = (disc / 100) * subtotal;
-    const lineTotal = subtotal - discValue;
+  const tahap2Complete = useMemo(
+    () => items.length > 0 && items.every((it) => it.imei),
+    [items]
+  );
+
+  const tahap3Complete = useMemo(() => {
+    if (!paymentForm.kategoriBayar) return false;
+    if (paymentForm.kategoriBayar === "PIUTANG")
+      return paymentForm.paymentMethod && paymentForm.mdr;
+    return true;
+  }, [paymentForm]);
+
+  // ============================================================
+  // REALTIME STOCK LISTENER — KATEGORI
+  // ============================================================
+
+  useEffect(() => {
+    if (activeItemIndex === null) return;
+
+    const cur = items[activeItemIndex];
+    if (!cur?.kategoriBarang) return;
+
+    const unsub = listenStockByCategory(
+      tokoName,
+      cur.kategoriBarang,
+      setStockKategori
+    );
+
+    return () => unsub && unsub();
+  }, [activeItemIndex, items[activeItemIndex]?.kategoriBarang]);
+
+  // ============================================================
+  // REALTIME STOCK LISTENER — NAMA BARANG
+  // ============================================================
+
+  useEffect(() => {
+    if (activeItemIndex === null) return;
+
+    const cur = items[activeItemIndex];
+    if (!cur?.namaBarang) return;
+
+    const unsub = listenStockByName(tokoName, cur.namaBarang, setStockNamaBarang);
+    return () => unsub && unsub();
+  }, [activeItemIndex, items[activeItemIndex]?.namaBarang]);
+
+  // ============================================================
+  // UPDATE ITEM SETELAH PILIH NAMA BARANG
+  // ============================================================
+
+  useEffect(() => {
+    if (stockNamaBarang.length === 0 || activeItemIndex === null) return;
+
+    const updated = [...items];
+    const target = updated[activeItemIndex];
+    const p = stockNamaBarang[0];
+
+    target.sku = p.sku;
+    target.namaBrand = p.brand;
+    target.hargaUnit = p.harga;
+    target.imei = p.imei || "";
+
+    setItems(updated);
+  }, [stockNamaBarang]);
+
+  // ============================================================
+  // HITUNG TOTAL SEMUA ITEM
+  // ============================================================
+
+  const totals = useMemo(() => {
+    let totalAmount = 0;
+
+    items.forEach((it) => {
+      const calc = calcLineTotal(it);
+      totalAmount += calc.lineTotal;
+    });
+
     return {
-      qty,
-      price,
-      disc,
-      subtotal,
-      discValue,
-      lineTotal,
+      totalItems: items.length,
+      totalAmount,
     };
+  }, [items]);
+
+  // ============================================================
+  // HANDLE ADD ITEM DARI MODAL + BUNDLING OPSI 2
+  // ============================================================
+
+  const handleAddFromSearch = async (selected) => {
+    if (!selected || selected.length === 0) {
+      setImeiModalOpen(false);
+      setNamaBarangModalOpen(false);
+      return;
+    }
+
+    const updated = [...items];
+    const item = selected[0];
+
+    updated[activeItemIndex] = {
+      ...updated[activeItemIndex],
+      sku: item.sku,
+      imei: item.imei || "",
+      namaBarang: item.namaBarang,
+      namaBrand: item.brand,
+      kategoriBarang: item.kategori,
+      hargaUnit: item.harga || 0,
+      qty: 1,
+    };
+
+    setItems(updated);
+
+    // BUNDLING OPSI 2
+    const bundling = await getBundlingItems(item.namaBarang);
+
+    if (bundling.length > 0) {
+      const expanded = [...updated];
+
+      bundling.forEach((b) => {
+        expanded.push({
+          id: Date.now() + Math.random(),
+          sku: b.sku,
+          namaBarang: b.nama,
+          namaBrand: b.nama.split(" ")[0] ?? "",
+          kategoriBarang: "BUNDLING",
+          imei: "",
+          qty: 1,
+          hargaUnit: b.bolehDijualTerpisah ? b.harga : 0,
+          discount: 0,
+        });
+      });
+
+      setItems(expanded);
+    }
+
+    setImeiModalOpen(false);
+    setNamaBarangModalOpen(false);
   };
 
-  // ✅ TOTAL ITEM & GRAND TOTAL (PASTI TERHUBUNG KE TABEL UTAMA)
-  const totals = useMemo(() => {
-    const totalItems = cartRows.reduce(
-      (sum, row) => sum + Number(row.item?.qty || 0),
-      0
-    );
 
-    const totalAmount = cartRows.reduce(
-      (sum, row) => sum + Number(row.totals?.lineTotal || 0),
-      0
-    );
 
-    return {
-      totalItems,
-      totalAmount, // ✅ INI YANG JADI TOTAL BAYAR
-    };
-  }, [cartRows]);
+    // ============================================================
+  // PREVIEW HANDLER
+  // ============================================================
 
-  // Harga total untuk skema PIUTANG
-  const hargaTotalUnitPiutang = totals.totalAmount;
-  const mdrPersenNum = Number(paymentForm.mdr || 0);
-  const hargaTotalPiutang = useMemo(() => {
-    const base = Number(totals.totalAmount || 0);
-    const mdrValue = (mdrPersenNum / 100) * base;
-    return base + mdrValue;
-  }, [totals.totalAmount, mdrPersenNum]);
-
-  // ✅ KEMBALIAN = UANG CASH - TOTAL BAYAR
-  const cashChange = useMemo(() => {
-    if (paymentMode !== "CASH") return 0;
-
-    const cash = Number(cashAmount || 0);
-    const total = Number(totals.totalAmount || 0);
-
-    const result = cash - total;
-    return result > 0 ? result : 0;
-  }, [paymentMode, cashAmount, totals.totalAmount]);
-
-  // ========== FORM → TABEL (TAMBAH BARIS MANUAL / ITEM SECTION) ==========
-
-  function handleAddRowFromForm(item) {
-    const parsed = parseImeiLines(item.imei || "");
-    const kategori = (item.kategoriBarang || "").toUpperCase();
-
-    // ✅ Jika kategori ACCESSORIES → boleh tanpa IMEI (multi qty)
-    if (kategori !== "ACCESSORIES") {
-      if (parsed.length !== 0 && parsed.length !== Number(item.qty)) {
-        if (parsed.length === 1 && Number(item.qty) > 1) {
-          // 1 imei dipakai untuk banyak qty -> diizinkan
-        } else {
-          alert(
-            "Jumlah IMEI harus sama dengan QTY (atau kosong jika tidak ada IMEI)."
-          );
-          return;
-        }
-      }
-    }
-
-    const invoice = userForm.noFaktur?.trim() || generateInvoiceNo();
-    const lineCalc = calcLineTotal(item);
-
-    const newRow = {
-      id: Date.now() + Math.random(),
+  const handlePreview = () => {
+    setPreviewData({
       tanggal: userForm.tanggalPembelian,
-      invoice,
-      tokoId,
+      invoice: userForm.noFaktur,
       tokoName,
       user: { ...userForm },
-      payment: {
-        ...paymentForm,
-        kategoriBayar: paymentMode || paymentForm.kategoriBayar,
-      },
-      item: { ...item },
-      totals: lineCalc,
-      status: "DRAFT",
-      source: "FORM",
-    };
+      payment: { ...paymentForm },
+      items: [...items],
+      totalAmount: totals.totalAmount,
+    });
 
-    setCartRows((p) => [...p, newRow]);
-  }
-
-  function handleRemoveCartRow(rowId) {
-    setCartRows((p) => p.filter((r) => r.id !== rowId));
-  }
-
-  function handleEditCartRow(rowId, updated) {
-    setCartRows((p) =>
-      p.map((r) => (r.id === rowId ? { ...r, ...updated } : r))
-    );
-  }
-
-  // ========== APPROVE (SIMPAN SATU BARIS KE FIREBASE) ==========
-
-  async function internalApproveRow(row) {
-    const imeiList = parseImeiLines(row.item.imei || "");
-    let finalImeis = imeiList.length ? imeiList : Array(row.item.qty).fill("");
-
-    if (finalImeis.length !== Number(row.item.qty)) {
-      if (finalImeis.length === 1) {
-        finalImeis = Array(row.item.qty).fill(finalImeis[0]);
-      } else {
-        alert("Jumlah IMEI tidak sesuai dengan QTY.");
-        return false;
-      }
-    }
-
-    for (let i = 0; i < finalImeis.length; i++) {
-      const payload = {
-        TANGGAL_TRANSAKSI: row.tanggal,
-        NO_INVOICE: row.invoice,
-        ID_PELANGGAN: row.user.idPelanggan || "-",
-        NO_TELEPON: row.user.noTelepon || "-",
-        NAMA_TOKO: row.tokoName,
-        NAMA_SALES: row.user.namaSales || "",
-        SALES_TITIPAN: row.user.salesTitipan || "",
-        NAMA_PELANGGAN: row.user.namaPelanggan || "",
-
-        KATEGORI_BAYAR: row.payment.kategoriBayar || paymentMode || "",
-        PAYMENT_METHOD: row.payment.paymentMethod || "",
-        MDR: row.payment.mdr || "",
-        MP_PROTECK: row.payment.mpProteck || "", // ✅ SIMPAN MP PROTECK
-        DP_USER: row.payment.dpUser || null,
-        TENOR: row.payment.tenor || null,
-
-        KATEGORI_BARANG: row.item.kategoriBarang || "",
-        NAMA_BRAND: row.item.namaBrand || "",
-        NAMA_BARANG: row.item.namaBarang || "",
-        IMEI: finalImeis[i] || "",
-        QTY: 1,
-        HARGA_UNIT: Number(row.item.hargaUnit || 0),
-        DISCOUNT: Number(row.item.discount || 0),
-        HARGA_TOTAL:
-          Number(row.totals.lineTotal || 0) / Number(row.item.qty || 1),
-        STATUS: row.payment.kategoriBayar === "PIUTANG" ? "PIUTANG" : "LUNAS",
-      };
-
-      if (typeof addTransaksi === "function") {
-        await addTransaksi(tokoId, payload);
-      } else if (typeof addPenjualan === "function") {
-        await addPenjualan(payload);
-      }
-    }
-
-    // kurangi stok jika ada IMEI / namaBarang
-    if (row.item.namaBarang) {
-      try {
-        await adjustInventoryStock(
-          row.item.namaBarang || row.item.sku || "",
-          Number(row.item.qty || 0) * -1,
-          "OUT"
-        );
-      } catch (err) {
-        console.warn("adjustInventoryStock error:", err);
-      }
-    }
-
-    return true;
-  }
-
-  function handleApproveRow(rowId) {
-    const row = cartRows.find((r) => r.id === rowId);
-    if (!row) return;
-
-    (async () => {
-      try {
-        setSaving(true);
-        const ok = await internalApproveRow(row);
-        if (!ok) {
-          setSaving(false);
-          return;
-        }
-
-        setCartRows((p) =>
-          p.map((r) => (r.id === rowId ? { ...r, status: "APPROVED" } : r))
-        );
-        alert("Transaksi berhasil disimpan & APPROVED.");
-      } catch (err) {
-        console.error("Approve error:", err);
-        alert("Gagal menyimpan transaksi. Cek console.");
-      } finally {
-        setSaving(false);
-      }
-    })();
-  }
-
-  // ========== VOID TRANSAKSI (KEMBALIKAN STOK) ==========
-
-  function handleVoidRow(rowId) {
-    const row = cartRows.find((r) => r.id === rowId);
-    if (!row) return;
-
-    if (!window.confirm("Yakin VOID transaksi ini? Stok akan dikembalikan.")) {
-      return;
-    }
-
-    (async () => {
-      try {
-        if (typeof updateTransaksi === "function") {
-          await updateTransaksi(tokoId, row.firebaseId || row.id, {
-            STATUS: "VOID",
-          });
-        }
-
-        if (typeof adjustInventoryStock === "function") {
-          await adjustInventoryStock(
-            row.item.namaBarang || row.item.sku || "",
-            Number(row.item.qty || 0),
-            "IN"
-          );
-        }
-
-        setCartRows((p) =>
-          p.map((r) => (r.id === rowId ? { ...r, status: "VOID" } : r))
-        );
-        alert("Transaksi di-VOID dan stok dikembalikan.");
-      } catch (err) {
-        console.error("Void error:", err);
-        alert("Gagal VOID transaksi. Cek console.");
-      }
-    })();
-  }
-
-  // ========== BULK APPROVE (SUBMIT SEMUA) ==========
-
-  function handleBulkApprove() {
-    if (!cartRows.length) {
-      alert("Belum ada data transaksi di tabel utama.");
-      return;
-    }
-    if (!paymentMode) {
-      alert(
-        "Pilih mode pembayaran (CASH / TRANSFER / PIUTANG) terlebih dahulu."
-      );
-      return;
-    }
-
-    if (
-      paymentMode === "CASH" &&
-      Number(cashAmount || 0) < Number(totals.totalAmount || 0)
-    ) {
-      alert("Jumlah uang cash masih kurang dari total belanja.");
-      return;
-    }
-
-    if (paymentMode === "PIUTANG") {
-      if (
-        !userForm.namaPelanggan ||
-        !userForm.noTelepon ||
-        !paymentForm.paymentMethod ||
-        !paymentForm.mdr
-      ) {
-        alert(
-          "Lengkapi Nama Pelanggan, No. Telepon, Payment Method dan MDR untuk PIUTANG."
-        );
-        return;
-      }
-    }
-
-    if (
-      !window.confirm(
-        `Yakin submit ${cartRows.length} baris transaksi dengan mode ${paymentMode}?`
-      )
-    ) {
-      return;
-    }
-
-    (async () => {
-      try {
-        setSaving(true);
-        for (const row of cartRows) {
-          const rowWithMode = {
-            ...row,
-            user: {
-              ...row.user,
-              idPelanggan: userForm.idPelanggan,
-              noTelepon: userForm.noTelepon,
-              namaPelanggan: userForm.namaPelanggan,
-              namaSales: userForm.namaSales,
-            },
-            payment: {
-              ...row.payment,
-              kategoriBayar: paymentMode,
-              paymentMethod: paymentForm.paymentMethod,
-              mdr: paymentForm.mdr,
-              mpProteck: paymentForm.mpProteck, // ✅ ikut dibawa
-              dpUser: paymentForm.dpUser,
-              tenor: paymentForm.tenor,
-            },
-          };
-          const ok = await internalApproveRow(rowWithMode);
-          if (!ok) {
-            setSaving(false);
-            return;
-          }
-        }
-
-        setCartRows((p) => p.map((r) => ({ ...r, status: "APPROVED" })));
-        alert("Semua transaksi berhasil disimpan & APPROVED.");
-      } catch (err) {
-        console.error("Bulk approve error:", err);
-        alert("Gagal menyimpan transaksi. Cek console.");
-      } finally {
-        setSaving(false);
-      }
-    })();
-  }
-
-  // ========== EXPORT EXCEL ==========
-
-  function handleExportExcel() {
-    try {
-      // eslint-disable-next-line global-require
-      const XLSX = require("xlsx");
-      const rows = cartRows.map((r) => ({
-        Tanggal: r.tanggal,
-        Invoice: r.invoice,
-        Toko: r.tokoName,
-        Barang: r.item?.namaBarang,
-        IMEI: r.item?.imei,
-        Qty: r.item?.qty,
-        HargaUnit: r.item?.hargaUnit,
-        Discount: r.item?.discount,
-        Total: r.totals?.lineTotal,
-        Status: r.status,
-      }));
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Penjualan");
-      const fileName = `Penjualan_${tokoName}_${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx`;
-      XLSX.writeFile(wb, fileName);
-    } catch (err) {
-      console.error("Export Excel error:", err);
-      alert("Gagal export Excel. Pastikan package xlsx terpasang.");
-    }
-  }
-
-  // ========== PREVIEW INVOICE ==========
-
-  function handlePreviewInvoice(mode) {
-    if (mode === "GLOBAL") {
-      setGlobalPreviewOpen(true);
-      // isi default dari form global berdasarkan userForm
-      setInvoiceForm((prev) => ({
-        ...prev,
-        idPelanggan: userForm.idPelanggan,
-        namaPelanggan: userForm.namaPelanggan,
-        noTlp: userForm.noTelepon,
-        namaSales: userForm.namaSales,
-      }));
-      return;
-    }
-
-    const row = cartRows.find((r) => r.id === mode);
-    if (!row) return;
-    setPreviewData(row);
     setTimeout(() => {
       previewRef.current?.scrollIntoView({ behavior: "smooth" });
     }, 150);
-  }
+  };
 
-  function handlePrintInvoice() {
-    window.print();
-  }
+  // ============================================================
+  // SAVE TRANSAKSI
+  // ============================================================
 
-  // ========== CALLBACK DARI MODAL IMEI SEARCH (PENJUALAN CEPAT) ==========
+  const handleSaveTransaksi = async () => {
+    try {
+      if (!tahap1Complete || !tahap2Complete || !tahap3Complete) {
+        alert("Lengkapi semua tahap sebelum menyimpan transaksi.");
+        return;
+      }
 
-  const handleAddFromImeiSearch = (selectedItems) => {
-    if (!selectedItems || !selectedItems.length) {
-      setImeiModalOpen(false);
-      return;
-    }
-
-    const mapped = selectedItems.map((it) => {
-      const calc = calcLineTotal(it);
-      return {
-        id: Date.now() + Math.random(),
+      const transaksiData = {
         tanggal: userForm.tanggalPembelian,
-        invoice: userForm.noFaktur?.trim() || generateInvoiceNo(),
+        invoice: userForm.noFaktur,
         tokoId,
         tokoName,
         user: { ...userForm },
-        payment: {
-          ...paymentForm,
-          kategoriBayar: paymentMode || paymentForm.kategoriBayar,
-        },
-        item: { ...it },
-        totals: calc,
-        status: "DRAFT",
-        source: "IMEI",
+        payment: { ...paymentForm },
+        items: [...items],
+        totalAmount: totals.totalAmount,
+        createdAt: Date.now(),
       };
-    });
 
-    // ⛔ Tidak langsung ke tabel utama — masuk dulu ke tabel QUICK
-    setQuickRows((prev) => [...prev, ...mapped]);
-    setImeiModalOpen(false);
+      // REDUCE STOCK (kecuali bundling)
+      for (const itm of items) {
+        if (itm.kategoriBarang === "BUNDLING") continue;
+
+        if (!itm.sku || !itm.imei) {
+          alert("SKU atau IMEI tidak valid.");
+          return;
+        }
+
+        const result = await reduceStock(tokoName, itm.sku, 1);
+        if (!result.success) {
+          alert(result.message || "Stok tidak cukup.");
+          return;
+        }
+      }
+
+      const resultAdd = await addTransaksi(transaksiData);
+
+      if (!resultAdd.success) {
+        alert("Gagal menyimpan transaksi.");
+        return;
+      }
+
+      alert("Transaksi berhasil disimpan!");
+
+      // RESET ITEM
+      setItems([
+        {
+          id: Date.now(),
+          sku: "",
+          kategoriBarang: "",
+          namaBrand: "",
+          namaBarang: "",
+          imei: "",
+          qty: 1,
+          hargaUnit: 0,
+          discount: 0,
+        },
+      ]);
+
+      // RESET FORM
+      setUserForm((prev) => ({
+        ...prev,
+        namaPelanggan: "",
+        idPelanggan: "",
+        noTelepon: "",
+        noFaktur: generateAutoFaktur(),
+      }));
+
+      setPaymentForm({
+        kategoriBayar: "",
+        paymentMethod: "",
+        mdr: "",
+        mpProteck: "",
+        dpUser: "",
+        tenor: "",
+        status: "PIUTANG",
+      });
+
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat menyimpan transaksi.");
+    }
   };
 
-  function handleSubmitQuickToMain() {
-    if (!quickRows.length) return;
-    setCartRows((prev) => [...prev, ...quickRows]);
-    setQuickRows([]);
-  }
-
-  // ========== RENDER ==========
+  // ============================================================
+  // RENDER START
+  // ============================================================
 
   return (
     <div className="min-h-screen p-6 bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-      <div className="max-w-7xl mx-auto space-y-5">
+      <div className="max-w-7xl mx-auto space-y-6">
+
         {/* HEADER */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              className="h-10 w-10 rounded-lg bg-white/60 border border-white/30 backdrop-blur flex items-center justify-center shadow"
-            >
-              <FaArrowBackIconFallback />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800">
-                Penjualan - {tokoName}
-              </h1>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Form penjualan & invoice (Glassmorphism Modern).
-              </p>
-            </div>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => navigate(-1)}
+            className="h-10 w-10 rounded-lg bg-white/60 border border-white/30 backdrop-blur flex items-center justify-center shadow"
+          >
+            <FaArrowBackIconFallback />
+          </button>
+
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">
+              Penjualan — {tokoName}
+            </h1>
+            <p className="text-xs text-slate-500">
+              Form Penjualan — Tahap 1 → 2 → 3
+            </p>
           </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => setImeiModalOpen(true)}
-              className="px-3 py-2 rounded-lg bg-white/70 border border-white/30 flex items-center gap-2 text-xs sm:text-sm"
-            >
-              <FaSearch /> Penjualan Cepat Cari IMEI
-            </button>
-
-            <button
-              onClick={handleExportExcel}
-              className="px-3 py-2 rounded-lg bg-emerald-600 text-white flex items-center gap-2 text-xs sm:text-sm"
-            >
-              Export Excel
-            </button>
-
-            <button
-              onClick={handleBulkApprove}
-              disabled={!paymentMode || !cartRows.length || saving}
-              className={`px-3 py-2 rounded-lg flex items-center gap-2 text-xs sm:text-sm ${
-                !paymentMode || !cartRows.length || saving
-                  ? "bg-indigo-300 text-white cursor-not-allowed"
-                  : "bg-indigo-600 text-white hover:bg-indigo-700"
-              }`}
-            >
-              <FaSave /> Submit
-            </button>
-          </div>
+          <div></div>
         </div>
 
-        {/* 3 SKEMA HORIZONTAL */}
+        {/* FORM GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* TAHAP 1 */}
           <div className={`${glassCard} min-h-[260px]`}>
             <FormUserSection
               value={userForm}
-              onChange={(next) => setUserForm(next)}
+              onChange={setUserForm}
               users={users}
+              tahap={1}
+              tahap1Complete={tahap1Complete}
             />
           </div>
 
-          <div className={`${glassCard} min-h-[260px]`}>
-            <FormPaymentSection
-              value={paymentForm}
-              onChange={(next) => setPaymentForm(next)}
-              mode={paymentMode}
-            />
-          </div>
-
+          {/* TAHAP 2 */}
           <div className={`${glassCard} min-h-[260px]`}>
             <FormItemSection
               value={items}
-              onChange={(next) => setItems(next)}
-              onAddRow={(row) => handleAddRowFromForm(row)}
+              onChange={setItems}
+              disabled={!tahap1Complete}
+              tahap={2}
+              onSearchIMEI={(index) => {
+                setActiveItemIndex(index);
+                setImeiModalOpen(true);
+              }}
+              onSearchNamaBarang={(index) => {
+                setActiveItemIndex(index);
+                setNamaBarangModalOpen(true);
+              }}
+              realtimeKategori={stockKategori}
+              realtimeNamaBarang={stockNamaBarang}
+            />
+          </div>
+
+          {/* TAHAP 3 */}
+          <div className={`${glassCard} min-h-[260px]`}>
+            <FormPaymentSection
+              value={paymentForm}
+              onChange={setPaymentForm}
+              tahap={3}
+              disabled={!tahap2Complete}
+              tahap3Complete={tahap3Complete}
             />
           </div>
         </div>
 
-        {/* TABEL TRANSAKSI BERDASARKAN PENCARIAN IMEI */}
-        {quickRows.length > 0 && (
-          <div className="bg-white rounded-2xl shadow p-4 border border-dashed border-indigo-200">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-slate-700">
-                Transaksi Berdasarkan Pencarian IMEI
-              </h2>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setQuickRows([])}
-                  className="px-3 py-1 rounded-lg bg-gray-100 text-xs md:text-sm hover:bg-gray-200"
-                >
-                  Kosongkan
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmitQuickToMain}
-                  className="px-3 py-1 rounded-lg bg-indigo-600 text-white text-xs md:text-sm hover:bg-indigo-700"
-                >
-                  Submit ke Tabel Utama
-                </button>
-              </div>
-            </div>
+        {/* ============================================================
+            SUMMARY
+        ============================================================ */}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs md:text-sm border-collapse">
-                <thead className="bg-slate-50">
+        <div className={`${glassCard} flex flex-col gap-4`}>
+
+          {/* TOTAL */}
+          <div className="flex justify-between text-sm text-slate-700">
+            <div>
+              Total Item: <strong>{totals.totalItems}</strong>
+            </div>
+            <div>
+              Grand Total:{" "}
+              <strong className="text-indigo-600">
+                {formatRupiah(totals.totalAmount)}
+              </strong>
+            </div>
+          </div>
+
+          {/* DETAIL RINGKAS */}
+          <div className="bg-white rounded-xl shadow p-4">
+            <h2 className="text-lg font-bold text-slate-700 mb-3">
+              Ringkasan Penjualan
+            </h2>
+
+            <table className="w-full text-sm border-collapse mb-3">
+              <tbody>
+                <tr><td className="border p-2 font-semibold w-48">Nama Pelanggan</td><td className="border p-2">{userForm.namaPelanggan}</td></tr>
+                <tr><td className="border p-2 font-semibold">ID Pelanggan</td><td className="border p-2">{userForm.idPelanggan}</td></tr>
+                <tr><td className="border p-2 font-semibold">No Telepon</td><td className="border p-2">{userForm.noTelepon}</td></tr>
+                <tr><td className="border p-2 font-semibold">Nama Sales</td><td className="border p-2">{userForm.namaSales}</td></tr>
+                <tr><td className="border p-2 font-semibold">Sales Titipan</td><td className="border p-2">{userForm.salesTitipan}</td></tr>
+                <tr><td className="border p-2 font-semibold">Kategori Bayar</td><td className="border p-2">{paymentForm.kategoriBayar}</td></tr>
+                <tr><td className="border p-2 font-semibold">Payment Method</td><td className="border p-2">{paymentForm.paymentMethod}</td></tr>
+                <tr><td className="border p-2 font-semibold">MDR</td><td className="border p-2">{paymentForm.mdr}%</td></tr>
+                <tr><td className="border p-2 font-semibold">DP User</td><td className="border p-2">{paymentForm.dpUser}</td></tr>
+                <tr><td className="border p-2 font-semibold">Tenor</td><td className="border p-2">{paymentForm.tenor}</td></tr>
+              </tbody>
+            </table>
+
+            {/* DETAIL BARANG */}
+            <h3 className="text-md font-bold mt-4 mb-2 text-slate-700">Detail Barang</h3>
+
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="border p-2">SKU</th>
+                  <th className="border p-2">Kategori</th>
+                  <th className="border p-2">Brand</th>
+                  <th className="border p-2">Nama Barang</th>
+                  <th className="border p-2">IMEI</th>
+                  <th className="border p-2">Harga</th>
+                  <th className="border p-2">Disc</th>
+                  <th className="border p-2">Total</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {items.map((it, idx) => {
+                  const calc = calcLineTotal(it);
+
+                  return (
+                    <tr key={idx}>
+                      <td className="border p-2">{it.sku}</td>
+                      <td className="border p-2">{it.kategoriBarang}</td>
+                      <td className="border p-2">{it.namaBrand}</td>
+                      <td className="border p-2">{it.namaBarang}</td>
+                      <td className="border p-2 whitespace-pre">{it.imei}</td>
+                      <td className="border p-2 text-right">{formatRupiah(it.hargaUnit)}</td>
+                      <td className="border p-2 text-center">{it.discount}%</td>
+                      <td className="border p-2 text-right">{formatRupiah(calc.lineTotal)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ACTION BUTTONS */}
+          <div className="flex justify-end gap-3 mt-4">
+            <button
+              onClick={handlePreview}
+              className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm"
+              disabled={!tahap3Complete}
+            >
+              PREVIEW INVOICE
+            </button>
+
+            <button
+              onClick={handleSaveTransaksi}
+              className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm"
+              disabled={!tahap3Complete}
+            >
+              SIMPAN TRANSAKSI
+            </button>
+          </div>
+        </div>
+
+        {/* ============================================================
+            PREVIEW INVOICE
+        ============================================================ */}
+
+        <div ref={previewRef}>
+          {previewData && (
+            <div className="bg-white rounded-xl shadow p-4 mt-6 print:p-0">
+
+              {/* HEADER */}
+              <div className="flex justify-between items-center mb-4">
+                <img src={logoUrl} alt="Logo" className="h-12" />
+                <div className="text-right">
+                  <h2 className="text-xl font-bold">INVOICE</h2>
+                  <p className="text-xs">
+                    No Faktur: {previewData.invoice}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Tanggal: {previewData.tanggal}
+                  </p>
+                </div>
+              </div>
+
+              {/* CUSTOMER */}
+              <div className="border rounded-lg p-3 bg-slate-50 mb-4">
+                <p className="text-xs"><strong>Nama:</strong> {previewData.user.namaPelanggan}</p>
+                <p className="text-xs"><strong>No Telepon:</strong> {previewData.user.noTelepon}</p>
+                <p className="text-xs"><strong>Sales:</strong> {previewData.user.namaSales}</p>
+              </div>
+
+              {/* TABLE */}
+              <table className="w-full text-xs border-collapse mb-4">
+                <thead className="bg-slate-100">
                   <tr>
-                    <th className="border p-2">No</th>
-                    <th className="border p-2">Tanggal</th>
-                    <th className="border p-2">Invoice</th>
                     <th className="border p-2">Nama Barang</th>
                     <th className="border p-2">IMEI</th>
-                    <th className="border p-2">Qty</th>
-                    <th className="border p-2">Harga Unit</th>
+                    <th className="border p-2">Harga</th>
                     <th className="border p-2">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {quickRows.map((r, idx) => (
-                    <tr key={r.id}>
-                      <td className="border p-2 text-center">{idx + 1}</td>
-                      <td className="border p-2 text-center">{r.tanggal}</td>
-                      <td className="border p-2 text-center">{r.invoice}</td>
-                      <td className="border p-2">{r.item?.namaBarang}</td>
-                      <td className="border p-2 whitespace-pre-wrap">
-                        {r.item?.imei}
-                      </td>
-                      <td className="border p-2 text-center">{r.item?.qty}</td>
-                      <td className="border p-2 text-right">
-                        {formatRupiah(r.item?.hargaUnit || 0)}
-                      </td>
-                      <td className="border p-2 text-right">
-                        {formatRupiah(r.totals?.lineTotal || 0)}
-                      </td>
-                    </tr>
-                  ))}
+                  {previewData.items.map((it, idx) => {
+                    const calc = calcLineTotal(it);
+
+                    return (
+                      <tr key={idx}>
+                        <td className="border p-2">{it.namaBarang}</td>
+                        <td className="border p-2 whitespace-pre">{it.imei}</td>
+                        <td className="border p-2 text-right">{formatRupiah(it.hargaUnit)}</td>
+                        <td className="border p-2 text-right">{formatRupiah(calc.lineTotal)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-            </div>
 
-            <p className="mt-1 text-[11px] text-slate-500">
-              • Data di atas belum masuk ke tabel utama. Klik{" "}
-              <span className="font-semibold">Submit ke Tabel Utama</span> untuk
-              memindahkan.
-            </p>
-          </div>
-        )}
-
-        {/* MODE PEMBAYARAN + TOTAL + KEMBALIAN + SKEMA PIUTANG */}
-        <div className={`${glassCard} flex flex-col gap-3`}>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-600">
-              Mode Pembayaran:
-            </span>
-            {["CASH", "TRANSFER", "PIUTANG"].map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => {
-                  setPaymentMode(mode);
-                  setPaymentForm((prev) => ({
-                    ...prev,
-                    kategoriBayar: mode,
-                    status: mode === "PIUTANG" ? "PIUTANG" : "LUNAS",
-                  }));
-                }}
-                className={`px-3 py-1 rounded-full text-xs md:text-sm border transition ${
-                  paymentMode === mode
-                    ? "bg-indigo-600 text-white border-indigo-600 shadow"
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-
-            {paymentMode && (
-              <span className="ml-2 text-[11px] text-slate-500">
-                Mode aktif: <span className="font-semibold">{paymentMode}</span>
-              </span>
-            )}
-          </div>
-
-          {/* TOTAL ITEM & GRAND TOTAL */}
-          <div className="flex flex-wrap justify-between text-xs md:text-sm text-slate-700">
-            <div>
-              Total Item:{" "}
-              <span className="font-semibold">{totals.totalItems}</span>
-            </div>
-            <div>
-              Grand Total:{" "}
-              <span className="font-semibold text-indigo-600">
-                {formatRupiah(totals.totalAmount)}
-              </span>
-            </div>
-          </div>
-
-          {/* MODE CASH → TOTAL BAYAR & KEMBALIAN */}
-          {paymentMode === "CASH" && (
-            <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm">
-              <div>
-                Total Bayar:{" "}
-                <span className="font-semibold text-emerald-600">
-                  {formatRupiah(totals.totalAmount)}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span>Jumlah Uang Cash:</span>
-                <input
-                  type="number"
-                  className="border rounded-lg px-2 py-1 text-xs md:text-sm bg-white"
-                  placeholder="Masukkan nominal cash"
-                  value={cashAmount}
-                  onChange={(e) => setCashAmount(e.target.value)}
-                />
-              </div>
-
-              <div>
-                Total Kembalian:{" "}
-                <span className="font-semibold text-indigo-600">
-                  {formatRupiah(cashChange)}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* MODE PIUTANG → SKEMA 2 & 3 */}
-          {paymentMode === "PIUTANG" && (
-            <div className="mt-2 border-t border-slate-200 pt-3 space-y-2 text-xs md:text-sm">
-              <div className="font-semibold text-slate-700 mb-1">
-                SKEMA PIUTANG (DATA AKUN)
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <input
-                  className="border rounded-lg px-2 py-1 bg-white"
-                  placeholder="NAMA AKUN / PELANGGAN"
-                  value={userForm.namaPelanggan}
-                  onChange={(e) =>
-                    setUserForm((prev) => ({
-                      ...prev,
-                      namaPelanggan: e.target.value.toUpperCase(),
-                    }))
-                  }
-                />
-                <input
-                  className="border rounded-lg px-2 py-1 bg-white"
-                  placeholder="NO. TELEPON"
-                  value={userForm.noTelepon}
-                  onChange={(e) =>
-                    setUserForm((prev) => ({
-                      ...prev,
-                      noTelepon: e.target.value.toUpperCase(),
-                    }))
-                  }
-                />
-                <input
-                  className="border rounded-lg px-2 py-1 bg-white"
-                  placeholder="ID PELANGGAN"
-                  value={userForm.idPelanggan}
-                  onChange={(e) =>
-                    setUserForm((prev) => ({
-                      ...prev,
-                      idPelanggan: e.target.value.toUpperCase(),
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                <select
-                  className="border rounded-lg px-2 py-1 bg-white"
-                  value={paymentForm.paymentMethod}
-                  onChange={(e) =>
-                    setPaymentForm((prev) => ({
-                      ...prev,
-                      paymentMethod: e.target.value.toUpperCase(),
-                    }))
-                  }
-                >
-                  <option value="">PAYMENT METHOD</option>
-                  <option value="DEBIT">DEBIT</option>
-                  <option value="KREDIT">KREDIT</option>
-                  <option value="VIRTUAL ACCOUNT">VIRTUAL ACCOUNT</option>
-                  <option value="PAYLATER">PAYLATER</option>
-                </select>
-
-                {/* ✅ MDR MANUAL */}
-                <input
-                  className="border rounded-lg px-2 py-1 bg-white"
-                  type="number"
-                  placeholder="MDR (%)"
-                  value={paymentForm.mdr}
-                  onChange={(e) =>
-                    setPaymentForm((prev) => ({
-                      ...prev,
-                      mdr: e.target.value,
-                    }))
-                  }
-                />
-
-                {/* ✅ MP PROTECK DI SAMPING MDR */}
-                <input
-                  className="border rounded-lg px-2 py-1 bg-white"
-                  type="number"
-                  placeholder="MP PROTECK"
-                  value={paymentForm.mpProteck}
-                  onChange={(e) =>
-                    setPaymentForm((prev) => ({
-                      ...prev,
-                      mpProteck: e.target.value,
-                    }))
-                  }
-                />
-
-                <input
-                  className="border rounded-lg px-2 py-1 bg-white"
-                  type="number"
-                  placeholder="DP USER"
-                  value={paymentForm.dpUser}
-                  onChange={(e) =>
-                    setPaymentForm((prev) => ({
-                      ...prev,
-                      dpUser: e.target.value,
-                    }))
-                  }
-                />
-
-                <input
-                  className="border rounded-lg px-2 py-1 bg-white"
-                  placeholder="TENOR"
-                  value={paymentForm.tenor}
-                  onChange={(e) =>
-                    setPaymentForm((prev) => ({
-                      ...prev,
-                      tenor: e.target.value.toUpperCase(),
-                    }))
-                  }
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <div className="border rounded-lg px-2 py-1 bg-slate-50 flex justify-between">
-                  <span>HARGA TOTAL UNIT</span>
-                  <span className="font-semibold">
-                    {formatRupiah(hargaTotalUnitPiutang)}
-                  </span>
-                </div>
-                <div className="border rounded-lg px-2 py-1 bg-slate-50 flex justify-between">
-                  <span>HARGA TOTAL + MDR</span>
-                  <span className="font-semibold text-indigo-600">
-                    {formatRupiah(hargaTotalPiutang)}
-                  </span>
+              {/* TOTAL */}
+              <div className="flex justify-end">
+                <div className="border rounded-lg p-3 bg-slate-50 w-64">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-semibold">Total Pembayaran:</span>
+                    <span className="font-bold text-indigo-600">
+                      {formatRupiah(previewData.totalAmount)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* TOMBOL PREVIEW GLOBAL */}
-          <div className="flex justify-end mt-2">
-            <button
-              onClick={() => handlePreviewInvoice("GLOBAL")}
-              className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs sm:text-sm hover:bg-indigo-700"
-            >
-              Preview Invoice
-            </button>
-          </div>
-        </div>
-
-        {/* TABEL HASIL TRANSAKSI (UTAMA) */}
-        <div className="bg-white rounded-2xl shadow p-4">
-          <SalesResultTable
-            rows={cartRows}
-            onRemove={handleRemoveCartRow}
-            onEdit={handleEditCartRow}
-            onApprove={handleApproveRow}
-            onVoid={handleVoidRow}
-            onPreview={handlePreviewInvoice}
-            onExport={handleExportExcel}
-          />
-        </div>
-
-        {/* PREVIEW INVOICE SATU ROW */}
-        <div ref={previewRef}>
-          {previewData && (
-            <div className="bg-white rounded-2xl shadow p-4 print:p-0 print:shadow-none">
-              <InvoicePreview
-                data={previewData}
-                logoUrl={logoUrl}
-                tokoName={tokoName}
-              />
-              <div className="mt-3 flex justify-end gap-2 print:hidden">
+              {/* ACTION */}
+              <div className="flex justify-end gap-3 mt-4 print:hidden">
                 <button
-                  onClick={handlePrintInvoice}
-                  className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-xs sm:text-sm"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm"
                 >
-                  Cetak Invoice
+                  CETAK
                 </button>
+
                 <button
                   onClick={() => setPreviewData(null)}
-                  className="px-3 py-2 rounded-lg bg-gray-300 text-xs sm:text-sm"
+                  className="px-4 py-2 rounded-lg bg-gray-300 text-sm"
                 >
-                  Tutup Preview
+                  Tutup
                 </button>
               </div>
+
             </div>
           )}
         </div>
+
+        {/* ============================================================
+            MODALS
+        ============================================================ */}
+
+        {imeiModalOpen && (
+          <IMEISearchModal
+            onClose={() => setImeiModalOpen(false)}
+            onSelect={handleAddFromSearch}
+          />
+        )}
+
+        {namaBarangModalOpen && (
+          <NamaBarangSearchModal
+            onClose={() => setNamaBarangModalOpen(false)}
+            onSelect={handleAddFromSearch}
+          />
+        )}
+
       </div>
-
-      {/* MODAL CARI IMEI */}
-      {imeiModalOpen && (
-        <IMEISearchModal
-          onClose={() => setImeiModalOpen(false)}
-          onSelect={handleAddFromImeiSearch}
-        />
-      )}
-
-      {/* MODAL PREVIEW GLOBAL */}
-      {globalPreviewOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
-          <div className="bg-white rounded-xl p-4 w-full max-w-md">
-            <h2 className="font-bold mb-3 text-sm">
-              Preview & Cetak Invoice (Global)
-            </h2>
-
-            {[
-              ["idPelanggan", "ID Pelanggan"],
-              ["namaPelanggan", "Nama Pelanggan"],
-              ["noTlp", "No Tlp"],
-              ["namaSales", "Nama Sales"],
-            ].map(([k, label]) => (
-              <div key={k} className="mb-2">
-                <label className="text-xs block mb-1">{label}</label>
-                <input
-                  className="w-full border rounded p-2 text-sm"
-                  value={invoiceForm[k]}
-                  onChange={(e) =>
-                    setInvoiceForm((prev) => ({
-                      ...prev,
-                      [k]: e.target.value.toUpperCase(),
-                    }))
-                  }
-                />
-              </div>
-            ))}
-
-            <div className="flex justify-end gap-2 mt-3">
-              <button
-                onClick={() => setGlobalPreviewOpen(false)}
-                className="px-3 py-2 bg-gray-300 rounded text-xs sm:text-sm"
-              >
-                Batal
-              </button>
-
-              <button
-                onClick={() => {
-                  setPreviewData({
-                    tanggal:
-                      userForm.tanggalPembelian ||
-                      new Date().toISOString().slice(0, 10),
-                    invoice: userForm.noFaktur || generateInvoiceNo(),
-                    user: {
-                      idPelanggan: invoiceForm.idPelanggan,
-                      noTelepon: invoiceForm.noTlp,
-                      namaSales: invoiceForm.namaSales,
-                      namaPelanggan: invoiceForm.namaPelanggan,
-                    },
-                    item: {
-                      namaBarang:
-                        cartRows[0]?.item?.namaBarang || "ITEM PENJUALAN",
-                      imei: cartRows.map((r) => r.item?.imei || "").join("\n"),
-                      qty: totals.totalItems,
-                      hargaUnit: 0,
-                      discount: 0,
-                    },
-                    totals: { lineTotal: totals.totalAmount },
-                    status: "APPROVED",
-                  });
-                  setGlobalPreviewOpen(false);
-                  setTimeout(() => window.print(), 300);
-                }}
-                className="px-3 py-2 bg-indigo-600 text-white rounded text-xs sm:text-sm"
-              >
-                Cetak
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
+
+/* ============================================================
+   ICON FALLBACK
+============================================================ */
 
 function FaArrowBackIconFallback() {
   return (
