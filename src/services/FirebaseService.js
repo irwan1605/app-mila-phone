@@ -225,12 +225,6 @@ export const addTransaksi = async (tokoId, data) => {
   return r.key;
 };
 
-/**
- * Update transaksi by id
- */
-export const updateTransaksi = (tokoId, id, data) => {
-  return update(ref(db, `toko/${tokoId}/transaksi/${id}`), data);
-};
 
 /**
  * Delete transaksi by id
@@ -1074,6 +1068,78 @@ export const listenInventoryReport = (namaToko, callback) => {
     },
     (err) => console.error("ERROR LISTEN INVENTORY:", err)
   );
+};
+
+
+
+// ================================
+// STOCK ACTIVITY LOGGER
+// ================================
+export const logStockActivity = async ({
+  tokoName,
+  sku,
+  qty,
+  type, // IN | OUT | RETURN
+  refId,
+  user,
+}) => {
+  try {
+    const id = Date.now();
+
+    await set(ref(db, `stockLog/${id}`), {
+      tokoName,
+      sku,
+      qty,
+      type,
+      refId,
+      user,
+      createdAt: Date.now(),
+    });
+
+    return { success: true };
+  } catch (err) {
+    console.error("logStockActivity error:", err);
+    return { success: false, error: err };
+  }
+};
+
+
+
+
+
+// =======================
+// UPDATE TRANSAKSI
+// =======================
+export const updateTransaksi = async (id, data) => {
+  try {
+    await update(ref(db, `transaksi/${id}`), data);
+    return { success: true };
+  } catch (err) {
+    console.error("updateTransaksi error:", err);
+    return { success: false, error: err };
+  }
+};
+
+// =======================
+// RETURN / BALIK STOK
+// =======================
+export const returnStock = async (tokoName, sku, qty = 1) => {
+  try {
+    const stockRef = ref(db, `stock/${tokoName}/${sku}`);
+    const snap = await get(stockRef);
+
+    if (!snap.exists()) {
+      await set(stockRef, { qty });
+    } else {
+      const current = snap.val().qty || 0;
+      await update(stockRef, { qty: current + qty });
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("returnStock error:", err);
+    return { success: false, error: err };
+  }
 };
 
 

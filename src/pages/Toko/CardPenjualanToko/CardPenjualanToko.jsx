@@ -22,8 +22,13 @@ import {
   getTokoName,
   listenUsers,
   addTransaksi,
+  updateTransaksi,   // ✅ TAMBAH
   reduceStock,
+  addStock,
+  returnStock,       // ✅ TAMBAH
+  logStockActivity,
 } from "../../../services/FirebaseService";
+
 
 // FIX IMPORT (SESUAI FILE KAMU)
 import { db } from "../../../services/FirebaseInit";
@@ -246,10 +251,21 @@ export default function CardPenjualanToko() {
     [userForm]
   );
 
-  const tahap2Complete = useMemo(
-    () => items.length > 0 && items.every((it) => it.imei),
-    [items]
-  );
+  const tahap2Complete = useMemo(() => {
+    return (
+      items.length > 0 &&
+      items.every((it) => {
+        if (
+          ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"].includes(
+            it.kategoriBarang
+          )
+        ) {
+          return it.imeiList && it.imeiList.length > 0;
+        }
+        return it.qty > 0;
+      })
+    );
+  }, [items]);
 
   const tahap3Complete = useMemo(() => {
     if (!paymentForm.kategoriBayar) return false;
@@ -287,7 +303,11 @@ export default function CardPenjualanToko() {
     const cur = items[activeItemIndex];
     if (!cur?.namaBarang) return;
 
-    const unsub = listenStockByName(tokoName, cur.namaBarang, setStockNamaBarang);
+    const unsub = listenStockByName(
+      tokoName,
+      cur.namaBarang,
+      setStockNamaBarang
+    );
     return () => unsub && unsub();
   }, [activeItemIndex, items[activeItemIndex]?.namaBarang]);
 
@@ -382,9 +402,88 @@ export default function CardPenjualanToko() {
     setNamaBarangModalOpen(false);
   };
 
+  const normalizeItemsBeforeSave = (items) => {
+    const normalized = [];
 
+    items.forEach((it) => {
+      // KATEGORI IMEI → PECAH PER IMEI
+      if (
+        ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"].includes(
+          it.kategoriBarang
+        ) &&
+        Array.isArray(it.imeiList) &&
+        it.imeiList.length > 0
+      ) {
+        it.imeiList.forEach((imei) => {
+          normalized.push({
+            ...it,
+            imei,
+            imeiList: [],
+            qty: 1,
+          });
+        });
+      } else {
+        // ACCESSORIES / NON IMEI
+        normalized.push({
+          ...it,
+          imei: "",
+          imeiList: [],
+        });
+      }
+    });
 
-    // ============================================================
+    return normalized;
+  };
+
+  const handleEditTransaksi = async (oldData, newData) => {
+    try {
+      // 1️⃣ BALIKKAN STOK LAMA
+      for (const it of oldData.items) {
+        await returnStock(oldData.tokoName, it.sku, it.qty || 1);
+      }
+
+      // 2️⃣ SIMPAN DATA BARU
+      await updateTransaksi(oldData.id, newData);
+
+      // 3️⃣ POTONG STOK BARU
+      for (const it of newData.items) {
+        await reduceStock(newData.tokoName, it.sku, it.qty || 1);
+      }
+
+      alert("✅ Transaksi berhasil di-edit");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Gagal edit transaksi");
+    }
+  };
+
+  const handleVoidTransaksi = async (transaksi) => {
+    if (!window.confirm("Yakin VOID transaksi ini?")) return;
+
+    try {
+      for (const itm of transaksi.items) {
+        await returnStock(transaksi.tokoName, itm.sku, itm.qty || 1);
+
+        if (Array.isArray(itm.bundling)) {
+          for (const b of itm.bundling) {
+            await returnStock(transaksi.tokoName, b.sku, b.qty);
+          }
+        }
+      }
+
+      await updateTransaksi(transaksi.id, {
+        status: "VOID",
+        voidAt: Date.now(),
+      });
+
+      alert("✅ Transaksi berhasil di-VOID & stok dikembalikan");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Gagal VOID transaksi");
+    }
+  };
+
+  // ============================================================
   // PREVIEW HANDLER
   // ============================================================
 
@@ -404,55 +503,93 @@ export default function CardPenjualanToko() {
     }, 150);
   };
 
+  const finalItems = normalizeItemsBeforeSave(items);
+
+  const calcTotalItem = (item) => {
+    const totalUtama = Number(item.hargaUnit || 0) * Number(item.qty || 1);
+
+    const totalBundling = (item.bundling || []).reduce(
+      (sum, b) => sum + Number(b.harga || 0) * Number(b.qty || 0),
+      0
+    );
+
+    return totalUtama + totalBundling;
+  };
+
+  const grandTotal = finalItems.reduce((sum, it) => sum + calcTotalItem(it), 0);
+
+  const checkIMEIAvailable = async (imei) => {
+    const snap = await get(ref(db, `imeiSold/${imei}`));
+    return !snap.exists();
+  };
+
   // ============================================================
   // SAVE TRANSAKSI
   // ============================================================
 
   const handleSaveTransaksi = async () => {
+    if (!tahap1Complete || !tahap2Complete || !tahap3Complete) {
+      alert("Lengkapi semua tahap sebelum menyimpan transaksi.");
+      return;
+    }
+
+    const finalItems = normalizeItemsBeforeSave(items);
+    const rollbackList = [];
+
+    const transaksiData = {
+      tanggal: userForm.tanggalPembelian,
+      invoice: userForm.noFaktur,
+      tokoId,
+      tokoName,
+      user: { ...userForm },
+      payment: { ...paymentForm },
+      items: finalItems,
+      totalAmount: totals.totalAmount,
+      createdAt: Date.now(),
+    };
+
     try {
-      if (!tahap1Complete || !tahap2Complete || !tahap3Complete) {
-        alert("Lengkapi semua tahap sebelum menyimpan transaksi.");
-        return;
-      }
+      // ===============================
+      // POTONG STOK
+      // ===============================
+      for (const itm of finalItems) {
+        // Barang utama
+        const qtyUtama = itm.qty || 1;
+        await reduceStock(tokoName, itm.sku, qtyUtama);
 
-      const transaksiData = {
-        tanggal: userForm.tanggalPembelian,
-        invoice: userForm.noFaktur,
-        tokoId,
-        tokoName,
-        user: { ...userForm },
-        payment: { ...paymentForm },
-        items: [...items],
-        totalAmount: totals.totalAmount,
-        createdAt: Date.now(),
-      };
+        await logStockActivity({
+          tokoName,
+          sku: itm.sku,
+          qty: qtyUtama,
+          type: "OUT",
+          refId: transaksiData.invoice,
+          user: userForm.namaSales,
+        });
+        rollbackList.push({ sku: itm.sku, qty: qtyUtama });
 
-      // REDUCE STOCK (kecuali bundling)
-      for (const itm of items) {
-        if (itm.kategoriBarang === "BUNDLING") continue;
-
-        if (!itm.sku || !itm.imei) {
-          alert("SKU atau IMEI tidak valid.");
-          return;
-        }
-
-        const result = await reduceStock(tokoName, itm.sku, 1);
-        if (!result.success) {
-          alert(result.message || "Stok tidak cukup.");
-          return;
+        // Bundling
+        if (Array.isArray(itm.bundling)) {
+          for (const b of itm.bundling) {
+            await reduceStock(tokoName, b.sku, b.qty);
+            rollbackList.push({ sku: b.sku, qty: b.qty });
+          }
         }
       }
 
-      const resultAdd = await addTransaksi(transaksiData);
+      // ===============================
+      // SIMPAN TRANSAKSI
+      // ===============================
+      const result = await addTransaksi(transaksiData);
 
-      if (!resultAdd.success) {
-        alert("Gagal menyimpan transaksi.");
-        return;
+      if (!result?.success) {
+        throw new Error("Gagal menyimpan transaksi");
       }
 
-      alert("Transaksi berhasil disimpan!");
+      alert("✅ Transaksi berhasil disimpan!");
 
-      // RESET ITEM
+      // ===============================
+      // RESET FORM
+      // ===============================
       setItems([
         {
           id: Date.now(),
@@ -467,7 +604,6 @@ export default function CardPenjualanToko() {
         },
       ]);
 
-      // RESET FORM
       setUserForm((prev) => ({
         ...prev,
         namaPelanggan: "",
@@ -485,10 +621,26 @@ export default function CardPenjualanToko() {
         tenor: "",
         status: "PIUTANG",
       });
-
     } catch (err) {
-      console.error(err);
-      alert("Terjadi kesalahan saat menyimpan transaksi.");
+      console.error("❌ ERROR SIMPAN TRANSAKSI:", err);
+
+      // ===============================
+      // ROLLBACK STOK
+      // ===============================
+
+      for (const rb of rollbackList) {
+        await addStock(tokoName, rb.sku, { qty: rb.qty });
+        await logStockActivity({
+          tokoName,
+          sku: rb.sku,
+          qty: rb.qty,
+          type: "RETURN",
+          refId: transaksiData.invoice,
+          user: userForm.namaSales,
+        });
+      }
+
+      alert("❌ Transaksi gagal. Stok dikembalikan.");
     }
   };
 
@@ -499,7 +651,6 @@ export default function CardPenjualanToko() {
   return (
     <div className="min-h-screen p-6 bg-gradient-to-br from-indigo-50 via-white to-purple-50">
       <div className="max-w-7xl mx-auto space-y-6">
-
         {/* HEADER */}
         <div className="flex items-center justify-between">
           <button
@@ -523,7 +674,6 @@ export default function CardPenjualanToko() {
 
         {/* FORM GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
           {/* TAHAP 1 */}
           <div className={`${glassCard} min-h-[260px]`}>
             <FormUserSection
@@ -572,7 +722,6 @@ export default function CardPenjualanToko() {
         ============================================================ */}
 
         <div className={`${glassCard} flex flex-col gap-4`}>
-
           {/* TOTAL */}
           <div className="flex justify-between text-sm text-slate-700">
             <div>
@@ -594,21 +743,55 @@ export default function CardPenjualanToko() {
 
             <table className="w-full text-sm border-collapse mb-3">
               <tbody>
-                <tr><td className="border p-2 font-semibold w-48">Nama Pelanggan</td><td className="border p-2">{userForm.namaPelanggan}</td></tr>
-                <tr><td className="border p-2 font-semibold">ID Pelanggan</td><td className="border p-2">{userForm.idPelanggan}</td></tr>
-                <tr><td className="border p-2 font-semibold">No Telepon</td><td className="border p-2">{userForm.noTelepon}</td></tr>
-                <tr><td className="border p-2 font-semibold">Nama Sales</td><td className="border p-2">{userForm.namaSales}</td></tr>
-                <tr><td className="border p-2 font-semibold">Sales Titipan</td><td className="border p-2">{userForm.salesTitipan}</td></tr>
-                <tr><td className="border p-2 font-semibold">Kategori Bayar</td><td className="border p-2">{paymentForm.kategoriBayar}</td></tr>
-                <tr><td className="border p-2 font-semibold">Payment Method</td><td className="border p-2">{paymentForm.paymentMethod}</td></tr>
-                <tr><td className="border p-2 font-semibold">MDR</td><td className="border p-2">{paymentForm.mdr}%</td></tr>
-                <tr><td className="border p-2 font-semibold">DP User</td><td className="border p-2">{paymentForm.dpUser}</td></tr>
-                <tr><td className="border p-2 font-semibold">Tenor</td><td className="border p-2">{paymentForm.tenor}</td></tr>
+                <tr>
+                  <td className="border p-2 font-semibold w-48">
+                    Nama Pelanggan
+                  </td>
+                  <td className="border p-2">{userForm.namaPelanggan}</td>
+                </tr>
+                <tr>
+                  <td className="border p-2 font-semibold">ID Pelanggan</td>
+                  <td className="border p-2">{userForm.idPelanggan}</td>
+                </tr>
+                <tr>
+                  <td className="border p-2 font-semibold">No Telepon</td>
+                  <td className="border p-2">{userForm.noTelepon}</td>
+                </tr>
+                <tr>
+                  <td className="border p-2 font-semibold">Nama Sales</td>
+                  <td className="border p-2">{userForm.namaSales}</td>
+                </tr>
+                <tr>
+                  <td className="border p-2 font-semibold">Sales Titipan</td>
+                  <td className="border p-2">{userForm.salesTitipan}</td>
+                </tr>
+                <tr>
+                  <td className="border p-2 font-semibold">Kategori Bayar</td>
+                  <td className="border p-2">{paymentForm.kategoriBayar}</td>
+                </tr>
+                <tr>
+                  <td className="border p-2 font-semibold">Payment Method</td>
+                  <td className="border p-2">{paymentForm.paymentMethod}</td>
+                </tr>
+                <tr>
+                  <td className="border p-2 font-semibold">MDR</td>
+                  <td className="border p-2">{paymentForm.mdr}%</td>
+                </tr>
+                <tr>
+                  <td className="border p-2 font-semibold">DP User</td>
+                  <td className="border p-2">{paymentForm.dpUser}</td>
+                </tr>
+                <tr>
+                  <td className="border p-2 font-semibold">Tenor</td>
+                  <td className="border p-2">{paymentForm.tenor}</td>
+                </tr>
               </tbody>
             </table>
 
             {/* DETAIL BARANG */}
-            <h3 className="text-md font-bold mt-4 mb-2 text-slate-700">Detail Barang</h3>
+            <h3 className="text-md font-bold mt-4 mb-2 text-slate-700">
+              Detail Barang
+            </h3>
 
             <table className="w-full text-sm border-collapse">
               <thead className="bg-slate-50">
@@ -635,9 +818,13 @@ export default function CardPenjualanToko() {
                       <td className="border p-2">{it.namaBrand}</td>
                       <td className="border p-2">{it.namaBarang}</td>
                       <td className="border p-2 whitespace-pre">{it.imei}</td>
-                      <td className="border p-2 text-right">{formatRupiah(it.hargaUnit)}</td>
+                      <td className="border p-2 text-right">
+                        {formatRupiah(it.hargaUnit)}
+                      </td>
                       <td className="border p-2 text-center">{it.discount}%</td>
-                      <td className="border p-2 text-right">{formatRupiah(calc.lineTotal)}</td>
+                      <td className="border p-2 text-right">
+                        {formatRupiah(calc.lineTotal)}
+                      </td>
                     </tr>
                   );
                 })}
@@ -672,15 +859,12 @@ export default function CardPenjualanToko() {
         <div ref={previewRef}>
           {previewData && (
             <div className="bg-white rounded-xl shadow p-4 mt-6 print:p-0">
-
               {/* HEADER */}
               <div className="flex justify-between items-center mb-4">
                 <img src={logoUrl} alt="Logo" className="h-12" />
                 <div className="text-right">
                   <h2 className="text-xl font-bold">INVOICE</h2>
-                  <p className="text-xs">
-                    No Faktur: {previewData.invoice}
-                  </p>
+                  <p className="text-xs">No Faktur: {previewData.invoice}</p>
                   <p className="text-xs text-slate-500">
                     Tanggal: {previewData.tanggal}
                   </p>
@@ -689,9 +873,15 @@ export default function CardPenjualanToko() {
 
               {/* CUSTOMER */}
               <div className="border rounded-lg p-3 bg-slate-50 mb-4">
-                <p className="text-xs"><strong>Nama:</strong> {previewData.user.namaPelanggan}</p>
-                <p className="text-xs"><strong>No Telepon:</strong> {previewData.user.noTelepon}</p>
-                <p className="text-xs"><strong>Sales:</strong> {previewData.user.namaSales}</p>
+                <p className="text-xs">
+                  <strong>Nama:</strong> {previewData.user.namaPelanggan}
+                </p>
+                <p className="text-xs">
+                  <strong>No Telepon:</strong> {previewData.user.noTelepon}
+                </p>
+                <p className="text-xs">
+                  <strong>Sales:</strong> {previewData.user.namaSales}
+                </p>
               </div>
 
               {/* TABLE */}
@@ -712,8 +902,12 @@ export default function CardPenjualanToko() {
                       <tr key={idx}>
                         <td className="border p-2">{it.namaBarang}</td>
                         <td className="border p-2 whitespace-pre">{it.imei}</td>
-                        <td className="border p-2 text-right">{formatRupiah(it.hargaUnit)}</td>
-                        <td className="border p-2 text-right">{formatRupiah(calc.lineTotal)}</td>
+                        <td className="border p-2 text-right">
+                          {formatRupiah(it.hargaUnit)}
+                        </td>
+                        <td className="border p-2 text-right">
+                          {formatRupiah(calc.lineTotal)}
+                        </td>
                       </tr>
                     );
                   })}
@@ -748,7 +942,6 @@ export default function CardPenjualanToko() {
                   Tutup
                 </button>
               </div>
-
             </div>
           )}
         </div>
@@ -770,7 +963,6 @@ export default function CardPenjualanToko() {
             onSelect={handleAddFromSearch}
           />
         )}
-
       </div>
     </div>
   );

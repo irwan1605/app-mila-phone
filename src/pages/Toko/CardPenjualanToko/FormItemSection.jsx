@@ -1,257 +1,267 @@
-// ============================================
-// FormItemSection.jsx — FINAL CLEAN VERSION
-// ============================================
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { listenMasterBarang } from "../../../services/FirebaseService";
 
+// ================= KONSTANTA =================
+const KATEGORI_IMEI = [
+  "MOTOR LISTRIK",
+  "SEPEDA LISTRIK",
+  "HANDPHONE",
+];
+
+const SKEMA_HARGA = ["SRP", "GROSIR", "RESELLER"];
+
+const isIMEIKategori = (kat) =>
+  KATEGORI_IMEI.includes((kat || "").toUpperCase());
+
+// ================= COMPONENT =================
 export default function FormItemSection({
-  value,
+  value = [],
   onChange,
-  onAddRow,
-  disabled,
-  tahap,
-  masterBarang = [],
+  disabled = false,
+  onSearchIMEI,
+  onSearchNamaBarang,
 }) {
-  // Bandling state
-  const [bandling, setBandling] = useState({
-    b1: "",
-    h1: 0,
-    b2: "",
-    h2: 0,
-    b3: "",
-    h3: 0,
-  });
+  const [masterBarang, setMasterBarang] = useState([]);
+  const [kategoriList, setKategoriList] = useState([]);
+  const [brandList, setBrandList] = useState([]);
 
-  // Fetch Bundling
-  const fetchBandling = (namaBarang) => {
-    const found = masterBarang.find((x) => x.NAMA_BARANG === namaBarang);
-    if (!found) return;
-
-    setBandling({
-      b1: found.bandling1 || "",
-      h1: found.hargaBandling1 || 0,
-      b2: found.bandling2 || "",
-      h2: found.hargaBandling2 || 0,
-      b3: found.bandling3 || "",
-      h3: found.hargaBandling3 || 0,
-    });
-  };
-
-  // Trigger bandling otomatis bila kategori cocok
+  // ================= LOAD MASTER BARANG =================
   useEffect(() => {
-    value.forEach((itm) => {
-      if (
-        itm.kategoriBarang === "MOTOR LISTRIK" ||
-        itm.kategoriBarang === "SEPEDA LISTRIK"
-      ) {
-        fetchBandling(itm.namaBarang);
-      }
-    });
-  }, [value]);
+    const unsub = listenMasterBarang((list) => {
+      setMasterBarang(list || []);
 
-  // Fungsi update field item
-  const handleItemChange = (id, key, val) => {
-    const updated = value.map((item) =>
-      item.id === id ? { ...item, [key]: val } : item
-    );
+      const kSet = new Set();
+      const bSet = new Set();
+
+      (list || []).forEach((x) => {
+        if (x.kategoriBarang) kSet.add(x.kategoriBarang);
+        if (x.namaBrand) bSet.add(x.namaBrand);
+      });
+
+      setKategoriList([...kSet]);
+      setBrandList([...bSet]);
+    });
+
+    return () => unsub && unsub();
+  }, []);
+
+  // ================= HELPER =================
+  const updateItem = (index, patch) => {
+    const updated = [...value];
+    updated[index] = { ...updated[index], ...patch };
     onChange(updated);
   };
 
-  // Tambah item ke cart
-  const handleAddItem = (item) => {
-    if (disabled) return alert("❌ TAHAP 2 belum aktif.");
-
-    if (!item.kategoriBarang || !item.namaBrand || !item.namaBarang) {
-      return alert("Lengkapi kategori, brand, dan nama barang.");
-    }
-
-    // IMEI logic
-    if (
-      ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"].includes(
-        item.kategoriBarang.toUpperCase()
-      )
-    ) {
-      const imeis = (item.imei || "")
-        .split(/\r?\n/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      if (imeis.length === 0)
-        return alert("Kategori ini wajib IMEI, minimal 1 IMEI harus diisi.");
-
-      item.qty = imeis.length;
-    }
-
-    onAddRow(item);
+  const tambahItem = () => {
+    onChange([
+      ...value,
+      {
+        id: Date.now(),
+        sku: "",
+        kategoriBarang: "",
+        namaBrand: "",
+        namaBarang: "",
+        imeiList: [],
+        qty: 0,
+        skemaHarga: "",
+        hargaUnit: 0,
+        discount: 0,
+        bundling: [],
+      },
+    ]);
   };
 
-  // Ambil harga otomatis
-  const getHarga = (brand, barang, tipe) => {
-    const found = masterBarang.find(
-      (x) => x.NAMA_BRAND === brand && x.NAMA_BARANG === barang
+  const filterBarang = (kategori, brand) =>
+    masterBarang.filter(
+      (b) =>
+        (!kategori || b.kategoriBarang === kategori) &&
+        (!brand || b.namaBrand === brand)
     );
-    if (!found) return 0;
 
-    return Number(found[`HARGA_${tipe}`] || 0);
-  };
-
+  // ================= RENDER =================
   return (
-    <div className="relative">
-      <div className="absolute top-1 right-2 text-[11px]">
-        {disabled ? (
-          <span className="text-red-500">🔒 Tahap 2 Terkunci</span>
-        ) : (
-          <span className="text-green-600">🟢 Tahap 2 Aktif</span>
-        )}
-      </div>
+    <div className="space-y-4">
+      <h2 className="text-lg font-bold">INPUT BARANG</h2>
 
-      <h2 className="text-sm font-bold mb-2">INPUT BARANG (TAHAP 2)</h2>
+      {value.map((item, index) => {
+        const barangList = filterBarang(
+          item.kategoriBarang,
+          item.namaBrand
+        );
 
-      {value.map((item) => (
-        <div key={item.id} className="border rounded-xl p-3 bg-white space-y-2">
-          {/* KATEGORI */}
-          <div>
-            <label className="text-xs font-semibold">Kategori *</label>
-            <select
-              disabled={disabled}
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={item.kategoriBarang}
-              onChange={(e) =>
-                handleItemChange(item.id, "kategoriBarang", e.target.value)
-              }
-            >
-              <option value="">-- PILIH --</option>
-              <option value="MOTOR LISTRIK">MOTOR LISTRIK</option>
-              <option value="SEPEDA LISTRIK">SEPEDA LISTRIK</option>
-              <option value="HANDPHONE">HANDPHONE</option>
-              <option value="ACCESSORIES">ACCESSORIES</option>
-            </select>
-          </div>
-
-          {/* BRAND */}
-          <div>
-            <label className="text-xs font-semibold">Brand *</label>
-            <input
-              disabled={disabled}
-              className="w-full border rounded px-2 py-1"
-              value={item.namaBrand}
-              onChange={(e) =>
-                handleItemChange(item.id, "namaBrand", e.target.value.toUpperCase())
-              }
-            />
-          </div>
-
-          {/* Nama Barang */}
-          <div>
-            <label className="text-xs font-semibold">Nama Barang *</label>
-            <input
-              disabled={disabled}
-              className="w-full border rounded px-2 py-1"
-              value={item.namaBarang}
-              onChange={(e) =>
-                handleItemChange(item.id, "namaBarang", e.target.value.toUpperCase())
-              }
-            />
-          </div>
-
-          {/* IMEI */}
-          {["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"].includes(
-            item.kategoriBarang?.toUpperCase()
-          ) && (
+        return (
+          <div
+            key={item.id}
+            className="border rounded-xl p-4 bg-white space-y-3"
+          >
+            {/* KATEGORI */}
             <div>
-              <label className="text-xs font-semibold">IMEI / Serial</label>
-              <textarea
+              <label className="text-xs font-semibold">Kategori Barang</label>
+              <select
+                className="input"
                 disabled={disabled}
-                rows={3}
-                className="w-full border rounded px-2 py-1 text-sm"
-                value={item.imei || ""}
-                onChange={(e) => {
-                  const arr = e.target.value
-                    .split(/\r?\n/)
-                    .map((x) => x.trim())
-                    .filter(Boolean);
-                  handleItemChange(item.id, "imei", e.target.value);
-                  handleItemChange(item.id, "qty", arr.length);
-                }}
-              />
-            </div>
-          )}
-
-          {/* BANDLING */}
-          {(item.kategoriBarang === "MOTOR LISTRIK" ||
-            item.kategoriBarang === "SEPEDA LISTRIK") && (
-            <div className="border p-2 rounded bg-yellow-50">
-              <label className="text-xs font-semibold">Bandling 1</label>
-              <input readOnly className="w-full border rounded px-2 py-1" value={bandling.b1} />
-              <input readOnly className="w-full border rounded px-2 py-1 mt-1" value={bandling.h1} />
-
-              <label className="text-xs font-semibold mt-2">Bandling 2</label>
-              <input readOnly className="w-full border rounded px-2 py-1" value={bandling.b2} />
-              <input readOnly className="w-full border rounded px-2 py-1 mt-1" value={bandling.h2} />
-
-              <label className="text-xs font-semibold mt-2">Bandling 3</label>
-              <input readOnly className="w-full border rounded px-2 py-1" value={bandling.b3} />
-              <input readOnly className="w-full border rounded px-2 py-1 mt-1" value={bandling.h3} />
-            </div>
-          )}
-
-          {/* Qty untuk accessories */}
-          {item.kategoriBarang === "ACCESSORIES" && (
-            <div>
-              <label className="text-xs font-semibold">Qty *</label>
-              <input
-                disabled={disabled}
-                type="number"
-                className="w-full border rounded px-2 py-1"
-                value={item.qty}
+                value={item.kategoriBarang}
                 onChange={(e) =>
-                  handleItemChange(item.id, "qty", Number(e.target.value))
+                  updateItem(index, {
+                    kategoriBarang: e.target.value,
+                    namaBrand: "",
+                    namaBarang: "",
+                    imeiList: [],
+                    qty: 0,
+                  })
+                }
+              >
+                <option value="">-- Pilih Kategori --</option>
+                {kategoriList.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* BRAND */}
+            <div>
+              <label className="text-xs font-semibold">Nama Brand</label>
+              <select
+                className="input"
+                disabled={disabled || !item.kategoriBarang}
+                value={item.namaBrand}
+                onChange={(e) =>
+                  updateItem(index, {
+                    namaBrand: e.target.value,
+                    namaBarang: "",
+                  })
+                }
+              >
+                <option value="">-- Pilih Brand --</option>
+                {brandList.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* NAMA BARANG */}
+            <div>
+              <label className="text-xs font-semibold">Nama Barang</label>
+              <select
+                className="input"
+                disabled={disabled || !item.namaBrand}
+                value={item.namaBarang}
+                onChange={(e) => {
+                  const barang = masterBarang.find(
+                    (x) => x.namaBarang === e.target.value
+                  );
+                  updateItem(index, {
+                    namaBarang: barang?.namaBarang || "",
+                    sku: barang?.sku || "",
+                    hargaUnit: barang?.hargaSRP || 0,
+                    skemaHarga: "SRP",
+                    qty: isIMEIKategori(item.kategoriBarang) ? 0 : 1,
+                  });
+                }}
+              >
+                <option value="">-- Pilih Barang --</option>
+                {barangList.map((b) => (
+                  <option key={b.id} value={b.namaBarang}>
+                    {b.namaBarang}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* IMEI */}
+            {isIMEIKategori(item.kategoriBarang) && (
+              <div>
+                <label className="text-xs font-semibold">IMEI</label>
+                <textarea
+                  className="input"
+                  rows={2}
+                  placeholder="1 IMEI per baris"
+                  value={(item.imeiList || []).join("\n")}
+                  onChange={(e) => {
+                    const list = e.target.value
+                      .split("\n")
+                      .map((x) => x.trim())
+                      .filter(Boolean);
+                    updateItem(index, {
+                      imeiList: list,
+                      qty: list.length,
+                    });
+                  }}
+                />
+                <button
+                  type="button"
+                  className="text-xs text-indigo-600 mt-1"
+                  onClick={() => onSearchIMEI(index)}
+                >
+                  Cari dari stok
+                </button>
+              </div>
+            )}
+
+            {/* QTY MANUAL */}
+            {!isIMEIKategori(item.kategoriBarang) && (
+              <div>
+                <label className="text-xs font-semibold">QTY Unit</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={item.qty}
+                  onChange={(e) =>
+                    updateItem(index, { qty: Number(e.target.value) })
+                  }
+                />
+              </div>
+            )}
+
+            {/* SKEMA HARGA */}
+            <div>
+              <label className="text-xs font-semibold">Skema Harga</label>
+              <select
+                className="input"
+                value={item.skemaHarga}
+                onChange={(e) =>
+                  updateItem(index, { skemaHarga: e.target.value })
+                }
+              >
+                <option value="">-- Pilih --</option>
+                {SKEMA_HARGA.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* HARGA */}
+            <div>
+              <label className="text-xs font-semibold">Harga Unit</label>
+              <input
+                type="number"
+                className="input"
+                value={item.hargaUnit}
+                onChange={(e) =>
+                  updateItem(index, {
+                    hargaUnit: Number(e.target.value),
+                  })
                 }
               />
             </div>
-          )}
-
-          {/* Harga Unit */}
-          <div>
-            <label className="text-xs font-semibold">Harga Unit</label>
-            <input
-              readOnly
-              className="w-full border rounded px-2 py-1 bg-gray-100"
-              value={item.hargaUnit || 0}
-            />
           </div>
+        );
+      })}
 
-          {/* SKEMA HARGA */}
-          <div>
-            <label className="text-xs font-semibold">Skema Harga *</label>
-            <select
-              disabled={disabled}
-              className="w-full border rounded px-2 py-1"
-              value={item.skemaHarga || "SRP"}
-              onChange={(e) => {
-                const harga = getHarga(item.namaBrand, item.namaBarang, e.target.value);
-                handleItemChange(item.id, "skemaHarga", e.target.value);
-                handleItemChange(item.id, "hargaUnit", harga);
-              }}
-            >
-              <option value="SRP">SRP</option>
-              <option value="GROSIR">GROSIR</option>
-              <option value="RESELLER">RESELLER</option>
-            </select>
-          </div>
-
-          {/* Button Tambah Item */}
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => handleAddItem(item)}
-            className={`w-full py-2 rounded text-white ${
-              disabled ? "bg-gray-300" : "bg-indigo-600 hover:bg-indigo-700"
-            }`}
-          >
-            Tambahkan Barang
-          </button>
-        </div>
-      ))}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={tambahItem}
+        className="w-full py-2 bg-green-600 text-white rounded-lg"
+      >
+        + Tambah Barang
+      </button>
     </div>
   );
 }
