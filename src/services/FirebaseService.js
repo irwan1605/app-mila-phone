@@ -1038,14 +1038,13 @@ const createMasterHelpers = (masterName) => {
 // ===========================
 export const listenMasterBarang = (callback) => {
   const r = ref(db, "dataManagement/masterBarang");
-
   const unsub = onValue(
     r,
     (snap) => {
       const raw = snap.val() || {};
-      const arr = Object.entries(raw).map(([id, item]) => ({
+      const arr = Object.entries(raw).map(([id, v]) => ({
         id,
-        ...item,
+        ...v,
       }));
       callback(arr);
     },
@@ -1054,9 +1053,9 @@ export const listenMasterBarang = (callback) => {
       callback([]);
     }
   );
-
   return () => unsub && unsub();
 };
+
 
 // ==============================
 // LISTEN INVENTORY REPORT by Toko
@@ -1076,6 +1075,7 @@ export const listenInventoryReport = (namaToko, callback) => {
     (err) => console.error("ERROR LISTEN INVENTORY:", err)
   );
 };
+
 
 
 
@@ -1219,6 +1219,27 @@ export const getBundlingItems = async (sku) => {
   const snap = await get(ref(db, `bundling/${sku}`));
   return snap.val() || [];
 };
+
+export const listenMasterPembelian = (callback) => {
+  const r = ref(db, "dataManagement/masterPembelian");
+  const unsub = onValue(
+    r,
+    (snap) => {
+      const raw = snap.val() || {};
+      const arr = Object.entries(raw).map(([id, item]) => ({
+        id,
+        ...item,
+      }));
+      callback(arr);
+    },
+    (err) => {
+      console.error("listenMasterPembelian error:", err);
+      callback([]);
+    }
+  );
+  return () => unsub && unsub();
+};
+
 
 /* ============================================================
    DEFAULT EXPORT
