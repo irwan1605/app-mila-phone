@@ -455,7 +455,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
               </ul>
             )}
 
-            <Link
+            {/* <Link
               to="/modul-sparepart"
               className={`flex items-center p-3 hover:bg-blue-500 ${
                 activePath === "/modul-sparepart" ? "bg-blue-600" : ""
@@ -463,7 +463,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
             >
               <FaCogs className="text-xl" />
               <span className="ml-2">MODUL SPAREPART</span>
-            </Link>
+            </Link> */}
 
             <Link
               to="/user-management"

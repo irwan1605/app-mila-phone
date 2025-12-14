@@ -703,6 +703,7 @@ export default function MasterBarang() {
                     <label className="text-xs text-slate-500">Kategori</label>
                     <select
                       className="input mt-1"
+                      disabled={editData.isLocked}
                       value={editData.kategori}
                       onChange={(e) =>
                         setEditData({ ...editData, kategori: e.target.value })
