@@ -78,10 +78,13 @@ export default function InventoryReport() {
   const [masterBarang, setMasterBarang] = useState({});
   const [selectedToko, setSelectedToko] = useState(null);
   const [search, setSearch] = useState("");
+  const [transferHistory, setTransferHistory] = useState([]);
+
 
   // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 25;
+  
 
   // ==========================
   // LISTENER REALTIME: STOK
