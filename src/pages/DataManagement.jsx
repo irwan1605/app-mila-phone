@@ -9,6 +9,7 @@ import {
   FaUserShield,
   FaUserFriends,
   FaUserTag,
+  FaTags,
 } from "react-icons/fa";
 
 import MasterPelangganCard from "../components/master-management/MasterPelangganCard";
@@ -20,6 +21,7 @@ import MasterTokoCard from "../components/master-management/MasterTokoCard";
 // ❌ TIDAK DIPAKAI LAGI:
 // import MasterBarangHargaCard from "../components/master-management/MasterBarangHargaCard";
 import MasterSupplierCard from "../components/master-management/MasterSupplierCard";
+import MasterKategoriBarangCard from "../components/master-management/MasterKategoriBarangCard";
 
 const cardsConfig = [
   {
@@ -78,6 +80,13 @@ const cardsConfig = [
     icon: FaTruck,
     gradient: "from-slate-500 via-slate-400 to-gray-400",
   },
+  {
+    key: "masterKategoriBarang",
+    title: "MASTER KATEGORI BARANG",
+    description: "Kelola kategori barang",
+    icon: FaTags,
+    gradient: "from-teal-500 via-teal-400 to-cyan-400",
+  },
 ];
 
 export default function MasterManagement() {
@@ -100,6 +109,9 @@ export default function MasterManagement() {
         return <MasterTokoCard />;
       case "masterSupplier":
         return <MasterSupplierCard />;
+      case "masterKategoriBarang":
+        return <MasterKategoriBarangCard />;
+
       default:
         return null;
     }

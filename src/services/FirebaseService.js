@@ -79,7 +79,37 @@ const normalizeTransaksi = (id, row = {}, tokoId = null, tokoName = "") => {
 ============================================================ */
 
 
+// CREATE
+export const addMasterKategoriBarang = async (data) => {
+  const newRef = push(ref(db, "masterKategoriBarang"));
+  await set(newRef, {
+    ...data,
+    createdAt: Date.now(),
+  });
+};
 
+// READ (LISTEN)
+export const listenMasterKategoriBarang = (callback) => {
+  const r = ref(db, "masterKategoriBarang");
+  return onValue(r, (snap) => {
+    const val = snap.val() || {};
+    const arr = Object.entries(val).map(([id, v]) => ({
+      id,
+      ...v,
+    }));
+    callback(arr);
+  });
+};
+
+// UPDATE
+export const updateMasterKategoriBarang = async (id, data) => {
+  await update(ref(db, `masterKategoriBarang/${id}`), data);
+};
+
+// DELETE
+export const deleteMasterKategoriBarang = async (id) => {
+  await remove(ref(db, `masterKategoriBarang/${id}`));
+};
 
 export const getTokoName = async (tokoId) => {
   try {
