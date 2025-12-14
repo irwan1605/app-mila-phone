@@ -4,9 +4,13 @@ import MasterCrudCard from "./MasterCrudCard";
 
 export default function MasterPelangganCard() {
   const fields = [
-    { name: "idPelanggan", label: "ID Pelanggan" },
-    { name: "namaPelanggan", label: "Nama Akun / Pelanggan" },
-    { name: "nik", label: "No. NIK" },
+    {
+      name: "idPelanggan",
+      label: "ID Pelanggan",
+      disabledOnCreate: true, // AUTO dari Firebase
+    },
+    { name: "namaPelanggan", label: "Nama Pelanggan", required: true },
+    { name: "nik", label: "NIK" },
     { name: "noTelpon", label: "No. Telpon" },
     { name: "alamat", label: "Alamat", type: "textarea" },
   ];
@@ -14,10 +18,11 @@ export default function MasterPelangganCard() {
   return (
     <MasterCrudCard
       title="MASTER PELANGGAN"
-      subtitle="Data akun / pelanggan yang digunakan di seluruh transaksi."
+      subtitle="Data pelanggan (ID otomatis)"
       collectionKey="masterPelanggan"
       fields={fields}
       excelFileName="Master_Pelanggan"
+
       listenFnName="listenMasterPelanggan"
       addFnName="addMasterPelanggan"
       updateFnName="updateMasterPelanggan"

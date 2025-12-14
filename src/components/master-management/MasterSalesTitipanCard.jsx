@@ -4,8 +4,8 @@ import MasterCrudCard from "./MasterCrudCard";
 
 export default function MasterSalesTitipanCard() {
   const fields = [
-    { name: "namaTitipan", label: "Nama Titipan (ST)" },
-    { name: "nik", label: "No. NIK" },
+    { name: "namaTitipan", label: "Nama Sales Titipan", required: true },
+    { name: "nik", label: "NIK" },
     { name: "noTelpon", label: "No. Telpon" },
     { name: "alamat", label: "Alamat", type: "textarea" },
   ];
@@ -13,10 +13,11 @@ export default function MasterSalesTitipanCard() {
   return (
     <MasterCrudCard
       title="MASTER SALES TITIPAN (ST)"
-      subtitle="Data sales titipan (ST) yang terkait transaksi."
+      subtitle="Data sales titipan"
       collectionKey="masterSalesTitipan"
       fields={fields}
       excelFileName="Master_SalesTitipan"
+
       listenFnName="listenMasterSalesTitipan"
       addFnName="addMasterSalesTitipan"
       updateFnName="updateMasterSalesTitipan"

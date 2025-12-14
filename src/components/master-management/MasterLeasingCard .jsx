@@ -3,11 +3,11 @@ import { ref, onValue, push, set, update, remove } from "firebase/database";
 import { db } from "../../FirebaseInit";
 import { FaPlus, FaEdit, FaTrash } from "react-icons/fa";
 
-const basePath = "dataManagement/masterPaymentMetode";
+const basePath = "dataManagement/masterLeasing";
 
-export default function MasterLeasingCard () {
+export default function MasterLeasingCard() {
   const [rows, setRows] = useState([]);
-  const [nama, setNama] = useState("");
+  const [namaLeasing, setNamaLeasing] = useState("");
   const [editId, setEditId] = useState(null);
 
   useEffect(() => {
@@ -18,14 +18,16 @@ export default function MasterLeasingCard () {
   }, []);
 
   const save = async () => {
-    if (!nama) return alert("Nama wajib diisi");
+    if (!namaLeasing) return alert("Nama Leasing wajib diisi");
+
     if (editId) {
-      await update(ref(db, `${basePath}/${editId}`), { nama });
+      await update(ref(db, `${basePath}/${editId}`), { namaLeasing });
     } else {
       const r = push(ref(db, basePath));
-      await set(r, { id: r.key, nama });
+      await set(r, { id: r.key, namaLeasing });
     }
-    setNama("");
+
+    setNamaLeasing("");
     setEditId(null);
   };
 
@@ -35,8 +37,8 @@ export default function MasterLeasingCard () {
 
       <div className="flex gap-2 mb-4">
         <input
-          value={nama}
-          onChange={(e) => setNama(e.target.value)}
+          value={namaLeasing}
+          onChange={(e) => setNamaLeasing(e.target.value)}
           placeholder="Nama Leasing"
           className="border px-3 py-2 rounded w-full"
         />
@@ -49,7 +51,7 @@ export default function MasterLeasingCard () {
         <thead className="bg-indigo-600 text-white">
           <tr>
             <th className="p-2">NO</th>
-            <th className="p-2">NAMA</th>
+            <th className="p-2">NAMA LEASING</th>
             <th className="p-2">AKSI</th>
           </tr>
         </thead>
@@ -57,14 +59,9 @@ export default function MasterLeasingCard () {
           {rows.map((r, i) => (
             <tr key={r.id} className="border-t">
               <td className="p-2 text-center">{i + 1}</td>
-              <td className="p-2">{r.nama}</td>
+              <td className="p-2">{r.namaLeasing}</td>
               <td className="p-2 flex justify-center gap-2">
-                <button
-                  onClick={() => {
-                    setEditId(r.id);
-                    setNama(r.nama);
-                  }}
-                >
+                <button onClick={() => { setEditId(r.id); setNamaLeasing(r.namaLeasing); }}>
                   <FaEdit />
                 </button>
                 <button onClick={() => remove(ref(db, `${basePath}/${r.id}`))}>

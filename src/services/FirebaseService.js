@@ -1282,6 +1282,42 @@ export const addMasterSupplier = masterSupplier.add;
 export const updateMasterSupplier = masterSupplier.update;
 export const deleteMasterSupplier = masterSupplier.delete;
 
+// =======================
+// MASTER PAYMENT GROUP
+// Path: dataManagement/{masterName}
+// =======================
+
+const masterPaymentMetode = createMasterHelpers("masterPaymentMetode");
+export const listenMasterPaymentMetode = masterPaymentMetode.listen;
+export const addMasterPaymentMetode = masterPaymentMetode.add;
+export const updateMasterPaymentMetode = masterPaymentMetode.update;
+export const deleteMasterPaymentMetode = masterPaymentMetode.delete;
+
+const masterLeasing = createMasterHelpers("masterLeasing");
+export const listenMasterLeasing = masterLeasing.listen;
+export const addMasterLeasing = masterLeasing.add;
+export const updateMasterLeasing = masterLeasing.update;
+export const deleteMasterLeasing = masterLeasing.delete;
+
+const masterMDR = createMasterHelpers("masterMDR");
+export const listenMasterMDR = masterMDR.listen;
+export const addMasterMDR = masterMDR.add;
+export const updateMasterMDR = masterMDR.update;
+export const deleteMasterMDR = masterMDR.delete;
+
+const masterTenor = createMasterHelpers("masterTenor");
+export const listenMasterTenor = masterTenor.listen;
+export const addMasterTenor = masterTenor.add;
+export const updateMasterTenor = masterTenor.update;
+export const deleteMasterTenor = masterTenor.delete;
+
+const masterVoucher = createMasterHelpers("masterVoucher");
+export const listenMasterVoucher = masterVoucher.listen;
+export const addMasterVoucher = masterVoucher.add;
+export const updateMasterVoucher = masterVoucher.update;
+export const deleteMasterVoucher = masterVoucher.delete;
+
+
 /* ============================================================
    SEARCH INVENTORY BY NAMA BARANG (UNTUK NAMA BARANG SEARCH MODAL)
 ============================================================ */

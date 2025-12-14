@@ -1,3 +1,4 @@
+// src/components/master-management/MasterKategoriBarangCard.jsx
 import React, { useEffect, useState } from "react";
 import {
   addMasterKategoriBarang,
@@ -17,20 +18,15 @@ import {
 
 export default function MasterKategoriBarangCard() {
   const [list, setList] = useState([]);
-  const [form, setForm] = useState({
-    namaKategori: "",
-    deskripsi: "",
-  });
+  const [form, setForm] = useState({ namaKategori: "", deskripsi: "" });
   const [editId, setEditId] = useState(null);
   const [search, setSearch] = useState("");
 
-  // ================= LISTENER =================
   useEffect(() => {
     const unsub = listenMasterKategoriBarang(setList);
-    return () => unsub();
+    return () => unsub && unsub();
   }, []);
 
-  // ================= ACTION =================
   const resetForm = () => {
     setForm({ namaKategori: "", deskripsi: "" });
     setEditId(null);
@@ -50,69 +46,44 @@ export default function MasterKategoriBarangCard() {
     resetForm();
   };
 
-  const handleEdit = (item) => {
-    setEditId(item.id);
-    setForm({
-      namaKategori: item.namaKategori,
-      deskripsi: item.deskripsi || "",
-    });
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm("Hapus kategori ini?")) {
-      deleteMasterKategoriBarang(id);
-    }
-  };
-
-  // ================= FILTER =================
   const filtered = list.filter((i) =>
     i.namaKategori.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div>
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-        <h2 className="text-lg font-bold text-slate-800">
-          MASTER KATEGORI BARANG
-        </h2>
-
-        <div className="relative">
-          <FaSearch className="absolute left-3 top-3 text-slate-400 text-sm" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari kategori..."
-            className="pl-9 pr-3 py-2 rounded-lg border text-sm w-64"
-          />
-        </div>
+    <div className="bg-white rounded-xl shadow p-5">
+      <div className="flex justify-between mb-4">
+        <h2 className="font-bold">MASTER KATEGORI BARANG</h2>
+        <input
+          placeholder="Cari..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="border px-3 py-1 rounded"
+        />
       </div>
 
-      {/* FORM */}
-      <div className="bg-slate-50 rounded-xl p-4 mb-4 border">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <input
-            value={form.namaKategori}
-            onChange={(e) =>
-              setForm({ ...form, namaKategori: e.target.value })
-            }
-            placeholder="Nama Kategori Barang"
-            className="px-3 py-2 rounded-lg border text-sm"
-          />
-          <input
-            value={form.deskripsi}
-            onChange={(e) =>
-              setForm({ ...form, deskripsi: e.target.value })
-            }
-            placeholder="Deskripsi (opsional)"
-            className="px-3 py-2 rounded-lg border text-sm"
-          />
-        </div>
+      <div className="bg-slate-50 p-3 rounded mb-4">
+        <input
+          placeholder="Nama Kategori"
+          value={form.namaKategori}
+          onChange={(e) =>
+            setForm({ ...form, namaKategori: e.target.value })
+          }
+          className="border p-2 rounded w-full mb-2"
+        />
+        <input
+          placeholder="Deskripsi"
+          value={form.deskripsi}
+          onChange={(e) =>
+            setForm({ ...form, deskripsi: e.target.value })
+          }
+          className="border p-2 rounded w-full"
+        />
 
-        <div className="flex gap-2 mt-3">
+        <div className="mt-3 flex gap-2">
           <button
             onClick={handleSubmit}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm"
+            className="bg-emerald-600 text-white px-4 py-2 rounded flex items-center gap-1"
           >
             {editId ? <FaSave /> : <FaPlus />}
             {editId ? "Simpan" : "Tambah"}
@@ -121,7 +92,7 @@ export default function MasterKategoriBarangCard() {
           {editId && (
             <button
               onClick={resetForm}
-              className="flex items-center gap-2 bg-slate-500 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm"
+              className="bg-slate-500 text-white px-4 py-2 rounded"
             >
               <FaTimes /> Batal
             </button>
@@ -129,62 +100,42 @@ export default function MasterKategoriBarangCard() {
         </div>
       </div>
 
-      {/* TABLE */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm border rounded-xl overflow-hidden">
-          <thead className="bg-slate-200 text-slate-700">
-            <tr>
-              <th className="px-3 py-2 text-left">No</th>
-              <th className="px-3 py-2 text-left">Nama Kategori</th>
-              <th className="px-3 py-2 text-left">Deskripsi</th>
-              <th className="px-3 py-2 text-center">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && (
-              <tr>
-                <td
-                  colSpan="4"
-                  className="text-center py-4 text-slate-500"
+      <table className="w-full text-sm border">
+        <thead className="bg-slate-200">
+          <tr>
+            <th className="p-2">No</th>
+            <th className="p-2">Nama</th>
+            <th className="p-2">Deskripsi</th>
+            <th className="p-2">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((item, i) => (
+            <tr key={item.id} className="border-t">
+              <td className="p-2">{i + 1}</td>
+              <td className="p-2">{item.namaKategori}</td>
+              <td className="p-2">{item.deskripsi || "-"}</td>
+              <td className="p-2 space-x-2">
+                <button
+                  onClick={() => {
+                    setEditId(item.id);
+                    setForm(item);
+                  }}
+                  className="text-blue-600"
                 >
-                  Data kosong
-                </td>
-              </tr>
-            )}
-
-            {filtered.map((item, i) => (
-              <tr
-                key={item.id}
-                className="border-t hover:bg-slate-50"
-              >
-                <td className="px-3 py-2">{i + 1}</td>
-                <td className="px-3 py-2 font-medium">
-                  {item.namaKategori}
-                </td>
-                <td className="px-3 py-2">
-                  {item.deskripsi || "-"}
-                </td>
-                <td className="px-3 py-2 text-center">
-                  <div className="flex justify-center gap-2">
-                    <button
-                      onClick={() => handleEdit(item)}
-                      className="p-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white"
-                    >
-                      <FaEdit />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white"
-                    >
-                      <FaTrash />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  <FaEdit />
+                </button>
+                <button
+                  onClick={() => deleteMasterKategoriBarang(item.id)}
+                  className="text-red-600"
+                >
+                  <FaTrash />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

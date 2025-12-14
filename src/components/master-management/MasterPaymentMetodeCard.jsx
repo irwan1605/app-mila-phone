@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { ref, onValue, push, set, update, remove } from "firebase/database";
-import { db } from "../../FirebaseInit";
+import {
+  listenMasterPaymentMetode,
+  addMasterPaymentMetode,
+  updateMasterPaymentMetode,
+  deleteMasterPaymentMetode,
+} from "../../services/FirebaseService";
 import { FaPlus, FaEdit, FaTrash } from "react-icons/fa";
-
-const basePath = "dataManagement/masterPaymentMetode";
 
 export default function MasterPaymentMetodeCard() {
   const [rows, setRows] = useState([]);
@@ -11,20 +13,19 @@ export default function MasterPaymentMetodeCard() {
   const [editId, setEditId] = useState(null);
 
   useEffect(() => {
-    return onValue(ref(db, basePath), (snap) => {
-      const val = snap.val() || {};
-      setRows(Object.entries(val).map(([id, v]) => ({ id, ...v })));
-    });
+    const unsub = listenMasterPaymentMetode(setRows);
+    return () => unsub && unsub();
   }, []);
 
   const save = async () => {
     if (!nama) return alert("Nama wajib diisi");
+
     if (editId) {
-      await update(ref(db, `${basePath}/${editId}`), { nama });
+      await updateMasterPaymentMetode(editId, { nama });
     } else {
-      const r = push(ref(db, basePath));
-      await set(r, { id: r.key, nama });
+      await addMasterPaymentMetode({ nama });
     }
+
     setNama("");
     setEditId(null);
   };
@@ -59,15 +60,10 @@ export default function MasterPaymentMetodeCard() {
               <td className="p-2 text-center">{i + 1}</td>
               <td className="p-2">{r.nama}</td>
               <td className="p-2 flex justify-center gap-2">
-                <button
-                  onClick={() => {
-                    setEditId(r.id);
-                    setNama(r.nama);
-                  }}
-                >
+                <button onClick={() => { setEditId(r.id); setNama(r.nama); }}>
                   <FaEdit />
                 </button>
-                <button onClick={() => remove(ref(db, `${basePath}/${r.id}`))}>
+                <button onClick={() => deleteMasterPaymentMetode(r.id)}>
                   <FaTrash />
                 </button>
               </td>

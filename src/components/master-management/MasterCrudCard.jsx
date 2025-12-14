@@ -1,3 +1,4 @@
+// src/components/master-management/MasterCrudCard.jsx
 import React, { useEffect, useState } from "react";
 import * as FirebaseService from "../../services/FirebaseService";
 import {
@@ -32,7 +33,7 @@ export default function MasterCrudCard({
   const [showForm, setShowForm] = useState(false);
 
   // ===============================
-  // LISTEN DATA
+  // LISTENER REALTIME
   // ===============================
   useEffect(() => {
     if (typeof listenFn !== "function") return;
@@ -45,7 +46,7 @@ export default function MasterCrudCard({
   }, [listenFn]);
 
   // ===============================
-  // FORM HANDLER
+  // HANDLER
   // ===============================
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -60,25 +61,16 @@ export default function MasterCrudCard({
 
   const handleSubmit = async () => {
     try {
-      // ===============================
-      // EDIT MODE
-      // ===============================
       if (editId && updateFn) {
         await updateFn(editId, {
           ...form,
           updatedAt: new Date().toISOString(),
         });
-        alert("Data berhasil diperbarui");
-      }
-      // ===============================
-      // CREATE MODE (JIKA DIIZINKAN)
-      // ===============================
-      else if (!disableCreate && addFn) {
+      } else if (!disableCreate && addFn) {
         await addFn({
           ...form,
           createdAt: new Date().toISOString(),
         });
-        alert("Data berhasil ditambahkan");
       } else {
         alert("Aksi tidak diizinkan");
         return;
@@ -91,48 +83,36 @@ export default function MasterCrudCard({
     }
   };
 
-  // ===============================
-  // DELETE HANDLER
-  // ===============================
   const handleDelete = async (id) => {
     if (!deleteFn) return;
     if (!window.confirm("Yakin hapus data ini?")) return;
 
     try {
       await deleteFn(id);
-      alert("Data berhasil dihapus");
     } catch (err) {
       console.error("Delete error:", err);
       alert("Gagal menghapus data");
     }
   };
 
-  // ===============================
-  // RENDER
-  // ===============================
   return (
-    <div>
-      {/* HEADER */}
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-slate-800">{title}</h2>
-        <p className="text-sm text-slate-500">{subtitle}</p>
-      </div>
+    <div className="bg-white rounded-xl shadow p-5">
+      <h2 className="text-lg font-bold">{title}</h2>
+      <p className="text-sm text-slate-500 mb-4">{subtitle}</p>
 
-      {/* ACTION BAR */}
-      <div className="flex items-center gap-2 mb-3">
-        {!disableCreate && addFn && (
-          <button
-            onClick={() => {
-              setShowForm(true);
-              setEditId(null);
-              setForm({});
-            }}
-            className="px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1 text-sm hover:bg-blue-700"
-          >
-            <FaPlus /> Tambah Data
-          </button>
-        )}
-      </div>
+      {/* ACTION */}
+      {!disableCreate && addFn && (
+        <button
+          onClick={() => {
+            setShowForm(true);
+            setEditId(null);
+            setForm({});
+          }}
+          className="mb-3 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded text-sm"
+        >
+          <FaPlus /> Tambah Data
+        </button>
+      )}
 
       {/* FORM */}
       {showForm && (
@@ -140,10 +120,9 @@ export default function MasterCrudCard({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {fields.map((f) => (
               <div key={f.name}>
-                <label className="block text-xs mb-1 text-slate-600">
+                <label className="text-xs text-slate-600">
                   {f.label}
                 </label>
-
                 {f.type === "textarea" ? (
                   <textarea
                     name={f.name}
@@ -171,14 +150,11 @@ export default function MasterCrudCard({
             >
               <FaTimes /> Batal
             </button>
-
             <button
               onClick={handleSubmit}
               className="px-3 py-1 bg-green-600 text-white rounded flex items-center gap-1"
             >
-              <FaSave />{" "}
-              {submitLabel ||
-                (editId || disableCreate ? "Edit Data" : "Simpan Data")}
+              <FaSave /> {submitLabel || "Simpan"}
             </button>
           </div>
         </div>
@@ -186,47 +162,40 @@ export default function MasterCrudCard({
 
       {/* TABLE */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+        <table className="w-full text-sm border">
           <thead className="bg-slate-200">
             <tr>
-              <th className="p-2 border">No</th>
+              <th className="p-2">No</th>
               {fields.map((f) => (
-                <th key={f.name} className="p-2 border">
-                  {f.label}
-                </th>
+                <th key={f.name} className="p-2">{f.label}</th>
               ))}
-              <th className="p-2 border">Aksi</th>
+              <th className="p-2">Aksi</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={r.id} className="hover:bg-slate-50">
-                <td className="p-2 border text-center">{i + 1}</td>
-
+              <tr key={r.id} className="border-t">
+                <td className="p-2 text-center">{i + 1}</td>
                 {fields.map((f) => (
-                  <td key={f.name} className="p-2 border">
+                  <td key={f.name} className="p-2">
                     {r[f.name]}
                   </td>
                 ))}
-
-                <td className="p-2 border text-center space-x-2">
+                <td className="p-2 text-center space-x-2">
                   <button
-                    className="text-blue-600 hover:text-blue-800"
                     onClick={() => {
                       setEditId(r.id);
                       setForm(r);
                       setShowForm(true);
                     }}
-                    title="Edit"
+                    className="text-blue-600"
                   >
                     <FaEdit />
                   </button>
-
                   {deleteFn && (
                     <button
-                      className="text-red-600 hover:text-red-800"
                       onClick={() => handleDelete(r.id)}
-                      title="Hapus"
+                      className="text-red-600"
                     >
                       <FaTrash />
                     </button>
@@ -239,7 +208,7 @@ export default function MasterCrudCard({
               <tr>
                 <td
                   colSpan={fields.length + 2}
-                  className="p-3 text-center text-slate-500"
+                  className="text-center py-4 text-slate-500"
                 >
                   Tidak ada data
                 </td>

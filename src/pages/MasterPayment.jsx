@@ -9,7 +9,7 @@ import {
 
 import MasterPaymentMetodeCard from "../components/master-management/MasterPaymentMetodeCard";
 import MasterLeasingCard from "../components/master-management/MasterLeasingCard ";
-import MasterTenorCard from "../components/master-management/MasterMDRCard ";
+import MasterTenorCard from "../components/master-management/MasterTenorCard ";
 import MasterVoucherCard from "../components/master-management/MasterVoucherCard ";
 import MasterMDRCard from "../components/master-management/MasterMDRCard ";
 

@@ -3,11 +3,11 @@ import { ref, onValue, push, set, update, remove } from "firebase/database";
 import { db } from "../../FirebaseInit";
 import { FaPlus, FaEdit, FaTrash } from "react-icons/fa";
 
-const basePath = "dataManagement/masterPaymentMetode";
+const basePath = "dataManagement/masterTenor";
 
-export default function MasterTenorCard () {
+export default function MasterTenorCard() {
   const [rows, setRows] = useState([]);
-  const [nama, setNama] = useState("");
+  const [tenor, setTenor] = useState("");
   const [editId, setEditId] = useState(null);
 
   useEffect(() => {
@@ -18,14 +18,16 @@ export default function MasterTenorCard () {
   }, []);
 
   const save = async () => {
-    if (!nama) return alert("Nama wajib diisi");
+    if (!tenor) return alert("Tenor wajib diisi");
+
     if (editId) {
-      await update(ref(db, `${basePath}/${editId}`), { nama });
+      await update(ref(db, `${basePath}/${editId}`), { tenor });
     } else {
       const r = push(ref(db, basePath));
-      await set(r, { id: r.key, nama });
+      await set(r, { id: r.key, tenor });
     }
-    setNama("");
+
+    setTenor("");
     setEditId(null);
   };
 
@@ -35,9 +37,9 @@ export default function MasterTenorCard () {
 
       <div className="flex gap-2 mb-4">
         <input
-          value={nama}
-          onChange={(e) => setNama(e.target.value)}
-          placeholder="Nama Payment Metode"
+          value={tenor}
+          onChange={(e) => setTenor(e.target.value)}
+          placeholder="Contoh: 12 BULAN"
           className="border px-3 py-2 rounded w-full"
         />
         <button onClick={save} className="bg-indigo-600 text-white px-4 rounded">
@@ -49,7 +51,7 @@ export default function MasterTenorCard () {
         <thead className="bg-indigo-600 text-white">
           <tr>
             <th className="p-2">NO</th>
-            <th className="p-2">NAMA</th>
+            <th className="p-2">TENOR</th>
             <th className="p-2">AKSI</th>
           </tr>
         </thead>
@@ -57,14 +59,9 @@ export default function MasterTenorCard () {
           {rows.map((r, i) => (
             <tr key={r.id} className="border-t">
               <td className="p-2 text-center">{i + 1}</td>
-              <td className="p-2">{r.nama}</td>
+              <td className="p-2">{r.tenor}</td>
               <td className="p-2 flex justify-center gap-2">
-                <button
-                  onClick={() => {
-                    setEditId(r.id);
-                    setNama(r.nama);
-                  }}
-                >
+                <button onClick={() => { setEditId(r.id); setTenor(r.tenor); }}>
                   <FaEdit />
                 </button>
                 <button onClick={() => remove(ref(db, `${basePath}/${r.id}`))}>
