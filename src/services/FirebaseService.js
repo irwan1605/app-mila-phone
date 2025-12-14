@@ -202,28 +202,6 @@ export const listenTransaksiByTokoHemat = (
 };
 
 
-/**
- * Add transaksi: writes a new transaksi and ensures id is stored in the object.
- * Returns the generated key.
- */
-export const addTransaksi = async (tokoId, data) => {
-  const r = push(ref(db, `toko/${tokoId}/transaksi`));
-  const payload = {
-    ...data,
-    // if caller didn't include TANGGAL_TRANSAKSI, try to keep consistent timestamp
-    TANGGAL_TRANSAKSI:
-      data.TANGGAL_TRANSAKSI || data.TANGGAL || new Date().toISOString(),
-  };
-  await set(r, payload);
-  // Optionally set id inside object for easier migration/read (not strictly necessary)
-  try {
-    await update(ref(db, `toko/${tokoId}/transaksi/${r.key}`), { id: r.key });
-  } catch (e) {
-    // ignore update error (best-effort)
-    console.warn("Could not set id field on new transaksi:", e);
-  }
-  return r.key;
-};
 
 
 /**
@@ -1110,9 +1088,26 @@ export const logStockActivity = async ({
 // =======================
 // UPDATE TRANSAKSI
 // =======================
-export const updateTransaksi = async (id, data) => {
+// =======================
+// UPDATE TRANSAKSI (LOCK BY TOKO)
+// =======================
+export const updateTransaksi = async (tokoId, id, data) => {
+  if (!tokoId || !id) {
+    throw new Error("updateTransaksi: tokoId dan id wajib");
+  }
+
+  // ❌ buang field toko dari payload agar tidak bisa dimanipulasi
+  const { tokoId: _t, TOKO: _T, ...safeData } = data || {};
+
   try {
-    await update(ref(db, `transaksi/${id}`), data);
+    await update(
+      ref(db, `toko/${tokoId}/transaksi/${id}`),
+      {
+        ...safeData,
+        updatedAt: new Date().toISOString(),
+      }
+    );
+
     return { success: true };
   } catch (err) {
     console.error("updateTransaksi error:", err);
@@ -1120,19 +1115,69 @@ export const updateTransaksi = async (id, data) => {
   }
 };
 
+
+
+/**
+ * Add transaksi: writes a new transaksi and ensures id is stored in the object.
+ * Returns the generated key.
+ */
+export const addTransaksi = async (tokoId, data) => {
+  const r = push(ref(db, `toko/${tokoId}/transaksi`));
+  const payload = {
+    ...data,
+    // if caller didn't include TANGGAL_TRANSAKSI, try to keep consistent timestamp
+    TANGGAL_TRANSAKSI:
+      data.TANGGAL_TRANSAKSI || data.TANGGAL || new Date().toISOString(),
+  };
+  await set(r, payload);
+  // Optionally set id inside object for easier migration/read (not strictly necessary)
+  try {
+    await update(ref(db, `toko/${tokoId}/transaksi/${r.key}`), { id: r.key });
+  } catch (e) {
+    // ignore update error (best-effort)
+    
+    
+    if (!tokoId) throw new Error("TOKO LOGIN WAJIB");
+
+    const safePayload = {
+      ...data,
+      tokoId,            // ⬅️ FORCE
+      TOKO: tokoId,      // ⬅️ FORCE
+      createdAt: new Date().toISOString(),
+    };
+  
+    const r = push(ref(db, `toko/${tokoId}/transaksi`));
+    await set(r, safePayload);
+  console.warn("Could not set id field on new transaksi:", e);
+  }
+  return r.key;
+};
+
+
 // =======================
-// RETURN / BALIK STOK
+// RETURN / BALIK STOK (AMAN)
 // =======================
 export const returnStock = async (tokoName, sku, qty = 1) => {
+  if (!tokoName || !sku || qty <= 0) {
+    throw new Error("returnStock: parameter tidak valid");
+  }
+
   try {
     const stockRef = ref(db, `stock/${tokoName}/${sku}`);
     const snap = await get(stockRef);
 
     if (!snap.exists()) {
-      await set(stockRef, { qty });
+      // kalau stok belum ada → buat baru
+      await set(stockRef, {
+        qty: Number(qty),
+        updatedAt: new Date().toISOString(),
+      });
     } else {
-      const current = snap.val().qty || 0;
-      await update(stockRef, { qty: current + qty });
+      const currentQty = Number(snap.val().qty || 0);
+      await update(stockRef, {
+        qty: currentQty + Number(qty),
+        updatedAt: new Date().toISOString(),
+      });
     }
 
     return { success: true };
@@ -1141,6 +1186,8 @@ export const returnStock = async (tokoName, sku, qty = 1) => {
     return { success: false, error: err };
   }
 };
+
+
 
 
 
@@ -1367,6 +1414,7 @@ const FirebaseService = {
   restoreStockByImeiRealtime,
   saveUserOnline,
   transferStock,
+  returnStock,
   updateInventory,
   updateKaryawan,
   updateMasterBarangHarga,

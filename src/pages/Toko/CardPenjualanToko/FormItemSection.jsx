@@ -1,8 +1,11 @@
+// ===============================
+// FormItemSection.jsx (FINAL FIX)
+// ===============================
 import React, { useEffect, useMemo, useState } from "react";
 import {
   listenMasterBarang,
   listenAllTransaksi,
-  listenStockAll ,
+  listenStockAll,
 } from "../../../services/FirebaseService";
 
 /* ================= KONSTANTA ================= */
@@ -30,13 +33,13 @@ export default function FormItemSection({
   const [transaksiPembelian, setTransaksiPembelian] = useState([]);
   const [stockAll, setStockAll] = useState({});
 
+  /* ===== STOCK ALL (IMEI PER TOKO) ===== */
   useEffect(() => {
     const unsub = listenStockAll((data) => {
       setStockAll(data || {});
     });
     return () => unsub && unsub();
   }, []);
-  
 
   /* ===== MASTER BARANG ===== */
   useEffect(() => {
@@ -57,7 +60,7 @@ export default function FormItemSection({
     return () => unsub && unsub();
   }, []);
 
-  /* ===== BRAND LIST (MASTER + PEMBELIAN) ===== */
+  /* ===== BRAND LIST ===== */
   const brandList = useMemo(() => {
     const set = new Set();
     masterBarang.forEach((b) => b.namaBrand && set.add(b.namaBrand));
@@ -76,11 +79,6 @@ export default function FormItemSection({
     Number(item.hargaUnit || 0) * Number(item.qty || 0) +
     Number(item.hargaBundling || 0) * Number(item.qtyBundling || 0);
 
-  const imeiMaster = useMemo(
-    () => masterBarang.map((b) => b.imei).filter(Boolean),
-    [masterBarang]
-  );
-
   const tambahItem = () => {
     onChange([
       ...value,
@@ -95,13 +93,13 @@ export default function FormItemSection({
         skemaHarga: "SRP",
         hargaUnit: 0,
 
-        // ====== SUDAH ADA (JANGAN DIHAPUS) ======
+        // ===== EXISTING (JANGAN DIHAPUS) =====
         bundlingOptions: [],
         selectedBundlingIndex: null,
         qtyBundling: 0,
         totalHarga: 0,
 
-        // ====== TAMBAHAN BARU (PREVIEW MASTER) ======
+        // ===== PREVIEW BUNDLING =====
         namaBundling1: "",
         hargaBundling1: 0,
         namaBundling2: "",
@@ -112,44 +110,31 @@ export default function FormItemSection({
     ]);
   };
 
-  
+  const getBarangFiltered = (namaBrand, kategoriBarang) => {
+    const map = new Map();
 
-  const getBarangFiltered = (
-    masterBarang,
-    transaksiPembelian,
-    namaBrand,
-    kategoriBarang
-  ) => {
-    const set = new Map();
-
-    // 🔹 DARI MASTER BARANG
     masterBarang.forEach((b) => {
       if (b.namaBrand === namaBrand && b.kategoriBarang === kategoriBarang) {
-        set.set(b.namaBarang, {
+        map.set(b.namaBarang, {
           id: b.id,
           namaBarang: b.namaBarang,
           sku: b.sku,
-          source: "MASTER",
         });
       }
     });
 
-    // 🔹 DARI TRANSAKSI PEMBELIAN (MasterPembelian)
     transaksiPembelian.forEach((t) => {
       if (t.NAMA_BRAND === namaBrand && t.KATEGORI_BRAND === kategoriBarang) {
-        set.set(t.NAMA_BARANG, {
+        map.set(t.NAMA_BARANG, {
           id: `trx-${t.id}`,
           namaBarang: t.NAMA_BARANG,
-          sku: `${t.NAMA_BRAND}_${t.NAMA_BARANG}`,
-          source: "PEMBELIAN",
+          sku: `${t.NAMA_BRAND}_${t.NAMA_BARANG}`.replace(/\s+/g, "_"),
         });
       }
     });
 
-    return Array.from(set.values());
+    return Array.from(map.values());
   };
-
-  
 
   /* ================= RENDER ================= */
   return (
@@ -158,29 +143,35 @@ export default function FormItemSection({
 
       {value.map((item, idx) => {
         const barangFiltered = getBarangFiltered(
-          masterBarang,
-          transaksiPembelian,
           item.namaBrand,
           item.kategoriBarang
         );
+
+        /* ===== IMEI SESUAI TOKO LOGIN ===== */
+        const imeiByToko = (() => {
+          if (!tokoLogin || !item.sku) return [];
+          const tokoStock = stockAll[tokoLogin];
+          if (!tokoStock || !tokoStock[item.sku]) return [];
+          const im = tokoStock[item.sku].imei;
+          if (Array.isArray(im)) return im;
+          if (typeof im === "string") return [im];
+          return [];
+        })();
 
         const isBundlingAllowed = ["MOTOR LISTRIK", "SEPEDA LISTRIK"].includes(
           (item.kategoriBarang || "").toUpperCase()
         );
 
         return (
-          <div
-            key={item.id}
-            className="border rounded-xl p-4 bg-white space-y-3"
-          >
-            {/* 1. KATEGORI */}
+          <div key={item.id} className="border rounded-xl p-4 bg-white space-y-3">
+
+            {/* KATEGORI */}
             <div>
               <label className="text-xs font-semibold">Kategori Barang</label>
               <input
                 list={`kategori-${idx}`}
                 className="input"
                 value={item.kategoriBarang}
-                disabled={disabled}
                 onChange={(e) =>
                   updateItem(idx, {
                     kategoriBarang: e.target.value,
@@ -188,9 +179,6 @@ export default function FormItemSection({
                     namaBarang: "",
                     imeiList: [],
                     qty: 0,
-                    produkBundling: "",
-                    qtyBundling: 0,
-                    hargaBundling: 0,
                   })
                 }
               />
@@ -201,7 +189,7 @@ export default function FormItemSection({
               </datalist>
             </div>
 
-            {/* 2. BRAND */}
+            {/* BRAND */}
             <div>
               <label className="text-xs font-semibold">Nama Brand</label>
               <input
@@ -222,73 +210,35 @@ export default function FormItemSection({
               </datalist>
             </div>
 
-            {/* 3. NAMA BARANG */}
+            {/* BARANG */}
             <div>
               <label className="text-xs font-semibold">Nama Barang</label>
               <select
                 className="input"
                 value={item.namaBarang}
                 onChange={(e) => {
-                  // ✅ KODE KAMU HARUS DI SINI
-
-                  const barang = masterBarang.find(
-                    (x) =>
-                      x.barang === e.target.value ||
-                      x.namaBarang === e.target.value
+                  const barang = transaksiPembelian.find(
+                    (t) =>
+                      t.NAMA_BRAND === item.namaBrand &&
+                      t.NAMA_BARANG === e.target.value
                   );
 
-                  // ===== TETAP ADA (punya kamu) =====
-                  const bundlingOptions = [];
-
-                  // ===== TAMBAHAN BARU =====
-                  const namaBundling1 = barang?.NAMA_BANDLING_1 || "";
-                  const hargaBundling1 = Number(barang?.HARGA_BANDLING_1 || 0);
-
-                  const namaBundling2 = barang?.NAMA_BANDLING_2 || "";
-                  const hargaBundling2 = Number(barang?.HARGA_BANDLING_2 || 0);
-
-                  const namaBundling3 = barang?.NAMA_BANDLING_3 || "";
-                  const hargaBundling3 = Number(barang?.HARGA_BANDLING_3 || 0);
-
-                  // ===== EXISTING LOGIC (TIDAK DIHAPUS) =====
-                  if (namaBundling1)
-                    bundlingOptions.push({
-                      nama: namaBundling1,
-                      harga: hargaBundling1,
-                    });
-                  if (namaBundling2)
-                    bundlingOptions.push({
-                      nama: namaBundling2,
-                      harga: hargaBundling2,
-                    });
-                  if (namaBundling3)
-                    bundlingOptions.push({
-                      nama: namaBundling3,
-                      harga: hargaBundling3,
-                    });
-
-                  // ===== UPDATE ITEM =====
                   updateItem(idx, {
-                    namaBarang: barang?.barang || barang?.namaBarang || "",
-                    sku: barang?.sku || "",
-                    hargaUnit: barang?.hargaSRP || 0,
+                    namaBarang: e.target.value,
+                    sku: `${item.namaBrand}_${e.target.value}`.replace(/\s+/g, "_"),
+                    hargaUnit: Number(barang?.HARGA_UNIT || 0),
                     skemaHarga: "SRP",
 
-                    bundlingOptions,
-                    selectedBundlingIndex: null,
-                    qtyBundling: 0,
-
-                    // 🔥 PREVIEW MASTER BUNDLING
-                    namaBundling1,
-                    hargaBundling1,
-                    namaBundling2,
-                    hargaBundling2,
-                    namaBundling3,
-                    hargaBundling3,
+                    namaBundling1: barang?.NAMA_BANDLING_1 || "",
+                    hargaBundling1: Number(barang?.HARGA_BANDLING_1 || 0),
+                    namaBundling2: barang?.NAMA_BANDLING_2 || "",
+                    hargaBundling2: Number(barang?.HARGA_BANDLING_2 || 0),
+                    namaBundling3: barang?.NAMA_BANDLING_3 || "",
+                    hargaBundling3: Number(barang?.HARGA_BANDLING_3 || 0),
                   });
                 }}
               >
-              
+                <option value="">-- Pilih Barang --</option>
                 {barangFiltered.map((b) => (
                   <option key={b.id} value={b.namaBarang}>
                     {b.namaBarang}
@@ -297,16 +247,13 @@ export default function FormItemSection({
               </select>
             </div>
 
-            {/* 4. IMEI */}
+            {/* IMEI */}
             {isIMEIKategori(item.kategoriBarang) && (
               <div>
-                <label className="text-xs font-semibold">
-                  IMEI (1 baris 1 IMEI)
-                </label>
+                <label className="text-xs font-semibold">IMEI</label>
                 <textarea
                   rows={2}
                   className="input"
-                  list={`imei-${idx}`}
                   value={(item.imeiList || []).join("\n")}
                   onChange={(e) => {
                     const list = e.target.value
@@ -317,22 +264,20 @@ export default function FormItemSection({
                     updateItem(idx, {
                       imeiList: list,
                       qty: list.length,
-                      totalHarga: hitungTotal({
-                        ...item,
-                        qty: list.length,
-                      }),
+                      totalHarga: hitungTotal({ ...item, qty: list.length }),
                     });
                   }}
+                  list={`imei-${idx}`}
                 />
                 <datalist id={`imei-${idx}`}>
-                  {imeiMaster.map((im) => (
+                  {imeiByToko.map((im) => (
                     <option key={im} value={im} />
                   ))}
                 </datalist>
               </div>
             )}
 
-            {/* 5. QTY */}
+            {/* QTY MANUAL */}
             {!isIMEIKategori(item.kategoriBarang) && (
               <div>
                 <label className="text-xs font-semibold">QTY Unit</label>
@@ -353,114 +298,28 @@ export default function FormItemSection({
               </div>
             )}
 
-            {/* 6. SKEMA HARGA */}
-            {isIMEIKategori(item.kategoriBarang) && (
-              <div>
-                <label className="text-xs font-semibold">Skema Harga</label>
-                <select
-                  className="input"
-                  value={item.skemaHarga}
-                  onChange={(e) =>
-                    updateItem(idx, { skemaHarga: e.target.value })
-                  }
-                >
-                  {SKEMA_HARGA.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* 7. HARGA UNIT */}
+            {/* HARGA UNIT */}
             <div>
               <label className="text-xs font-semibold">Harga Unit</label>
               <input
                 type="number"
                 className="input"
                 value={item.hargaUnit}
-                onChange={(e) =>
-                  updateItem(idx, {
-                    hargaUnit: Number(e.target.value),
-                    totalHarga: hitungTotal({
-                      ...item,
-                      hargaUnit: Number(e.target.value),
-                    }),
-                  })
-                }
+                readOnly
               />
             </div>
 
-            {/* ===== PREVIEW MASTER BUNDLING (READ ONLY) ===== */}
+            {/* PREVIEW BUNDLING */}
             {isBundlingAllowed && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                <div>
-                  <label className="text-xs font-semibold">
-                    Nama Bundling 1
-                  </label>
-                  <input
-                    className="input bg-gray-100"
-                    value={item.namaBundling1}
-                    readOnly
-                  />
-                  <input
-                    className="input mt-1 bg-gray-100"
-                    value={item.hargaBundling1}
-                    readOnly
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold">
-                    Nama Bundling 2
-                  </label>
-                  <input
-                    className="input bg-gray-100"
-                    value={item.namaBundling2}
-                    readOnly
-                  />
-                  <input
-                    className="input mt-1 bg-gray-100"
-                    value={item.hargaBundling2}
-                    readOnly
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold">
-                    Nama Bundling 3
-                  </label>
-                  <input
-                    className="input bg-gray-100"
-                    value={item.namaBundling3}
-                    readOnly
-                  />
-                  <input
-                    className="input mt-1 bg-gray-100"
-                    value={item.hargaBundling3}
-                    readOnly
-                  />
-                </div>
+              <div className="grid grid-cols-3 gap-2">
+                <input className="input bg-gray-100" readOnly value={item.namaBundling1} />
+                <input className="input bg-gray-100" readOnly value={item.namaBundling2} />
+                <input className="input bg-gray-100" readOnly value={item.namaBundling3} />
               </div>
             )}
-
-            {/* TOTAL */}
-            <div className="text-right font-bold text-indigo-700">
-              Total: Rp {hitungTotal(item).toLocaleString("id-ID")}
-            </div>
           </div>
         );
       })}
-
-      <button
-        type="button"
-        onClick={tambahItem}
-        disabled={disabled}
-        className="w-full py-2 bg-green-600 text-white rounded-lg"
-      >
-        + Tambah Barang
-      </button>
     </div>
   );
 }
