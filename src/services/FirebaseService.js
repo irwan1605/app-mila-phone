@@ -23,16 +23,85 @@ import {
   orderByChild,   // ⬅️ TAMBAH
   limitToLast,    // ⬅️ TAMBAH
   startAt,        // ⬅️ TAMBAH
-  endAt,          // ⬅️ TAMBAH
+  endAt,        // ⬅️ TAMBAH
 } from "firebase/database";
-
-
 
 
 
 /* ============================================================
    HELPERS
 ============================================================ */
+
+
+
+export const unlockImei = async (imei) => {
+  await set(ref(db, `imeiLocks/${imei}`), null);
+};
+
+export const rollbackStock = async (toko, sku, qty) => {
+  await updateStockAtomic(toko, sku, qty);
+};
+
+
+
+// 🧾 SIMPAN AUDIT LOG
+export const addAuditLog = async (logId, data) => {
+  await set(ref(db, `auditLogs/${logId}`), {
+    ...data,
+    createdAt: Date.now(),
+  });
+};
+
+// 🔄 UPDATE AUDIT LOG
+export const updateAuditLog = async (logId, data) => {
+  await update(ref(db, `auditLogs/${logId}`), data);
+};
+
+
+// 🔒 LOCK IMEI SECARA ATOMIC (ANTI DOUBLE SALES)
+export const lockImeiAtomic = async (imei, payload) => {
+  const imeiRef = ref(db, `imeiLocks/${imei}`);
+
+  const result = await runTransaction(imeiRef, (current) => {
+    if (current) {
+      // ❌ IMEI sudah ada → abort
+      return;
+    }
+    return {
+      status: "SOLD",
+      ...payload,
+      lockedAt: Date.now(),
+    };
+  });
+
+  if (!result.committed) {
+    throw new Error(`IMEI ${imei} sudah terjual`);
+  }
+};
+
+// 🔒 UPDATE STOK ATOMIC (ANTI MINUS)
+export const updateStockAtomic = async (toko, sku, diffQty) => {
+  const stockRef = ref(db, `stock/${toko}/${sku}`);
+
+  const result = await runTransaction(stockRef, (current) => {
+    const currQty = Number(current?.qty || 0);
+    const nextQty = currQty + diffQty;
+
+    if (nextQty < 0) {
+      return; // ❌ abort
+    }
+
+    return {
+      ...current,
+      qty: nextQty,
+      updatedAt: Date.now(),
+    };
+  });
+
+  if (!result.committed) {
+    throw new Error(`Stok ${toko} tidak mencukupi`);
+  }
+};
 
 
 
@@ -69,23 +138,31 @@ const normalizeTransaksi = (id, row = {}, tokoId = null, tokoName = "") => {
 
 // CREATE
 export const addMasterKategoriBarang = async (data) => {
-  const newRef = push(ref(db, "masterKategoriBarang"));
-  await set(newRef, {
-    ...data,
-    createdAt: Date.now(),
-  });
+  try {
+    const r = push(ref(db, "masterKategoriBarang"));
+    await set(r, {
+      ...data,
+      id: r.key,
+      createdAt: Date.now(),
+    });
+    return r.key;
+  } catch (err) {
+    console.error("🔥 Firebase addMasterKategoriBarang ERROR:", err);
+    throw err; // ⬅️ WAJIB agar React tahu error Firebase
+  }
 };
+
 
 // READ (LISTEN)
 export const listenMasterKategoriBarang = (callback) => {
-  const r = ref(db, "masterKategoriBarang");
-  return onValue(r, (snap) => {
-    const val = snap.val() || {};
-    const arr = Object.entries(val).map(([id, v]) => ({
+  const q = ref(db, "masterKategoriBarang");
+  return onValue(q, (snap) => {
+    const data = snap.val() || {};
+    const list = Object.entries(data).map(([id, v]) => ({
       id,
       ...v,
     }));
-    callback(arr);
+    callback(list);
   });
 };
 
@@ -1163,9 +1240,11 @@ export const addTransaksi = async (tokoId, data) => {
       TOKO: tokoId,      // ⬅️ FORCE
       createdAt: new Date().toISOString(),
     };
+    
   
     const r = push(ref(db, `toko/${tokoId}/transaksi`));
     await set(r, safePayload);
+    
   console.warn("Could not set id field on new transaksi:", e);
   }
   return r.key;
@@ -1257,6 +1336,23 @@ export const addLogPembelian = async (data) => {
   await set(logRef, {
     ...data,
     createdAt: Date.now(),
+  });
+};
+
+
+
+// 🔒 CEK IMEI SUDAH DIJUAL ATAU BELUM
+export const checkImeiAvailable = async (imei) => {
+  const snap = await get(ref(db, `imeiLocks/${imei}`));
+  return !snap.exists();
+};
+
+// 🔒 LOCK IMEI (SETELAH TRANSAKSI BERHASIL)
+export const lockImei = async (imei, data) => {
+  await set(ref(db, `imeiLocks/${imei}`), {
+    status: "SOLD",
+    ...data,
+    lockedAt: Date.now(),
   });
 };
 
@@ -1364,6 +1460,7 @@ export const updateMasterVoucher = masterVoucher.update;
 export const deleteMasterVoucher = masterVoucher.delete;
 
 
+
 /* ============================================================
    SEARCH INVENTORY BY NAMA BARANG (UNTUK NAMA BARANG SEARCH MODAL)
 ============================================================ */
@@ -1464,6 +1561,7 @@ export const listenMasterPembelian = (callback) => {
   );
   return () => unsub && unsub();
 };
+
 
 
 /* ============================================================

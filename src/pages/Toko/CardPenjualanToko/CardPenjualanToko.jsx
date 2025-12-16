@@ -22,13 +22,20 @@ import {
   getTokoName,
   listenUsers,
   addTransaksi,
-  updateTransaksi,   // ✅ TAMBAH
+  updateTransaksi, // ✅ TAMBAH
   reduceStock,
   addStock,
-  returnStock,       // ✅ TAMBAH
+  returnStock, // ✅ TAMBAH
   logStockActivity,
+  checkImeiAvailable,
+  lockImei,
+  lockImeiAtomic,
+  updateStockAtomic,
+  addAuditLog,
+  updateAuditLog,
+  unlockImei,
+  rollbackStock,
 } from "../../../services/FirebaseService";
-
 
 // FIX IMPORT (SESUAI FILE KAMU)
 import { db } from "../../../services/FirebaseInit";
@@ -528,121 +535,104 @@ export default function CardPenjualanToko() {
   // ============================================================
 
   const handleSaveTransaksi = async () => {
-    if (!tahap1Complete || !tahap2Complete || !tahap3Complete) {
-      alert("Lengkapi semua tahap sebelum menyimpan transaksi.");
-      return;
-    }
-
+    const auditId = `${Date.now()}-${userForm.noFaktur}`;
+  
     const finalItems = normalizeItemsBeforeSave(items);
-    const rollbackList = [];
-
-    const transaksiData = {
-      tanggal: userForm.tanggalPembelian,
+  
+    // ===============================
+    // 🧾 INIT AUDIT
+    // ===============================
+    await addAuditLog(auditId, {
+      action: "PENJUALAN",
       invoice: userForm.noFaktur,
-      tokoId,
-      tokoName,
-      user: { ...userForm },
-      payment: { ...paymentForm },
-      items: finalItems,
-      totalAmount: totals.totalAmount,
-      createdAt: Date.now(),
-    };
-
+      toko: tokoName,
+      user: userForm.namaSales,
+      status: "PROCESS",
+      steps: {
+        lockImei: false,
+        updateStock: false,
+        saveTransaksi: false,
+      },
+      imeis: finalItems.map((i) => i.imei).filter(Boolean),
+      stockChanges: finalItems.map((i) => ({
+        sku: i.sku,
+        qty: -(i.qty || 1),
+      })),
+    });
+  
     try {
-      // ===============================
-      // POTONG STOK
-      // ===============================
-      for (const itm of finalItems) {
-        // Barang utama
-        const qtyUtama = itm.qty || 1;
-        await reduceStock(tokoName, itm.sku, qtyUtama);
-
-        await logStockActivity({
-          tokoName,
-          sku: itm.sku,
-          qty: qtyUtama,
-          type: "OUT",
-          refId: transaksiData.invoice,
-          user: userForm.namaSales,
+      // ======================================
+      // 🔒 STEP 1: LOCK IMEI
+      // ======================================
+      for (const item of finalItems) {
+        if (!item.imei) continue;
+  
+        await lockImeiAtomic(item.imei, {
+          invoice: userForm.noFaktur,
+          toko: tokoName,
         });
-        rollbackList.push({ sku: itm.sku, qty: qtyUtama });
-
-        // Bundling
-        if (Array.isArray(itm.bundling)) {
-          for (const b of itm.bundling) {
-            await reduceStock(tokoName, b.sku, b.qty);
-            rollbackList.push({ sku: b.sku, qty: b.qty });
-          }
-        }
       }
-
-      // ===============================
-      // SIMPAN TRANSAKSI
-      // ===============================
-      const result = await addTransaksi(transaksiData);
-
-      if (!result?.success) {
-        throw new Error("Gagal menyimpan transaksi");
-      }
-
-      alert("✅ Transaksi berhasil disimpan!");
-
-      // ===============================
-      // RESET FORM
-      // ===============================
-      setItems([
-        {
-          id: Date.now(),
-          sku: "",
-          kategoriBarang: "",
-          namaBrand: "",
-          namaBarang: "",
-          imei: "",
-          qty: 1,
-          hargaUnit: 0,
-          discount: 0,
-        },
-      ]);
-
-      setUserForm((prev) => ({
-        ...prev,
-        namaPelanggan: "",
-        idPelanggan: "",
-        noTelepon: "",
-        noFaktur: generateAutoFaktur(),
-      }));
-
-      setPaymentForm({
-        kategoriBayar: "",
-        paymentMethod: "",
-        mdr: "",
-        mpProteck: "",
-        dpUser: "",
-        tenor: "",
-        status: "PIUTANG",
+  
+      await updateAuditLog(auditId, {
+        "steps.lockImei": true,
       });
-    } catch (err) {
-      console.error("❌ ERROR SIMPAN TRANSAKSI:", err);
-
-      // ===============================
-      // ROLLBACK STOK
-      // ===============================
-
-      for (const rb of rollbackList) {
-        await addStock(tokoName, rb.sku, { qty: rb.qty });
-        await logStockActivity({
-          tokoName,
-          sku: rb.sku,
-          qty: rb.qty,
-          type: "RETURN",
-          refId: transaksiData.invoice,
-          user: userForm.namaSales,
-        });
+  
+      // ======================================
+      // 🔒 STEP 2: UPDATE STOK
+      // ======================================
+      for (const item of finalItems) {
+        await updateStockAtomic(tokoName, item.sku, -(item.qty || 1));
       }
-
-      alert("❌ Transaksi gagal. Stok dikembalikan.");
+  
+      await updateAuditLog(auditId, {
+        "steps.updateStock": true,
+      });
+  
+      // ======================================
+      // 💾 STEP 3: SIMPAN TRANSAKSI
+      // ======================================
+      await addTransaksi({
+        invoice: userForm.noFaktur,
+        toko: tokoName,
+        user: userForm,
+        items: finalItems,
+        payment: paymentForm,
+        totalBarang: totals.totalAmount,
+        createdAt: Date.now(),
+      });
+  
+      await updateAuditLog(auditId, {
+        status: "SUCCESS",
+        "steps.saveTransaksi": true,
+      });
+  
+      alert("✅ Transaksi berhasil disimpan");
+  
+    } catch (err) {
+      console.error("ROLLBACK:", err);
+  
+      // ===============================
+      // 🔄 ROLLBACK
+      // ===============================
+      for (const item of finalItems) {
+        if (item.imei) {
+          await unlockImei(item.imei);
+        }
+        await rollbackStock(tokoName, item.sku, item.qty || 1);
+      }
+  
+      await updateAuditLog(auditId, {
+        status: "FAILED",
+        error: err.message,
+      });
+  
+      alert(`❌ Transaksi dibatalkan & rollback dilakukan`);
     }
   };
+  
+  
+
+  
 
   // ============================================================
   // RENDER START

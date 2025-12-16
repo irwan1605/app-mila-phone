@@ -16,11 +16,12 @@ import { FaTimes, FaSearch, FaCheck } from "react-icons/fa";
    - listenAllTransaksi(cb)
   maka modal akan tarik data realtime.
 */
-
 import {
   listenStockAll,
   listenAllTransaksi,
 } from "../../../services/FirebaseService";
+
+
 
 export default function IMEISearchModal({ onClose, onSelect }) {
   const [search, setSearch] = useState("");
@@ -61,9 +62,6 @@ export default function IMEISearchModal({ onClose, onSelect }) {
     };
   }, []);
 
-  // =============================
-  // GABUNGKAN DATA
-  // =============================
   const mergedData = useMemo(() => {
     const stockMapped = stockData.map((s) => ({
       source: "STOCK",
@@ -73,7 +71,7 @@ export default function IMEISearchModal({ onClose, onSelect }) {
       imei: s.IMEI || s.NO_IMEI || "",
       hargaUnit: Number(s.HARGA_JUAL || s.HARGA || s.HARGA_UNIT || 0),
     }));
-
+  
     const salesMapped = salesData.map((s) => ({
       source: "SALES",
       kategoriBarang: s.KATEGORI_BARANG || "",
@@ -82,14 +80,25 @@ export default function IMEISearchModal({ onClose, onSelect }) {
       imei: s.IMEI || "",
       hargaUnit: Number(s.HARGA_UNIT || s.HARGA || 0),
     }));
-
-    return [...stockMapped, ...salesMapped];
+  
+    // ❌ HAPUS IMEI YANG SUDAH TERJUAL
+    const soldImeis = new Set(
+      salesMapped.map((s) => s.imei).filter(Boolean)
+    );
+  
+    return [...stockMapped, ...salesMapped].filter(
+      (item) => !item.imei || !soldImeis.has(item.imei)
+    );
   }, [stockData, salesData]);
+  
+
+
 
   // =============================
   // FILTER HASIL
   // =============================
   const filtered = useMemo(() => {
+
     if (!search) return mergedData;
 
     const q = search.toLowerCase();

@@ -1,0 +1,14 @@
+@media print {
+    button {
+      display: none;
+    }
+  
+    body {
+      background: white;
+    }
+  
+    table {
+      font-size: 12px;
+    }
+  }
+  

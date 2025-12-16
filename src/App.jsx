@@ -232,8 +232,22 @@ export default function App() {
                   {/* Produk */}
                   <Route path="/products" element={<Products />} />
 
-                  {/* Penjualan Sync */}
+                  {/* MASTER MANAGEMENT */}
                   <Route path="/data-management" element={<DataManagement />} />
+
+                   {/* PRINT */}
+
+                  {/* <Route path="/print/sales" element={<PrintSalesReport />} />
+                  <Route path="/print/inventory" element={<PrintInventory />} />
+                  <Route
+                    path="/print/stock-opname"
+                    element={<PrintStockOpname />}
+                  />
+                  <Route path="/print/keuangan" element={<PrintKeuangan />} />
+                  <Route
+                    path="/print/surat-jalan/:invoice"
+                    element={<PrintSuratJalan />}
+                  /> */}
 
                   {/* Surat Jalan, Faktur, Invoice, Struk */}
                   <Route path="/surat-jalan" element={<SuratJalan />} />
