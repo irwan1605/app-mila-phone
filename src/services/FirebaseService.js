@@ -34,19 +34,7 @@ import {
    HELPERS
 ============================================================ */
 
-/**
- * Convert snapshot val to list safely
- */
-const safeValToList = (snap) => {
-  const v = snap.val();
-  if (!v) return [];
-  if (typeof v === "object" && !Array.isArray(v)) {
-    return Object.entries(v).map(([id, item]) =>
-      typeof item === "object" ? { id, ...item } : { id, value: item }
-    );
-  }
-  return Array.isArray(v) ? v : [v];
-};
+
 
 /**
  * Normalize transaksi row into consistent shape used by app
@@ -1216,6 +1204,64 @@ export const returnStock = async (tokoName, sku, qty = 1) => {
     return { success: false, error: err };
   }
 };
+
+// ======================================================
+// 🔥 MIGRASI KATEGORI STOCK (SEKALI JALAN)
+// ======================================================
+
+
+export const migrateStockKategori = async () => {
+  const stockRef = ref(db, "stock");
+  const snap = await get(stockRef);
+
+  if (!snap.exists()) {
+    alert("❌ Tidak ada data stock");
+    return;
+  }
+
+  const stock = snap.val();
+  const updates = {};
+
+  Object.entries(stock).forEach(([namaToko, items]) => {
+    Object.entries(items || {}).forEach(([sku, item]) => {
+      let kategori =
+        item.kategori ||
+        item.KATEGORI_BRAND ||
+        item.kategoriBrand ||
+        "";
+
+      kategori = kategori.toUpperCase().trim();
+
+      if (kategori === "ACCESORIES") kategori = "ACCESSORIES";
+      if (kategori === "SPARE PART") kategori = "SPAREPART";
+
+      if (kategori !== item.kategori) {
+        updates[`stock/${namaToko}/${sku}/kategori`] = kategori;
+      }
+    });
+  });
+
+  if (Object.keys(updates).length > 0) {
+    await update(ref(db), updates);
+    alert("✅ Migrasi kategori stock BERHASIL");
+  } else {
+    alert("ℹ️ Tidak ada data yang perlu dimigrasi");
+  }
+};
+
+
+// baru pakai di function
+export const addLogPembelian = async (data) => {
+  const db = getDatabase();
+  const logRef = push(ref(db, "logPembelian"));
+  await set(logRef, {
+    ...data,
+    createdAt: Date.now(),
+  });
+};
+
+
+
 
 
 

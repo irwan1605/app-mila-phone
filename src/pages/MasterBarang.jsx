@@ -4,6 +4,7 @@ import {
   addTransaksi,
   updateTransaksi,
   deleteTransaksi,
+  listenMasterKategoriBarang,
 } from "../services/FirebaseService";
 
 import {
@@ -56,6 +57,7 @@ export default function MasterBarang() {
   const TODAY = new Date().toISOString().slice(0, 10);
   const [isLoading, setIsLoading] = useState(true);
   const [lastCount, setLastCount] = useState(0);
+  const [kategoriList, setKategoriList] = useState([]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -73,6 +75,13 @@ export default function MasterBarang() {
     isBandling: false,
     tipeBandling: "", // "1" | "2" | "3"
   });
+
+  useEffect(() => {
+    const unsub = listenMasterKategoriBarang((rows) => {
+      setKategoriList(rows || []);
+    });
+    return () => unsub && unsub();
+  }, []);
 
   useEffect(() => {
     if (lastCount === 0 && allTransaksi.length > 0) {
@@ -127,10 +136,26 @@ export default function MasterBarang() {
 
   const counterKategori = useMemo(() => {
     const map = {};
+
     allTransaksi.forEach((t) => {
       const kat = t.KATEGORI_BRAND || "TANPA KATEGORI";
-      map[kat] = (map[kat] || 0) + 1;
+      const qty = Number(t.QTY || 0);
+      const metode = (t.PAYMENT_METODE || "").toUpperCase();
+
+      if (metode === "PEMBELIAN") {
+        map[kat] = (map[kat] || 0) + qty;
+      }
+
+      if (metode === "PENJUALAN") {
+        map[kat] = (map[kat] || 0) - qty;
+      }
     });
+
+    // ❗ Jangan sampai minus
+    Object.keys(map).forEach((k) => {
+      if (map[k] < 0) map[k] = 0;
+    });
+
     return map;
   }, [allTransaksi]);
 
@@ -185,6 +210,17 @@ export default function MasterBarang() {
     const start = (currentPage - 1) * itemsPerPage;
     return filtered.slice(start, start + itemsPerPage);
   }, [filtered, currentPage]);
+
+  const namaBarangList = useMemo(() => {
+    return masterBarang
+      .filter((x) => x.barang)
+      .map((x) => ({
+        label: `${x.barang} (${x.brand})`,
+        barang: x.barang,
+        brand: x.brand,
+        kategori: x.kategori,
+      }));
+  }, [masterBarang]);
 
   // ================== EXPORT EXCEL ==================
   const exportExcel = () => {
@@ -271,37 +307,70 @@ export default function MasterBarang() {
     setShowTambah(false);
   };
 
-  // ================== EDIT ==================
+  // ================== OPEN EDIT ==================
   const openEdit = (row) => {
-    const sudahPembelian = allTransaksi.some(
-      (t) =>
-        t.NAMA_BRAND === row.brand &&
-        t.NAMA_BARANG === row.barang &&
-        t.PAYMENT_METODE === "PEMBELIAN"
-    );
-
     setEditData({
       ...row,
-      isLocked: sudahPembelian,
+
+      // ✅ SIMPAN DATA ASLI (PENTING!)
+      _originalBrand: row.brand,
+      _originalBarang: row.barang,
+
+      tanggal: row.tanggal || TODAY,
     });
     setShowEdit(true);
   };
 
-  const submitEdit = async () => {
+  // ================== DELETE MASTER BARANG ==================
+  const deleteItem = async (row) => {
+    const confirmDelete = window.confirm(
+      `Yakin hapus Master Barang:\n\n${row.brand} - ${row.barang} ?`
+    );
+    if (!confirmDelete) return;
+
     const rows = allTransaksi.filter(
-      (t) =>
-        t.NAMA_BRAND === editData.brand && t.NAMA_BARANG === editData.barang
+      (t) => t.NAMA_BRAND === row.brand && t.NAMA_BARANG === row.barang
     );
 
     for (const r of rows) {
+      await deleteTransaksi(r.tokoId || 1, r.id);
+    }
+
+    showNotif("🗑️ Master Barang berhasil dihapus!");
+  };
+
+  const submitEdit = async () => {
+    if (!editData?._originalBrand || !editData?._originalBarang) {
+      alert("Data referensi lama tidak ditemukan");
+      return;
+    }
+
+    // ✅ CARI DATA BERDASARKAN NAMA LAMA
+    const rows = allTransaksi.filter(
+      (t) =>
+        t.NAMA_BRAND === editData._originalBrand &&
+        t.NAMA_BARANG === editData._originalBarang
+    );
+
+    if (!rows.length) {
+      alert("Tidak ada data yang bisa diperbarui");
+      return;
+    }
+
+    for (const r of rows) {
       await updateTransaksi(r.tokoId || 1, r.id, {
-        TANGGAL_TRANSAKSI: editData.tanggal, // ✅ TANGGAL SEKARANG IKUT TERUPDATE
+        TANGGAL_TRANSAKSI: editData.tanggal,
+
+        // ✅ UPDATE KE NAMA BARU
+        NAMA_BRAND: editData.brand,
+        NAMA_BARANG: editData.barang,
+        KATEGORI_BRAND: editData.kategori,
+
         HARGA_SRP: Number(editData.hargaSRP || 0),
         HARGA_UNIT: Number(editData.hargaSRP || 0),
         HARGA_GROSIR: Number(editData.hargaGrosir || 0),
         HARGA_RESELLER: Number(editData.hargaReseller || 0),
-        KATEGORI_BRAND: editData.kategori,
-        ...(editData.isLocked ? {} : { NAMA_BARANG: editData.barang }),
+
         NAMA_BANDLING_1: editData.NAMA_BANDLING_1 || "",
         HARGA_BANDLING_1: Number(editData.HARGA_BANDLING_1 || 0),
 
@@ -313,23 +382,8 @@ export default function MasterBarang() {
       });
     }
 
-    showNotif("✅ Data Master Barang berhasil diperbarui!");
-
+    showNotif("✅ Nama Brand & Nama Barang berhasil diperbarui (Realtime)");
     setShowEdit(false);
-  };
-
-  const deleteItem = async (row) => {
-    if (!window.confirm("Hapus data ini?")) return;
-
-    const rows = allTransaksi.filter(
-      (t) => t.NAMA_BRAND === row.brand && t.NAMA_BARANG === row.barang
-    );
-
-    for (const r of rows) {
-      await deleteTransaksi(r.tokoId || 1, r.id);
-    }
-
-    alert("✅ Data berhasil dihapus!");
   };
 
   // ================== UI ==================
@@ -514,83 +568,130 @@ export default function MasterBarang() {
           <div className="bg-white text-slate-800 w-full max-w-md rounded-xl p-5">
             <h3 className="font-bold mb-3">Tambah Master Barang</h3>
 
-            <div className="space-y-2">
-              <td className="font-bold mb-3"> TANGGAL</td>
-              <input
-                type="date"
-                className="input"
-                value={form.tanggal}
-                min={TODAY}
-                max={TODAY}
-                readOnly
-              />
-              <td className="font-bold mb-3"> Kategori Barang</td>
-              <select
-                className="input"
-                value={form.kategori}
-                onChange={(e) => setForm({ ...form, kategori: e.target.value })}
-              >
-                <option value="">Pilih Kategori</option>
-                {KATEGORI_OPTIONS.map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </select>
-              <td className="font-bold mb-3"> Nama Brand</td>
-              <input
-                list="brand-list"
-                placeholder="Nama Brand"
-                className="input"
-                value={form.brand}
-                onChange={(e) => setForm({ ...form, brand: e.target.value })}
-              />
-              <td className="font-bold mb-3"> Nama Barang</td>
-              <input
-                placeholder="Nama Barang"
-                className="input"
-                value={form.barang}
-                onChange={(e) => setForm({ ...form, barang: e.target.value })}
-              />
-              <datalist id="brand-list">
-                {BRAND_OPTIONS.map((b) => (
-                  <option key={b} value={b} />
-                ))}
-              </datalist>
-              <td className="font-bold mb-3"> Harga SRP</td>
-              <input
-                placeholder="Harga SRP"
-                type="number"
-                className="input"
-                value={form.hargaSRP}
-                onChange={(e) => setForm({ ...form, hargaSRP: e.target.value })}
-              />
-              <td className="font-bold mb-3"> Harga Grosir</td>
-              <input
-                placeholder="Harga Grosir"
-                type="number"
-                className="input"
-                value={form.hargaGrosir}
-                onChange={(e) =>
-                  setForm({ ...form, hargaGrosir: e.target.value })
-                }
-              />
-              <td className="font-bold mb-3"> Harga Reseller</td>
-              <input
-                placeholder="Harga Reseller"
-                type="number"
-                className="input"
-                value={form.hargaReseller}
-                onChange={(e) =>
-                  setForm({ ...form, hargaReseller: e.target.value })
-                }
-              />
-              <td className="font-bold mb-3"> Barang Bandling </td>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold">TANGGAL</label>
+                <input
+                  type="date"
+                  className="input"
+                  value={form.tanggal}
+                  min={TODAY}
+                  max={TODAY}
+                  readOnly
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold">
+                  {" "}
+                  Kategori Barang
+                </label>
+                <select
+                  className="input"
+                  value={form.kategori}
+                  onChange={(e) =>
+                    setForm({ ...form, kategori: e.target.value })
+                  }
+                >
+                  <option value="">Pilih Kategori</option>
+                  {kategoriList.map((k) => (
+                    <option key={k.id} value={k.namaKategori}>
+                      {k.namaKategori}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold"> Nama Brand</label>
+                <input
+                  list="brand-list"
+                  placeholder="Nama Brand"
+                  className="input"
+                  value={form.brand}
+                  onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold">Nama Barang</label>
+                <input
+                  list="nama-barang-list"
+                  placeholder="Ketik atau pilih Nama Barang"
+                  className="input"
+                  value={form.barang}
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    // cek apakah cocok dengan master barang
+                    const selected = namaBarangList.find(
+                      (x) => x.barang.toLowerCase() === value.toLowerCase()
+                    );
+
+                    setForm({
+                      ...form,
+                      barang: value,
+                      // 🔥 auto isi jika cocok, manual jika tidak
+                      brand: selected?.brand || form.brand,
+                      kategori: selected?.kategori || form.kategori,
+                    });
+                  }}
+                />
+
+                <datalist id="nama-barang-list">
+                  {namaBarangList.map((x, i) => (
+                    <option key={i} value={x.barang}>
+                      {x.label}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold">Harga SRP</label>
+                <input
+                  placeholder="Harga SRP"
+                  type="number"
+                  className="input"
+                  value={form.hargaSRP}
+                  onChange={(e) =>
+                    setForm({ ...form, hargaSRP: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold"> Harga Grosir</label>
+                <input
+                  placeholder="Harga Grosir"
+                  type="number"
+                  className="input"
+                  value={form.hargaGrosir}
+                  onChange={(e) =>
+                    setForm({ ...form, hargaGrosir: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold">Harga Reseller</label>
+                <input
+                  placeholder="Harga Reseller"
+                  type="number"
+                  className="input"
+                  value={form.hargaReseller}
+                  onChange={(e) =>
+                    setForm({ ...form, hargaReseller: e.target.value })
+                  }
+                />{" "}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold">Barang Bandling </label>
             </div>
             {/* ✅ BANDLING KHUSUS SEPEDA & MOTOR */}
             {(form.kategori === "SEPEDA LISTRIK" ||
               form.kategori === "MOTOR LISTRIK") && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                 <div>
-                  <label className="text-xs">Bandling 1 (Nama)</label>
+                  <label className="text-xs font-semibold">
+                    Bandling 1 (Nama)
+                  </label>
                   <input
                     className="input"
                     value={form.namaBandling1}
@@ -598,6 +699,7 @@ export default function MasterBarang() {
                       setForm({ ...form, namaBandling1: e.target.value })
                     }
                   />
+
                   <input
                     type="number"
                     className="input mt-1"
@@ -610,7 +712,9 @@ export default function MasterBarang() {
                 </div>
 
                 <div>
-                  <label className="text-xs">Bandling 2 (Nama)</label>
+                  <label className="text-xs font-semibold">
+                    Bandling 2 (Nama)
+                  </label>
                   <input
                     className="input"
                     value={form.namaBandling2}
@@ -630,7 +734,9 @@ export default function MasterBarang() {
                 </div>
 
                 <div>
-                  <label className="text-xs">Bandling 3 (Nama)</label>
+                  <label className="text-xs font-semibold">
+                    Bandling 3 (Nama)
+                  </label>
                   <input
                     className="input"
                     value={form.namaBandling3}
@@ -720,9 +826,11 @@ export default function MasterBarang() {
                   <div>
                     <label className="text-xs text-slate-500">Nama Brand</label>
                     <input
-                      disabled
-                      className="input mt-1 bg-gray-100"
+                      className="input mt-1"
                       value={editData.brand}
+                      onChange={(e) =>
+                        setEditData({ ...editData, brand: e.target.value })
+                      }
                     />
                   </div>
 
@@ -731,10 +839,7 @@ export default function MasterBarang() {
                       Nama Barang
                     </label>
                     <input
-                      disabled={editData.isLocked}
-                      className={`input mt-1 ${
-                        editData.isLocked ? "bg-gray-100" : ""
-                      }`}
+                      className="input mt-1"
                       value={editData.barang}
                       onChange={(e) =>
                         setEditData({ ...editData, barang: e.target.value })

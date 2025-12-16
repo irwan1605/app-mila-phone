@@ -45,25 +45,6 @@ const rupiah = (n) =>
     minimumFractionDigits: 0,
   });
 
-// =======================
-// STOCK NORMALIZER
-// =======================
-const normalizeStock = (stokObj = {}) => {
-  const result = {};
-  Object.values(stokObj).forEach((item) => {
-    if (!item) return;
-    const brand = item.brand || item.namaBrand;
-    const barang = item.barang || item.namaBarang;
-    const sku = `${brand}_${barang}`.replace(/\s+/g, "_").toUpperCase();
-
-    if (!result[sku]) {
-      result[sku] = { sku, nama: barang, qty: 0 };
-    }
-    result[sku].qty += Number(item.qty || 0);
-  });
-  return result;
-};
-
 // ======================================================================
 // COMPONENT UTAMA
 // ======================================================================
@@ -78,13 +59,10 @@ export default function InventoryReport() {
   const [masterBarang, setMasterBarang] = useState({});
   const [selectedToko, setSelectedToko] = useState(null);
   const [search, setSearch] = useState("");
-  const [transferHistory, setTransferHistory] = useState([]);
-
 
   // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 25;
-  
 
   // ==========================
   // LISTENER REALTIME: STOK
@@ -119,18 +97,19 @@ export default function InventoryReport() {
     return () => unsub && unsub();
   }, []);
 
-  // ======================================================================
-  // HITUNG TOTAL STOCK SEMUA TOKO
-  // ======================================================================
-  const totalAllStock = useMemo(() => {
-    let total = 0;
-    Object.values(stockData).forEach((tokoObj) => {
-      Object.values(tokoObj).forEach((item) => {
-        total += Number(item.qty || 0);
-      });
-    });
-    return total;
-  }, [stockData]);
+  const hitungStockPembelian = (transaksi, namaToko) => {
+    return (transaksi || []).reduce((sum, t) => {
+      if (
+        (t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN" ||
+        t.NAMA_TOKO !== namaToko
+      ) {
+        return sum;
+      }
+
+      // IMEI = 1 qty, Non-IMEI pakai QTY
+      return sum + (t.IMEI ? 1 : Number(t.QTY || 0));
+    }, 0);
+  };
 
   // ======================================================================
   // HITUNG STOCK PEMBELIAN CILANGKAP PUSAT
@@ -145,31 +124,44 @@ export default function InventoryReport() {
   }, [stockData]);
 
   // ======================================================================
+  // HITUNG TOTAL STOCK SEMUA TOKO
+  // ======================================================================
+  const totalAllStock = useMemo(() => {
+    const stokTokoLain = [
+      "METLAND 2",
+      "SAWANGAN",
+      "CIBINONG",
+      "GAS ALAM",
+      "CITEUREUP",
+      "CIRACAS",
+      "METLAND 1",
+      "PITARA",
+      "KOTA WISATA",
+    ].reduce((sum, toko) => sum + hitungStockPembelian(transaksi, toko), 0);
+
+    return stockPembelianPusat + stokTokoLain;
+  }, [transaksi, stockPembelianPusat]);
+
+  // ======================================================================
   // CARD STOK PER TOKO
   // ======================================================================
   const cardStock = useMemo(() => {
     return TOKO_LIST.map((toko, idx) => {
-      // Untuk Cilankap Pusat → pakai stok pembelian pusat
-      if (toko === "CILANGKAP PUSAT") {
-        return {
-          toko,
-          total: stockPembelianPusat,
-          color: "from-emerald-500 to-teal-500",
-        };
-      }
+      const total =
+        toko === "CILANGKAP PUSAT"
+          ? stockPembelianPusat // ini SUDAH BENAR
+          : hitungStockPembelian(transaksi, toko);
 
-      const stokAsli = stockData[toko] || {};
-      const stok = normalizeStock(stokAsli);
-      const total = Object.values(stok).reduce(
-        (sum, r) => sum + Number(r.qty || 0),
-        0
-      );
+      // const total = Object.values(stokToko).reduce(
+      //   (sum, item) => sum + Number(item.qty || 0),
+      //   0
+      // );
 
       return {
         toko,
         total,
         color: [
-          "from-indigo-500 to-blue-500",
+          "from-emerald-500 to-teal-500",
           "from-fuchsia-500 to-pink-500",
           "from-orange-500 to-amber-400",
           "from-cyan-500 to-teal-500",
@@ -182,7 +174,7 @@ export default function InventoryReport() {
         ][idx % 10],
       };
     });
-  }, [stockData, stockPembelianPusat]);
+  }, [transaksi, stockPembelianPusat]);
 
   // ======================================================================
   // DETAIL TABEL (JOIN MASTER BARANG + HITUNG BANDLING)
@@ -251,8 +243,6 @@ export default function InventoryReport() {
 
     return expanded;
   }, [selectedToko, transaksi, masterBarang, search]);
-
-
 
   // ======================================================================
   // PAGINATION

@@ -7,6 +7,10 @@ import {
   deleteTransaksi,
   addStock,
   reduceStock,
+  listenMasterToko,
+  listenMasterKategoriBarang,
+  addLogPembelian,
+  listenStockAll,
 } from "../services/FirebaseService";
 
 import * as XLSX from "xlsx";
@@ -25,13 +29,6 @@ import {
 } from "react-icons/fa";
 
 // (omitting repeated comments for brevity in this preview)
-
-const KATEGORI_OPTIONS = [
-  "SEPEDA LISTRIK",
-  "MOTOR LISTRIK",
-  "HANDPHONE",
-  "ACCESORIES",
-];
 
 const TOKO_LIST = [
   "CILANGKAP PUSAT",
@@ -110,6 +107,9 @@ export default function MasterPembelian() {
   const [showEdit, setShowEdit] = useState(false);
   const TODAY = new Date().toISOString().slice(0, 10);
   const [tokoTujuan, setTokoTujuan] = useState("CILANGKAP PUSAT");
+  const [masterToko, setMasterToko] = useState([]);
+  const [kategoriOptions, setKategoriOptions] = useState([]);
+  const [stockSnapshot, setStockSnapshot] = useState({});
 
   const [tambahForm, setTambahForm] = useState({
     tanggal: TODAY,
@@ -131,6 +131,27 @@ export default function MasterPembelian() {
   });
 
   const [editData, setEditData] = useState(null);
+
+  useEffect(() => {
+    const unsub = listenStockAll((snap) => {
+      setStockSnapshot(snap || {});
+    });
+    return () => unsub && unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = listenMasterKategoriBarang((rows) => {
+      setKategoriOptions(rows.map((r) => r.namaKategori));
+    });
+    return () => unsub && unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = listenMasterToko((rows) => {
+      setMasterToko(rows || []);
+    });
+    return () => unsub && unsub();
+  }, []);
 
   useEffect(() => {
     const unsub =
@@ -454,12 +475,26 @@ export default function MasterPembelian() {
   };
 
   const openEdit = (item) => {
+    const hasPenjualan = (allTransaksi || []).some(
+      (t) =>
+        (t.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN" &&
+        t.NAMA_BRAND === item.brand &&
+        t.NAMA_BARANG === item.barang &&
+        t.NAMA_TOKO === item.namaToko
+    );
+
+    if (hasPenjualan) {
+      alert(
+        "❌ Pembelian tidak bisa diedit karena sebagian barang sudah terjual.\n\nGunakan fitur RETUR atau PENYESUAIAN STOK."
+      );
+      return;
+    }
+
     setEditData({
       ...item,
       imeiList: (item.imeis || []).join("\n"),
-      originalKey: `${item.tanggal || ""}|${item.noDo || ""}|${
-        item.supplier || ""
-      }|${item.brand || ""}|${item.barang || ""}`,
+      originalToko: item.namaToko,
+      originalKey: `${item.tanggal}|${item.noDo}|${item.supplier}|${item.brand}|${item.barang}`,
       hargaSup: item.hargaSup || 0,
     });
     setShowEdit(true);
@@ -468,29 +503,16 @@ export default function MasterPembelian() {
   const saveEdit = async () => {
     if (!editData) return;
 
+    const oldToko = editData.originalToko || "CILANGKAP PUSAT";
+    const newToko = editData.namaToko || "CILANGKAP PUSAT";
+    const sku = makeSku(editData.brand, editData.barang);
+
     const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(editData.kategoriBrand);
     const isAccessories = editData.kategoriBrand === "ACCESORIES";
 
-    let imeis = [];
-
-    if (isKategoriImei) {
-      imeis = String(editData.imeiList || "")
-        .split("\n")
-        .map((x) => x.trim())
-        .filter(Boolean);
-
-      if (imeis.length <= 0) {
-        alert("Silahkan isi IMEI terlebih dahulu.");
-        return;
-      }
-
-      const err = validateImeisEdit(imeis, editData.originalKey);
-      if (err.length) {
-        alert(err.join("\n"));
-        return;
-      }
-    }
-
+    // ===============================
+    // AMBIL DATA TRANSAKSI LAMA
+    // ===============================
     const rows = (allTransaksi || []).filter((t) => {
       if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return false;
       const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
@@ -504,72 +526,105 @@ export default function MasterPembelian() {
       return;
     }
 
-    const originalQty = rows.length;
-    const newQty = imeis.length;
-    const sku = makeSku(editData.brand, editData.barang);
+    const originalQty = rows.reduce((sum, r) => sum + Number(r.QTY || 0), 0);
 
-    // QTY BERKURANG
-    if (newQty < originalQty) {
-      const toDelete = originalQty - newQty;
+    // ===============================
+    // HITUNG QTY BARU
+    // ===============================
+    let imeis = [];
+    let newQty = originalQty;
 
-      for (let i = 0; i < toDelete; i++) {
-        const r = rows[rows.length - 1 - i];
-        await deleteTransaksi(r.tokoId || 1, r.id);
+    if (isKategoriImei) {
+      imeis = String(editData.imeiList || "")
+        .split("\n")
+        .map((x) => x.trim())
+        .filter(Boolean);
+
+      const err = validateImeisEdit(imeis, editData.originalKey);
+      if (err.length) {
+        alert(err.join("\n"));
+        return;
       }
 
-      await reduceStock(editData.namaToko || "CILANGKAP PUSAT", sku, toDelete);
+      newQty = imeis.length;
+    } else if (isAccessories) {
+      newQty = Number(editData.totalQty || originalQty);
     }
 
-    // QTY BERTAMBAH
-    if (newQty > originalQty) {
-      const toAdd = newQty - originalQty;
-
-      for (let i = 0; i < toAdd; i++) {
-        const newImei = imeis[originalQty + i];
-
-        await addTransaksi(1, {
-          PAYMENT_METODE: "PEMBELIAN",
-          TANGGAL_TRANSAKSI: editData.tanggal,
-          NO_INVOICE: editData.noDo,
-          NAMA_SUPPLIER: editData.supplier,
-          NAMA_BRAND: editData.brand,
-          NAMA_BARANG: editData.barang,
-          KATEGORI_BRAND: editData.kategoriBrand,
-          QTY: 1,
-          IMEI: newImei,
-          HARGA_SUPLAYER: Number(editData.hargaSup),
-          TOTAL: Number(editData.hargaSup),
-          NAMA_TOKO: editData.namaToko || "CILANGKAP PUSAT",
-        });
-      }
-
-      await addStock(editData.namaToko || "CILANGKAP PUSAT", sku, {
-        brand: editData.brand,
-        barang: editData.barang,
-        qty: newQty - originalQty,
+    // ===============================
+    // PINDAH TOKO (JIKA BERUBAH)
+    // ===============================
+    if (oldToko !== newToko) {
+      await reduceStock(oldToko, sku, originalQty);
+      await addStock(newToko, sku, {
+        namaBrand: editData.brand,
+        namaBarang: editData.barang,
+        qty: originalQty,
       });
     }
 
-    // QTY SAMA → update transaksi IMEI
-    if (newQty === originalQty) {
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        await updateTransaksi(r.tokoId || 1, r.id, {
-          ...r,
-          TANGGAL_TRANSAKSI: editData.tanggal,
-          NO_INVOICE: editData.noDo,
-          NAMA_SUPPLIER: editData.supplier,
-          NAMA_BRAND: editData.brand,
-          NAMA_BARANG: editData.barang,
-          KATEGORI_BRAND: editData.kategoriBrand,
-          HARGA_SUPLAYER: Number(editData.hargaSup),
-          TOTAL: Number(editData.hargaSup),
-          IMEI: imeis[i],
-        });
-      }
+    // ===============================
+    // UPDATE QTY (DELTA)
+    // ===============================
+    const diffQty = newQty - originalQty;
+
+    // ==================================================
+    // ⛔ PASANG KODE VALIDASI STOK DI SINI (WAJIB)
+    // ==================================================
+    const currentStock = stockSnapshot?.[newToko]?.[sku]?.qty || 0;
+
+    if (diffQty < 0 && currentStock < Math.abs(diffQty)) {
+      alert(
+        `❌ Stok ${newToko} tidak mencukupi.\n\nStok tersedia: ${currentStock}\nPengurangan diminta: ${Math.abs(
+          diffQty
+        )}`
+      );
+      return;
     }
 
-    alert("✅ Edit pembelian berhasil disimpan & stok sinkron realtime.");
+    if (diffQty < 0) {
+      await reduceStock(newToko, sku, Math.abs(diffQty));
+    } else if (diffQty > 0) {
+      await addStock(newToko, sku, {
+        namaBrand: editData.brand,
+        namaBarang: editData.barang,
+        qty: diffQty,
+      });
+    }
+
+    // ===============================
+    // UPDATE / REPLACE TRANSAKSI
+    // ===============================
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      await updateTransaksi(r.tokoId || 1, r.id, {
+        ...r,
+        TANGGAL_TRANSAKSI: editData.tanggal,
+        NO_INVOICE: editData.noDo,
+        NAMA_SUPPLIER: editData.supplier,
+        NAMA_TOKO: newToko,
+        NAMA_BRAND: editData.brand,
+        NAMA_BARANG: editData.barang,
+        KATEGORI_BRAND: editData.kategoriBrand,
+        HARGA_SUPLAYER: Number(editData.hargaSup),
+        TOTAL: Number(editData.hargaSup),
+        IMEI: imeis[i] || "",
+      });
+    }
+
+    await addLogPembelian({
+      action: "EDIT_PEMBELIAN",
+      user: "SYSTEM", // nanti bisa diganti user login
+      oldToko,
+      newToko,
+      brand: editData.brand,
+      barang: editData.barang,
+      originalQty,
+      newQty,
+      diffQty,
+    });
+
+    alert("✅ Edit pembelian berhasil & stok sinkron realtime.");
     setShowEdit(false);
   };
 
@@ -756,15 +811,6 @@ export default function MasterPembelian() {
         await addTransaksi(tokoId, payload);
       }
 
-      // Simpan stok di CILANGKAP PUSAT menggunakan SKU
-      // Tambah stok pusat (selalu dilakukan)
-      await addStock("CILANGKAP PUSAT", sku, {
-        namaBrand: brand,
-        namaBarang: barang,
-        kategoriBrand,
-        qty: finalQty,
-      });
-
       // Tambah stok toko tujuan (TAPI JANGAN lakukan jika tokoTujuan = CILANGKAP PUSAT)
       if (tokoTujuan && tokoTujuan !== "CILANGKAP PUSAT") {
         await addStock(tokoTujuan, sku, {
@@ -781,7 +827,15 @@ export default function MasterPembelian() {
       }
 
       alert(
-        "✅ Pembelian berhasil disimpan.\n• Data masuk MASTER PEMBELIAN\n• Otomatis masuk MASTER BARANG\n• Stok CILANGKAP PUSAT bertambah."
+        `✅ Pembelian berhasil disimpan\n
+      📦 Toko Tujuan : ${tokoTujuan}
+      🏷 Brand : ${brand}
+      📱 Barang : ${barang}
+      📊 Qty : ${finalQty}
+      
+      • Data masuk Master Pembelian
+      • Stok CILANGKAP PUSAT bertambah
+      • Stok ${tokoTujuan} otomatis bertambah`
       );
 
       if (isBandlingItem) {
@@ -1314,9 +1368,9 @@ export default function MasterPembelian() {
                   }
                 >
                   <option value="">- Pilih Kategori -</option>
-                  {KATEGORI_OPTIONS.map((x) => (
-                    <option key={x} value={x}>
-                      {x}
+                  {kategoriOptions.map((k) => (
+                    <option key={k} value={k}>
+                      {k}
                     </option>
                   ))}
                 </select>
@@ -1587,19 +1641,42 @@ export default function MasterPembelian() {
                 <label className="text-xs font-semibold text-slate-600">
                   Nama Toko
                 </label>
-                <input
-                  list="toko-list"
-                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
+                <select
                   value={editData.namaToko}
                   onChange={(e) =>
-                    setEditData((p) => ({ ...p, namaToko: e.target.value }))
+                    setEditData((prev) => ({
+                      ...prev,
+                      namaToko: e.target.value,
+                    }))
                   }
-                />
-                <datalist id="toko-list">
-                  {TOKO_LIST.map((toko) => (
-                    <option key={toko} value={toko} />
+                >
+                  {masterToko.map((t) => (
+                    <option key={t.id} value={t.namaToko}>
+                      {t.namaToko}
+                    </option>
                   ))}
-                </datalist>
+                </select>
+                {/* <select
+                  className="input"
+                  value={editData.namaToko}
+                  onChange={(e) =>
+                    setEditData((prev) => ({
+                      ...prev,
+                      namaToko: e.target.value,
+                    }))
+                  }
+                >
+                  <option>CILANGKAP PUSAT</option>
+                  <option>CIBINONG</option>
+                  <option>GAS ALAM</option>
+                  <option>CITEUREUP</option>
+                  <option>CIRACAS</option>
+                  <option>METLAND 1</option>
+                  <option>METLAND 2</option>
+                  <option>PITARA</option>
+                  <option>KOTA WISATA</option>
+                  <option>SAWANGAN</option>
+                </select> */}
               </div>
 
               {/* Brand */}
@@ -1633,9 +1710,9 @@ export default function MasterPembelian() {
                   }
                 >
                   <option value="">- Pilih Kategori -</option>
-                  {KATEGORI_OPTIONS.map((x) => (
-                    <option key={x} value={x}>
-                      {x}
+                  {kategoriOptions.map((k) => (
+                    <option key={k} value={k}>
+                      {k}
                     </option>
                   ))}
                 </select>
