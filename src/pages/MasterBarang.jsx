@@ -5,6 +5,8 @@ import {
   updateTransaksi,
   deleteTransaksi,
   listenMasterKategoriBarang,
+  listenMasterBarang,
+  listenMasterBarangBundling,
 } from "../services/FirebaseService";
 
 import {
@@ -59,6 +61,9 @@ export default function MasterBarang() {
   const [lastCount, setLastCount] = useState(0);
   const [kategoriList, setKategoriList] = useState([]);
 
+  const [masterBarang, setMasterBarang] = useState([]);
+  const [masterBundling, setMasterBundling] = useState([]);
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -75,6 +80,21 @@ export default function MasterBarang() {
     isBandling: false,
     tipeBandling: "", // "1" | "2" | "3"
   });
+
+  useEffect(() => {
+    const unsub = listenMasterBarang(setMasterBarang);
+    return () => unsub && unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = listenMasterKategoriBarang(setKategoriList);
+    return () => unsub && unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = listenMasterBarangBundling(setMasterBundling);
+    return () => unsub && unsub();
+  }, []);
 
   useEffect(() => {
     const unsub = listenMasterKategoriBarang((rows) => {
@@ -160,41 +180,39 @@ export default function MasterBarang() {
   }, [allTransaksi]);
 
   // ================== REKAP MASTER BARANG ==================
-  const masterBarang = useMemo(() => {
-    const map = {};
-    allTransaksi.forEach((t) => {
-      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-      if (!map[key]) {
-        map[key] = {
-          key,
-          tanggal: t.TANGGAL_TRANSAKSI,
-          brand: t.NAMA_BRAND,
-          kategori: t.KATEGORI_BRAND,
-          barang: t.NAMA_BARANG,
-          hargaSRP: Number(t.HARGA_SRP || t.HARGA_UNIT || 0),
-          hargaGrosir: Number(t.HARGA_GROSIR || 0),
-          hargaReseller: Number(t.HARGA_RESELLER || 0),
+// ================== REKAP MASTER BARANG ==================
+const rekapMasterBarang = useMemo(() => {
+  const map = {};
+  allTransaksi.forEach((t) => {
+    const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+    if (!map[key]) {
+      map[key] = {
+        key,
+        tanggal: t.TANGGAL_TRANSAKSI,
+        brand: t.NAMA_BRAND,
+        kategori: t.KATEGORI_BRAND,
+        barang: t.NAMA_BARANG,
+        hargaSRP: Number(t.HARGA_SRP || t.HARGA_UNIT || 0),
+        hargaGrosir: Number(t.HARGA_GROSIR || 0),
+        hargaReseller: Number(t.HARGA_RESELLER || 0),
 
-          // ✅ TAMBAHAN DATA BANDLING
-          IS_BANDLING: t.IS_BANDLING || false,
-          TIPE_BANDLING: t.TIPE_BANDLING || "",
+        IS_BANDLING: t.IS_BANDLING || false,
+        TIPE_BANDLING: t.TIPE_BANDLING || "",
+        NAMA_BANDLING_1: t.NAMA_BANDLING_1 || "",
+        HARGA_BANDLING_1: Number(t.HARGA_BANDLING_1 || 0),
+        NAMA_BANDLING_2: t.NAMA_BANDLING_2 || "",
+        HARGA_BANDLING_2: Number(t.HARGA_BANDLING_2 || 0),
+        NAMA_BANDLING_3: t.NAMA_BANDLING_3 || "",
+        HARGA_BANDLING_3: Number(t.HARGA_BANDLING_3 || 0),
+      };
+    }
+  });
+  return Object.values(map);
+}, [allTransaksi]);
 
-          NAMA_BANDLING_1: t.NAMA_BANDLING_1 || "",
-          HARGA_BANDLING_1: Number(t.HARGA_BANDLING_1 || 0),
-
-          NAMA_BANDLING_2: t.NAMA_BANDLING_2 || "",
-          HARGA_BANDLING_2: Number(t.HARGA_BANDLING_2 || 0),
-
-          NAMA_BANDLING_3: t.NAMA_BANDLING_3 || "",
-          HARGA_BANDLING_3: Number(t.HARGA_BANDLING_3 || 0),
-        };
-      }
-    });
-    return Object.values(map);
-  }, [allTransaksi]);
 
   const filtered = useMemo(() => {
-    if (!search) return masterBarang;
+    if (!search) return rekapMasterBarang;
     const q = search.toLowerCase();
     return masterBarang.filter(
       (x) =>
@@ -202,7 +220,7 @@ export default function MasterBarang() {
         x.barang.toLowerCase().includes(q) ||
         x.kategori.toLowerCase().includes(q)
     );
-  }, [search, masterBarang]);
+  }, [search, rekapMasterBarang]);
 
   const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
 
@@ -221,6 +239,26 @@ export default function MasterBarang() {
         kategori: x.kategori,
       }));
   }, [masterBarang]);
+
+  const namaBarangByBrand = useMemo(() => {
+    if (!form.brand) return [];
+
+    return masterBarang
+      .filter((x) => x.brand === form.brand && x.barang)
+      .map((x) => ({
+        label: x.barang,
+        barang: x.barang,
+        kategori: x.kategori,
+      }));
+  }, [masterBarang, form.brand]);
+
+  const brandList = useMemo(() => {
+    const set = new Set();
+    rekapMasterBarang.forEach((x) => {
+      if (x.brand) set.add(x.brand);
+    });
+    return Array.from(set);
+  }, [rekapMasterBarang]);
 
   // ================== EXPORT EXCEL ==================
   const exportExcel = () => {
@@ -601,45 +639,51 @@ export default function MasterBarang() {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-semibold"> Nama Brand</label>
+                <label className="text-xs font-semibold">Nama Brand</label>
                 <input
-                  list="brand-list"
-                  placeholder="Nama Brand"
+                  list="brand-master-list"
+                  placeholder="Pilih Nama Brand"
                   className="input"
                   value={form.brand}
-                  onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      brand: e.target.value,
+                      barang: "", // reset barang
+                      kategori: "", // reset kategori
+                    })
+                  }
                 />
+
+                <datalist id="brand-master-list">
+                  {brandList.map((b, i) => (
+                    <option key={i} value={b} />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="text-xs font-semibold">Nama Barang</label>
                 <input
                   list="nama-barang-list"
-                  placeholder="Ketik atau pilih Nama Barang"
-                  className="input"
                   value={form.barang}
                   onChange={(e) => {
-                    const value = e.target.value;
-
-                    // cek apakah cocok dengan master barang
-                    const selected = namaBarangList.find(
-                      (x) => x.barang.toLowerCase() === value.toLowerCase()
+                    const val = e.target.value;
+                    const found = namaBarangList.find(
+                      (x) => x.barang.toLowerCase() === val.toLowerCase()
                     );
 
                     setForm({
                       ...form,
-                      barang: value,
-                      // 🔥 auto isi jika cocok, manual jika tidak
-                      brand: selected?.brand || form.brand,
-                      kategori: selected?.kategori || form.kategori,
+                      barang: val,
+                      brand: found?.brand || form.brand,
+                      kategori: found?.kategori || form.kategori,
                     });
                   }}
                 />
 
                 <datalist id="nama-barang-list">
                   {namaBarangList.map((x, i) => (
-                    <option key={i} value={x.barang}>
-                      {x.label}
-                    </option>
+                    <option key={i} value={x.barang} />
                   ))}
                 </datalist>
               </div>

@@ -11,6 +11,7 @@ import {
   listenMasterKategoriBarang,
   addLogPembelian,
   listenStockAll,
+  listenMasterBarang,
 } from "../services/FirebaseService";
 
 import * as XLSX from "xlsx";
@@ -110,6 +111,7 @@ export default function MasterPembelian() {
   const [masterToko, setMasterToko] = useState([]);
   const [kategoriOptions, setKategoriOptions] = useState([]);
   const [stockSnapshot, setStockSnapshot] = useState({});
+  const [masterBarang, setMasterBarang] = useState([]);
 
   const [tambahForm, setTambahForm] = useState({
     tanggal: TODAY,
@@ -131,6 +133,13 @@ export default function MasterPembelian() {
   });
 
   const [editData, setEditData] = useState(null);
+
+  useEffect(() => {
+    const unsub = listenMasterBarang((rows) => {
+      setMasterBarang(rows || []);
+    });
+    return () => unsub && unsub();
+  }, []);
 
   useEffect(() => {
     const unsub = listenStockAll((snap) => {
@@ -235,6 +244,23 @@ export default function MasterPembelian() {
     [allTransaksi]
   );
 
+  const brandOptions = useMemo(() => {
+    return Array.from(
+      new Set(masterBarang.map((b) => b.NAMA_BRAND).filter(Boolean))
+    );
+  }, [masterBarang]);
+
+  const namaBarangOptions = useMemo(() => {
+    return masterBarang
+      .filter(
+        (b) =>
+          (!tambahForm.brand || b.NAMA_BRAND === tambahForm.brand) &&
+          (!tambahForm.kategoriBrand ||
+            b.KATEGORI_BARANG === tambahForm.kategoriBrand)
+      )
+      .map((b) => b.NAMA_BARANG);
+  }, [masterBarang, tambahForm.brand, tambahForm.kategoriBrand]);
+
   const brandOptionsDynamic = useMemo(() => {
     const set = new Set(BRAND_OPTIONS);
     masterBarangList.forEach((x) => {
@@ -243,21 +269,21 @@ export default function MasterPembelian() {
     return Array.from(set);
   }, [masterBarangList]);
 
-  const namaBarangOptions = useMemo(() => {
-    if (!tambahForm.brand) {
-      return Array.from(
-        new Set(masterBarangList.map((x) => x.barang).filter(Boolean))
-      );
-    }
-    return Array.from(
-      new Set(
-        masterBarangList
-          .filter((x) => x.brand === tambahForm.brand)
-          .map((x) => x.barang)
-          .filter(Boolean)
-      )
-    );
-  }, [masterBarangList, tambahForm.brand]);
+  // const namaBarangOptions = useMemo(() => {
+  //   if (!tambahForm.brand) {
+  //     return Array.from(
+  //       new Set(masterBarangList.map((x) => x.barang).filter(Boolean))
+  //     );
+  //   }
+  //   return Array.from(
+  //     new Set(
+  //       masterBarangList
+  //         .filter((x) => x.brand === tambahForm.brand)
+  //         .map((x) => x.barang)
+  //         .filter(Boolean)
+  //     )
+  //   );
+  // }, [masterBarangList, tambahForm.brand]);
 
   const groupedPembelian = useMemo(() => {
     const map = {};
@@ -278,7 +304,7 @@ export default function MasterPembelian() {
       const barang = t.NAMA_BARANG || "";
       const kategoriBrand = t.KATEGORI_BRAND || "";
 
-      const key = `${tanggal}|${noDo}|${supplier}|${namaToko}|${brand}|${barang}`;
+      const key = `${tanggal}|${noDo}|${supplier}|${namaToko}`;
 
       if (!map[key]) {
         map[key] = {

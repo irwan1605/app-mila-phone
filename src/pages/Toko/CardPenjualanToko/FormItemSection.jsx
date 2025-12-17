@@ -6,6 +6,7 @@ import {
   listenMasterBarang,
   listenAllTransaksi,
   listenStockAll,
+  listenMasterBarangBundling,
 } from "../../../services/FirebaseService";
 
 /* ================= KONSTANTA ================= */
@@ -17,21 +18,16 @@ const KATEGORI_DEFAULT = [
 ];
 
 const KATEGORI_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
-const SKEMA_HARGA = ["SRP", "GROSIR", "RESELLER"];
 
 const isIMEIKategori = (kat) =>
   KATEGORI_IMEI.includes((kat || "").toUpperCase());
 
 /* ================= COMPONENT ================= */
-export default function FormItemSection({
-  value = [],
-  onChange,
-  disabled = false,
-  tokoLogin,
-}) {
+export default function FormItemSection({ value = [], onChange, tokoLogin }) {
   const [masterBarang, setMasterBarang] = useState([]);
   const [transaksiPembelian, setTransaksiPembelian] = useState([]);
   const [stockAll, setStockAll] = useState({});
+  const [masterBundling, setMasterBundling] = useState([]);
 
   /* ===== STOCK ALL (IMEI PER TOKO) ===== */
   useEffect(() => {
@@ -45,6 +41,14 @@ export default function FormItemSection({
   useEffect(() => {
     const unsub = listenMasterBarang((list) => {
       setMasterBarang(Array.isArray(list) ? list : []);
+    });
+    return () => unsub && unsub();
+  }, []);
+
+  /* ===== MASTER BARANG BUNDLING ===== */
+  useEffect(() => {
+    const unsub = listenMasterBarangBundling((rows) => {
+      setMasterBundling(Array.isArray(rows) ? rows : []);
     });
     return () => unsub && unsub();
   }, []);
@@ -77,7 +81,9 @@ export default function FormItemSection({
 
   const hitungTotal = (item) =>
     Number(item.hargaUnit || 0) * Number(item.qty || 0) +
-    Number(item.hargaBundling || 0) * Number(item.qtyBundling || 0);
+    Number(item.hargaBundling1 || 0) +
+    Number(item.hargaBundling2 || 0) +
+    Number(item.hargaBundling3 || 0);
 
   const tambahItem = () => {
     onChange([
@@ -136,6 +142,12 @@ export default function FormItemSection({
     return Array.from(map.values());
   };
 
+  const getBundlingByKategori = (kategori) => {
+    return masterBundling
+      .filter((b) => b.kategoriBarang === kategori && b.namaBarang)
+      .slice(0, 3); // max 3 bundling
+  };
+
   /* ================= RENDER ================= */
   return (
     <div className="space-y-4">
@@ -163,8 +175,10 @@ export default function FormItemSection({
         );
 
         return (
-          <div key={item.id} className="border rounded-xl p-4 bg-white space-y-3">
-
+          <div
+            key={item.id}
+            className="border rounded-xl p-4 bg-white space-y-3"
+          >
             {/* KATEGORI */}
             <div>
               <label className="text-xs font-semibold">Kategori Barang</label>
@@ -217,24 +231,36 @@ export default function FormItemSection({
                 className="input"
                 value={item.namaBarang}
                 onChange={(e) => {
+                  const namaBarangDipilih = e.target.value;
+
                   const barang = transaksiPembelian.find(
                     (t) =>
                       t.NAMA_BRAND === item.namaBrand &&
-                      t.NAMA_BARANG === e.target.value
+                      t.NAMA_BARANG === namaBarangDipilih
                   );
 
+                  const bundlingList = isBundlingAllowed
+                    ? getBundlingByKategori(item.kategoriBarang)
+                    : [];
+
                   updateItem(idx, {
-                    namaBarang: e.target.value,
-                    sku: `${item.namaBrand}_${e.target.value}`.replace(/\s+/g, "_"),
+                    namaBarang: namaBarangDipilih,
+                    sku: `${item.namaBrand}_${namaBarangDipilih}`.replace(
+                      /\s+/g,
+                      "_"
+                    ),
                     hargaUnit: Number(barang?.HARGA_UNIT || 0),
                     skemaHarga: "SRP",
 
-                    namaBundling1: barang?.NAMA_BANDLING_1 || "",
-                    hargaBundling1: Number(barang?.HARGA_BANDLING_1 || 0),
-                    namaBundling2: barang?.NAMA_BANDLING_2 || "",
-                    hargaBundling2: Number(barang?.HARGA_BANDLING_2 || 0),
-                    namaBundling3: barang?.NAMA_BANDLING_3 || "",
-                    hargaBundling3: Number(barang?.HARGA_BANDLING_3 || 0),
+                    // ===== BUNDLING OTOMATIS (MASTER) =====
+                    namaBundling1: bundlingList[0]?.namaBarang || "",
+                    hargaBundling1: Number(bundlingList[0]?.hargaBundling || 0),
+
+                    namaBundling2: bundlingList[1]?.namaBarang || "",
+                    hargaBundling2: Number(bundlingList[1]?.hargaBundling || 0),
+
+                    namaBundling3: bundlingList[2]?.namaBarang || "",
+                    hargaBundling3: Number(bundlingList[2]?.hargaBundling || 0),
                   });
                 }}
               >
@@ -312,9 +338,21 @@ export default function FormItemSection({
             {/* PREVIEW BUNDLING */}
             {isBundlingAllowed && (
               <div className="grid grid-cols-3 gap-2">
-                <input className="input bg-gray-100" readOnly value={item.namaBundling1} />
-                <input className="input bg-gray-100" readOnly value={item.namaBundling2} />
-                <input className="input bg-gray-100" readOnly value={item.namaBundling3} />
+                <input
+                  className="input bg-gray-100"
+                  readOnly
+                  value={item.namaBundling1}
+                />
+                <input
+                  className="input bg-gray-100"
+                  readOnly
+                  value={item.namaBundling2}
+                />
+                <input
+                  className="input bg-gray-100"
+                  readOnly
+                  value={item.namaBundling3}
+                />
               </div>
             )}
           </div>

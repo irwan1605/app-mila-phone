@@ -35,6 +35,29 @@ const TOKO_LIST = [
   "SAWANGAN",
 ];
 
+const CARD_COLORS = [
+  "from-emerald-500 to-teal-500",
+  "from-fuchsia-500 to-pink-500",
+  "from-orange-500 to-amber-400",
+  "from-cyan-500 to-teal-500",
+  "from-rose-500 to-red-500",
+  "from-purple-500 to-indigo-500",
+  "from-lime-500 to-green-500",
+  "from-blue-600 to-cyan-500",
+  "from-yellow-500 to-orange-500",
+];
+
+
+const hitungStockByKategori = (items = []) => {
+  const map = {};
+  items.forEach((it) => {
+    const kat = it.KATEGORI_BARANG || "LAINNYA";
+    const qty = it.IMEI ? 1 : Number(it.QTY || 0);
+    map[kat] = (map[kat] || 0) + qty;
+  });
+  return map;
+};
+
 // =======================
 // RUPIAH
 // =======================
@@ -96,24 +119,23 @@ export default function InventoryReport() {
     });
     return () => unsub && unsub();
   }, []);
+
   const hitungStockPembelian = (transaksi, namaToko) => {
     const tokoUpper = String(namaToko).toUpperCase();
-  
+
     return (transaksi || []).reduce((sum, t) => {
       const tokoTrx = String(t.TOKO || t.NAMA_TOKO || "").toUpperCase();
-  
+
       if (
         (t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN" ||
         tokoTrx !== tokoUpper
       ) {
         return sum;
       }
-  
-      // IMEI = 1 unit, non-IMEI pakai QTY
+
       return sum + (t.IMEI ? 1 : Number(t.QTY || 0));
     }, 0);
   };
-  
 
   // ======================================================================
   // HITUNG STOCK PEMBELIAN CILANGKAP PUSAT
@@ -131,16 +153,19 @@ export default function InventoryReport() {
   // HITUNG TOTAL STOCK SEMUA TOKO
   // ======================================================================
   const totalAllStock = useMemo(() => {
-    const stokTokoLain = TOKO_LIST
-      .filter((t) => t !== "CILANGKAP PUSAT")
-      .reduce(
-        (sum, toko) => sum + hitungStockPembelian(transaksi, toko),
-        0
-      );
-  
+    const stokTokoLain = TOKO_LIST.filter(
+      (t) => t !== "CILANGKAP PUSAT"
+    ).reduce((sum, toko) => sum + hitungStockPembelian(transaksi, toko), 0);
+
     return stockPembelianPusat + stokTokoLain;
   }, [transaksi, stockPembelianPusat]);
-  
+
+  const rows = transaksi.filter(
+    (t) =>
+      t.STATUS === "Approved" &&
+      String(t.NAMA_TOKO || "").toUpperCase() ===
+        String(selectedToko || "").toUpperCase()
+  );
 
   // ======================================================================
   // CARD STOK PER TOKO
@@ -175,6 +200,33 @@ export default function InventoryReport() {
       };
     });
   }, [transaksi, stockPembelianPusat]);
+
+  const totalStockPerKategori = useMemo(() => {
+    const map = {};
+
+    // stok pusat
+    const pusat = stockData["CILANGKAP PUSAT"] || {};
+    Object.values(pusat).forEach((s) => {
+      const kat = s.kategoriBrand || "LAINNYA";
+      map[kat] = (map[kat] || 0) + Number(s.qty || 0);
+    });
+
+    // stok toko lain (dari transaksi pembelian)
+    TOKO_LIST.filter((t) => t !== "CILANGKAP PUSAT").forEach((toko) => {
+      transaksi.forEach((trx) => {
+        if (
+          trx.STATUS === "Approved" &&
+          trx.PAYMENT_METODE === "PEMBELIAN" &&
+          trx.NAMA_TOKO === toko
+        ) {
+          const kat = trx.KATEGORI_BRAND || "LAINNYA";
+          map[kat] = (map[kat] || 0) + (trx.IMEI ? 1 : Number(trx.QTY || 0));
+        }
+      });
+    });
+
+    return map;
+  }, [stockData, transaksi]);
 
   // ======================================================================
   // DETAIL TABEL (JOIN MASTER BARANG + HITUNG BANDLING)
@@ -256,6 +308,31 @@ export default function InventoryReport() {
     return detailTable.slice((page - 1) * pageSize, page * pageSize);
   }, [page, detailTable]);
 
+  const cardStockPerToko = useMemo(() => {
+    return TOKO_LIST.map((toko) => {
+      let items = [];
+
+      if (toko === "CILANGKAP PUSAT") {
+        items = Object.values(stockData[toko] || {}).map((s) => ({
+          KATEGORI_BARANG: s.kategoriBrand,
+          QTY: s.qty,
+        }));
+      } else {
+        items = transaksi.filter(
+          (t) =>
+            t.STATUS === "Approved" &&
+            t.PAYMENT_METODE === "PEMBELIAN" &&
+            t.NAMA_TOKO === toko
+        );
+      }
+
+      return {
+        toko,
+        kategori: hitungStockByKategori(items),
+      };
+    });
+  }, [stockData, transaksi]);
+
   // ======================================================================
   // EXPORT EXCEL
   // ======================================================================
@@ -298,8 +375,15 @@ export default function InventoryReport() {
 
           <div className="mt-5 flex gap-10">
             <div>
-              <p className="text-lg opacity-80">TOTAL STOCK SEMUA TOKO</p>
-              <p className="text-4xl font-bold">{totalAllStock}</p>
+              <h3 className="text-lg font-semibold">
+                TOTAL STOCK KESELURUHAN TOKO
+              </h3>
+              {Object.entries(totalStockPerKategori).map(([kat, qty]) => (
+                <div key={kat} className="flex justify-between">
+                  <span>{kat}</span>
+                  <span className="font-bold">{qty}</span>
+                </div>
+              ))}
             </div>
 
             <div>
@@ -308,31 +392,49 @@ export default function InventoryReport() {
             </div>
           </div>
         </div>
+        {/* ================================================================== */}
+        {/* CARD KECIL PER TOKO + PER KATEGORI */}
+        {/* ================================================================== */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10">
+          {cardStockPerToko.map((t, idx) => {
+            // hanya tampilkan toko yang punya stok
+            const kategoriEntries = Object.entries(t.kategori || {}).filter(
+              ([_, qty]) => qty > 0
+            );
 
-        {/* ================================================================== */}
-        {/* CARD KECIL PER TOKO */}
-        {/* ================================================================== */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
-          {cardStock.map((c, idx) => (
-            <div
-              key={idx}
-              onClick={() => {
-                setPage(1);
-                setSelectedToko(c.toko);
-              }}
-              className={`
-                cursor-pointer rounded-2xl 
-                bg-gradient-to-br ${c.color}
-                hover:scale-105 hover:shadow-xl 
-                hover:shadow-white/40 backdrop-blur-md 
-                p-5 text-white shadow-lg transition-all duration-300
-              `}
-            >
-              <div className="text-lg font-semibold">{c.toko}</div>
-              <div className="text-3xl font-bold mt-3">{c.total}</div>
-              <div className="text-xs opacity-80">Total Stock</div>
-            </div>
-          ))}
+            if (kategoriEntries.length === 0) return null;
+
+            return (
+              <div
+                key={t.toko}
+                onClick={() => {
+                  setPage(1);
+                  setSelectedToko(t.toko);
+                }}
+                className={`
+          cursor-pointer rounded-2xl 
+          bg-gradient-to-br ${CARD_COLORS[idx % CARD_COLORS.length]}
+          hover:scale-105 hover:shadow-xl 
+          hover:shadow-white/40 backdrop-blur-md 
+          p-5 text-white shadow-lg transition-all duration-300
+        `}
+              >
+                {/* NAMA TOKO */}
+                <div className="text-lg font-bold mb-2">{t.toko}</div>
+
+                {/* STOCK PER KATEGORI */}
+                {kategoriEntries.map(([kat, qty]) => (
+                  <div
+                    key={kat}
+                    className="flex justify-between text-sm border-b border-white/20 py-1"
+                  >
+                    <span className="opacity-90">{kat}</span>
+                    <span className="font-semibold">{qty}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
 
         {/* ================================================================== */}
