@@ -96,20 +96,24 @@ export default function InventoryReport() {
     });
     return () => unsub && unsub();
   }, []);
-
   const hitungStockPembelian = (transaksi, namaToko) => {
+    const tokoUpper = String(namaToko).toUpperCase();
+  
     return (transaksi || []).reduce((sum, t) => {
+      const tokoTrx = String(t.TOKO || t.NAMA_TOKO || "").toUpperCase();
+  
       if (
         (t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN" ||
-        t.NAMA_TOKO !== namaToko
+        tokoTrx !== tokoUpper
       ) {
         return sum;
       }
-
-      // IMEI = 1 qty, Non-IMEI pakai QTY
+  
+      // IMEI = 1 unit, non-IMEI pakai QTY
       return sum + (t.IMEI ? 1 : Number(t.QTY || 0));
     }, 0);
   };
+  
 
   // ======================================================================
   // HITUNG STOCK PEMBELIAN CILANGKAP PUSAT
@@ -127,20 +131,16 @@ export default function InventoryReport() {
   // HITUNG TOTAL STOCK SEMUA TOKO
   // ======================================================================
   const totalAllStock = useMemo(() => {
-    const stokTokoLain = [
-      "METLAND 2",
-      "SAWANGAN",
-      "CIBINONG",
-      "GAS ALAM",
-      "CITEUREUP",
-      "CIRACAS",
-      "METLAND 1",
-      "PITARA",
-      "KOTA WISATA",
-    ].reduce((sum, toko) => sum + hitungStockPembelian(transaksi, toko), 0);
-
+    const stokTokoLain = TOKO_LIST
+      .filter((t) => t !== "CILANGKAP PUSAT")
+      .reduce(
+        (sum, toko) => sum + hitungStockPembelian(transaksi, toko),
+        0
+      );
+  
     return stockPembelianPusat + stokTokoLain;
   }, [transaksi, stockPembelianPusat]);
+  
 
   // ======================================================================
   // CARD STOK PER TOKO

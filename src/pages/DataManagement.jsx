@@ -10,6 +10,9 @@ import {
   FaUserFriends,
   FaUserTag,
   FaTags,
+  FaBolt,
+  FaMoneyBillWave,
+  FaCubes,
 } from "react-icons/fa";
 
 import MasterPelangganCard from "../components/master-management/MasterPelangganCard";
@@ -22,6 +25,8 @@ import MasterTokoCard from "../components/master-management/MasterTokoCard";
 // import MasterBarangHargaCard from "../components/master-management/MasterBarangHargaCard";
 import MasterSupplierCard from "../components/master-management/MasterSupplierCard";
 import MasterKategoriBarangCard from "../components/master-management/MasterKategoriBarangCard";
+import MasterBarangKategoriCard from "../components/master-management/MasterBarangKategoriCard";
+import MasterBarangBundlingCard from "../components/master-management/MasterBarangBundlingCard";
 
 const cardsConfig = [
   {
@@ -87,6 +92,43 @@ const cardsConfig = [
     icon: FaTags,
     gradient: "from-teal-500 via-teal-400 to-cyan-400",
   },
+  {
+    key: "barangMotorListrik",
+    title: "BARANG MOTOR LISTRIK",
+    icon: FaBolt,
+    gradient: "from-emerald-500 to-green-500",
+  },
+  {
+    key: "barangSepedaListrik",
+    title: "BARANG SEPEDA LISTRIK",
+    icon: FaBolt,
+    gradient: "from-emerald-500 to-green-500",
+  },
+  {
+    key: "barangHandphone",
+    title: "BARANG HANDPHONE",
+    icon: FaBolt,
+    gradient: "from-emerald-500 to-green-500",
+  },
+  {
+    key: "barangAccessoriesListrik",
+    title: "BARANG ACCESSORIES",
+    icon: FaBolt,
+    gradient: "from-emerald-500 to-green-500",
+  },
+  {
+    key: "barangSparePartListrik",
+    title: "BARANG SPARE PART",
+    icon: FaMoneyBillWave,
+    gradient: "from-emerald-500 to-green-500",
+  },
+  {
+    key: "masterBarangBundling",
+    title: "MASTER BARANG BUNDLING",
+    description: "Kelola harga bundling accessories",
+    icon: FaCubes,
+    gradient: "from-indigo-500 via-purple-400 to-pink-400",
+  },
 ];
 
 export default function MasterManagement() {
@@ -111,6 +153,18 @@ export default function MasterManagement() {
         return <MasterSupplierCard />;
       case "masterKategoriBarang":
         return <MasterKategoriBarangCard />;
+      case "barangMotorListrik":
+        return <MasterBarangKategoriCard kategori="MOTOR LISTRIK" />;
+      case "barangSepedaListrik":
+        return <MasterBarangKategoriCard kategori="SEPEDA LISTRIK" />;
+      case "barangHandphone":
+        return <MasterBarangKategoriCard kategori="HANDPHONE" />;
+      case "barangAccessoriesListrik":
+        return <MasterBarangKategoriCard kategori="ACCESSORIES" />;
+      case "barangSparePartListrik":
+        return <MasterBarangKategoriCard kategori="SPARE PART" />;
+      case "masterBarangBundling":
+        return <MasterBarangBundlingCard />;
 
       default:
         return null;

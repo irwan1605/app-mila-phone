@@ -1356,6 +1356,26 @@ export const lockImei = async (imei, data) => {
   });
 };
 
+// =======================
+// MASTER BARANG (BY KATEGORI)
+// =======================
+
+
+export const listenMasterBarangByKategori = (kategori, callback) => {
+  const r = ref(db, "dataManagement/masterBarang");
+  return onValue(r, (snap) => {
+    const raw = snap.val() || {};
+    const arr = Object.entries(raw)
+      .map(([id, v]) => ({ id, ...v }))
+      .filter((x) => x.kategoriBarang === kategori);
+    callback(arr);
+  });
+};
+
+
+
+
+
 
 
 
@@ -1458,6 +1478,32 @@ export const listenMasterVoucher = masterVoucher.listen;
 export const addMasterVoucher = masterVoucher.add;
 export const updateMasterVoucher = masterVoucher.update;
 export const deleteMasterVoucher = masterVoucher.delete;
+
+const masterBarang = createMasterHelpers("masterBarang");
+export const addMasterBarang = masterBarang.add;
+export const updateMasterBarang = masterBarang.update;
+export const deleteMasterBarangMasing = masterBarang.delete;
+
+// =======================
+// MASTER HARGA
+// =======================
+const masterHarga = createMasterHelpers("masterHarga");
+
+export const listenMasterHarga = masterHarga.listen;
+export const addMasterHarga = masterHarga.add;
+export const updateMasterHarga = masterHarga.update;
+export const deleteMasterHarga = masterHarga.delete;
+
+// =======================
+// MASTER BARANG BUNDLING
+// =======================
+const masterBarangBundling = createMasterHelpers("masterBarangBundling");
+
+export const listenMasterBarangBundling = masterBarangBundling.listen;
+export const addMasterBarangBundling = masterBarangBundling.add;
+export const updateMasterBarangBundling = masterBarangBundling.update;
+export const deleteMasterBarangBundling = masterBarangBundling.delete;
+
 
 
 
