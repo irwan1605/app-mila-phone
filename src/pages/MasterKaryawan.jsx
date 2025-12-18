@@ -20,7 +20,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
-/* ✅ MASTER TOKO (UNTUK DROPDOWN) */
+/* ================= MASTER TOKO ================= */
 const TOKO_OPTIONS = [
   "CILANGKAP PUSAT",
   "CIBINONG",
@@ -45,271 +45,181 @@ const JABATAN_OPTIONS = [
 
 const fmtRupiah = (v) =>
   "Rp " +
-  Number(v || 0).toLocaleString("id-ID", {
-    minimumFractionDigits: 0,
-  });
+  Number(v || 0).toLocaleString("id-ID", { minimumFractionDigits: 0 });
 
 export default function MasterKaryawan() {
   const [list, setList] = useState([]);
   const [search, setSearch] = useState("");
-
   const [showTambah, setShowTambah] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
-  // ✅ DETEKSI USER LOGIN & TOKO (UNTUK FILTER PIC)
+
+  const tableRef = useRef(null);
+
+  /* ================= USER LOGIN ================= */
   const userLogin = JSON.parse(localStorage.getItem("user") || "{}");
   const roleLogin = String(userLogin?.role || "").toLowerCase();
   const tokoLogin = userLogin?.tokoBertugas || userLogin?.toko || null;
 
-  /* ✅ FORM TAMBAH (DITAMBAH TOKO_BERTUGAS) */
+  /* ================= FORM ================= */
   const [formTambah, setFormTambah] = useState({
     tanggalMasuk: "",
     nik: "",
     namaKaryawan: "",
     jabatan: "",
     gaji: "",
-    tokoBertugas: "", // ✅ BARU
+    tokoBertugas: "",
   });
 
   const [formEdit, setFormEdit] = useState(null);
-  const tableRef = useRef(null);
 
-  // LISTENER FIREBASE (REALTIME)
+  /* ================= LISTENER FIREBASE ================= */
   useEffect(() => {
-    const unsub = listenKaryawan((items) => {
-      setList(Array.isArray(items) ? items : []);
+    const unsub = listenKaryawan((rows) => {
+      setList(Array.isArray(rows) ? rows : []);
     });
     return () => unsub && unsub();
   }, []);
 
+  /* ================= FILTER ================= */
   const filteredList = useMemo(() => {
-    const q = (search || "").toLowerCase();
+    const q = search.toLowerCase();
 
-    return (list || []).filter((x) => {
-      const matchText =
-        String(x.NIK || "")
-          .toLowerCase()
-          .includes(q) ||
-        String(x.NAMA || "")
-          .toLowerCase()
-          .includes(q) ||
-        String(x.JABATAN || "")
-          .toLowerCase()
-          .includes(q) ||
-        String(x.TOKO_BERTUGAS || "")
-          .toLowerCase()
-          .includes(q);
+    return list.filter((x) => {
+      const match =
+        String(x.NIK || "").toLowerCase().includes(q) ||
+        String(x.NAMA || "").toLowerCase().includes(q) ||
+        String(x.JABATAN || "").toLowerCase().includes(q) ||
+        String(x.TOKO_BERTUGAS || "").toLowerCase().includes(q);
 
-      // ✅ JIKA SUPERADMIN / ADMIN → TIDAK DIKUNCI
-      if (roleLogin === "superadmin" || roleLogin === "admin") {
-        return matchText;
+      if (roleLogin === "admin" || roleLogin === "superadmin") {
+        return match;
       }
 
-      // ✅ JIKA PIC → HANYA TOKO SENDIRI
       return (
-        matchText &&
+        match &&
         String(x.TOKO_BERTUGAS || "").toUpperCase() ===
           String(tokoLogin || "").toUpperCase()
       );
     });
   }, [list, search, roleLogin, tokoLogin]);
 
-  // TOTAL GAJI (FITUR GAJI)
+  /* ================= TOTAL GAJI ================= */
   const totalGaji = useMemo(
-    () => (list || []).reduce((sum, x) => sum + Number(x.GAJI || 0), 0),
-    [list]
+    () => filteredList.reduce((sum, x) => sum + Number(x.GAJI || 0), 0),
+    [filteredList]
   );
 
-  /* =================== EXPORT EXCEL =================== */
-  const handleExcel = () => {
-    const data = filteredList.map((x) => ({
+  /* ================= EXPORT EXCEL ================= */
+  const exportExcel = () => {
+    const rows = filteredList.map((x) => ({
       Tanggal_Masuk: x.TANGGAL_MASUK,
       NIK: x.NIK,
-      Nama_Karyawan: x.NAMA,
+      Nama: x.NAMA,
       Jabatan: x.JABATAN,
-      Toko_Bertugas: x.TOKO_BERTUGAS, // ✅ BARU
+      Toko: x.TOKO_BERTUGAS,
       Gaji: Number(x.GAJI || 0),
     }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
+    const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "MASTER_KARYAWAN");
     XLSX.writeFile(wb, "MASTER_KARYAWAN.xlsx");
   };
 
-  // ✅ STATISTIK KARYAWAN PER TOKO (REALTIME)
-  const statistikPerToko = useMemo(() => {
-    const map = {};
+  /* ================= EXPORT PDF ================= */
+  const exportPDF = async () => {
+    const el = tableRef.current;
+    if (!el) return;
 
-    (filteredList || []).forEach((k) => {
-      const toko = k.TOKO_BERTUGAS || "TANPA TOKO";
-      if (!map[toko]) {
-        map[toko] = {
-          jumlah: 0,
-          totalGaji: 0,
-        };
-      }
-
-      map[toko].jumlah += 1;
-      map[toko].totalGaji += Number(k.GAJI || 0);
-    });
-
-    return map;
-  }, [filteredList]);
-
-  /* =================== EXPORT PDF =================== */
-  const handlePDF = async () => {
-    const input = tableRef.current;
-    if (!input) return;
-
-    const canvas = await html2canvas(input, { scale: 1.1 });
+    const canvas = await html2canvas(el, { scale: 1.2 });
     const img = canvas.toDataURL("image/png");
 
     const pdf = new jsPDF("p", "mm", "a4");
-    const width = pdf.internal.pageSize.getWidth();
-    const height = (canvas.height * width) / canvas.width;
+    const w = pdf.internal.pageSize.getWidth();
+    const h = (canvas.height * w) / canvas.width;
 
-    pdf.addImage(img, "PNG", 0, 0, width, height);
+    pdf.addImage(img, "PNG", 0, 0, w, h);
     pdf.save("MASTER_KARYAWAN.pdf");
   };
 
-  // ✅ CETAK SLIP GAJI 1 BULAN PER ORANG
-  const cetakSlipGaji = (row) => {
-    // Minta bulan (format: 2025-01)
-    const defaultMonth = new Date().toISOString().slice(0, 7);
-    const bulanInput =
-      window.prompt(
-        "Masukkan bulan slip gaji (format: YYYY-MM), contoh: " + defaultMonth,
-        defaultMonth
-      ) || defaultMonth;
-
-    const pdf = new jsPDF();
-
-    // HEADER + LOGO (logo bisa disesuaikan: misalnya di bagian atas slip)
-    // Jika Anda punya base64 logo, bisa pakai pdf.addImage(base64Logo, "PNG", x, y, w, h);
-    pdf.setFontSize(14);
-    pdf.text("SLIP GAJI KARYAWAN", 70, 20);
-
-    // Info Perusahaan / Logo placeholder
-    pdf.setFontSize(10);
-    pdf.text("PT. NAMA PERUSAHAAN / TOKO", 20, 30);
-    pdf.text("Periode: " + bulanInput, 20, 36);
-
-    // Garis
-    pdf.line(20, 40, 190, 40);
-
-    // DATA KARYAWAN
-    pdf.setFontSize(11);
-    pdf.text(`Nama        : ${row.NAMA || "-"}`, 20, 50);
-    pdf.text(`NIK         : ${row.NIK || "-"}`, 20, 58);
-    pdf.text(`Jabatan     : ${row.JABATAN || "-"}`, 20, 66);
-    pdf.text(`Tanggal Masuk : ${row.TANGGAL_MASUK || "-"}`, 20, 74);
-
-    // GAJI (anggap GAJI = gaji per bulan)
-    const gajiNumber = Number(row.GAJI || 0);
-    pdf.text(
-      `Gaji Pokok Bulanan : Rp ${gajiNumber.toLocaleString("id-ID")}`,
-      20,
-      90
-    );
-
-    // FOOTER TTD
-    pdf.line(20, 110, 190, 110);
-    pdf.text("Disetujui,", 20, 120);
-    pdf.text("Bagian HRD / Keuangan", 20, 126);
-    pdf.text("Karyawan,", 140, 120);
-
-    pdf.save(`SLIP_GAJI_${row.NAMA || "KARYAWAN"}_${bulanInput}.pdf`);
-  };
-
-  /* =================== TAMBAH KARYAWAN =================== */
+  /* ================= TAMBAH ================= */
   const submitTambah = async () => {
-    try {
-      if (
-        !formTambah.tanggalMasuk ||
-        !formTambah.nik ||
-        !formTambah.namaKaryawan ||
-        !formTambah.tokoBertugas
-      ) {
-        alert("Semua field wajib diisi");
-        return;
-      }
-
-      const payload = {
-        TANGGAL_MASUK: formTambah.tanggalMasuk,
-        NIK: formTambah.nik,
-        NAMA: formTambah.namaKaryawan,
-        JABATAN: formTambah.jabatan,
-        GAJI: Number(formTambah.gaji || 0),
-        TOKO_BERTUGAS: formTambah.tokoBertugas, // ✅ SIMPAN KE FIREBASE
-      };
-
-      await addKaryawan(payload);
-      alert("Data berhasil ditambahkan");
-
-      setFormTambah({
-        tanggalMasuk: "",
-        nik: "",
-        namaKaryawan: "",
-        jabatan: "",
-        gaji: "",
-        tokoBertugas: "",
-      });
-      setShowTambah(false);
-    } catch (e) {
-      alert("Gagal menambah karyawan");
+    if (
+      !formTambah.tanggalMasuk ||
+      !formTambah.nik ||
+      !formTambah.namaKaryawan ||
+      !formTambah.tokoBertugas
+    ) {
+      alert("Lengkapi semua field wajib");
+      return;
     }
+
+    const payload = {
+      TANGGAL_MASUK: formTambah.tanggalMasuk,
+      NIK: formTambah.nik,
+      NAMA: formTambah.namaKaryawan,
+      JABATAN: formTambah.jabatan,
+      GAJI: Number(formTambah.gaji || 0),
+      TOKO_BERTUGAS: formTambah.tokoBertugas,
+    };
+
+    await addKaryawan(payload);
+    setShowTambah(false);
+    setFormTambah({
+      tanggalMasuk: "",
+      nik: "",
+      namaKaryawan: "",
+      jabatan: "",
+      gaji: "",
+      tokoBertugas: "",
+    });
   };
 
-  /* =================== OPEN EDIT =================== */
+  /* ================= EDIT ================= */
   const openEdit = (row) => {
     setFormEdit({
       id: row.id,
-      tanggalMasuk: row.TANGGAL_MASUK || "",
-      nik: row.NIK || "",
-      namaKaryawan: row.NAMA || "",
-      jabatan: row.JABATAN || "",
-      gaji: row.GAJI ?? "",
-      tokoBertugas: row.TOKO_BERTUGAS || "", // ✅ BARU
+      tanggalMasuk: row.TANGGAL_MASUK,
+      nik: row.NIK,
+      namaKaryawan: row.NAMA,
+      jabatan: row.JABATAN,
+      gaji: row.GAJI,
+      tokoBertugas: row.TOKO_BERTUGAS,
     });
     setShowEdit(true);
   };
 
-  /* =================== SUBMIT EDIT =================== */
   const submitEdit = async () => {
-    try {
-      const payload = {
-        TANGGAL_MASUK: formEdit.tanggalMasuk,
-        NIK: formEdit.nik,
-        NAMA: formEdit.namaKaryawan,
-        JABATAN: formEdit.jabatan,
-        GAJI: Number(formEdit.gaji || 0),
-        TOKO_BERTUGAS: formEdit.tokoBertugas, // ✅ UPDATE
-      };
+    const payload = {
+      TANGGAL_MASUK: formEdit.tanggalMasuk,
+      NIK: formEdit.nik,
+      NAMA: formEdit.namaKaryawan,
+      JABATAN: formEdit.jabatan,
+      GAJI: Number(formEdit.gaji || 0),
+      TOKO_BERTUGAS: formEdit.tokoBertugas,
+    };
 
-      await updateKaryawan(formEdit.id, payload);
-      alert("Data berhasil diupdate");
-      setShowEdit(false);
-    } catch (e) {
-      alert("Gagal update karyawan");
-    }
+    await updateKaryawan(formEdit.id, payload);
+    setShowEdit(false);
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Hapus data ini?")) return;
+    if (!window.confirm("Hapus karyawan ini?")) return;
     await deleteKaryawan(id);
   };
 
+  /* ================= UI ================= */
   return (
     <div className="p-4 space-y-4">
       <h2 className="text-xl font-bold">MASTER KARYAWAN</h2>
 
       {/* TOOLBAR */}
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="flex items-center border rounded px-3 py-2 bg-white shadow-sm">
-          <FaSearch className="text-gray-600" />
+        <div className="flex items-center border rounded px-3 py-2 bg-white">
+          <FaSearch />
           <input
             className="ml-2 outline-none text-sm"
-            placeholder="Cari NIK / nama / jabatan / gaji"
+            placeholder="Cari NIK / Nama / Jabatan / Toko"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -317,367 +227,182 @@ export default function MasterKaryawan() {
 
         <button
           onClick={() => setShowTambah(true)}
-          className="px-3 py-2 bg-indigo-600 text-white rounded text-sm flex items-center shadow-sm hover:bg-indigo-700"
+          className="bg-indigo-600 text-white px-3 py-2 rounded flex items-center"
         >
-          <FaPlus className="mr-1" /> Tambah Karyawan
+          <FaPlus className="mr-1" /> Tambah
         </button>
 
         <button
-          onClick={handleExcel}
-          className="px-3 py-2 bg-green-600 text-white rounded text-sm flex items-center shadow-sm hover:bg-green-700"
+          onClick={exportExcel}
+          className="bg-green-600 text-white px-3 py-2 rounded flex items-center"
         >
           <FaFileExcel className="mr-1" /> Excel
         </button>
 
         <button
-          onClick={handlePDF}
-          className="px-3 py-2 bg-red-600 text-white rounded text-sm flex items-center shadow-sm hover:bg-red-700"
+          onClick={exportPDF}
+          className="bg-red-600 text-white px-3 py-2 rounded flex items-center"
         >
           <FaFilePdf className="mr-1" /> PDF
         </button>
       </div>
 
-      {/* FITUR GAJI – RINGKASAN */}
-      <div className="bg-gradient-to-r from-emerald-50 via-white to-indigo-50 border border-emerald-100 rounded-xl p-3 flex flex-wrap items-center justify-between text-xs sm:text-sm shadow-sm">
-        <div>
-          <div className="font-semibold text-slate-700">
-            Total Gaji Seluruh Karyawan
-          </div>
-          <div className="bg-slate-100 p-3 rounded">
-            Total Gaji: <b>{fmtRupiah(totalGaji)}</b>
-          </div>
-        </div>
-        <div className="text-[11px] text-slate-500 mt-2 sm:mt-0">
-          Data diambil realtime dari Firebase — setiap tambah / edit karyawan
-          akan otomatis mengubah total gaji.
-        </div>
+      {/* TOTAL GAJI */}
+      <div className="bg-slate-100 p-3 rounded">
+        Total Gaji Karyawan: <b>{fmtRupiah(totalGaji)}</b>
       </div>
 
-      {/* TABEL DATA */}
-      <div
-        ref={tableRef}
-        className="bg-white rounded-lg shadow-sm overflow-x-auto"
-      >
+      {/* TABLE */}
+      <div ref={tableRef} className="bg-white rounded shadow overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-100">
             <tr>
-              <th className="px-3 py-2 border text-left text-xs">
-                Tanggal Masuk
-              </th>
-              <th className="px-3 py-2 border text-left text-xs">NIK</th>
-              <th className="px-3 py-2 border text-left text-xs">
-                Nama Karyawan
-              </th>
-              <th className="px-3 py-2 border">Jabatan</th>
-              <th className="px-3 py-2 border">Toko Bertugas</th>{" "}
-              {/* ✅ BARU */}
-              <th className="px-3 py-2 border">Gaji</th>
-              <th className="px-3 py-2 border">Aksi</th>
+              <th className="p-2 border">Tanggal</th>
+              <th className="p-2 border">NIK</th>
+              <th className="p-2 border">Nama</th>
+              <th className="p-2 border">Jabatan</th>
+              <th className="p-2 border">Toko</th>
+              <th className="p-2 border">Gaji</th>
+              <th className="p-2 border">Aksi</th>
             </tr>
           </thead>
           <tbody>
-            {filteredList.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="px-3 py-4 text-center text-gray-500 text-sm"
-                >
-                  Belum ada data karyawan.
+            {filteredList.map((x) => (
+              <tr key={x.id}>
+                <td className="border p-2">{x.TANGGAL_MASUK}</td>
+                <td className="border p-2">{x.NIK}</td>
+                <td className="border p-2">{x.NAMA}</td>
+                <td className="border p-2">{x.JABATAN}</td>
+                <td className="border p-2 font-semibold text-indigo-700">
+                  {x.TOKO_BERTUGAS}
+                </td>
+                <td className="border p-2 text-right">
+                  {fmtRupiah(x.GAJI)}
+                </td>
+                <td className="border p-2 text-center space-x-2">
+                  <button onClick={() => openEdit(x)} className="text-blue-600">
+                    <FaEdit />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(x.id)}
+                    className="text-red-600"
+                  >
+                    <FaTrash />
+                  </button>
                 </td>
               </tr>
-            ) : (
-              filteredList.map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 border text-xs">
-                    {row.TANGGAL_MASUK}
-                  </td>
-                  <td className="px-3 py-2 border text-xs">{row.NIK}</td>
-                  <td className="px-3 py-2 border text-xs">{row.NAMA}</td>
-                  <td className="px-3 py-2 border text-xs">{row.JABATAN}</td>
-                  <td className="px-3 py-2 border font-semibold text-indigo-700">
-                    {row.TOKO_BERTUGAS}
-                  </td>
-                  <td className="px-3 py-2 border text-xs text-right">
-                    {fmtRupiah(row.GAJI)}
-                  </td>
-                  <td className="px-3 py-2 border text-center text-xs">
-                    <button
-                      onClick={() => cetakSlipGaji(row)}
-                      className="inline-flex items-center px-2 py-1 text-emerald-600 hover:text-emerald-800 mr-2"
-                    >
-                      <FaFilePdf className="mr-1" /> Slip
-                    </button>
-                    <button
-                      onClick={() => openEdit(row)}
-                      className="inline-flex items-center px-2 py-1 text-blue-600 hover:text-blue-800 mr-2"
-                    >
-                      <FaEdit className="mr-1" /> Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(row.id)}
-                      className="inline-flex items-center px-2 py-1 text-red-600 hover:text-red-800"
-                    >
-                      <FaTrash className="mr-1" /> Hapus
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
 
-      {/* MODAL TAMBAH */}
-      {showTambah && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-70">
-          <div className="bg-white rounded-lg shadow-lg p-4 w-full max-w-md">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold text-lg">Tambah Karyawan</h3>
-              <button
-                onClick={() => setShowTambah(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <FaTimes />
-              </button>
-            </div>
+      {/* MODAL TAMBAH & EDIT */}
+      {(showTambah || showEdit) && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+          <div className="bg-white p-4 rounded w-full max-w-md">
+            <h3 className="font-bold mb-3">
+              {showTambah ? "Tambah Karyawan" : "Edit Karyawan"}
+            </h3>
 
-            <div className="space-y-3 text-sm">
-              <div>
-                <label className="block mb-1 text-gray-700 text-xs">
-                  Tanggal Masuk
-                </label>
+            {(showTambah ? formTambah : formEdit) && (
+              <div className="space-y-2 text-sm">
                 <input
                   type="date"
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  value={formTambah.tanggalMasuk}
+                  className="input"
+                  value={
+                    showTambah
+                      ? formTambah.tanggalMasuk
+                      : formEdit.tanggalMasuk
+                  }
                   onChange={(e) =>
-                    setFormTambah((p) => ({
-                      ...p,
-                      tanggalMasuk: e.target.value,
-                    }))
+                    showTambah
+                      ? setFormTambah({
+                          ...formTambah,
+                          tanggalMasuk: e.target.value,
+                        })
+                      : setFormEdit({
+                          ...formEdit,
+                          tanggalMasuk: e.target.value,
+                        })
                   }
                 />
-              </div>
 
-              <div>
-                <label className="block mb-1 text-gray-700 text-xs">NIK</label>
                 <input
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  value={formTambah.nik}
+                  className="input"
+                  placeholder="NIK"
+                  value={showTambah ? formTambah.nik : formEdit.nik}
                   onChange={(e) =>
-                    setFormTambah((p) => ({
-                      ...p,
-                      nik: e.target.value,
-                    }))
+                    showTambah
+                      ? setFormTambah({
+                          ...formTambah,
+                          nik: e.target.value,
+                        })
+                      : setFormEdit({ ...formEdit, nik: e.target.value })
                   }
                 />
-              </div>
 
-              <div>
-                <label className="block mb-1 text-gray-700 text-xs">
-                  Nama Karyawan
-                </label>
                 <input
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  value={formTambah.namaKaryawan}
+                  className="input"
+                  placeholder="Nama Karyawan"
+                  value={
+                    showTambah
+                      ? formTambah.namaKaryawan
+                      : formEdit.namaKaryawan
+                  }
                   onChange={(e) =>
-                    setFormTambah((p) => ({
-                      ...p,
-                      namaKaryawan: e.target.value,
-                    }))
+                    showTambah
+                      ? setFormTambah({
+                          ...formTambah,
+                          namaKaryawan: e.target.value,
+                        })
+                      : setFormEdit({
+                          ...formEdit,
+                          namaKaryawan: e.target.value,
+                        })
                   }
                 />
-              </div>
 
-              {/* STATUS JABATAN – BISA KETIK MANUAL + DROPDOWN */}
-              <div>
-                <label className="block mb-1 text-gray-700 text-xs">
-                  Status Jabatan
-                </label>
                 <input
                   list="jabatan-list"
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  value={formTambah.jabatan}
+                  className="input"
+                  placeholder="Jabatan"
+                  value={showTambah ? formTambah.jabatan : formEdit.jabatan}
                   onChange={(e) =>
-                    setFormTambah((p) => ({
-                      ...p,
-                      jabatan: e.target.value,
-                    }))
+                    showTambah
+                      ? setFormTambah({
+                          ...formTambah,
+                          jabatan: e.target.value,
+                        })
+                      : setFormEdit({
+                          ...formEdit,
+                          jabatan: e.target.value,
+                        })
                   }
-                  placeholder="Ketik / pilih jabatan (misal: TEKNISI)"
                 />
+
                 <datalist id="jabatan-list">
                   {JABATAN_OPTIONS.map((j) => (
                     <option key={j} value={j} />
                   ))}
                 </datalist>
-              </div>
 
-              <div>
-                <label className="block mb-1 text-gray-700 text-xs">
-                  Gaji (Rp)
-                </label>
-                <input
-                  type="number"
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  value={formTambah.gaji}
-                  onChange={(e) =>
-                    setFormTambah((p) => ({
-                      ...p,
-                      gaji: e.target.value,
-                    }))
-                  }
-                  placeholder="0"
-                />
-              </div>
-            </div>
-
-            {/* ================= STATISTIK PER TOKO ================= */}
-            <div className="grid md:grid-cols-4 gap-3 p-1">
-              {Object.keys(statistikPerToko).map((toko) => (
-                <div
-                  key={toko}
-                  className="bg-gradient-to-br from-indigo-500 to-blue-500 text-white p-3 rounded-xl shadow"
-                >
-                  <div className="text-xs opacity-90">TOKO</div>
-                  <div className="font-bold text-sm">{toko}</div>
-
-                  <div className="mt-2 text-xs">
-                    Jumlah Karyawan:{" "}
-                    <b>{statistikPerToko[toko]?.jumlah || 0}</b>
-                  </div>
-
-                  <div className="text-xs">
-                    Total Gaji:{" "}
-                    <b>{fmtRupiah(statistikPerToko[toko]?.totalGaji || 0)}</b>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setShowTambah(false)}
-                className="px-3 py-1 border rounded text-sm flex items-center"
-              >
-                <FaTimes className="mr-1" /> Batal
-              </button>
-              <button
-                onClick={submitTambah}
-                className="px-3 py-1 bg-indigo-600 text-white rounded text-sm flex items-center"
-              >
-                <FaSave className="mr-1" /> Simpan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL EDIT */}
-      {showEdit && formEdit && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-4 w-full max-w-md">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-lg">Edit Karyawan</h3>
-              <button
-                onClick={() => setShowEdit(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <FaTimes />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-sm">
-              <div>
-                <label className="block mb-1 text-gray-700 text-xs">
-                  Tanggal Masuk
-                </label>
-                <input
-                  type="date"
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  value={formEdit.tanggalMasuk}
-                  onChange={(e) =>
-                    setFormEdit((p) => ({
-                      ...p,
-                      tanggalMasuk: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="block mb-1 text-gray-700 text-xs">NIK</label>
-                <input
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  value={formEdit.nik}
-                  onChange={(e) =>
-                    setFormEdit((p) => ({
-                      ...p,
-                      nik: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="block mb-1 text-gray-700 text-xs">
-                  Nama Karyawan
-                </label>
-                <input
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  value={formEdit.namaKaryawan}
-                  onChange={(e) =>
-                    setFormEdit((p) => ({
-                      ...p,
-                      namaKaryawan: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-
-              {/* STATUS JABATAN EDIT – INPUT + DATALIST */}
-              <div>
-                <label className="block mb-1 text-gray-700 text-xs">
-                  Status Jabatan
-                </label>
-                <input
-                  list="jabatan-list-edit"
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  value={formEdit.jabatan}
-                  onChange={(e) =>
-                    setFormEdit((p) => ({
-                      ...p,
-                      jabatan: e.target.value,
-                    }))
-                  }
-                  placeholder="Ketik / pilih jabatan (misal: TEKNISI)"
-                />
-                <datalist id="jabatan-list-edit">
-                  {JABATAN_OPTIONS.map((j) => (
-                    <option key={j} value={j} />
-                  ))}
-                </datalist>
-              </div>
-
-              <div className="bg-white p-4 rounded w-full max-w-md">
-                <label className="block text-xs mb-1">Toko Bertugas</label>
                 <select
-                  className="w-full border px-2 py-1 text-sm"
+                  className="input"
                   value={
                     showTambah
                       ? formTambah.tokoBertugas
-                      : formEdit?.tokoBertugas
+                      : formEdit.tokoBertugas
                   }
                   onChange={(e) =>
                     showTambah
-                      ? setFormTambah((p) => ({
-                          ...p,
+                      ? setFormTambah({
+                          ...formTambah,
                           tokoBertugas: e.target.value,
-                        }))
-                      : setFormEdit((p) => ({
-                          ...p,
+                        })
+                      : setFormEdit({
+                          ...formEdit,
                           tokoBertugas: e.target.value,
-                        }))
+                        })
                   }
                 >
                   <option value="">Pilih Toko</option>
@@ -685,44 +410,56 @@ export default function MasterKaryawan() {
                     <option key={t}>{t}</option>
                   ))}
                 </select>
-              </div>
 
-              <div>
-                <label className="block mb-1 text-gray-700 text-xs">
-                  Gaji (Rp)
-                </label>
                 <input
                   type="number"
-                  className="w-full border rounded px-2 py-1 text-sm"
-                  value={formEdit.gaji}
+                  className="input"
+                  placeholder="Gaji"
+                  value={showTambah ? formTambah.gaji : formEdit.gaji}
                   onChange={(e) =>
-                    setFormEdit((p) => ({
-                      ...p,
-                      gaji: e.target.value,
-                    }))
+                    showTambah
+                      ? setFormTambah({
+                          ...formTambah,
+                          gaji: e.target.value,
+                        })
+                      : setFormEdit({
+                          ...formEdit,
+                          gaji: e.target.value,
+                        })
                   }
-                  placeholder="0"
                 />
               </div>
-            </div>
+            )}
 
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={() => setShowEdit(false)}
-                className="px-3 py-1 border rounded text-sm flex items-center"
+                onClick={() => {
+                  setShowTambah(false);
+                  setShowEdit(false);
+                }}
+                className="border px-3 py-1 rounded"
               >
-                <FaTimes className="mr-1" /> Batal
+                <FaTimes /> Batal
               </button>
               <button
-                onClick={submitEdit}
-                className="px-3 py-1 bg-indigo-600 text-white rounded text-sm flex items-center"
+                onClick={showTambah ? submitTambah : submitEdit}
+                className="bg-indigo-600 text-white px-3 py-1 rounded"
               >
-                <FaSave className="mr-1" /> Simpan
+                <FaSave /> Simpan
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        .input {
+          width: 100%;
+          border: 1px solid #ccc;
+          padding: 8px;
+          border-radius: 6px;
+        }
+      `}</style>
     </div>
   );
 }
