@@ -117,6 +117,7 @@ export default function MasterPembelian() {
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterSupplier, setMasterSupplier] = useState([]);
   const [masterBundling, setMasterBundling] = useState([]);
+  
 
   const [tambahForm, setTambahForm] = useState({
     tanggal: TODAY,
@@ -354,6 +355,8 @@ export default function MasterPembelian() {
   //     )
   //   );
   // }, [masterBarangList, tambahForm.brand]);
+
+  
 
   const groupedPembelian = useMemo(() => {
     const map = {};
@@ -975,6 +978,7 @@ export default function MasterPembelian() {
   };
 
   const groupedPurchases = groupedPembelian;
+  
 
   // ------------------------
   // exportExcel (FINAL FIX)
@@ -1687,7 +1691,7 @@ export default function MasterPembelian() {
                     </option>
                   ))}
                 </select>
-                {/* <select
+                <select
                   className="input"
                   value={editData.namaToko}
                   onChange={(e) =>
@@ -1707,7 +1711,7 @@ export default function MasterPembelian() {
                   <option>PITARA</option>
                   <option>KOTA WISATA</option>
                   <option>SAWANGAN</option>
-                </select> */}
+                </select>
               </div>
 
               {/* Brand */}

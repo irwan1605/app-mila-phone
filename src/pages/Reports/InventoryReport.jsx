@@ -1,8 +1,8 @@
 // ======================================================================
 // INVENTORY REPORT — PRO MAX FINAL VERSION
 // ======================================================================
+import React, { useEffect, useMemo, useState, useRef } from "react";
 
-import React, { useEffect, useMemo, useState } from "react";
 import {
   listenAllTransaksi,
   listenStockAll,
@@ -47,17 +47,6 @@ const CARD_COLORS = [
   "from-yellow-500 to-orange-500",
 ];
 
-
-const hitungStockByKategori = (items = []) => {
-  const map = {};
-  items.forEach((it) => {
-    const kat = it.KATEGORI_BARANG || "LAINNYA";
-    const qty = it.IMEI ? 1 : Number(it.QTY || 0);
-    map[kat] = (map[kat] || 0) + qty;
-  });
-  return map;
-};
-
 // =======================
 // RUPIAH
 // =======================
@@ -79,13 +68,25 @@ export default function InventoryReport() {
   // ==========================
   const [stockData, setStockData] = useState({});
   const [transaksi, setTransaksi] = useState([]);
-  const [masterBarang, setMasterBarang] = useState({});
   const [selectedToko, setSelectedToko] = useState(null);
   const [search, setSearch] = useState("");
+  const tableRef = useRef(null);
 
   // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 25;
+
+  // ==========================
+  // AUTO SCROLL SAAT CARD DI KLIK
+  // ==========================
+  useEffect(() => {
+    if (selectedToko && tableRef.current) {
+      tableRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, [selectedToko]);
 
   // ==========================
   // LISTENER REALTIME: STOK
@@ -96,246 +97,167 @@ export default function InventoryReport() {
   }, []);
 
   // ==========================
-  // LISTENER REALTIME: TRANSAKSI
+  // REALTIME LISTENER
   // ==========================
   useEffect(() => {
-    const unsub = listenAllTransaksi((rows) => setTransaksi(rows || []));
-    return () => unsub && unsub();
+    const u1 = listenStockAll((s) => setStockData(s || {}));
+    const u2 = listenAllTransaksi((t) => setTransaksi(t || []));
+    const u3 = listenMasterBarang(() => {});
+    return () => {
+      u1 && u1();
+      u2 && u2();
+      u3 && u3();
+    };
   }, []);
 
   // ==========================
-  // LISTENER REALTIME: MASTER BARANG
+  // STOCK BY TOKO (SINGLE SOURCE OF TRUTH)
   // ==========================
-  useEffect(() => {
-    const unsub = listenMasterBarang((rows) => {
-      const map = {};
-      rows.forEach((b) => {
-        const key = `${b.NAMA_BRAND}_${b.NAMA_BARANG}`
-          .replace(/\s+/g, "_")
-          .toUpperCase();
-        map[key] = b;
-      });
-      setMasterBarang(map);
-    });
-    return () => unsub && unsub();
-  }, []);
-
-  const hitungStockPembelian = (transaksi, namaToko) => {
-    const tokoUpper = String(namaToko).toUpperCase();
-
-    return (transaksi || []).reduce((sum, t) => {
-      const tokoTrx = String(t.TOKO || t.NAMA_TOKO || "").toUpperCase();
-
-      if (
-        (t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN" ||
-        tokoTrx !== tokoUpper
-      ) {
-        return sum;
-      }
-
-      return sum + (t.IMEI ? 1 : Number(t.QTY || 0));
-    }, 0);
-  };
-
-  // ======================================================================
-  // HITUNG STOCK PEMBELIAN CILANGKAP PUSAT
-  // ======================================================================
-  // Hitung stok pusat langsung dari Firebase stock path
-  const stockPembelianPusat = useMemo(() => {
-    const pusat = stockData["CILANGKAP PUSAT"] || {};
-    return Object.values(pusat).reduce(
-      (sum, item) => sum + Number(item.qty || 0),
-      0
-    );
-  }, [stockData]);
-
-  // ======================================================================
-  // HITUNG TOTAL STOCK SEMUA TOKO
-  // ======================================================================
-  const totalAllStock = useMemo(() => {
-    const stokTokoLain = TOKO_LIST.filter(
-      (t) => t !== "CILANGKAP PUSAT"
-    ).reduce((sum, toko) => sum + hitungStockPembelian(transaksi, toko), 0);
-
-    return stockPembelianPusat + stokTokoLain;
-  }, [transaksi, stockPembelianPusat]);
-
-  const rows = transaksi.filter(
-    (t) =>
-      t.STATUS === "Approved" &&
-      String(t.NAMA_TOKO || "").toUpperCase() ===
-        String(selectedToko || "").toUpperCase()
-  );
-
-  // ======================================================================
-  // CARD STOK PER TOKO
-  // ======================================================================
-  const cardStock = useMemo(() => {
-    return TOKO_LIST.map((toko, idx) => {
-      const total =
-        toko === "CILANGKAP PUSAT"
-          ? stockPembelianPusat // ini SUDAH BENAR
-          : hitungStockPembelian(transaksi, toko);
-
-      // const total = Object.values(stokToko).reduce(
-      //   (sum, item) => sum + Number(item.qty || 0),
-      //   0
-      // );
-
-      return {
-        toko,
-        total,
-        color: [
-          "from-emerald-500 to-teal-500",
-          "from-fuchsia-500 to-pink-500",
-          "from-orange-500 to-amber-400",
-          "from-cyan-500 to-teal-500",
-          "from-rose-500 to-red-500",
-          "from-purple-500 to-indigo-500",
-          "from-lime-500 to-green-500",
-          "from-emerald-500 to-teal-500",
-          "from-blue-600 to-cyan-500",
-          "from-yellow-500 to-orange-500",
-        ][idx % 10],
-      };
-    });
-  }, [transaksi, stockPembelianPusat]);
-
-  const totalStockPerKategori = useMemo(() => {
+  const stokByToko = useMemo(() => {
     const map = {};
 
-    // stok pusat
-    const pusat = stockData["CILANGKAP PUSAT"] || {};
-    Object.values(pusat).forEach((s) => {
-      const kat = s.kategoriBrand || "LAINNYA";
-      map[kat] = (map[kat] || 0) + Number(s.qty || 0);
+    TOKO_LIST.forEach((toko) => {
+      map[toko] = { kategori: {}, items: [] };
     });
 
-    // stok toko lain (dari transaksi pembelian)
-    TOKO_LIST.filter((t) => t !== "CILANGKAP PUSAT").forEach((toko) => {
-      transaksi.forEach((trx) => {
-        if (
-          trx.STATUS === "Approved" &&
-          trx.PAYMENT_METODE === "PEMBELIAN" &&
-          trx.NAMA_TOKO === toko
-        ) {
-          const kat = trx.KATEGORI_BRAND || "LAINNYA";
-          map[kat] = (map[kat] || 0) + (trx.IMEI ? 1 : Number(trx.QTY || 0));
-        }
-      });
+    // PUSAT → dari stockData
+    Object.values(stockData["CILANGKAP PUSAT"] || {}).forEach((s) => {
+      const kat = s.kategoriBrand || "LAINNYA";
+      map["CILANGKAP PUSAT"].kategori[kat] =
+        (map["CILANGKAP PUSAT"].kategori[kat] || 0) + Number(s.qty || 0);
+
+      map["CILANGKAP PUSAT"].items.push(s);
+    });
+
+    // TOKO → dari transaksi pembelian
+    transaksi.forEach((t) => {
+      if (t.STATUS !== "Approved" || t.PAYMENT_METODE !== "PEMBELIAN") return;
+
+      const toko = t.NAMA_TOKO;
+      if (!map[toko]) return;
+
+      const kat = t.KATEGORI_BRAND || "LAINNYA";
+      const qty = t.IMEI ? 1 : Number(t.QTY || 0);
+
+      map[toko].kategori[kat] = (map[toko].kategori[kat] || 0) + qty;
+
+      map[toko].items.push(t);
     });
 
     return map;
-  }, [stockData, transaksi]);
+  }, [transaksi, stockData]);
 
-  // ======================================================================
-  // DETAIL TABEL (JOIN MASTER BARANG + HITUNG BANDLING)
-  // ======================================================================
-  const detailTable = useMemo(() => {
-    if (!selectedToko) return [];
+  // ==========================
+  // TOTAL SEMUA TOKO
+  // ==========================
+  const totalStockSemuaToko = useMemo(() => {
+    return Object.values(stokByToko).reduce((sum, t) => {
+      return sum + Object.values(t.kategori).reduce((s, v) => s + v, 0);
+    }, 0);
+  }, [stokByToko]);
 
-    const rows = transaksi.filter(
-      (t) =>
-        String(t.NAMA_TOKO || "").toUpperCase() ===
-        String(selectedToko || "").toUpperCase()
+  // ==========================
+  // STOCK PUSAT (FIX)
+  // ==========================
+  const stockPembelianPusat = useMemo(() => {
+    const pusat = stockData["CILANGKAP PUSAT"] || {};
+    return Object.values(pusat).reduce((s, i) => s + Number(i.qty || 0), 0);
+  }, [stockData]);
+
+  // ==========================
+  // MASTER DATA PEMBELIAN (SINGLE SOURCE OF TRUTH)
+  // ==========================
+  const pembelianApproved = useMemo(() => {
+    return transaksi.filter(
+      (t) => t.STATUS === "Approved" && t.PAYMENT_METODE === "PEMBELIAN"
     );
+  }, [transaksi]);
 
-    let expanded = rows.map((t) => {
-      const sku = `${t.NAMA_BRAND}_${t.NAMA_BARANG}`
-        .replace(/\s+/g, "_")
-        .toUpperCase();
+  // ==========================
+  // DETAIL TABLE
+  // ==========================
+  // ==========================
+  // DETAIL TABLE = MASTER PEMBELIAN
+  // ==========================
+  // ==========================
+// DETAIL TABLE (NORMALIZED DARI MASTER PEMBELIAN)
+// ==========================
+const detailTable = useMemo(() => {
+  if (!selectedToko) return [];
 
-      const master = masterBarang[sku] || {};
+  return pembelianApproved
+    .filter((t) => t.NAMA_TOKO === selectedToko)
+    .map((t) => {
       const qty = t.IMEI ? 1 : Number(t.QTY || 0);
+      const harga = Number(t.HARGA_SUPLAYER || 0);
 
       return {
         id: t.id,
         tokoId: t.tokoId,
-        tanggal: t.TANGGAL_TRANSAKSI,
-        noDo: t.NO_INVOICE,
-        supplier: t.NAMA_SUPPLIER,
-        brand: t.NAMA_BRAND,
-        barang: t.NAMA_BARANG,
-        imei: t.IMEI,
+
+        tanggal: t.TANGGAL_TRANSAKSI || "-",
+        noDo: t.NO_INVOICE || "-",
+        supplier: t.NAMA_SUPPLIER || "-",
+
+        brand: t.NAMA_BRAND || "-",
+        barang: t.NAMA_BARANG || "-",
+        imei: t.IMEI || "-",
+
         qty,
+        hargaSRP: harga,
+        totalSRP: harga * qty,
 
-        hargaSRP: Number(t.HARGA_SRP || 0),
-        totalSRP: qty * Number(t.HARGA_SRP || 0),
+        hargaGrosir: 0,
+        totalGrosir: 0,
+        hargaReseller: 0,
+        totalReseller: 0,
 
-        hargaGrosir: Number(t.HARGA_GROSIR || 0),
-        totalGrosir: qty * Number(t.HARGA_GROSIR || 0),
+        band1: t.NAMA_BANDLING_1 || "-",
+        hband1: Number(t.HARGA_BANDLING_1 || 0),
+        totalBand1: qty * Number(t.HARGA_BANDLING_1 || 0),
 
-        hargaReseller: Number(t.HARGA_RESELLER || 0),
-        totalReseller: qty * Number(t.HARGA_RESELLER || 0),
+        band2: t.NAMA_BANDLING_2 || "-",
+        hband2: Number(t.HARGA_BANDLING_2 || 0),
+        totalBand2: qty * Number(t.HARGA_BANDLING_2 || 0),
 
-        // Bandling realtime dari MasterBarang
-        band1: master.NAMA_BANDLING_1 || "-",
-        hband1: Number(master.HARGA_BANDLING_1 || 0),
-        totalBand1: qty * Number(master.HARGA_BANDLING_1 || 0),
+        band3: t.NAMA_BANDLING_3 || "-",
+        hband3: Number(t.HARGA_BANDLING_3 || 0),
+        totalBand3: qty * Number(t.HARGA_BANDLING_3 || 0),
 
-        band2: master.NAMA_BANDLING_2 || "-",
-        hband2: Number(master.HARGA_BANDLING_2 || 0),
-        totalBand2: qty * Number(master.HARGA_BANDLING_2 || 0),
-
-        band3: master.NAMA_BANDLING_3 || "-",
-        hband3: Number(master.HARGA_BANDLING_3 || 0),
-        totalBand3: qty * Number(master.HARGA_BANDLING_3 || 0),
+        transferIn: "-",
+        transferOut: "-",
       };
     });
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      expanded = expanded.filter(
-        (r) =>
-          r.brand.toLowerCase().includes(q) ||
-          r.barang.toLowerCase().includes(q) ||
-          String(r.imei).toLowerCase().includes(q)
-      );
-    }
-
-    return expanded;
-  }, [selectedToko, transaksi, masterBarang, search]);
+}, [selectedToko, pembelianApproved]);
 
   // ======================================================================
   // PAGINATION
   // ======================================================================
-  const pageCount = useMemo(
-    () => Math.ceil(detailTable.length / pageSize),
-    [detailTable]
-  );
+  const pageCount = Math.ceil(detailTable.length / pageSize);
+  const data = detailTable.slice((page - 1) * pageSize, page * pageSize);
 
-  const data = useMemo(() => {
-    return detailTable.slice((page - 1) * pageSize, page * pageSize);
-  }, [page, detailTable]);
-
+  // ==========================
+  // CARD KECIL PER TOKO + KATEGORI
+  // ==========================
   const cardStockPerToko = useMemo(() => {
     return TOKO_LIST.map((toko) => {
-      let items = [];
+      const kategori = {};
 
-      if (toko === "CILANGKAP PUSAT") {
-        items = Object.values(stockData[toko] || {}).map((s) => ({
-          KATEGORI_BARANG: s.kategoriBrand,
-          QTY: s.qty,
-        }));
-      } else {
-        items = transaksi.filter(
-          (t) =>
-            t.STATUS === "Approved" &&
-            t.PAYMENT_METODE === "PEMBELIAN" &&
-            t.NAMA_TOKO === toko
-        );
-      }
+      pembelianApproved.forEach((t) => {
+        if (t.NAMA_TOKO !== toko) return;
 
-      return {
-        toko,
-        kategori: hitungStockByKategori(items),
-      };
+        const k = t.KATEGORI_BRAND || "LAINNYA";
+        const qty = t.IMEI ? 1 : Number(t.QTY || 0);
+        kategori[k] = (kategori[k] || 0) + qty;
+      });
+
+      return { toko, kategori };
     });
-  }, [stockData, transaksi]);
+  }, [pembelianApproved]);
 
-  // ======================================================================
-  // EXPORT EXCEL
-  // ======================================================================
+  // ==========================
+  // EXPORT
+  // ==========================
   const exportToExcel = () => {
     const sheet = XLSX.utils.json_to_sheet(detailTable);
     const book = XLSX.utils.book_new();
@@ -354,94 +276,61 @@ export default function InventoryReport() {
         {/* ================================================================== */}
         {/* CARD BESAR CILANGKAP PUSAT */}
         {/* ================================================================== */}
+        {/* CARD BESAR PUSAT */}
         <div
-          onClick={() => setSelectedToko("CILANGKAP PUSAT")}
-          className="
-            cursor-pointer rounded-3xl 
-            bg-gradient-to-br from-emerald-500 to-teal-500 
-            shadow-2xl shadow-emerald-400/40
-            p-6 mb-6 text-white 
-            hover:scale-105 hover:shadow-teal-400/50
-            backdrop-blur-xl transition-all duration-300
-          "
+          onClick={() => {
+            setSelectedToko("CILANGKAP PUSAT");
+            setPage(1);
+          }}
+          className="cursor-pointer rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-500 p-6 mb-6 shadow-2xl"
         >
-          <div className="flex items-center gap-4">
-            <FaStore className="text-5xl opacity-90" />
+          <div className="flex gap-4 items-center">
+            <FaStore className="text-5xl" />
             <div>
               <h2 className="text-2xl font-bold">CILANGKAP PUSAT</h2>
-              <p className="text-sm opacity-80">Realtime Firebase</p>
+              <p className="text-sm opacity-80">
+                TOTAL STOCK SEMUA TOKO: {totalStockSemuaToko}
+              </p>
             </div>
           </div>
 
-          <div className="mt-5 flex gap-10">
-            <div>
-              <h3 className="text-lg font-semibold">
-                TOTAL STOCK KESELURUHAN TOKO
-              </h3>
-              {Object.entries(totalStockPerKategori).map(([kat, qty]) => (
-                <div key={kat} className="flex justify-between">
-                  <span>{kat}</span>
-                  <span className="font-bold">{qty}</span>
-                </div>
-              ))}
-            </div>
-
-            <div>
-              <p className="text-lg opacity-80">STOCK PEMBELIAN PUSAT</p>
-              <p className="text-4xl font-bold">{stockPembelianPusat}</p>
-            </div>
-          </div>
+          <p className="mt-4 text-4xl font-bold">{stockPembelianPusat}</p>
         </div>
         {/* ================================================================== */}
         {/* CARD KECIL PER TOKO + PER KATEGORI */}
         {/* ================================================================== */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10">
-          {cardStockPerToko.map((t, idx) => {
-            // hanya tampilkan toko yang punya stok
-            const kategoriEntries = Object.entries(t.kategori || {}).filter(
-              ([_, qty]) => qty > 0
-            );
-
-            if (kategoriEntries.length === 0) return null;
-
-            return (
-              <div
-                key={t.toko}
-                onClick={() => {
-                  setPage(1);
-                  setSelectedToko(t.toko);
-                }}
-                className={`
-          cursor-pointer rounded-2xl 
-          bg-gradient-to-br ${CARD_COLORS[idx % CARD_COLORS.length]}
-          hover:scale-105 hover:shadow-xl 
-          hover:shadow-white/40 backdrop-blur-md 
-          p-5 text-white shadow-lg transition-all duration-300
-        `}
-              >
-                {/* NAMA TOKO */}
-                <div className="text-lg font-bold mb-2">{t.toko}</div>
-
-                {/* STOCK PER KATEGORI */}
-                {kategoriEntries.map(([kat, qty]) => (
-                  <div
-                    key={kat}
-                    className="flex justify-between text-sm border-b border-white/20 py-1"
-                  >
-                    <span className="opacity-90">{kat}</span>
-                    <span className="font-semibold">{qty}</span>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
+        {/* CARD KECIL */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+          {cardStockPerToko.map((t, i) => (
+            <div
+              key={t.toko}
+              onClick={() => {
+                setSelectedToko(t.toko);
+                setPage(1);
+              }}
+              className={`cursor-pointer rounded-2xl p-4 bg-gradient-to-br ${
+                CARD_COLORS[i % CARD_COLORS.length]
+              }`}
+            >
+              <div className="font-bold mb-2">{t.toko}</div>
+              {Object.entries(t.kategori).map(([k, v]) => (
+                <div key={k} className="flex justify-between text-sm">
+                  <span>{k}</span>
+                  <span className="font-bold">{v}</span>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
 
         {/* ================================================================== */}
         {/* SEARCH */}
         {/* ================================================================== */}
         {selectedToko && (
-          <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl mb-5 flex items-center">
+          <div
+            ref={tableRef}
+            className="bg-white/10 backdrop-blur-md p-4 rounded-xl mb-5 flex items-center"
+          >
             <FaSearch className="text-white text-lg" />
             <input
               placeholder="Cari brand / barang / IMEI..."
@@ -456,7 +345,10 @@ export default function InventoryReport() {
         {/* TABEL DETAIL */}
         {/* ================================================================== */}
         {selectedToko && (
-          <div className="bg-blue-900 p-6 rounded-2xl shadow-2xl overflow-auto">
+          <div
+            ref={tableRef}
+            className="bg-blue-900 p-6 rounded-2xl shadow-2xl overflow-auto"
+          >
             {/* EXPORT BUTTON */}
             <div className="flex justify-between mb-4">
               <h2 className="text-xl font-bold">Detail Stok: {selectedToko}</h2>
