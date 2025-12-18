@@ -75,21 +75,65 @@ export default function MasterBarang() {
     hargaSRP: "",
     hargaGrosir: "",
     hargaReseller: "",
-
-    // ✅ TAMBAHAN UNTUK BANDLING
-    isBandling: false,
-    tipeBandling: "", // "1" | "2" | "3"
+  
+    // === BUNDLING ===
+    isBundling: false,
+    bundlingItems: [], // [{ namaBarang, harga }]
   });
+  
+
+  useEffect(() => {
+    // RESET dulu
+    setForm((f) => ({
+      ...f,
+      isBundling: false,
+      bundlingItems: [],
+    }));
+  
+    // MOTOR & SEPEDA → bundling harga 0
+    if (
+      form.kategori === "MOTOR LISTRIK" ||
+      form.kategori === "SEPEDA LISTRIK"
+    ) {
+      const bundlingList = masterBundling
+        .filter((b) => b.kategoriBarang === form.kategori)
+        .map((b) => ({
+          namaBarang: b.namaBarang,
+          harga: 0,
+        }));
+  
+      setForm((f) => ({
+        ...f,
+        isBundling: true,
+        bundlingItems: bundlingList,
+      }));
+    }
+  
+    // ACCESSORIES → harga dari master bundling
+    if (form.kategori === "ACCESSORIES") {
+      const bundlingList = masterBundling
+        .filter((b) => b.kategoriBarang === "ACCESSORIES")
+        .map((b) => ({
+          namaBarang: b.namaBarang,
+          harga: Number(b.hargaBundling || 0),
+        }));
+  
+      if (bundlingList.length > 0) {
+        setForm((f) => ({
+          ...f,
+          isBundling: true,
+          bundlingItems: bundlingList,
+        }));
+      }
+    }
+  }, [form.kategori, masterBundling]);
+  
 
   useEffect(() => {
     const unsub = listenMasterBarang(setMasterBarang);
     return () => unsub && unsub();
   }, []);
 
-  useEffect(() => {
-    const unsub = listenMasterKategoriBarang(setKategoriList);
-    return () => unsub && unsub();
-  }, []);
 
   useEffect(() => {
     const unsub = listenMasterBarangBundling(setMasterBundling);
@@ -134,25 +178,25 @@ export default function MasterBarang() {
     return () => typeof unsub === "function" && unsub();
   }, []);
 
-  useEffect(() => {
-    if (
-      form.kategori !== "SEPEDA LISTRIK" &&
-      form.kategori !== "MOTOR LISTRIK"
-    ) {
-      setForm((prev) => ({
-        ...prev,
-        isBandling: false,
-        tipeBandling: "",
+  // useEffect(() => {
+  //   if (
+  //     form.kategori !== "SEPEDA LISTRIK" &&
+  //     form.kategori !== "MOTOR LISTRIK"
+  //   ) {
+  //     setForm((prev) => ({
+  //       ...prev,
+  //       isBandling: false,
+  //       tipeBandling: "",
 
-        namaBandling1: "",
-        hargaBandling1: "",
-        namaBandling2: "",
-        hargaBandling2: "",
-        namaBandling3: "",
-        hargaBandling3: "",
-      }));
-    }
-  }, [form.kategori]);
+  //       namaBandling1: "",
+  //       hargaBandling1: "",
+  //       namaBandling2: "",
+  //       hargaBandling2: "",
+  //       namaBandling3: "",
+  //       hargaBandling3: "",
+  //     }));
+  //   }
+  // }, [form.kategori]);
 
   const counterKategori = useMemo(() => {
     const map = {};
@@ -212,14 +256,16 @@ export default function MasterBarang() {
 
   const filtered = useMemo(() => {
     if (!search) return rekapMasterBarang;
+  
     const q = search.toLowerCase();
-    return masterBarang.filter(
+    return rekapMasterBarang.filter(
       (x) =>
         x.brand.toLowerCase().includes(q) ||
         x.barang.toLowerCase().includes(q) ||
         x.kategori.toLowerCase().includes(q)
     );
   }, [search, rekapMasterBarang]);
+  
 
   const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
 
@@ -228,16 +274,16 @@ export default function MasterBarang() {
     return filtered.slice(start, start + itemsPerPage);
   }, [filtered, currentPage]);
 
-  const namaBarangList = useMemo(() => {
-    return masterBarang
-      .filter((x) => x.barang)
-      .map((x) => ({
-        label: `${x.barang} (${x.brand})`,
-        barang: x.barang,
-        brand: x.brand,
-        kategori: x.kategori,
-      }));
-  }, [masterBarang]);
+  // const namaBarangList = useMemo(() => {
+  //   return masterBarang
+  //     .filter((x) => x.barang)
+  //     .map((x) => ({
+  //       label: `${x.barang} (${x.brand})`,
+  //       barang: x.barang,
+  //       brand: x.brand,
+  //       kategori: x.kategori,
+  //     }));
+  // }, [masterBarang]);
 
   const namaBarangByBrand = useMemo(() => {
     if (!form.brand) return [];
@@ -722,81 +768,28 @@ export default function MasterBarang() {
                 />{" "}
               </div>
             </div>
-            <div>
-              <label className="text-xs font-semibold">Barang Bandling </label>
-            </div>
-            {/* ✅ BANDLING KHUSUS SEPEDA & MOTOR */}
-            {(form.kategori === "SEPEDA LISTRIK" ||
-              form.kategori === "MOTOR LISTRIK") && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                <div>
-                  <label className="text-xs font-semibold">
-                    Bandling 1 (Nama)
-                  </label>
-                  <input
-                    className="input"
-                    value={form.namaBandling1}
-                    onChange={(e) =>
-                      setForm({ ...form, namaBandling1: e.target.value })
-                    }
-                  />
+            {form.isBundling && (
+  <div className="mt-4">
+    <label className="text-xs font-semibold">
+      Barang Bundling (otomatis dari Master Bundling)
+    </label>
 
-                  <input
-                    type="number"
-                    className="input mt-1"
-                    placeholder="Harga Jual Bandling 1"
-                    value={form.hargaBandling1}
-                    onChange={(e) =>
-                      setForm({ ...form, hargaBandling1: e.target.value })
-                    }
-                  />
-                </div>
+    <div className="mt-2 space-y-2">
+      {form.bundlingItems.map((b, i) => (
+        <div
+          key={i}
+          className="flex justify-between items-center bg-slate-100 px-3 py-2 rounded"
+        >
+          <span className="text-sm">{b.namaBarang}</span>
+          <span className="text-sm font-semibold">
+            Rp {Number(b.harga).toLocaleString("id-ID")}
+          </span>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
-                <div>
-                  <label className="text-xs font-semibold">
-                    Bandling 2 (Nama)
-                  </label>
-                  <input
-                    className="input"
-                    value={form.namaBandling2}
-                    onChange={(e) =>
-                      setForm({ ...form, namaBandling2: e.target.value })
-                    }
-                  />
-                  <input
-                    type="number"
-                    className="input mt-1"
-                    placeholder="Harga Jual Bandling 2"
-                    value={form.hargaBandling2}
-                    onChange={(e) =>
-                      setForm({ ...form, hargaBandling2: e.target.value })
-                    }
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold">
-                    Bandling 3 (Nama)
-                  </label>
-                  <input
-                    className="input"
-                    value={form.namaBandling3}
-                    onChange={(e) =>
-                      setForm({ ...form, namaBandling3: e.target.value })
-                    }
-                  />
-                  <input
-                    type="number"
-                    className="input mt-1"
-                    placeholder="Harga Jual Bandling 3"
-                    value={form.hargaBandling3}
-                    onChange={(e) =>
-                      setForm({ ...form, hargaBandling3: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-            )}
 
             <div className="flex justify-end gap-2 mt-4">
               <button

@@ -14,6 +14,7 @@ import {
   listenMasterBarang,
   listenMasterSupplier,
   addMasterSupplier,
+  listenMasterBarangBundling,
 } from "../services/FirebaseService";
 
 import * as XLSX from "xlsx";
@@ -115,6 +116,7 @@ export default function MasterPembelian() {
   const [stockSnapshot, setStockSnapshot] = useState({});
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterSupplier, setMasterSupplier] = useState([]);
+  const [masterBundling, setMasterBundling] = useState([]);
 
   const [tambahForm, setTambahForm] = useState({
     tanggal: TODAY,
@@ -135,11 +137,67 @@ export default function MasterPembelian() {
     hargaBandling3: 0,
   });
 
+  useEffect(() => {
+    // RESET bundling default
+    setTambahForm((prev) => ({
+      ...prev,
+      isBundling: false,
+      bundlingItems: [],
+    }));
+
+    // MOTOR & SEPEDA → bundling harga 0
+    if (
+      tambahForm.kategoriBrand === "MOTOR LISTRIK" ||
+      tambahForm.kategoriBrand === "SEPEDA LISTRIK"
+    ) {
+      const bundlingList = masterBundling.map((b) => ({
+        namaBarang: b.namaBarang,
+        harga: 0,
+      }));
+
+      setTambahForm((prev) => ({
+        ...prev,
+        isBundling: true,
+        bundlingItems: bundlingList,
+      }));
+    }
+
+    // ACCESSORIES → harga dari master bundling
+    if (tambahForm.kategoriBrand === "ACCESSORIES") {
+      const bundlingList = masterBundling.map((b) => ({
+        namaBarang: b.namaBarang,
+        harga: Number(b.hargaBundling || 0),
+      }));
+
+      if (bundlingList.length > 0) {
+        setTambahForm((prev) => ({
+          ...prev,
+          isBundling: true,
+          bundlingItems: bundlingList,
+        }));
+      }
+    }
+  }, [tambahForm.kategoriBrand, masterBundling]);
+
+  useEffect(() => {
+    setTambahForm((prev) => ({
+      ...prev,
+      barang: "",
+    }));
+  }, [tambahForm.brand]);
+
   const [editData, setEditData] = useState(null);
 
   useEffect(() => {
     const unsub = listenMasterSupplier((rows) => {
       setMasterSupplier(rows || []);
+    });
+    return () => unsub && unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = listenMasterBarangBundling((rows) => {
+      setMasterBundling(rows || []);
     });
     return () => unsub && unsub();
   }, []);
@@ -241,21 +299,36 @@ export default function MasterPembelian() {
     return masterSupplier.map((s) => s.namaSupplier).filter(Boolean);
   }, [masterSupplier]);
 
-  const brandOptions = useMemo(() => {
-    return Array.from(
-      new Set(masterBarang.map((b) => b.NAMA_BRAND).filter(Boolean))
-    );
-  }, [masterBarang]);
+  // const brandOptions = useMemo(() => {
+  //   return Array.from(
+  //     new Set(masterBarang.map((b) => b.NAMA_BRAND).filter(Boolean))
+  //   );
+  // }, [masterBarang]);
+
+  const namaBarangOptionsEdit = useMemo(() => {
+    return masterBarang
+      .filter(
+        (b) =>
+          (!editData?.brand || b.namaBrand === editData.brand) &&
+          (!editData?.kategoriBrand ||
+            b.kategoriBarang === editData.kategoriBrand)
+      )
+      .map((b) => b.namaBarang)
+      .filter(Boolean);
+  }, [masterBarang, editData?.brand, editData?.kategoriBrand]);
 
   const namaBarangOptions = useMemo(() => {
     return masterBarang
       .filter(
         (b) =>
-          (!tambahForm.brand || b.NAMA_BRAND === tambahForm.brand) &&
+          // filter BRAND
+          (!tambahForm.brand || b.namaBrand === tambahForm.brand) &&
+          // filter KATEGORI (jika dipilih)
           (!tambahForm.kategoriBrand ||
-            b.KATEGORI_BARANG === tambahForm.kategoriBrand)
+            b.kategoriBarang === tambahForm.kategoriBrand)
       )
-      .map((b) => b.NAMA_BARANG);
+      .map((b) => b.namaBarang)
+      .filter(Boolean);
   }, [masterBarang, tambahForm.brand, tambahForm.kategoriBrand]);
 
   const brandOptionsDynamic = useMemo(() => {
@@ -820,31 +893,20 @@ export default function MasterPembelian() {
           }
         }
 
+        // 2️⃣ 🔥 PAYLOAD DITEMPATKAN DI SINI 🔥
         const payload = {
-          TANGGAL_TRANSAKSI: tanggal,
-          NO_INVOICE: noDo,
-          NAMA_SUPPLIER: supplier,
-          NAMA_USER: "SYSTEM",
-          NAMA_TOKO: namaToko,
-          NAMA_BRAND: brand,
-          KATEGORI_BRAND: kategoriBrand,
-          NAMA_BARANG: barang,
-          QTY: finalQty,
-          IMEI: "",
-          NOMOR_UNIK: `PEMBELIAN|${brand}|${barang}|${Date.now()}`,
-          HARGA_SUPLAYER: hSup,
-          HARGA_UNIT: hSup,
-          TOTAL: hSup * finalQty,
+          KATEGORI_BRAND: tambahForm.kategoriBrand,
+          NAMA_BRAND: tambahForm.brand,
+          NAMA_BARANG: tambahForm.barang,
+          QTY: Number(tambahForm.qty || 1),
+
+          IS_BUNDLING: tambahForm.isBundling,
+          BUNDLING_ITEMS: tambahForm.bundlingItems,
+
           PAYMENT_METODE: "PEMBELIAN",
-          SYSTEM_PAYMENT: "SYSTEM",
-          NAMA_BANDLING_1: tambahForm.namaBandling1,
-          HARGA_BANDLING_1: Number(tambahForm.hargaBandling1),
-          NAMA_BANDLING_2: tambahForm.namaBandling2,
-          HARGA_BANDLING_2: Number(tambahForm.hargaBandling2),
-          NAMA_BANDLING_3: tambahForm.namaBandling3,
-          HARGA_BANDLING_3: Number(tambahForm.hargaBandling3),
-          KETERANGAN: "Pembelian (Overwrite)",
           STATUS: "Approved",
+
+          CREATED_AT: Date.now(),
         };
 
         await addTransaksi(tokoId, payload);
@@ -1505,97 +1567,27 @@ export default function MasterPembelian() {
 
             <h4 className="mt-3 font-bold text-blue-600">Bandling Produk</h4>
 
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              <div>
-                <label>Nama Bandling 1</label>
-                <input
-                  type="text"
-                  value={tambahForm.namaBandling1}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      namaBandling1: e.target.value,
-                    }))
-                  }
-                  className="input"
-                />
-              </div>
+            {tambahForm.isBundling && (
+              <div className="mt-3">
+                <label className="text-xs font-semibold text-slate-600">
+                  Barang Bundling (otomatis)
+                </label>
 
-              <div>
-                <label>Harga Bandling 1</label>
-                <input
-                  type="number"
-                  value={tambahForm.hargaBandling1}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      hargaBandling1: e.target.value,
-                    }))
-                  }
-                  className="input"
-                />
+                <div className="mt-2 space-y-2">
+                  {tambahForm.bundlingItems.map((b, i) => (
+                    <div
+                      key={i}
+                      className="flex justify-between items-center bg-slate-100 px-3 py-2 rounded"
+                    >
+                      <span className="text-sm">{b.namaBarang}</span>
+                      <span className="text-sm font-semibold">
+                        Rp {Number(b.harga).toLocaleString("id-ID")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-
-              <div>
-                <label>Nama Bandling 2</label>
-                <input
-                  type="text"
-                  value={tambahForm.namaBandling2}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      namaBandling2: e.target.value,
-                    }))
-                  }
-                  className="input"
-                />
-              </div>
-
-              <div>
-                <label>Harga Bandling 2</label>
-                <input
-                  type="number"
-                  value={tambahForm.hargaBandling2}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      hargaBandling2: e.target.value,
-                    }))
-                  }
-                  className="input"
-                />
-              </div>
-
-              <div>
-                <label>Nama Bandling 3</label>
-                <input
-                  type="text"
-                  value={tambahForm.namaBandling3}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      namaBandling3: e.target.value,
-                    }))
-                  }
-                  className="input"
-                />
-              </div>
-
-              <div>
-                <label>Harga Bandling 3</label>
-                <input
-                  type="number"
-                  value={tambahForm.hargaBandling3}
-                  onChange={(e) =>
-                    setTambahForm((p) => ({
-                      ...p,
-                      hargaBandling3: e.target.value,
-                    }))
-                  }
-                  className="input"
-                />
-              </div>
-            </div>
+            )}
 
             <div className="flex justify-end gap-2 mt-4">
               <button
@@ -1719,19 +1711,22 @@ export default function MasterPembelian() {
               </div>
 
               {/* Brand */}
-              <div>
-                <label className="text-xs font-semibold text-slate-600">
-                  Nama Brand
-                </label>
-                <input
-                  list="brand-list"
-                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
-                  value={editData.brand}
-                  onChange={(e) =>
-                    setEditData((p) => ({ ...p, brand: e.target.value }))
-                  }
-                />
-              </div>
+              <input
+                list="barang-list-edit"
+                value={editData?.barang || ""}
+                onChange={(e) =>
+                  setEditData((prev) => ({
+                    ...prev,
+                    barang: e.target.value,
+                  }))
+                }
+              />
+
+              <datalist id="barang-list-edit">
+                {namaBarangOptionsEdit.map((nama) => (
+                  <option key={nama} value={nama} />
+                ))}
+              </datalist>
 
               {/* Kategori Brand */}
               <div>
