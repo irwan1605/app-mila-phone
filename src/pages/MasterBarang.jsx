@@ -27,26 +27,26 @@ const KATEGORI_OPTIONS = [
   "ACCESORIES",
 ];
 
-const BRAND_OPTIONS = [
-  "OFERO",
-  "UWNFLY",
-  "E NINE",
-  "ZXTEX",
-  "UNITED",
-  "RAKATA",
-  "OPPO",
-  "SAMSUNG",
-  "REALME",
-  "VIVO",
-  "IPHONE",
-  "ZTE NUBIA",
-  "XIOMI",
-  "INFINIX",
-  "OLIKE",
-  "ROBOT",
-  "BATERAI",
-  "CHARGER",
-];
+// const BRAND_OPTIONS = [
+//   "OFERO",
+//   "UWNFLY",
+//   "E NINE",
+//   "ZXTEX",
+//   "UNITED",
+//   "RAKATA",
+//   "OPPO",
+//   "SAMSUNG",
+//   "REALME",
+//   "VIVO",
+//   "IPHONE",
+//   "ZTE NUBIA",
+//   "XIOMI",
+//   "INFINIX",
+//   "OLIKE",
+//   "ROBOT",
+//   "BATERAI",
+//   "CHARGER",
+// ];
 
 const fmt = (n) => Number(n || 0).toLocaleString("id-ID");
 
@@ -180,36 +180,35 @@ export default function MasterBarang() {
   }, [allTransaksi]);
 
   // ================== REKAP MASTER BARANG ==================
-// ================== REKAP MASTER BARANG ==================
-const rekapMasterBarang = useMemo(() => {
-  const map = {};
-  allTransaksi.forEach((t) => {
-    const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-    if (!map[key]) {
-      map[key] = {
-        key,
-        tanggal: t.TANGGAL_TRANSAKSI,
-        brand: t.NAMA_BRAND,
-        kategori: t.KATEGORI_BRAND,
-        barang: t.NAMA_BARANG,
-        hargaSRP: Number(t.HARGA_SRP || t.HARGA_UNIT || 0),
-        hargaGrosir: Number(t.HARGA_GROSIR || 0),
-        hargaReseller: Number(t.HARGA_RESELLER || 0),
+  // ================== REKAP MASTER BARANG ==================
+  const rekapMasterBarang = useMemo(() => {
+    const map = {};
+    allTransaksi.forEach((t) => {
+      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+      if (!map[key]) {
+        map[key] = {
+          key,
+          tanggal: t.TANGGAL_TRANSAKSI,
+          brand: t.NAMA_BRAND,
+          kategori: t.KATEGORI_BRAND,
+          barang: t.NAMA_BARANG,
+          hargaSRP: Number(t.HARGA_SRP || t.HARGA_UNIT || 0),
+          hargaGrosir: Number(t.HARGA_GROSIR || 0),
+          hargaReseller: Number(t.HARGA_RESELLER || 0),
 
-        IS_BANDLING: t.IS_BANDLING || false,
-        TIPE_BANDLING: t.TIPE_BANDLING || "",
-        NAMA_BANDLING_1: t.NAMA_BANDLING_1 || "",
-        HARGA_BANDLING_1: Number(t.HARGA_BANDLING_1 || 0),
-        NAMA_BANDLING_2: t.NAMA_BANDLING_2 || "",
-        HARGA_BANDLING_2: Number(t.HARGA_BANDLING_2 || 0),
-        NAMA_BANDLING_3: t.NAMA_BANDLING_3 || "",
-        HARGA_BANDLING_3: Number(t.HARGA_BANDLING_3 || 0),
-      };
-    }
-  });
-  return Object.values(map);
-}, [allTransaksi]);
-
+          IS_BANDLING: t.IS_BANDLING || false,
+          TIPE_BANDLING: t.TIPE_BANDLING || "",
+          NAMA_BANDLING_1: t.NAMA_BANDLING_1 || "",
+          HARGA_BANDLING_1: Number(t.HARGA_BANDLING_1 || 0),
+          NAMA_BANDLING_2: t.NAMA_BANDLING_2 || "",
+          HARGA_BANDLING_2: Number(t.HARGA_BANDLING_2 || 0),
+          NAMA_BANDLING_3: t.NAMA_BANDLING_3 || "",
+          HARGA_BANDLING_3: Number(t.HARGA_BANDLING_3 || 0),
+        };
+      }
+    });
+    return Object.values(map);
+  }, [allTransaksi]);
 
   const filtered = useMemo(() => {
     if (!search) return rekapMasterBarang;
@@ -243,22 +242,16 @@ const rekapMasterBarang = useMemo(() => {
   const namaBarangByBrand = useMemo(() => {
     if (!form.brand) return [];
 
-    return masterBarang
-      .filter((x) => x.brand === form.brand && x.barang)
-      .map((x) => ({
-        label: x.barang,
-        barang: x.barang,
-        kategori: x.kategori,
-      }));
+    return masterBarang.filter((x) => x.namaBrand === form.brand);
   }, [masterBarang, form.brand]);
 
   const brandList = useMemo(() => {
     const set = new Set();
-    rekapMasterBarang.forEach((x) => {
-      if (x.brand) set.add(x.brand);
+    masterBarang.forEach((x) => {
+      if (x.namaBrand) set.add(x.namaBrand);
     });
     return Array.from(set);
-  }, [rekapMasterBarang]);
+  }, [masterBarang]);
 
   // ================== EXPORT EXCEL ==================
   const exportExcel = () => {
@@ -642,15 +635,15 @@ const rekapMasterBarang = useMemo(() => {
                 <label className="text-xs font-semibold">Nama Brand</label>
                 <input
                   list="brand-master-list"
-                  placeholder="Pilih Nama Brand"
                   className="input"
+                  placeholder="Pilih Nama Brand"
                   value={form.brand}
                   onChange={(e) =>
                     setForm({
                       ...form,
                       brand: e.target.value,
-                      barang: "", // reset barang
-                      kategori: "", // reset kategori
+                      barang: "",
+                      kategori: "",
                     })
                   }
                 />
@@ -664,26 +657,30 @@ const rekapMasterBarang = useMemo(() => {
               <div>
                 <label className="text-xs font-semibold">Nama Barang</label>
                 <input
-                  list="nama-barang-list"
+                  list="nama-barang-brand-list"
+                  className="input"
+                  placeholder={
+                    form.brand ? "Pilih Nama Barang" : "Pilih Brand dulu"
+                  }
+                  disabled={!form.brand}
                   value={form.barang}
                   onChange={(e) => {
                     const val = e.target.value;
-                    const found = namaBarangList.find(
-                      (x) => x.barang.toLowerCase() === val.toLowerCase()
+                    const found = namaBarangByBrand.find(
+                      (x) => x.namaBarang === val
                     );
 
                     setForm({
                       ...form,
                       barang: val,
-                      brand: found?.brand || form.brand,
-                      kategori: found?.kategori || form.kategori,
+                      kategori: found?.kategoriBarang || "",
                     });
                   }}
                 />
 
-                <datalist id="nama-barang-list">
-                  {namaBarangList.map((x, i) => (
-                    <option key={i} value={x.barang} />
+                <datalist id="nama-barang-brand-list">
+                  {namaBarangByBrand.map((x) => (
+                    <option key={x.id} value={x.namaBarang} />
                   ))}
                 </datalist>
               </div>
