@@ -12,6 +12,8 @@ import {
   addLogPembelian,
   listenStockAll,
   listenMasterBarang,
+  listenMasterSupplier,
+  addMasterSupplier,
 } from "../services/FirebaseService";
 
 import * as XLSX from "xlsx";
@@ -112,6 +114,7 @@ export default function MasterPembelian() {
   const [kategoriOptions, setKategoriOptions] = useState([]);
   const [stockSnapshot, setStockSnapshot] = useState({});
   const [masterBarang, setMasterBarang] = useState([]);
+  const [masterSupplier, setMasterSupplier] = useState([]);
 
   const [tambahForm, setTambahForm] = useState({
     tanggal: TODAY,
@@ -133,6 +136,13 @@ export default function MasterPembelian() {
   });
 
   const [editData, setEditData] = useState(null);
+
+  useEffect(() => {
+    const unsub = listenMasterSupplier((rows) => {
+      setMasterSupplier(rows || []);
+    });
+    return () => unsub && unsub();
+  }, []);
 
   useEffect(() => {
     const unsub = listenMasterBarang((rows) => {
@@ -227,22 +237,9 @@ export default function MasterPembelian() {
   const isBandlingItem = selectedMasterBarang?.IS_BANDLING === true;
   const tipeBandling = selectedMasterBarang?.TIPE_BANDLING || "";
 
-  const supplierOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          (allTransaksi || [])
-            .filter(
-              (t) =>
-                (t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
-                t.NAMA_SUPPLIER &&
-                t.NO_INVOICE
-            )
-            .map((t) => t.NAMA_SUPPLIER)
-        )
-      ),
-    [allTransaksi]
-  );
+  const supplierOptions = useMemo(() => {
+    return masterSupplier.map((s) => s.namaSupplier).filter(Boolean);
+  }, [masterSupplier]);
 
   const brandOptions = useMemo(() => {
     return Array.from(
@@ -696,6 +693,22 @@ export default function MasterPembelian() {
     if (!tanggal) return alert("Tanggal wajib diisi.");
     if (!noDo) return alert("No Delivery Order wajib diisi.");
     if (!supplier) return alert("Nama Supplier wajib diisi.");
+    // ===============================
+    // AUTO TAMBAH SUPPLIER KE MASTER
+    // ===============================
+    const supplierExists = masterSupplier.some(
+      (s) =>
+        s.namaSupplier?.toLowerCase().trim() === supplier.toLowerCase().trim()
+    );
+
+    if (!supplierExists) {
+      await addMasterSupplier({
+        namaSupplier: supplier,
+        createdAt: Date.now(),
+        source: "MASTER PEMBELIAN",
+      });
+    }
+
     if (!brand) return alert("Nama Brand wajib diisi.");
     if (!kategoriBrand) return alert("Kategori Brand wajib dipilih.");
     if (!barang) return alert("Nama Barang wajib diisi.");
@@ -1765,11 +1778,10 @@ export default function MasterPembelian() {
                   Harga Supplier
                 </label>
                 <input
-                  type="number"
-                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
-                  value={editData.hargaSup}
+                  list="supplier-list"
+                  value={editData.supplier}
                   onChange={(e) =>
-                    setEditData((p) => ({ ...p, hargaSup: e.target.value }))
+                    setEditData((p) => ({ ...p, supplier: e.target.value }))
                   }
                 />
               </div>
