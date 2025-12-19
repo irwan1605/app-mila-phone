@@ -15,8 +15,14 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import FirebaseService from "../services/FirebaseService";
 import { useLocation } from "react-router-dom";
-import { listenTransferRequests } from "../services/FirebaseService";
-import { FaBell } from "react-icons/fa";
+import {
+  addStock,
+  reduceStock,
+  addTransaksi,
+  listenStockAll,
+} from "../services/FirebaseService";
+
+
 import Logo from "../assets/logoMMT.png";
 
 const TOKO_TUJUAN = [
@@ -54,12 +60,12 @@ const generateNoSuratJalan = () => {
     .padStart(3, "0")}`;
 };
 
-const countAvailableStockByBarang = (stockByToko, namaBarang) => {
-  return Object.values(stockByToko || {}).filter(
-    (s) =>
-      s.status === "AVAILABLE" && String(s.namaBarang) === String(namaBarang)
-  ).length;
-};
+// const countAvailableStockByBarang = (stockByToko, namaBarang) => {
+//   return Object.values(stockByToko || {}).filter(
+//     (s) =>
+//       s.status === "AVAILABLE" && String(s.namaBarang) === String(namaBarang)
+//   ).length;
+// };
 
 export default function TransferBarang() {
   const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "CILANGKAP PUSAT";
@@ -94,6 +100,9 @@ export default function TransferBarang() {
   const normalizeRole = (r) => String(r || "").toUpperCase();
   const [stockRealtime, setStockRealtime] = useState({});
   const [showPreview, setShowPreview] = useState(false);
+  const [stockAll, setStockAll] = useState({});
+  const [inventorySource, setInventorySource] = useState([]);
+
 
   const [selectedSJ, setSelectedSJ] = useState(null);
   const suratJalanRef = useRef(null);
@@ -104,6 +113,39 @@ export default function TransferBarang() {
   // ===================== PAGINATION =====================
   const [page, setPage] = useState(1);
   const PER_PAGE = 10;
+  
+
+  useEffect(() => {
+    const unsub = FirebaseService.listenAllTransaksi((rows) => {
+      setInventorySource(Array.isArray(rows) ? rows : []);
+    });
+    return () => unsub && unsub();
+  }, []);
+  
+
+  useEffect(() => {
+    const unsub = FirebaseService.listenAllTransaksi((rows) => {
+      setInventorySource(Array.isArray(rows) ? rows : []);
+    });
+    return () => unsub && unsub();
+  }, []);
+  
+
+  useEffect(() => {
+    const unsub = listenStockAll((data) => {
+      setStockAll(data || {});
+    });
+    return () => unsub && unsub();
+  }, []);
+
+  useEffect(() => {
+    setForm((f) => ({
+      ...f,
+      imeis: [],
+      qty: 0,
+    }));
+    setImeiInput("");
+  }, [form.dari, form.barang]);
 
   useEffect(() => {
     if (location?.state?.filterStatus) {
@@ -123,12 +165,12 @@ export default function TransferBarang() {
       localStorage.getItem("TOKO_LOGIN");
 
       const me = arr.find(
-        (u) =>
-          String(u.username).toLowerCase() === String(username).toLowerCase()
+        (u) => u.username?.toLowerCase() === username.toLowerCase()
       );
+      
 
       if (me?.role) {
-        setCurrentRole(me.role.toUpperCase()); // ✅ SUPERADMIN REAL
+        setCurrentRole(me.role.toUpperCase());
       } else {
         setCurrentRole("USER");
       }
@@ -165,35 +207,49 @@ export default function TransferBarang() {
     setMasterBarang(Object.values(map));
   }, [allTransaksi]);
 
-  // ===================== SOURCE IMEI =====================
-  const imeiSource = useMemo(() => {
-    const tokoStock = stockRealtime?.[form.dari] || {};
-
-    return Object.values(tokoStock)
-      .filter(
-        (s) =>
-          s.status === "AVAILABLE" &&
-          String(s.toko) === String(form.dari) &&
-          String(s.namaBarang) === String(form.barang)
-      )
-      .map((s) => String(s.imei));
-  }, [stockRealtime, form.dari, form.barang]);
-
   // ===================== ADD IMEI =====================
   const addImei = () => {
-    const im = imeiInput.trim();
+    const im = String(imeiInput || "").trim();
     if (!im) return;
-    if (form.imeis.includes(im)) {
-      alert("❌ IMEI tidak boleh duplikat!");
+
+    // ❌ TIDAK BOLEH IMEI DI LUAR STOK TOKO
+    if (!imeiSource.includes(im)) {
+      alert("❌ IMEI tidak tersedia di stok toko ini");
       return;
     }
+
+    // ❌ DUPLIKAT
+    if (form.imeis.includes(im)) {
+      alert("❌ IMEI sudah dipilih");
+      return;
+    }
+
     setForm((f) => ({
       ...f,
       imeis: [...f.imeis, im],
       qty: f.imeis.length + 1,
     }));
+
     setImeiInput("");
   };
+
+  // ===================== SOURCE IMEI =====================
+  const imeiSource = useMemo(() => {
+    if (!form.tokoPengirim || !form.barang) return [];
+  
+    return inventorySource
+      .filter(
+        (t) =>
+          t.STATUS === "Approved" &&
+          t.IMEI && // hanya yang punya IMEI
+          String(t.NAMA_TOKO).toUpperCase() ===
+            String(form.tokoPengirim).toUpperCase() &&
+          String(t.NAMA_BARANG || "").toUpperCase().trim() ===
+            String(form.barang).toUpperCase().trim()
+      )
+      .map((t) => String(t.IMEI));
+  }, [inventorySource, form.tokoPengirim, form.barang]);
+  
 
   const removeImei = (idx) => {
     const next = [...form.imeis];
@@ -210,6 +266,12 @@ export default function TransferBarang() {
       if (!form.imeis.length) throw new Error("Minimal 1 IMEI!");
 
       const sku = `${form.brand}_${form.barang}`.replace(/\s+/g, "_");
+
+      // 🔒 FINAL CHECK
+      const invalid = form.imeis.some((im) => !imeiSource.includes(im));
+      if (invalid) {
+        throw new Error("Terdapat IMEI yang tidak valid untuk toko ini");
+      }
 
       await FirebaseService.createTransferRequest({
         ...form,
@@ -264,41 +326,80 @@ export default function TransferBarang() {
   // ===================== ✅ APPROVE (SUPERADMIN ONLY) =====================
   const approveTransfer = async (row) => {
     try {
-      const username = localStorage.getItem("USERNAME");
+      // ===============================
+      // 🔧 FIX VARIABEL TIDAK TERDEFINISI
+      // ===============================
+
+      const realFromToko = row.tokoPengirim || row.dari; // ✅ TOKO ASAL REAL
+      const realQty = Array.isArray(row.imeis)
+        ? row.imeis.length
+        : Number(row.qty || 0); // ✅ QTY REAL
+
+      const username =
+        JSON.parse(localStorage.getItem("user") || "{}")?.username ||
+        localStorage.getItem("USERNAME") ||
+        "SYSTEM";
 
       if (currentRole !== "SUPERADMIN") {
-        setNotif("❌ Akses ditolak! Anda bukan SUPERADMIN!");
-        return;
-      }
-
-      // ✅ VALIDASI LANGSUNG KE FIREBASE (BUKAN DARI STATE)
-
-      if (currentRole !== "SUPERADMIN") {
-        setNotif("❌ Akses ditolak! Anda bukan SUPERADMIN!");
+        setNotif("❌ Hanya SUPERADMIN yang boleh approve!");
         return;
       }
 
       if (!row || row.status !== "Pending") {
-        setNotif("⚠️ Transfer ini sudah diproses!");
+        setNotif("⚠️ Transfer sudah diproses!");
         return;
       }
 
-      const realFromToko = row.tokoPengirim || row.dari;
-      const realQty = Array.isArray(row.imeis)
+      const qty = Array.isArray(row.imeis)
         ? row.imeis.length
         : Number(row.qty || 0);
 
-      const availableStock = countAvailableStockByBarang(
-        stockRealtime?.[realFromToko],
-        row.barang
-      );
 
-      if (availableStock < realQty) {
-        setNotif(
-          `❌ Gagal APPROVE: Stok di ${realFromToko} tidak mencukupi! (Stok tersedia: ${availableStock})`
-        );
-        return;
-      }
+      // ===============================
+      // 1️⃣ KURANGI STOK TOKO ASAL
+      // ===============================
+      await reduceStock(realFromToko, row.sku, realQty);
+
+      // ===============================
+      // 2️⃣ TAMBAH STOK TOKO TUJUAN
+      // ===============================
+      await addStock(row.ke, row.sku, {
+        namaBrand: row.brand,
+        namaBarang: row.barang,
+        qty: realQty,
+      });
+
+      // ===============================
+      // 3️⃣ CATAT TRANSAKSI TRANSFER
+      // ===============================
+      await addTransaksi(1, {
+        TANGGAL_TRANSAKSI: row.tanggal,
+        NO_INVOICE: row.noDo,
+        NAMA_TOKO: row.ke,
+        NAMA_BRAND: row.brand,
+        KATEGORI_BRAND: row.kategori,
+        NAMA_BARANG: row.barang,
+        QTY: qty,
+        PAYMENT_METODE: "TRANSFER",
+        STATUS: "Approved",
+        KETERANGAN: `TRANSFER DARI ${row.dari}`,
+      });
+
+      // ===============================
+      // 4️⃣ UPDATE STATUS TRANSFER
+      // ===============================
+      await FirebaseService.pushNotification({
+        message: `Transfer ${row.barang} (${row.qty}) dari ${row.dari} ke ${row.ke} APPROVED`,
+        createdAt: new Date().toISOString(),
+        type: "TRANSFER_APPROVED",
+        toko: row.ke,
+      });
+      
+
+      await FirebaseService.updateTransferRequest(row.id, {
+        status: "Approved",
+        approvedAt: new Date().toISOString(),
+      });
 
       // ✅ PAKAI SKU PERSIS row.sku (tanpa /128GB, biar sama dengan MasterPembelian & StockOpname)
       await FirebaseService.transferStock({
@@ -312,11 +413,7 @@ export default function TransferBarang() {
         performedBy: username,
       });
 
-      await FirebaseService.updateImeiStatus(
-        realFromToko,
-        row.imeis,
-        "TRANSFER_OUT"
-      );
+      await FirebaseService.updateImeiStatus(row.ke, row.imeis, "AVAILABLE");
 
       await FirebaseService.updateImeiStatus(row.ke, row.imeis, "AVAILABLE");
 
@@ -359,7 +456,7 @@ export default function TransferBarang() {
     try {
       const username = localStorage.getItem("USERNAME");
 
-      if (currentRole !== "SUPERADMIN") {
+      if (currentRole !== "superadmin") {
         setNotif("❌ Hanya SUPERADMIN yang boleh menolak transfer!");
         return;
       }
@@ -445,9 +542,9 @@ export default function TransferBarang() {
     win.print();
   };
 
-  const qrValue = selectedSJ
-    ? `${selectedSJ.noSuratJalan}|${selectedSJ.tanggal}|${selectedSJ.dari}|${selectedSJ.ke}|${selectedSJ.barang}|${selectedSJ.qty}`
-    : "";
+  // const qrValue = selectedSJ
+  //   ? `${selectedSJ.noSuratJalan}|${selectedSJ.tanggal}|${selectedSJ.dari}|${selectedSJ.ke}|${selectedSJ.barang}|${selectedSJ.qty}`
+  //   : "";
 
   // ===================== UI =====================
   return (
@@ -501,12 +598,6 @@ export default function TransferBarang() {
             className="input"
             placeholder="Toko Pengirim"
           />
-          <datalist id="toko-list">
-            {TOKO_TUJUAN.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
-
           {/* NAMA PENGIRIM */}
           <input
             list="pengirim-list"
@@ -584,8 +675,14 @@ export default function TransferBarang() {
               list="imei-list"
               value={imeiInput}
               onChange={(e) => setImeiInput(e.target.value)}
-              className="input w-full"
+              className="border p-2 rounded w-full"
+              placeholder="Pilih IMEI"
             />
+            <datalist id="imei-list">
+              {imeiSource.map((i) => (
+                <option key={i} value={i} />
+              ))}
+            </datalist>
             <button
               onClick={addImei}
               className="bg-indigo-600 text-white px-4 rounded-lg"
@@ -593,12 +690,6 @@ export default function TransferBarang() {
               <FaPlus />
             </button>
           </div>
-
-          <datalist id="imei-list">
-            {imeiSource.map((i) => (
-              <option key={i} value={i} />
-            ))}
-          </datalist>
 
           <div className="flex flex-wrap mt-2">
             {form.imeis.map((im, i) => (
@@ -739,7 +830,7 @@ export default function TransferBarang() {
                   colSpan="2"
                   className="border border-black text-center py-4"
                 >
-                 <img src={Logo} alt="LOGO" className="mx-auto h-16" />
+                  <img src={Logo} alt="LOGO" className="mx-auto h-16" />
 
                   <h2 className="font-bold text-xl mt-2">SURAT JALAN</h2>
                 </td>

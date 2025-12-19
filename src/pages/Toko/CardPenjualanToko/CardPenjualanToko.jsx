@@ -490,6 +490,61 @@ export default function CardPenjualanToko() {
     }
   };
 
+  const handleSubmitPenjualan = async () => {
+    try {
+      for (const item of items) {
+        // =========================
+        // 1️⃣ SKU (WAJIB ADA)
+        // =========================
+        const sku = `${item.brand}_${item.barang}`.replace(/\s+/g, "_");
+
+        // =========================
+        // 2️⃣ QTY (IMEI / NON IMEI)
+        // =========================
+        const qty = Array.isArray(item.imeis)
+          ? item.imeis.length
+          : Number(item.qty || 0);
+
+        if (!qty || qty <= 0) {
+          alert("Qty tidak valid");
+          return;
+        }
+
+        // =========================
+        // 3️⃣ KURANGI STOK TOKO
+        // =========================
+        await reduceStock(TOKO_LOGIN, sku, qty);
+
+        // =========================
+        // 4️⃣ PAYLOAD TRANSAKSI
+        // =========================
+        const payload = {
+          TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+          NAMA_TOKO: TOKO_LOGIN,
+          NAMA_BRAND: item.brand,
+          NAMA_BARANG: item.barang,
+          KATEGORI_BRAND: item.kategori,
+          QTY: qty,
+          IMEI: Array.isArray(item.imeis) ? item.imeis.join(", ") : "",
+          PAYMENT_METODE: "PENJUALAN",
+          STATUS: "Approved",
+          TOTAL: Number(item.total || 0),
+          CREATED_AT: Date.now(),
+        };
+
+        // =========================
+        // 5️⃣ SIMPAN TRANSAKSI
+        // =========================
+        await addTransaksi(item.tokoId || 1, payload);
+      }
+
+      alert("✅ Penjualan berhasil, stok & inventory terupdate realtime");
+    } catch (err) {
+      console.error("submit penjualan error:", err);
+      alert("❌ Gagal menyimpan penjualan");
+    }
+  };
+
   // ============================================================
   // PREVIEW HANDLER
   // ============================================================
@@ -530,15 +585,20 @@ export default function CardPenjualanToko() {
     return !snap.exists();
   };
 
+  const TOKO_LOGIN =
+    JSON.parse(localStorage.getItem("user") || "{}")?.namaToko ||
+    localStorage.getItem("TOKO_LOGIN") ||
+    "";
+
   // ============================================================
   // SAVE TRANSAKSI
   // ============================================================
 
   const handleSaveTransaksi = async () => {
     const auditId = `${Date.now()}-${userForm.noFaktur}`;
-  
+
     const finalItems = normalizeItemsBeforeSave(items);
-  
+
     // ===============================
     // 🧾 INIT AUDIT
     // ===============================
@@ -559,37 +619,37 @@ export default function CardPenjualanToko() {
         qty: -(i.qty || 1),
       })),
     });
-  
+
     try {
       // ======================================
       // 🔒 STEP 1: LOCK IMEI
       // ======================================
       for (const item of finalItems) {
         if (!item.imei) continue;
-  
+
         await lockImeiAtomic(item.imei, {
           invoice: userForm.noFaktur,
           toko: tokoName,
         });
       }
-  
+
       await updateAuditLog(auditId, {
         "steps.lockImei": true,
       });
-  
+
       // ======================================
       // 🔒 STEP 2: UPDATE STOK
       // ======================================
       for (const item of finalItems) {
         await updateStockAtomic(tokoName, item.sku, -(item.qty || 1));
       }
-  
+
       await updateAuditLog(auditId, {
         "steps.updateStock": true,
       });
-  
+
       // ======================================
-      // 💾 STEP 3: SIMPAN TRANSAKSI
+      // 💾 STEP 3: SIMPAN TRANSAKSI (FINAL FIX)
       // ======================================
       await addTransaksi({
         invoice: userForm.noFaktur,
@@ -598,19 +658,20 @@ export default function CardPenjualanToko() {
         items: finalItems,
         payment: paymentForm,
         totalBarang: totals.totalAmount,
+        PAYMENT_METODE: "PENJUALAN",
+        STATUS: "Approved",
         createdAt: Date.now(),
       });
-  
+
       await updateAuditLog(auditId, {
         status: "SUCCESS",
         "steps.saveTransaksi": true,
       });
-  
+
       alert("✅ Transaksi berhasil disimpan");
-  
     } catch (err) {
       console.error("ROLLBACK:", err);
-  
+
       // ===============================
       // 🔄 ROLLBACK
       // ===============================
@@ -620,19 +681,15 @@ export default function CardPenjualanToko() {
         }
         await rollbackStock(tokoName, item.sku, item.qty || 1);
       }
-  
+
       await updateAuditLog(auditId, {
         status: "FAILED",
         error: err.message,
       });
-  
+
       alert(`❌ Transaksi dibatalkan & rollback dilakukan`);
     }
   };
-  
-  
-
-  
 
   // ============================================================
   // RENDER START

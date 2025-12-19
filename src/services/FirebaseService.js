@@ -555,19 +555,20 @@ export const getStockForToko = async (tokoName, sku) => {
 };
 
 // Tambah stok (safe transaction)
-export const addStock = (tokoName, sku, payload) => {
-  const r = ref(db, `stock/${tokoName}/${sku}`);
-  return runTransaction(r, (cur) => {
-    const curQty = Number(cur?.qty || 0);
-    return {
-      ...cur,
-      nama: payload.nama || cur?.nama || "",
-      imei: payload.imei || cur?.imei || "",
-      qty: curQty + (payload.qty ? Number(payload.qty) : 0),
-      updatedAt: new Date().toISOString(),
-    };
+export const addStock = async (toko, sku, payload) => {
+  const stockRef = ref(db, `stock/${toko}/${sku}`);
+  const snap = await get(stockRef);
+
+  const currentQty = snap.val()?.qty || 0;
+
+  await set(stockRef, {
+    ...snap.val(),
+    ...payload,
+    qty: currentQty + Number(payload.qty || 0),
+    updatedAt: Date.now(),
   });
 };
+
 
 // Kurangi stok
 // Kurangi stok (mendukung model qty langsung & model varian / child)
@@ -671,6 +672,12 @@ export const transferStock = async ({
 /* ============================================================
    INVENTORY WRAPPER — untuk integrasi DataManagement & Dashboard
 ============================================================ */
+
+export const pushNotification = (notif) => {
+  const id = Date.now();
+  return set(ref(db, `notifications/${id}`), notif);
+};
+
 
 /**
  * Ambil item stok berdasarkan toko + sku

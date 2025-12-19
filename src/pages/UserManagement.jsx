@@ -4,6 +4,7 @@ import {
   listenUsers,
   saveUserOnline,
   deleteUserOnline,
+  listenKaryawan,
 } from "../services/FirebaseService";
 
 export default function UserManagement() {
@@ -23,6 +24,8 @@ export default function UserManagement() {
     name: "",
   });
 
+  const [karyawanList, setKaryawanList] = useState([]);
+
   const [showModal, setShowModal] = useState(false);
   const [editForm, setEditForm] = useState({
     username: "",
@@ -34,6 +37,13 @@ export default function UserManagement() {
 
   // ✅ FIX: TIDAK BOLEH SET localStorage DI SINI
   // ❌ BARIS user.role, user.username, user.toko SUDAH DIHAPUS
+
+  useEffect(() => {
+    const unsub = listenKaryawan((rows) => {
+      setKaryawanList(Array.isArray(rows) ? rows : []);
+    });
+    return () => unsub && unsub();
+  }, []);
 
   useEffect(() => {
     const unsub = listenUsers((list) => {
@@ -71,19 +81,19 @@ export default function UserManagement() {
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const addUser = async () => {
-    if (!form.username || !form.password) {
-      alert("Username & Password wajib diisi.");
+    if (!form.name || !form.username || !form.password) {
+      alert("Nama, Username, dan Password WAJIB diisi");
       return;
     }
-
+  
     if (users.some((u) => u.username === form.username)) {
       alert("Username sudah digunakan.");
       return;
     }
-
+  
     let role = form.role;
     let toko = form.toko || null;
-
+  
     if (role === "pic_toko") {
       if (!toko) {
         alert("Pilih toko untuk PIC Toko.");
@@ -93,27 +103,32 @@ export default function UserManagement() {
     } else {
       toko = null;
     }
-
+  
     const newUser = {
       username: form.username,
       password: form.password,
       role,
       toko,
-      name: form.name || form.username,
+      nik: form.nik,
+      name: form.name,
+      status: "AKTIF",
+      createdAt: new Date().toISOString(),
     };
-
+  
     await saveUserOnline(newUser);
-
+  
     setForm({
       username: "",
       password: "",
       role: "pic_toko",
       toko: "",
       name: "",
+      nik: "",
     });
-
-    alert("User berhasil ditambahkan.");
+  
+    alert("✅ User berhasil ditambahkan & tampil realtime");
   };
+  
 
   const handleDelete = async (username) => {
     if (!window.confirm("Hapus user ini?")) return;
@@ -193,23 +208,39 @@ export default function UserManagement() {
 
       {/* FORM TAMBAH USER */}
       <div className="bg-white shadow rounded p-4 grid md:grid-cols-4 gap-4">
+        {/* NAMA (DARI MASTER KARYAWAN) */}
         <div>
-          <label className="text-xs">Nama Lengkap</label>
-          <input
+          <label className="text-xs">Nama Karyawan</label>
+          <select
             className="border p-2 rounded w-full"
             value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Nama"
-          />
+            onChange={(e) => {
+              const k = karyawanList.find((x) => x.NAMA === e.target.value);
+              setForm({
+                ...form,
+                name: k?.NAMA || "",
+                nik: k?.NIK || "",
+                toko: k?.TOKO_BERTUGAS || "",
+              });
+            }}
+          >
+            <option value="">-- pilih karyawan --</option>
+            {karyawanList.map((k) => (
+              <option key={k.NIK} value={k.NAMA}>
+                {k.NAMA}
+              </option>
+            ))}
+          </select>
         </div>
 
+        {/* USERNAME (WAJIB INPUT MANUAL) */}
         <div>
           <label className="text-xs">Username</label>
           <input
             className="border p-2 rounded w-full"
             value={form.username}
             onChange={(e) => setForm({ ...form, username: e.target.value })}
-            placeholder="username"
+            placeholder="username login"
           />
         </div>
 

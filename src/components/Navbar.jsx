@@ -10,6 +10,8 @@ import {
 } from "../services/FirebaseService";
 import { FaBell } from "react-icons/fa";
 
+
+
 const Navbar = ({ user, onLogout }) => {
   const [showWhatsAppDropdown, setShowWhatsAppDropdown] = useState(false);
   const [firebaseUsers, setFirebaseUsers] = useState([]);
@@ -25,6 +27,8 @@ const Navbar = ({ user, onLogout }) => {
       return null;
     }
   }, [user]);
+
+  
 
   
 
