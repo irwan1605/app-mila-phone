@@ -33,7 +33,8 @@ import {
 
 import {
   listenAllTransaksi,
-  listenStockAll, // ✅ ambil stok MASTER BARANG (CILANGKAP PUSAT)
+  listenStockAll,
+  forceDeleteTransaksi, // ✅ ambil stok MASTER BARANG (CILANGKAP PUSAT)
 } from "../services/FirebaseService";
 
 export default function Dashboard() {
@@ -63,8 +64,47 @@ export default function Dashboard() {
   const [filterToko, setFilterToko] = useState("semua");
   const [filterSales, setFilterSales] = useState("semua");
 
+  const TOKO_LIST = [
+    "CILANGKAP PUSAT",
+    "CIBINONG",
+    "GAS ALAM",
+    "CITEUREUP",
+    "CIRACAS",
+    "METLAND 1",
+    "METLAND 2",
+    "PITARA",
+    "KOTA WISATA",
+    "SAWANGAN",
+  ];
+
   // === SEARCH IMEI ===
   const [searchImei, setSearchImei] = useState("");
+  const [stockData, setStockData] = useState({});
+  const [transaksi, setTransaksi] = useState([]);
+
+  const [stockAll, setStockAll] = useState({});
+
+  useEffect(() => {
+    const unsub = listenStockAll((s = {}) => {
+      setStockAll(s);
+    });
+    return () => unsub && unsub();
+  }, []);
+
+  useEffect(() => {
+    const u1 = listenStockAll((s) => setStockData(s || {}));
+    const u2 = listenAllTransaksi((t) => setTransaksi(t || []));
+
+    return () => {
+      u1 && u1();
+      u2 && u2();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsub = listenStockAll((snap) => setStockData(snap || {}));
+    return () => unsub && unsub();
+  }, []);
 
   // =======================================================
   // LISTEN MASTER STOK (CILANGKAP PUSAT) — MASTER BARANG
@@ -74,6 +114,13 @@ export default function Dashboard() {
       setStokMaster(Array.isArray(listRaw) ? listRaw : []);
     });
     return () => unsub && unsub();
+  }, []);
+
+  useEffect(() => {
+    // 🔥 HAPUS TRANSAKSI LEGACY DARI TOKO 1
+    forceDeleteTransaksi(1, (val) => {
+      return !val.NAMA_TOKO || String(val.NAMA_TOKO).toUpperCase() === "TOKO 1";
+    });
   }, []);
 
   // =======================================================
@@ -134,6 +181,44 @@ export default function Dashboard() {
     return () => unsub && unsub();
   }, []);
 
+    // ==========================
+  // STOCK BY TOKO (SINGLE SOURCE OF TRUTH)
+  // ==========================
+  const stokByToko = useMemo(() => {
+    const map = {};
+
+    TOKO_LIST.forEach((toko) => {
+      map[toko] = { kategori: {}, items: [] };
+    });
+
+    // PUSAT → dari stockData
+    Object.values(stockData["CILANGKAP PUSAT"] || {}).forEach((s) => {
+      const kat = s.kategoriBrand || "LAINNYA";
+      map["CILANGKAP PUSAT"].kategori[kat] =
+        (map["CILANGKAP PUSAT"].kategori[kat] || 0) + Number(s.qty || 0);
+
+      map["CILANGKAP PUSAT"].items.push(s);
+    });
+
+    // TOKO → dari transaksi pembelian
+    transaksi.forEach((t) => {
+      if (t.STATUS !== "Approved" || t.PAYMENT_METODE !== "PEMBELIAN") return;
+
+      const toko = t.NAMA_TOKO;
+      if (!map[toko]) return;
+
+      const kat = t.KATEGORI_BRAND || "LAINNYA";
+      const qty = t.IMEI ? 1 : Number(t.QTY || 0);
+
+      map[toko].kategori[kat] = (map[toko].kategori[kat] || 0) + qty;
+
+      map[toko].items.push(t);
+    });
+
+    return map;
+  }, [transaksi, stockData]);
+  
+
   // =======================================================
   // FILTERING (UNTUK CHART & INFO)
   // =======================================================
@@ -174,36 +259,54 @@ export default function Dashboard() {
     return f;
   }, [dataTransaksi, filterType, filterValue, filterToko, filterSales]);
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const dataHariIni = useMemo(() => {
+    return filteredData.filter(
+      (x) =>
+        x.TANGGAL_TRANSAKSI && x.TANGGAL_TRANSAKSI.slice(0, 10) === todayStr
+    );
+  }, [filteredData]);
+
+  const penjualanHariIni = useMemo(() => {
+    return dataHariIni.filter((x) => x.STATUS === "Approved").length;
+  }, [dataHariIni]);
+
+  const omzetHariIni = useMemo(() => {
+    return dataHariIni
+      .filter((x) => x.STATUS === "Approved")
+      .reduce((a, b) => a + Number(b.TOTAL || 0), 0);
+  }, [dataHariIni]);
+
   // =======================================================
   // METRIK DASHBOARD PUSAT
   // =======================================================
-  const totalOmzet = useMemo(
-    () => filteredData.reduce((a, b) => a + Number(b.TOTAL || 0), 0),
-    [filteredData]
-  );
+  const totalOmzet = useMemo(() => {
+    return filteredData
+      .filter((x) => x.STATUS === "Approved")
+      .reduce((a, b) => a + Number(b.TOTAL || 0), 0);
+  }, [filteredData]);
 
-  const totalStok = useMemo(
-    () => stokMaster.reduce((a, b) => a + Number(b.qty || b.QTY || 0), 0),
-    [stokMaster]
-  );
+  const totalStockSemuaToko = useMemo(() => {
+    return Object.values(stokByToko).reduce((sum, t) => {
+      return sum + Object.values(t.kategori).reduce((s, v) => s + v, 0);
+    }, 0);
+  }, [stokByToko]);
+  
 
-  const totalPenjualan = useMemo(
-    () => filteredData.filter((x) => x.STATUS === "Approved").length,
-    [filteredData]
-  );
+  const totalPenjualan = useMemo(() => {
+    return filteredData.filter((x) => x.STATUS === "Approved").length;
+  }, [filteredData]);
 
-  const totalPending = useMemo(
-    () => filteredData.filter((x) => x.STATUS === "Pending").length,
-    [filteredData]
-  );
+  const totalPending = useMemo(() => {
+    return filteredData.filter((x) => x.STATUS === "Pending").length;
+  }, [filteredData]);
 
-  const totalPiutang = useMemo(
-    () =>
-      filteredData
-        .filter((x) => x.SYSTEM_PAYMENT === "PIUTANG")
-        .reduce((a, b) => a + Number(b.TOTAL || 0), 0),
-    [filteredData]
-  );
+  const totalPiutang = useMemo(() => {
+    return filteredData
+      .filter((x) => x.SYSTEM_PAYMENT === "PIUTANG" && x.STATUS === "Approved")
+      .reduce((a, b) => a + Number(b.TOTAL || 0), 0);
+  }, [filteredData]);
 
   // =======================================================
   // DATA UNTUK CHART
@@ -219,14 +322,28 @@ export default function Dashboard() {
     "#3B82F6",
   ];
 
+  const registeredTokoSet = useMemo(() => {
+    return new Set(
+      tokoList.filter(Boolean).filter((t) => !/^TOKO\s+\d+$/i.test(t))
+    );
+  }, [tokoList]);
+
   const omzetPerToko = useMemo(() => {
     const map = {};
     filteredData.forEach((x) => {
-      const toko = x.NAMA_TOKO || x.TOKO || "UNKNOWN";
+      const toko = x.NAMA_TOKO || x.TOKO;
+
+      if (!toko) return;
+      if (!registeredTokoSet.has(toko)) return;
+
       map[toko] = (map[toko] || 0) + Number(x.TOTAL || 0);
     });
-    return Object.entries(map).map(([toko, omzet]) => ({ toko, omzet }));
-  }, [filteredData]);
+
+    return Object.entries(map).map(([toko, omzet]) => ({
+      toko,
+      omzet,
+    }));
+  }, [filteredData, registeredTokoSet]);
 
   const omzetPerSales = useMemo(() => {
     const map = {};
@@ -293,7 +410,6 @@ export default function Dashboard() {
   const handleOpenStockOpname = () => {
     navigate("/stok-opname");
   };
-  
 
   // =======================================================
   // UI DASHBOARD PUSAT (TANPA TABLE)
@@ -346,7 +462,9 @@ export default function Dashboard() {
           <p className="text-xs opacity-90 mt-1">
             Audit dan penyesuaian stok barang secara realtime dari gudang pusat.
           </p>
-          <p className="text-xl font-bold">{totalStok}</p>
+          <p className="text-xl font-bold">
+            {totalStockSemuaToko.toLocaleString("id-ID")} Unit
+          </p>
         </div>
 
         <div
@@ -369,24 +487,33 @@ export default function Dashboard() {
             <span className="text-xs text-slate-500">Informasi Keuangan</span>
           </div>
           <div className="text-lg font-bold text-slate-800">
-            Rp {totalOmzet.toLocaleString("id-ID")}
+            Rp {omzetHariIni.toLocaleString("id-ID")}
           </div>
           <span className="text-[11px] text-slate-500">
-            Total omzet berdasarkan transaksi yang difilter.
+            Omzet transaksi APPROVED hari ini.
           </span>
         </div>
 
         <div className="bg-white rounded-2xl shadow p-4 flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <FaBoxes className="text-blue-600" />
-            <span className="text-xs text-slate-500">Jumlah Stock</span>
+          <div
+            onClick={() => navigate("/inventory-report")}
+            className="bg-white rounded-2xl shadow p-4 flex flex-col gap-1 cursor-pointer hover:bg-blue-50"
+          >
+            <div className="flex items-center gap-2">
+              <FaBoxes className="text-blue-600" />
+              <span className="text-xs text-slate-500">
+                TOTAL STOCK SEMUA TOKO
+              </span>
+            </div>
+
+            <div className="text-lg font-bold text-slate-800">
+              {totalStockSemuaToko.toLocaleString("id-ID")} Unit
+            </div>
+
+            <span className="text-[11px] text-slate-500">
+              Klik untuk lihat Inventory Report — PRO MAX
+            </span>
           </div>
-          <div className="text-lg font-bold text-slate-800">
-            {totalStok} Unit
-          </div>
-          <span className="text-[11px] text-slate-500">
-            Total stok MASTER BARANG CILANGKAP PUSAT.
-          </span>
         </div>
 
         <div className="bg-white rounded-2xl shadow p-4 flex flex-col gap-1">
@@ -395,10 +522,10 @@ export default function Dashboard() {
             <span className="text-xs text-slate-500">Informasi Penjualan</span>
           </div>
           <div className="text-lg font-bold text-slate-800">
-            {totalPenjualan} Approved
+            {penjualanHariIni} Approved
           </div>
           <span className="text-[11px] text-slate-500">
-            Jumlah transaksi dengan status APPROVED.
+            Transaksi APPROVED hari ini.
           </span>
         </div>
 
