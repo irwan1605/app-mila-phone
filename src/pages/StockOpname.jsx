@@ -660,6 +660,74 @@ export default function StockOpname() {
     }
   };
 
+  // ===================== AKSI TABLE (SUPERADMIN ONLY) =====================
+
+  // SIMPAN → APPROVED
+  const handleSimpanOpname = async (row) => {
+    if (!isSuperAdmin) return;
+
+    try {
+      const tokoIndex = fallbackTokoNames.findIndex(
+        (t) =>
+          String(t).toUpperCase() === String(row.NAMA_TOKO || "").toUpperCase()
+      );
+      const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
+
+      await updateTransaksi(tokoId, row.id, {
+        ...row,
+        STATUS: "Approved",
+        KETERANGAN:
+          (row.KETERANGAN ? row.KETERANGAN + " | " : "") +
+          "Disetujui oleh SuperAdmin (Stock Opname)",
+      });
+
+      // update lokal → realtime UI
+      setAllTransaksi((prev) =>
+        prev.map((x) => (x.id === row.id ? { ...x, STATUS: "Approved" } : x))
+      );
+    } catch (err) {
+      console.error("Simpan opname error:", err);
+      alert("Gagal menyimpan opname");
+    }
+  };
+
+  // EDIT → masuk ke form atas
+  const handleEditOpname = (row) => {
+    if (!isSuperAdmin) return;
+    setForm({ ...row });
+    setEditId(row.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // REJECK → STATUS REJECTED
+  const handleRejectOpname = async (row) => {
+    if (!isSuperAdmin) return;
+    if (!window.confirm("Yakin REJECK hasil stok opname ini?")) return;
+
+    try {
+      const tokoIndex = fallbackTokoNames.findIndex(
+        (t) =>
+          String(t).toUpperCase() === String(row.NAMA_TOKO || "").toUpperCase()
+      );
+      const tokoId = tokoIndex >= 0 ? tokoIndex + 1 : 1;
+
+      await updateTransaksi(tokoId, row.id, {
+        ...row,
+        STATUS: "Rejected",
+        KETERANGAN:
+          (row.KETERANGAN ? row.KETERANGAN + " | " : "") +
+          "Ditolak oleh SuperAdmin (Stock Opname)",
+      });
+
+      setAllTransaksi((prev) =>
+        prev.map((x) => (x.id === row.id ? { ...x, STATUS: "Rejected" } : x))
+      );
+    } catch (err) {
+      console.error("Reject opname error:", err);
+      alert("Gagal reject opname");
+    }
+  };
+
   const handleApproval = async (row, status) => {
     try {
       const tokoIndex = fallbackTokoNames.findIndex(
@@ -1245,41 +1313,42 @@ export default function StockOpname() {
                       >
                         {selisih === "" ? "-" : selisih}
                       </td>
-                      <td className="p-2 border text-center space-x-2">
+                      <td className="p-2 border text-center space-x-1">
                         {isSuperAdmin && (
-                          <button
-                            className="text-blue-600 hover:text-blue-800 inline-flex"
-                            onClick={() => openEditSku(key)}
-                            title="Edit SKU / Harga"
-                          >
-                            <FaEdit />
-                          </button>
+                          <>
+                            {/* SIMPAN */}
+                            <button
+                              onClick={() => handleSimpanOpname(sample)}
+                              className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                              title="Simpan / Approve"
+                            >
+                              <FaSave />
+                            </button>
+
+                            {/* EDIT */}
+                            <button
+                              onClick={() => handleEditOpname(sample)}
+                              className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                              title="Edit"
+                            >
+                              <FaEdit />
+                            </button>
+
+                            {/* REJECK */}
+                            <button
+                              onClick={() => handleRejectOpname(sample)}
+                              className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                              title="Reject"
+                            >
+                              <FaTimes />
+                            </button>
+                          </>
                         )}
 
-                        {isSuperAdmin && (
-                          <button
-                            className="text-red-600 hover:text-red-800 inline-flex"
-                            onClick={() => deleteSku(key)}
-                            title="Hapus SKU"
-                          >
-                            <FaTrash />
-                          </button>
-                        )}
-
-                        {isSuperAdmin && (
-                          <button
-                            onClick={() =>
-                              saveOpnameFor({
-                                ...ag,
-                                NOMOR_UNIK: key,
-                                QTY: ag.totalQty,
-                              })
-                            }
-                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs inline-flex items-center hover:bg-blue-700 transition"
-                            title="Simpan hasil stok opname"
-                          >
-                            <FaSave className="mr-1" /> Simpan
-                          </button>
+                        {!isSuperAdmin && (
+                          <span className="text-gray-400 text-xs italic">
+                            Tidak ada akses
+                          </span>
                         )}
                       </td>
                     </tr>
