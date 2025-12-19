@@ -4,13 +4,18 @@ import { useNavigate } from "react-router-dom";
 import "./Navbar.css";
 import { LogOut, UserCircle } from "lucide-react";
 
-import { listenUsers } from "../services/FirebaseService";
+import {
+  listenUsers,
+  listenTransferRequests,
+} from "../services/FirebaseService";
+import { FaBell } from "react-icons/fa";
 
 const Navbar = ({ user, onLogout }) => {
   const [showWhatsAppDropdown, setShowWhatsAppDropdown] = useState(false);
   const [firebaseUsers, setFirebaseUsers] = useState([]);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const [notifTransfer, setNotifTransfer] = useState([]);
 
   // ✅ SAFE USER DARI LOCALSTORAGE
   const activeUser = useMemo(() => {
@@ -20,6 +25,24 @@ const Navbar = ({ user, onLogout }) => {
       return null;
     }
   }, [user]);
+
+  
+
+  useEffect(() => {
+    if (notifTransfer.length > 0) {
+      console.log("🔔 Ada transfer menunggu approval");
+    }
+  }, [notifTransfer]);
+  
+
+  useEffect(() => {
+    const unsub = listenTransferRequests((list) => {
+      const pending = (list || []).filter((t) => t.status === "Pending");
+      setNotifTransfer(pending);
+    });
+
+    return () => unsub && unsub();
+  }, []);
 
   // ✅ AMBIL DATA USER DARI FIREBASE
   useEffect(() => {
@@ -83,6 +106,32 @@ const Navbar = ({ user, onLogout }) => {
       <h1 className="text-xl md:text-2xl font-bold tracking-wide">
         Monitoring & Report Management — MILA PHONE
       </h1>
+
+      <div
+  className="relative flex items-center gap-3 cursor-pointer"
+  onClick={() =>
+    navigate("/transfer-barang", {
+      state: { filterStatus: "Pending" },
+    })
+  }
+>
+  {/* ICON */}
+  <FaBell className="text-xl text-white hover:scale-110 transition" />
+
+  {/* BADGE */}
+  {notifTransfer.length > 0 && (
+    <span
+      className="
+        absolute -top-2 -right-2 
+        bg-red-600 text-white text-xs 
+        rounded-full px-2 py-0.5
+        animate-pulse
+      "
+    >
+      {notifTransfer.length}
+    </span>
+  )}
+   </div>
 
       <div className="flex items-center gap-4" ref={dropdownRef}>
         {/* ✅ ✅ ✅ USER ICON + NAMA USER */}

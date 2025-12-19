@@ -466,7 +466,12 @@ export default function DashboardToko(props) {
     if (type === "penjualan") {
       navigate(`/toko/${tokoSlug}/penjualan`);
     } else if (type === "stock") {
-      navigate(`/toko/${tokoSlug}/stock-opname`);
+      navigate("/stok-opname", {
+        state: {
+          lockedToko: toko.tokoName, // 🔒 kunci toko
+        },
+      });
+      
     } else if (type === "transfer") {
       navigate("/transfer-barang");
     }

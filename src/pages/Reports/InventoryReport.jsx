@@ -8,6 +8,7 @@ import {
   listenStockAll,
   listenMasterBarang,
   updateTransaksi,
+  listenTransferRequests,
 } from "../../services/FirebaseService";
 import {
   FaSearch,
@@ -18,6 +19,7 @@ import {
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
+
 
 // =======================
 // LIST TOKO
@@ -56,6 +58,7 @@ const rupiah = (n) =>
     currency: "IDR",
     minimumFractionDigits: 0,
   });
+  
 
 // ======================================================================
 // COMPONENT UTAMA
@@ -71,10 +74,66 @@ export default function InventoryReport() {
   const [selectedToko, setSelectedToko] = useState(null);
   const [search, setSearch] = useState("");
   const tableRef = useRef(null);
+  const [transferData, setTransferData] = useState([]);
+  const [masterBarangMap, setMasterBarangMap] = useState({});
 
   // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 25;
+
+  useEffect(() => {
+    const unsub = listenTransferRequests((list) => {
+      setTransferData(list || []);
+    });
+    return () => unsub && unsub();
+  }, []);
+  useEffect(() => {
+    const unsub = listenMasterBarang((rows) => {
+      const map = {};
+  
+      (rows || []).forEach((b) => {
+        const brand = String(
+          b.namaBrand || b.NAMA_BRAND || ""
+        )
+          .trim()
+          .replace(/\s+/g, " ")
+          .toUpperCase();
+  
+        const barang = String(
+          b.namaBarang || b.NAMA_BARANG || ""
+        )
+          .trim()
+          .replace(/\s+/g, " ")
+          .toUpperCase();
+  
+        if (!brand || !barang) return;
+  
+        const key = `${brand}|${barang}`;
+  
+        map[key] = {
+          // ===== HARGA =====
+          hargaSRP: Number(b.hargaSRP ?? b.HARGA_SRP ?? 0),
+          hargaGrosir: Number(b.hargaGrosir ?? b.HARGA_GROSIR ?? 0),
+          hargaReseller: Number(b.hargaReseller ?? b.HARGA_RESELLER ?? 0),
+  
+          // ===== BUNDLING =====
+          band1: b.NAMA_BANDLING_1 || "",
+          hband1: Number(b.HARGA_BANDLING_1 || 0),
+  
+          band2: b.NAMA_BANDLING_2 || "",
+          hband2: Number(b.HARGA_BANDLING_2 || 0),
+  
+          band3: b.NAMA_BANDLING_3 || "",
+          hband3: Number(b.HARGA_BANDLING_3 || 0),
+        };
+      });
+  
+      setMasterBarangMap(map);
+    });
+  
+    return () => unsub && unsub();
+  }, []);
+  
 
   // ==========================
   // AUTO SCROLL SAAT CARD DI KLIK
@@ -102,13 +161,14 @@ export default function InventoryReport() {
   useEffect(() => {
     const u1 = listenStockAll((s) => setStockData(s || {}));
     const u2 = listenAllTransaksi((t) => setTransaksi(t || []));
-    const u3 = listenMasterBarang(() => {});
+
     return () => {
       u1 && u1();
       u2 && u2();
-      u3 && u3();
     };
   }, []);
+
+  
 
   // ==========================
   // STOCK BY TOKO (SINGLE SOURCE OF TRUTH)
@@ -147,6 +207,8 @@ export default function InventoryReport() {
     return map;
   }, [transaksi, stockData]);
 
+
+
   // ==========================
   // TOTAL SEMUA TOKO
   // ==========================
@@ -163,15 +225,41 @@ export default function InventoryReport() {
     const pusat = stockData["CILANGKAP PUSAT"] || {};
     return Object.values(pusat).reduce((s, i) => s + Number(i.qty || 0), 0);
   }, [stockData]);
+  
 
   // ==========================
   // MASTER DATA PEMBELIAN (SINGLE SOURCE OF TRUTH)
   // ==========================
   const pembelianApproved = useMemo(() => {
     return transaksi.filter(
-      (t) => t.STATUS === "Approved" && t.PAYMENT_METODE === "PEMBELIAN"
+      (t) =>
+        t.STATUS === "Approved" &&
+        t.PAYMENT_METODE === "PEMBELIAN"
     );
   }, [transaksi]);
+
+  const transferMap = useMemo(() => {
+    const map = {};
+
+    transferData.forEach((t) => {
+      if (t.status !== "Approved") return;
+
+      const qty = Array.isArray(t.imeis) ? t.imeis.length : Number(t.qty || 0);
+      const key = `${t.brand}|${t.barang}`;
+
+      // OUT
+      if (!map[t.dari]) map[t.dari] = {};
+      map[t.dari][key] = (map[t.dari][key] || 0) - qty;
+
+      // IN
+      if (!map[t.ke]) map[t.ke] = {};
+      map[t.ke][key] = (map[t.ke][key] || 0) + qty;
+    });
+
+    return map;
+  }, [transferData]);
+
+
 
   // ==========================
   // DETAIL TABLE
@@ -180,55 +268,103 @@ export default function InventoryReport() {
   // DETAIL TABLE = MASTER PEMBELIAN
   // ==========================
   // ==========================
-// DETAIL TABLE (NORMALIZED DARI MASTER PEMBELIAN)
-// ==========================
-const detailTable = useMemo(() => {
-  if (!selectedToko) return [];
+  // DETAIL TABLE (NORMALIZED DARI MASTER PEMBELIAN)
+  // ==========================
 
-  return pembelianApproved
-    .filter((t) => t.NAMA_TOKO === selectedToko)
-    .map((t) => {
-      const qty = t.IMEI ? 1 : Number(t.QTY || 0);
-      const harga = Number(t.HARGA_SUPLAYER || 0);
-
-      return {
-        id: t.id,
-        tokoId: t.tokoId,
-
-        tanggal: t.TANGGAL_TRANSAKSI || "-",
-        noDo: t.NO_INVOICE || "-",
-        supplier: t.NAMA_SUPPLIER || "-",
-
-        brand: t.NAMA_BRAND || "-",
-        barang: t.NAMA_BARANG || "-",
-        imei: t.IMEI || "-",
-
-        qty,
-        hargaSRP: harga,
-        totalSRP: harga * qty,
-
-        hargaGrosir: 0,
-        totalGrosir: 0,
-        hargaReseller: 0,
-        totalReseller: 0,
-
-        band1: t.NAMA_BANDLING_1 || "-",
-        hband1: Number(t.HARGA_BANDLING_1 || 0),
-        totalBand1: qty * Number(t.HARGA_BANDLING_1 || 0),
-
-        band2: t.NAMA_BANDLING_2 || "-",
-        hband2: Number(t.HARGA_BANDLING_2 || 0),
-        totalBand2: qty * Number(t.HARGA_BANDLING_2 || 0),
-
-        band3: t.NAMA_BANDLING_3 || "-",
-        hband3: Number(t.HARGA_BANDLING_3 || 0),
-        totalBand3: qty * Number(t.HARGA_BANDLING_3 || 0),
-
-        transferIn: "-",
-        transferOut: "-",
-      };
-    });
-}, [selectedToko, pembelianApproved]);
+  const detailTable = useMemo(() => {
+    if (!selectedToko) return [];
+  
+    return pembelianApproved
+      .filter((t) => t.NAMA_TOKO === selectedToko)
+      .map((t) => {
+        const qty = t.IMEI ? 1 : Number(t.QTY || 0);
+  
+        const brand = String(
+          t.NAMA_BRAND || t.namaBrand || "-"
+        )
+          .trim()
+          .replace(/\s+/g, " ")
+          .toUpperCase();
+  
+        const barang = String(
+          t.NAMA_BARANG || t.namaBarang || "-"
+        )
+          .trim()
+          .replace(/\s+/g, " ")
+          .toUpperCase();
+  
+        const key = `${brand}|${barang}`;
+        const master = masterBarangMap[key] || {};
+  
+        // ===== HARGA (MASTER → TRANSAKSI → 0) =====
+        const hargaSRP =
+          master.hargaSRP || Number(t.HARGA_SRP) || 0;
+  
+        const hargaGrosir =
+          master.hargaGrosir || Number(t.HARGA_GROSIR) || 0;
+  
+        const hargaReseller =
+          master.hargaReseller || Number(t.HARGA_RESELLER) || 0;
+  
+        // ===== BUNDLING (MASTER → TRANSAKSI) =====
+        const band1 = master.band1 || t.NAMA_BANDLING_1 || "-";
+        const hband1 =
+          master.hband1 || Number(t.HARGA_BANDLING_1 || 0);
+  
+        const band2 = master.band2 || t.NAMA_BANDLING_2 || "-";
+        const hband2 =
+          master.hband2 || Number(t.HARGA_BANDLING_2 || 0);
+  
+        const band3 = master.band3 || t.NAMA_BANDLING_3 || "-";
+        const hband3 =
+          master.hband3 || Number(t.HARGA_BANDLING_3 || 0);
+  
+        return {
+          id: t.id,
+          tokoId: t.tokoId,
+  
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
+          noDo: t.NO_INVOICE || "-",
+          supplier: t.NAMA_SUPPLIER || "-",
+  
+          brand,
+          barang,
+          imei: t.IMEI || "-",
+          qty,
+  
+          // ===== HARGA =====
+          hargaSRP,
+          totalSRP: hargaSRP * qty,
+  
+          hargaGrosir,
+          totalGrosir: hargaGrosir * qty,
+  
+          hargaReseller,
+          totalReseller: hargaReseller * qty,
+  
+          // ===== BUNDLING =====
+          band1,
+          hband1,
+          totalBand1: hband1 * qty,
+  
+          band2,
+          hband2,
+          totalBand2: hband2 * qty,
+  
+          band3,
+          hband3,
+          totalBand3: hband3 * qty,
+  
+          transferIn: 0,
+          transferOut: 0,
+        };
+      });
+  }, [selectedToko, pembelianApproved, masterBarangMap]);
+  
+  
+  
+  
+  
 
   // ======================================================================
   // PAGINATION

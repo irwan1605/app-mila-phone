@@ -8,12 +8,13 @@ import {
   listenStockAll,
   addStock,
   reduceStock,
-  listenMasterBarangHarga ,
+  listenMasterBarangHarga,
 } from "../services/FirebaseService";
 import StockBarang from "../data/StockBarang"; // pastikan path sesuai project
 import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { useLocation } from "react-router-dom";
 
 import {
   FaPlus,
@@ -40,8 +41,6 @@ import {
   - VOID mengembalikan stok ke CILANGKAP PUSAT
   - Draft form disimpan ke localStorage agar tidak hilang saat pindah halaman/refresh
 */
-
-
 
 const fallbackTokoNames = [
   "CILANGKAP PUSAT",
@@ -90,33 +89,50 @@ export default function StockOpname() {
   const isSuperAdmin =
     loggedUser?.role === "superadmin" || loggedUser?.level === "superadmin";
 
+  const location = useLocation();
+
+  // 🔒 toko dikunci dari Dashboard Toko
+  const lockedTokoFromNav = location?.state?.lockedToko || null;
+
+  // 🔑 toko login final (1 sumber kebenaran)
+  const tokoLogin =
+    lockedTokoFromNav ||
+    loggedUser?.toko ||
+    localStorage.getItem("TOKO_LOGIN") ||
+    null;
+
   const myTokoId = loggedUser?.toko;
   const [masterHargaMap, setMasterHargaMap] = useState({});
 
   useEffect(() => {
+    if (!isSuperAdmin && tokoLogin) {
+      setFilterToko(tokoLogin); // 🔒 kunci filter
+    }
+  }, [isSuperAdmin, tokoLogin]);
+
+  useEffect(() => {
     if (typeof listenMasterBarangHarga !== "function") return;
-  
+
     const unsub = listenMasterBarangHarga((rows = []) => {
       const map = {};
       rows.forEach((r) => {
         const key =
           (r.NOMOR_UNIK && String(r.NOMOR_UNIK).trim()) ||
           `${r.NAMA_BRAND}|${r.NAMA_BARANG}`;
-  
+
         map[key] = {
-          hargaSRP:
-            Number(r.HARGA_SRP || r.SRP || r.HARGA_UNIT || r.HARGA || 0),
+          hargaSRP: Number(
+            r.HARGA_SRP || r.SRP || r.HARGA_UNIT || r.HARGA || 0
+          ),
         };
       });
       setMasterHargaMap(map);
     });
     console.log("USER LOGIN:", loggedUser);
     console.log("IS superadmin:", isSuperAdmin);
-    
+
     return () => unsub && unsub();
   }, []);
-  
-
 
   // ===================== LOAD DRAFT FORM DARI LOCALSTORAGE =====================
   useEffect(() => {
@@ -378,34 +394,22 @@ export default function StockOpname() {
 
   // ===================== Derivasi: options toko, filter, pagination =====================
   const tokoOptions = useMemo(() => {
-    // NAMA TOKO dari transaksi
+    // 🔒 USER TOKO → hanya 1 toko
+    if (!isSuperAdmin && tokoLogin) {
+      return [tokoLogin];
+    }
+
+    // 👑 SUPERADMIN → semua toko
     const fromTransaksi = [
-      ...new Set(
-        (allTransaksi || [])
-          .map((r) => r.NAMA_TOKO)
-          .filter(Boolean)
-          .map((t) => String(t))
-      ),
+      ...new Set((allTransaksi || []).map((r) => r.NAMA_TOKO).filter(Boolean)),
     ];
 
-    // NAMA TOKO dari stockRealtime (Master Barang)
     const fromStock = Object.keys(stockRealtime || {});
 
-    // gabung + fallback list
-    const merged = Array.from(
+    return Array.from(
       new Set([...fromTransaksi, ...fromStock, ...fallbackTokoNames])
     );
-
-    // pastikan CILANGKAP PUSAT jadi toko pusat (di urutan pertama)
-    merged.sort((a, b) => {
-      if (!myTokoId) return;
-      if (a === "CILANGKAP PUSAT") return -1;
-      if (b === "CILANGKAP PUSAT") return 1;
-      return String(a).localeCompare(String(b));
-    });
-
-    return merged;
-  }, [allTransaksi, stockRealtime]);
+  }, [isSuperAdmin, tokoLogin, allTransaksi, stockRealtime]);
 
   const filteredRows = useMemo(() => {
     return allTransaksi.filter((r) => {
@@ -500,11 +504,10 @@ export default function StockOpname() {
     const tokoName = form.NAMA_TOKO || "CILANGKAP PUSAT";
     const qty = Number(form.QTY || 0);
     const hargaUnit =
-    masterHargaMap[form.NOMOR_UNIK]?.hargaSRP ??
-    masterHargaMap[`${form.NAMA_BRAND}|${form.NAMA_BARANG}`]?.hargaSRP ??
-    Number(form.hargaSRP || 0);
-  
-  
+      masterHargaMap[form.NOMOR_UNIK]?.hargaSRP ??
+      masterHargaMap[`${form.NAMA_BRAND}|${form.NAMA_BARANG}`]?.hargaSRP ??
+      Number(form.hargaSRP || 0);
+
     if (!myTokoId) return;
     if (!tanggal || !brand || !barang || !tokoName) {
       alert("Isi minimal: Tanggal, Toko, Nama Brand, Nama Barang");
@@ -753,31 +756,30 @@ export default function StockOpname() {
     }
 
     const srp =
-    masterHargaMap[key]?.hargaSRP ??
-    masterHargaMap[`${record.brand}|${record.barang}`]?.hargaSRP ??
-    0;
-  
-  const payload = {
-    TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
-    NO_INVOICE: `OPN-${Date.now()}`,
-    NAMA_USER: "SYSTEM OPNAME",
-    NAMA_TOKO: "CILANGKAP PUSAT",
-    NAMA_BRAND: record.NAMA_BRAND || record.brand || "",
-    NAMA_BARANG: record.NAMA_BARANG || record.barang || "",
-    QTY: Math.abs(selisih),
-    NOMOR_UNIK: record.NOMOR_UNIK || key,
-    hargaSRP: srp,
-    HARGA: srp,
-    TOTAL: Math.abs(selisih) * srp,
-    PAYMENT_METODE: "STOK OPNAME",
-    SYSTEM_PAYMENT: "SYSTEM",
-    KETERANGAN:
-      selisih > 0
-        ? "Opname: Adjustment (Tambah)"
-        : "Opname: Adjustment (Kurang)",
-    STATUS: "Approved",
-  };
-  
+      masterHargaMap[key]?.hargaSRP ??
+      masterHargaMap[`${record.brand}|${record.barang}`]?.hargaSRP ??
+      0;
+
+    const payload = {
+      TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+      NO_INVOICE: `OPN-${Date.now()}`,
+      NAMA_USER: "SYSTEM OPNAME",
+      NAMA_TOKO: "CILANGKAP PUSAT",
+      NAMA_BRAND: record.NAMA_BRAND || record.brand || "",
+      NAMA_BARANG: record.NAMA_BARANG || record.barang || "",
+      QTY: Math.abs(selisih),
+      NOMOR_UNIK: record.NOMOR_UNIK || key,
+      hargaSRP: srp,
+      HARGA: srp,
+      TOTAL: Math.abs(selisih) * srp,
+      PAYMENT_METODE: "STOK OPNAME",
+      SYSTEM_PAYMENT: "SYSTEM",
+      KETERANGAN:
+        selisih > 0
+          ? "Opname: Adjustment (Tambah)"
+          : "Opname: Adjustment (Kurang)",
+      STATUS: "Approved",
+    };
 
     try {
       const tokoId =
@@ -1087,16 +1089,17 @@ export default function StockOpname() {
 
         <select
           value={filterToko}
-          onChange={(e) => {
-            setFilterToko(e.target.value);
-            setCurrentPage(1);
-          }}
-          className="p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+          onChange={(e) => setFilterToko(e.target.value)}
+          disabled={!isSuperAdmin} // 🔒 user toko tidak bisa ganti
+          className={`px-2 py-1 rounded border ${
+            !isSuperAdmin ? "bg-gray-100 cursor-not-allowed" : ""
+          }`}
         >
-          <option value="semua">Semua Toko</option>
-          {tokoOptions.map((t) => (
-            <option key={t} value={t}>
-              {t}
+          {isSuperAdmin && <option value="semua">SEMUA TOKO</option>}
+
+          {tokoOptions.map((toko) => (
+            <option key={toko} value={toko}>
+              {toko}
             </option>
           ))}
         </select>
@@ -1202,7 +1205,6 @@ export default function StockOpname() {
                     masterHargaMap[`${ag.brand}|${ag.barang}`]?.hargaSRP ??
                     sample?.hargaSRP ??
                     0;
-                  
 
                   return (
                     <tr key={key} className="hover:bg-gray-50">

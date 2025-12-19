@@ -290,6 +290,11 @@ export default function Dashboard() {
     );
   };
 
+  const handleOpenStockOpname = () => {
+    navigate("/stok-opname");
+  };
+  
+
   // =======================================================
   // UI DASHBOARD PUSAT (TANPA TABLE)
   // =======================================================
@@ -333,7 +338,7 @@ export default function Dashboard() {
         </div>
 
         <div
-          onClick={() => navigate("/toko/cilangkap-pusat/stock-opname")}
+          onClick={handleOpenStockOpname}
           className="cursor-pointer bg-gradient-to-br from-emerald-500 to-emerald-700 text-white p-5 rounded-2xl shadow hover:scale-[1.02] transition transform"
         >
           <FaClipboardList size={28} />
@@ -341,6 +346,7 @@ export default function Dashboard() {
           <p className="text-xs opacity-90 mt-1">
             Audit dan penyesuaian stok barang secara realtime dari gudang pusat.
           </p>
+          <p className="text-xl font-bold">{totalStok}</p>
         </div>
 
         <div

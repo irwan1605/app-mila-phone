@@ -15,6 +15,9 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import FirebaseService from "../services/FirebaseService";
 import { useLocation } from "react-router-dom";
+import { listenTransferRequests } from "../services/FirebaseService";
+import { FaBell } from "react-icons/fa";
+import Logo from "../assets/logoMMT.png";
 
 const TOKO_TUJUAN = [
   "CILANGKAP PUSAT",
@@ -51,6 +54,13 @@ const generateNoSuratJalan = () => {
     .padStart(3, "0")}`;
 };
 
+const countAvailableStockByBarang = (stockByToko, namaBarang) => {
+  return Object.values(stockByToko || {}).filter(
+    (s) =>
+      s.status === "AVAILABLE" && String(s.namaBarang) === String(namaBarang)
+  ).length;
+};
+
 export default function TransferBarang() {
   const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "CILANGKAP PUSAT";
 
@@ -83,6 +93,7 @@ export default function TransferBarang() {
   const [allTransaksi, setAllTransaksi] = useState([]);
   const normalizeRole = (r) => String(r || "").toUpperCase();
   const [stockRealtime, setStockRealtime] = useState({});
+  const [showPreview, setShowPreview] = useState(false);
 
   const [selectedSJ, setSelectedSJ] = useState(null);
   const suratJalanRef = useRef(null);
@@ -95,6 +106,13 @@ export default function TransferBarang() {
   const PER_PAGE = 10;
 
   useEffect(() => {
+    if (location?.state?.filterStatus) {
+      setFilterStatus(location.state.filterStatus);
+      setPage(1);
+    }
+  }, [location]);
+
+  useEffect(() => {
     const unsubUsers = FirebaseService.listenUsers((list) => {
       const arr = Array.isArray(list) ? list : [];
       setUsers(arr);
@@ -102,8 +120,7 @@ export default function TransferBarang() {
       // ✅ JANGAN PERCAYA ROLE DARI LOCALSTORAGE
       const localUser = JSON.parse(localStorage.getItem("user") || "{}");
       const username = localUser.username || "";
-      localStorage.getItem("TOKO_LOGIN")
-
+      localStorage.getItem("TOKO_LOGIN");
 
       const me = arr.find(
         (u) =>
@@ -150,17 +167,17 @@ export default function TransferBarang() {
 
   // ===================== SOURCE IMEI =====================
   const imeiSource = useMemo(() => {
-    const fromTransaksi = (allTransaksi || [])
-      .filter((t) => String(t.NAMA_BARANG) === String(form.barang))
-      .map((t) => String(t.IMEI || "").trim())
-      .filter(Boolean);
+    const tokoStock = stockRealtime?.[form.dari] || {};
 
-    const fromStock = Object.values(stockRealtime?.[form.dari] || {}).map((v) =>
-      String(v.imei || "").trim()
-    );
-
-    return Array.from(new Set([...fromTransaksi, ...fromStock]));
-  }, [allTransaksi, stockRealtime, form.barang, form.dari]);
+    return Object.values(tokoStock)
+      .filter(
+        (s) =>
+          s.status === "AVAILABLE" &&
+          String(s.toko) === String(form.dari) &&
+          String(s.namaBarang) === String(form.barang)
+      )
+      .map((s) => String(s.imei));
+  }, [stockRealtime, form.dari, form.barang]);
 
   // ===================== ADD IMEI =====================
   const addImei = () => {
@@ -271,26 +288,14 @@ export default function TransferBarang() {
         ? row.imeis.length
         : Number(row.qty || 0);
 
-      const realSKU = row.sku; // ✅ JANGAN DITAMBAH 128GB
-
-      const realStock = Number(
-        stockRealtime?.[realFromToko]?.[row.sku]?.qty || 0
-      );
-      
-      if (realStock < realQty) {
-        setNotif(
-          `❌ Gagal APPROVE: Stok di ${realFromToko} tidak mencukupi! (Stok tersedia: ${realStock})`
-        );
-        return;
-      }
-      const totalStock = await FirebaseService.getStockTotalBySKU(
-        realFromToko,
-        row.sku
+      const availableStock = countAvailableStockByBarang(
+        stockRealtime?.[realFromToko],
+        row.barang
       );
 
-      if (Number(totalStock) < Number(realQty)) {
+      if (availableStock < realQty) {
         setNotif(
-          `❌ Gagal APPROVE: Stok di ${realFromToko} tidak mencukupi! (Stok tersedia: ${totalStock})`
+          `❌ Gagal APPROVE: Stok di ${realFromToko} tidak mencukupi! (Stok tersedia: ${availableStock})`
         );
         return;
       }
@@ -306,6 +311,14 @@ export default function TransferBarang() {
         keterangan: `SJ:${row.noSuratJalan}`,
         performedBy: username,
       });
+
+      await FirebaseService.updateImeiStatus(
+        realFromToko,
+        row.imeis,
+        "TRANSFER_OUT"
+      );
+
+      await FirebaseService.updateImeiStatus(row.ke, row.imeis, "AVAILABLE");
 
       // ✅ CATAT PEMBELIAN JIKA MASUK PUSAT
       if (row.ke === "CILANGKAP PUSAT") {
@@ -637,6 +650,16 @@ export default function TransferBarang() {
         <button onClick={printSuratJalan} className="btn-indigo" type="button">
           <FaPrint /> Print
         </button>
+        <button
+          onClick={() => {
+            if (!selectedSJ) return alert("Pilih Surat Jalan dulu!");
+            setShowPreview(true);
+          }}
+          className="btn-indigo"
+          type="button"
+        >
+          👁️ Preview
+        </button>
       </div>
 
       {notif && (
@@ -703,22 +726,77 @@ export default function TransferBarang() {
       </div>
 
       {/* ================= SURAT JALAN ================= */}
-      {selectedSJ && (
-        <div ref={suratJalanRef} className="bg-white p-4 rounded shadow mt-4">
-          <h3 className="font-bold">SURAT JALAN</h3>
-          <p>No SJ: {selectedSJ.noSuratJalan}</p>
-          <p>Dari: {selectedSJ.tokoPengirim}</p>
-          <p>Ke: {selectedSJ.ke}</p>
-          <p>Barang: {selectedSJ.barang}</p>
-          <p>Qty: {selectedSJ.qty}</p>
+      {selectedSJ && showPreview && (
+        <div
+          ref={suratJalanRef}
+          className="bg-white p-6 rounded shadow mt-6 text-sm"
+          style={{ width: "210mm" }}
+        >
+          <table className="w-full border border-black">
+            <tbody>
+              <tr>
+                <td
+                  colSpan="2"
+                  className="border border-black text-center py-4"
+                >
+                 <img src={Logo} alt="LOGO" className="mx-auto h-16" />
 
-          <img
-            className="mt-4"
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-              qrValue
-            )}`}
-            alt="QR"
-          />
+                  <h2 className="font-bold text-xl mt-2">SURAT JALAN</h2>
+                </td>
+              </tr>
+
+              <tr>
+                <td className="border border-black p-2 w-1/3">
+                  Nomor Surat Jalan
+                </td>
+                <td className="border border-black p-2">
+                  {selectedSJ.noSuratJalan}
+                </td>
+              </tr>
+
+              <tr>
+                <td className="border border-black p-2">Nama Pengirim</td>
+                <td className="border border-black p-2">
+                  {selectedSJ.pengirim}
+                </td>
+              </tr>
+
+              <tr>
+                <td className="border border-black p-2">Dari</td>
+                <td className="border border-black p-2">
+                  {selectedSJ.tokoPengirim || selectedSJ.dari}
+                </td>
+              </tr>
+
+              <tr>
+                <td className="border border-black p-2">Ke</td>
+                <td className="border border-black p-2">{selectedSJ.ke}</td>
+              </tr>
+
+              <tr>
+                <td className="border border-black p-2">Nama Barang</td>
+                <td className="border border-black p-2">{selectedSJ.barang}</td>
+              </tr>
+
+              <tr>
+                <td className="border border-black p-2">QTY</td>
+                <td className="border border-black p-2">{selectedSJ.qty}</td>
+              </tr>
+
+              <tr>
+                <td className="border border-black p-2">IMEI</td>
+                <td className="border border-black p-2">
+                  {(selectedSJ.imeis || []).join(", ")}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <button
+            onClick={() => setShowPreview(false)}
+            className="mt-4 btn-red"
+          >
+            Tutup
+          </button>
         </div>
       )}
     </div>
