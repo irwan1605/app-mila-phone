@@ -120,20 +120,20 @@ export default function MasterPembelian() {
 
   const masterBarangMap = useMemo(() => {
     const map = {};
-
+  
     (allTransaksi || []).forEach((t) => {
+      // 🔒 HANYA PEMBELIAN NYATA
       if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return;
+      if (t.STATUS !== "Approved") return;
       if (!t.NAMA_BRAND || !t.NAMA_BARANG) return;
-
+  
       const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-
-      // ambil 1 data master saja (jangan overwrite)
+  
       if (!map[key]) {
         map[key] = {
           hargaSRP: Number(t.HARGA_SRP || t.HARGA_UNIT || 0),
           hargaGrosir: Number(t.HARGA_GROSIR || 0),
           hargaReseller: Number(t.HARGA_RESELLER || 0),
-
           isBundling: Boolean(t.IS_BUNDLING),
           bundlingItems: Array.isArray(t.BUNDLING_ITEMS)
             ? t.BUNDLING_ITEMS
@@ -141,9 +141,10 @@ export default function MasterPembelian() {
         };
       }
     });
-
+  
     return map;
   }, [allTransaksi]);
+  
 
   const [tambahForm, setTambahForm] = useState({
     tanggal: TODAY,
@@ -408,11 +409,11 @@ export default function MasterPembelian() {
           kategoriBrand: t.KATEGORI_BRAND,
 
           // 🔥 AUTO DARI MASTER BARANG
-          hargaSRP: masterRef.hargaSRP ?? 0,
-          hargaGrosir: masterRef.hargaGrosir ?? 0,
-          hargaReseller: masterRef.hargaReseller ?? 0,
-          isBundling: masterRef.isBundling ?? false,
-          bundlingItems: masterRef.bundlingItems ?? [],
+          hargaSRP: masterRef ? masterRef.hargaSRP : 0,
+          hargaGrosir: masterRef ? masterRef.hargaGrosir : 0,
+          hargaReseller: masterRef ? masterRef.hargaReseller : 0,
+          isBundling: masterRef ? masterRef.isBundling : false,
+          bundlingItems: masterRef ? masterRef.bundlingItems : [],
 
           // PEMBELIAN
           hargaSup: Number(t.HARGA_SUPLAYER || 0),
@@ -1203,10 +1204,10 @@ export default function MasterPembelian() {
                   <th className="border p-2">Kategori Brand</th>
                   <th className="border p-2">Nama Barang</th>
                   <th className="border p-2">IMEI / No Mesin</th>
-                  <th className="border p-2 text-right">Harga SRP</th>
+                  {/* <th className="border p-2 text-right">Harga SRP</th>
                   <th className="border p-2 text-right">Harga Grosir</th>
-                  <th className="border p-2 text-right">Harga Reseller</th>
-                  <th className="border p-2">Barang Bundling</th>
+                  <th className="border p-2 text-right">Harga Reseller</th> */}
+                  {/* <th className="border p-2">Barang Bundling</th> */}
 
                   <th className="border p-2 text-right">
                     Harga Supplier (Satuan)
@@ -1258,7 +1259,7 @@ export default function MasterPembelian() {
                           {shownImeis.length ? shownImeis.join("\n") : "-"}
                         </td>
 
-                        <td className="border p-2 text-right">
+                        {/* <td className="border p-2 text-right">
                           Rp {fmt(item.hargaSRP)}
                         </td>
 
@@ -1268,9 +1269,9 @@ export default function MasterPembelian() {
 
                         <td className="border p-2 text-right">
                           Rp {fmt(item.hargaReseller)}
-                        </td>
+                        </td> */}
 
-                        <td className="border p-2">
+                        {/* <td className="border p-2">
                           {!item.isBundling ||
                           item.bundlingItems.length === 0 ? (
                             <span className="text-slate-400 italic">—</span>
@@ -1289,7 +1290,7 @@ export default function MasterPembelian() {
                               ))}
                             </div>
                           )}
-                        </td>
+                        </td> */}
 
                         {/* === HARGA SUPPLIER === */}
                         <td className="border p-2 text-right">
@@ -1796,15 +1797,18 @@ export default function MasterPembelian() {
 
               {/* Harga Supplier */}
               <div>
-                <label className="text-xs font-semibold text-slate-600">
-                  Harga Supplier
-                </label>
+                <label className="text-xs font-semibold">Harga Supplier</label>
                 <input
-                  list="supplier-list"
-                  value={editData.supplier}
+                  type="number"
+                  className="input"
+                  value={editData?.hargaSup || ""}
                   onChange={(e) =>
-                    setEditData((p) => ({ ...p, supplier: e.target.value }))
+                    setEditData((prev) => ({
+                      ...prev,
+                      hargaSup: Number(e.target.value || 0),
+                    }))
                   }
+                  placeholder="Harga Supplier"
                 />
               </div>
 
