@@ -224,6 +224,7 @@ export default function MasterBarang() {
   // ================== REKAP MASTER BARANG ==================
   const rekapMasterBarang = useMemo(() => {
     const map = {};
+
     allTransaksi.forEach((t) => {
       const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
       if (!map[key]) {
@@ -233,21 +234,19 @@ export default function MasterBarang() {
           brand: t.NAMA_BRAND,
           kategori: t.KATEGORI_BRAND,
           barang: t.NAMA_BARANG,
+
           hargaSRP: Number(t.HARGA_SRP || t.HARGA_UNIT || 0),
           hargaGrosir: Number(t.HARGA_GROSIR || 0),
           hargaReseller: Number(t.HARGA_RESELLER || 0),
 
-          IS_BANDLING: t.IS_BANDLING || false,
-          TIPE_BANDLING: t.TIPE_BANDLING || "",
-          NAMA_BANDLING_1: t.NAMA_BANDLING_1 || "",
-          HARGA_BANDLING_1: Number(t.HARGA_BANDLING_1 || 0),
-          NAMA_BANDLING_2: t.NAMA_BANDLING_2 || "",
-          HARGA_BANDLING_2: Number(t.HARGA_BANDLING_2 || 0),
-          NAMA_BANDLING_3: t.NAMA_BANDLING_3 || "",
-          HARGA_BANDLING_3: Number(t.HARGA_BANDLING_3 || 0),
+          IS_BUNDLING: Boolean(t.IS_BUNDLING),
+          BUNDLING_ITEMS: Array.isArray(t.BUNDLING_ITEMS)
+            ? t.BUNDLING_ITEMS
+            : [],
         };
       }
     });
+
     return Object.values(map);
   }, [allTransaksi]);
 
@@ -352,6 +351,16 @@ export default function MasterBarang() {
       HARGA_GROSIR: form.isBandling ? 0 : Number(form.hargaGrosir || 0),
       HARGA_RESELLER: form.isBandling ? 0 : Number(form.hargaReseller || 0),
 
+      NAMA_BANDLING_1: form.namaBandling1 || "",
+      HARGA_BANDLING_1: Number(form.hargaBandling1 || 0),
+
+      NAMA_BANDLING_2: form.namaBandling2 || "",
+      HARGA_BANDLING_2: Number(form.hargaBandling2 || 0),
+
+      NAMA_BANDLING_3: form.namaBandling3 || "",
+      HARGA_BANDLING_3: Number(form.hargaBandling3 || 0),
+
+      // ✅ FIX BUNDLING
       IS_BUNDLING: !!form.isBundling,
       BUNDLING_ITEMS: form.isBundling ? form.bundlingItems : [],
 
@@ -443,6 +452,11 @@ export default function MasterBarang() {
 
         NAMA_BANDLING_3: editData.NAMA_BANDLING_3 || "",
         HARGA_BANDLING_3: Number(editData.HARGA_BANDLING_3 || 0),
+
+        IS_BUNDLING: Boolean(editData.IS_BUNDLING),
+        BUNDLING_ITEMS: Array.isArray(editData.BUNDLING_ITEMS)
+          ? editData.BUNDLING_ITEMS
+          : [],
       });
     }
 
@@ -517,11 +531,7 @@ export default function MasterBarang() {
                 <th className="p-2 border text-right">Harga SRP</th>
                 <th className="p-2 border text-right">Harga Grosir</th>
                 <th className="p-2 border text-right">Harga Reseller</th>
-                <th className="p-2 border">Nama Bandling 1</th>
-                <th className="p-2 border">Harga 1</th>
-                <th className="p-2 border">Nama Bandling 2</th>
-                <th className="p-2 border">Harga 2</th>
-                <th className="p-2 border">Nama Bandling 3</th>
+                <th className="p-2 border">Barang Bundling</th>
                 <th className="p-2 border">Harga 3</th>
 
                 <th className="p-2 border">Aksi</th>
@@ -546,19 +556,24 @@ export default function MasterBarang() {
                   <td className="border p-2 text-right">
                     Rp {fmt(x.hargaReseller)}
                   </td>
-                  <td className="border p-2">{x.NAMA_BANDLING_1}</td>
-                  <td className="border p-2 text-right">
-                    Rp {fmt(x.HARGA_BANDLING_1)}
-                  </td>
-
-                  <td className="border p-2">{x.NAMA_BANDLING_2}</td>
-                  <td className="border p-2 text-right">
-                    Rp {fmt(x.HARGA_BANDLING_2)}
-                  </td>
-
-                  <td className="border p-2">{x.NAMA_BANDLING_3}</td>
-                  <td className="border p-2 text-right">
-                    Rp {fmt(x.HARGA_BANDLING_3)}
+                  <td className="border p-2">
+                    {x.BUNDLING_ITEMS.length === 0 ? (
+                      <span className="text-slate-400 italic">—</span>
+                    ) : (
+                      <div className="space-y-1">
+                        {x.BUNDLING_ITEMS.map((b, i) => (
+                          <div
+                            key={i}
+                            className="flex justify-between gap-2 text-xs bg-slate-100 px-2 py-1 rounded"
+                          >
+                            <span>{b.namaBarang}</span>
+                            <span className="font-semibold">
+                              Rp {fmt(b.harga)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </td>
 
                   <td className="border p-2 text-center space-x-2">
