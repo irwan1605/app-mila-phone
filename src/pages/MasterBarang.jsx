@@ -373,7 +373,24 @@ export default function MasterBarang() {
       QTY: 1,
       PAYMENT_METODE: "PEMBELIAN",
       STATUS: "Approved",
+      CREATED_AT: Date.now(),
     };
+
+    // ⬇️ SIMPAN KE FIREBASE
+    await addTransaksi(1, payload);
+
+     // ⬇️ RESET FORM (PENTING)
+     setForm({
+      tanggal: new Date().toISOString().slice(0, 10),
+      kategori: "",
+      brand: "",
+      barang: "",
+      hargaSRP: "",
+      hargaGrosir: "",
+      hargaReseller: "",
+      isBundling: false,
+      bundlingItems: [],
+    });
 
     const totalAfter = masterBarang.length + 1;
     const lastPage = Math.ceil(totalAfter / itemsPerPage);
