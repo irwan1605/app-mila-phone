@@ -224,9 +224,13 @@ export default function MasterBarang() {
   // ================== REKAP MASTER BARANG ==================
   const rekapMasterBarang = useMemo(() => {
     const map = {};
-
+  
     allTransaksi.forEach((t) => {
+      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return;
+      if (!t.NAMA_BRAND || !t.NAMA_BARANG) return;
+  
       const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+  
       if (!map[key]) {
         map[key] = {
           key,
@@ -234,21 +238,23 @@ export default function MasterBarang() {
           brand: t.NAMA_BRAND,
           kategori: t.KATEGORI_BRAND,
           barang: t.NAMA_BARANG,
-
+  
           hargaSRP: Number(t.HARGA_SRP || t.HARGA_UNIT || 0),
           hargaGrosir: Number(t.HARGA_GROSIR || 0),
           hargaReseller: Number(t.HARGA_RESELLER || 0),
-
-          IS_BUNDLING: Boolean(t.IS_BUNDLING),
-          BUNDLING_ITEMS: Array.isArray(t.BUNDLING_ITEMS)
+  
+          // 🔥 FIX BUNDLING (SUMBER TUNGGAL)
+          isBundling: Boolean(t.IS_BUNDLING),
+          bundlingItems: Array.isArray(t.BUNDLING_ITEMS)
             ? t.BUNDLING_ITEMS
             : [],
         };
       }
     });
-
+  
     return Object.values(map);
   }, [allTransaksi]);
+  
 
   const filtered = useMemo(() => {
     if (!search) return rekapMasterBarang;
@@ -532,7 +538,6 @@ export default function MasterBarang() {
                 <th className="p-2 border text-right">Harga Grosir</th>
                 <th className="p-2 border text-right">Harga Reseller</th>
                 <th className="p-2 border">Barang Bundling</th>
-                <th className="p-2 border">Harga 3</th>
 
                 <th className="p-2 border">Aksi</th>
               </tr>
@@ -556,25 +561,26 @@ export default function MasterBarang() {
                   <td className="border p-2 text-right">
                     Rp {fmt(x.hargaReseller)}
                   </td>
-                  <td className="border p-2">
-                    {x.BUNDLING_ITEMS.length === 0 ? (
-                      <span className="text-slate-400 italic">—</span>
-                    ) : (
-                      <div className="space-y-1">
-                        {x.BUNDLING_ITEMS.map((b, i) => (
-                          <div
-                            key={i}
-                            className="flex justify-between gap-2 text-xs bg-slate-100 px-2 py-1 rounded"
-                          >
-                            <span>{b.namaBarang}</span>
-                            <span className="font-semibold">
-                              Rp {fmt(b.harga)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </td>
+                 <td className="border p-2">
+  {!x.isBundling || x.bundlingItems.length === 0 ? (
+    <span className="text-slate-400 italic">—</span>
+  ) : (
+    <div className="space-y-1">
+      {x.bundlingItems.map((b, i) => (
+        <div
+          key={i}
+          className="flex justify-between gap-2 text-xs bg-slate-100 px-2 py-1 rounded"
+        >
+          <span>{b.namaBarang}</span>
+          <span className="font-semibold">
+            Rp {fmt(b.harga)}
+          </span>
+        </div>
+      ))}
+    </div>
+  )}
+</td>
+
 
                   <td className="border p-2 text-center space-x-2">
                     <button
@@ -930,7 +936,7 @@ export default function MasterBarang() {
                 </div>
 
                 {/* Bandling edit — rapi di baris/kolom */}
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="text-xs text-slate-500">
                       Nama Bandling 1
@@ -1020,7 +1026,7 @@ export default function MasterBarang() {
                       }
                     />
                   </div>
-                </div>
+                </div> */}
 
                 <div className="flex justify-end gap-3 mt-6">
                   <button

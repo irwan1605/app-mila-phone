@@ -117,7 +117,33 @@ export default function MasterPembelian() {
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterSupplier, setMasterSupplier] = useState([]);
   const [masterBundling, setMasterBundling] = useState([]);
-  
+
+  const masterBarangMap = useMemo(() => {
+    const map = {};
+
+    (allTransaksi || []).forEach((t) => {
+      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return;
+      if (!t.NAMA_BRAND || !t.NAMA_BARANG) return;
+
+      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+      // ambil 1 data master saja (jangan overwrite)
+      if (!map[key]) {
+        map[key] = {
+          hargaSRP: Number(t.HARGA_SRP || t.HARGA_UNIT || 0),
+          hargaGrosir: Number(t.HARGA_GROSIR || 0),
+          hargaReseller: Number(t.HARGA_RESELLER || 0),
+
+          isBundling: Boolean(t.IS_BUNDLING),
+          bundlingItems: Array.isArray(t.BUNDLING_ITEMS)
+            ? t.BUNDLING_ITEMS
+            : [],
+        };
+      }
+    });
+
+    return map;
+  }, [allTransaksi]);
 
   const [tambahForm, setTambahForm] = useState({
     tanggal: TODAY,
@@ -253,9 +279,9 @@ export default function MasterPembelian() {
     const map = {};
     (allTransaksi || []).forEach((t) => {
       if (!t.NAMA_BRAND || !t.NAMA_BARANG) return;
-      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-      if (!map[key]) {
-        map[key] = {
+      const keyGroup = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+      if (!map[keyGroup]) {
+        map[keyGroup] = {
           brand: t.NAMA_BRAND,
           barang: t.NAMA_BARANG,
           kategoriBrand: t.KATEGORI_BRAND || "",
@@ -356,46 +382,40 @@ export default function MasterPembelian() {
   //   );
   // }, [masterBarangList, tambahForm.brand]);
 
-  
-
   const groupedPembelian = useMemo(() => {
     const map = {};
 
     (allTransaksi || []).forEach((t) => {
-      if (
-        (t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN" ||
-        !t.NAMA_SUPPLIER ||
-        !t.NO_INVOICE
-      )
-        return;
+      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return;
 
-      const tanggal = t.TANGGAL_TRANSAKSI || "";
-      const noDo = t.NO_INVOICE || "";
-      const supplier = t.NAMA_SUPPLIER || "";
-      const namaToko = t.NAMA_TOKO || "";
       const brand = t.NAMA_BRAND || "";
       const barang = t.NAMA_BARANG || "";
-      const kategoriBrand = t.KATEGORI_BRAND || "";
 
-      const key = `${tanggal}|${noDo}|${supplier}|${namaToko}`;
+      const keyGroup = `${t.TANGGAL_TRANSAKSI}|${t.NO_INVOICE}|${brand}|${barang}`;
 
-      if (!map[key]) {
-        map[key] = {
-          key,
-          tanggal,
-          noDo,
-          supplier,
-          namaToko,
+      // 🔗 JOIN KE MASTER BARANG (REALTIME)
+      const masterKey = `${brand}|${barang}`;
+      const masterRef = masterBarangMap[masterKey] || {};
+
+      if (!map[keyGroup]) {
+        map[keyGroup] = {
+          tanggal: t.TANGGAL_TRANSAKSI,
+          noDo: t.NO_INVOICE,
+          supplier: t.NAMA_SUPPLIER,
+          namaToko: t.NAMA_TOKO,
           brand,
           barang,
-          kategoriBrand,
+          kategoriBrand: t.KATEGORI_BRAND,
+
+          // 🔥 AUTO DARI MASTER BARANG
+          hargaSRP: masterRef.hargaSRP ?? 0,
+          hargaGrosir: masterRef.hargaGrosir ?? 0,
+          hargaReseller: masterRef.hargaReseller ?? 0,
+          isBundling: masterRef.isBundling ?? false,
+          bundlingItems: masterRef.bundlingItems ?? [],
+
+          // PEMBELIAN
           hargaSup: Number(t.HARGA_SUPLAYER || 0),
-          namaBandling1: t.NAMA_BANDLING_1 || "",
-          hargaBandling1: Number(t.HARGA_BANDLING_1 || 0),
-          namaBandling2: t.NAMA_BANDLING_2 || "",
-          hargaBandling2: Number(t.HARGA_BANDLING_2 || 0),
-          namaBandling3: t.NAMA_BANDLING_3 || "",
-          hargaBandling3: Number(t.HARGA_BANDLING_3 || 0),
           imeis: [],
           totalQty: 0,
           totalHargaSup: 0,
@@ -403,23 +423,18 @@ export default function MasterPembelian() {
       }
 
       const qty = Number(t.QTY || 0);
-      const hSup = Number(t.HARGA_SUPLAYER || 0);
+      map[keyGroup].totalQty += qty;
+      map[keyGroup].totalHargaSup += qty * Number(t.HARGA_SUPLAYER || 0);
 
-      map[key].totalQty += qty;
-      map[key].totalHargaSup += qty * hSup;
-      map[key].hargaSup = hSup;
-
-      if (t.IMEI && String(t.IMEI).trim() !== "") {
-        map[key].imeis.push(String(t.IMEI).trim());
+      if (t.IMEI) {
+        map[keyGroup].imeis.push(String(t.IMEI));
       }
     });
 
-    return Object.values(map).sort((a, b) => {
-      const ta = new Date(a.tanggal || 0).getTime();
-      const tb = new Date(b.tanggal || 0).getTime();
-      return tb - ta;
-    });
-  }, [allTransaksi]);
+    return Object.values(map).sort(
+      (a, b) => new Date(b.tanggal) - new Date(a.tanggal)
+    );
+  }, [allTransaksi, masterBarangMap]);
 
   const filteredPurchases = useMemo(() => {
     const q = String(search || "").toLowerCase();
@@ -539,7 +554,7 @@ export default function MasterPembelian() {
       return;
     }
 
-    const key = `${item.tanggal || ""}|${item.noDo || ""}|${
+    const keyGroup = `${item.tanggal || ""}|${item.noDo || ""}|${
       item.supplier || ""
     }|${item.brand || ""}|${item.barang || ""}`;
 
@@ -548,7 +563,7 @@ export default function MasterPembelian() {
       const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
         t.NAMA_SUPPLIER || ""
       }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
-      return k === key;
+      return k === keyGroup;
     });
 
     try {
@@ -727,16 +742,18 @@ export default function MasterPembelian() {
     setShowEdit(false);
   };
 
-  const handleTambahChange = (key, value) => {
+  const handleTambahChange = (keyGroup, value) => {
     setTambahForm((prev) => {
-      const next = { ...prev, [key]: value };
+      const next = { ...prev, [keyGroup]: value };
 
       const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(
-        key === "kategoriBrand" ? value : prev.kategoriBrand
+        keyGroup === "kategoriBrand" ? value : prev.kategoriBrand
       );
 
-      if (key === "imeiList" || key === "kategoriBrand") {
-        const imeis = String(key === "imeiList" ? value : prev.imeiList || "")
+      if (keyGroup === "imeiList" || keyGroup === "kategoriBrand") {
+        const imeis = String(
+          keyGroup === "imeiList" ? value : prev.imeiList || ""
+        )
           .split("\n")
           .map((x) => x.trim())
           .filter(Boolean);
@@ -978,7 +995,6 @@ export default function MasterPembelian() {
   };
 
   const groupedPurchases = groupedPembelian;
-  
 
   // ------------------------
   // exportExcel (FINAL FIX)
@@ -1187,12 +1203,10 @@ export default function MasterPembelian() {
                   <th className="border p-2">Kategori Brand</th>
                   <th className="border p-2">Nama Barang</th>
                   <th className="border p-2">IMEI / No Mesin</th>
-                  <th className="border p-2">Bandling 1</th>
-                  <th className="border p-2">Harga</th>
-                  <th className="border p-2">Bandling 2</th>
-                  <th className="border p-2">Harga</th>
-                  <th className="border p-2">Bandling 3</th>
-                  <th className="border p-2">Harga</th>
+                  <th className="border p-2 text-right">Harga SRP</th>
+                  <th className="border p-2 text-right">Harga Grosir</th>
+                  <th className="border p-2 text-right">Harga Reseller</th>
+                  <th className="border p-2">Barang Bundling</th>
 
                   <th className="border p-2 text-right">
                     Harga Supplier (Satuan)
@@ -1244,28 +1258,37 @@ export default function MasterPembelian() {
                           {shownImeis.length ? shownImeis.join("\n") : "-"}
                         </td>
 
-                        {/* === BANDLING 1 === */}
-                        <td className="border p-2">
-                          {item.namaBandling1 || "-"}
-                        </td>
                         <td className="border p-2 text-right">
-                          {fmt(item.hargaBandling1 || 0)}
+                          Rp {fmt(item.hargaSRP)}
                         </td>
 
-                        {/* === BANDLING 2 === */}
-                        <td className="border p-2">
-                          {item.namaBandling2 || "-"}
-                        </td>
                         <td className="border p-2 text-right">
-                          {fmt(item.hargaBandling2 || 0)}
+                          Rp {fmt(item.hargaGrosir)}
                         </td>
 
-                        {/* === BANDLING 3 === */}
-                        <td className="border p-2">
-                          {item.namaBandling3 || "-"}
-                        </td>
                         <td className="border p-2 text-right">
-                          {fmt(item.hargaBandling3 || 0)}
+                          Rp {fmt(item.hargaReseller)}
+                        </td>
+
+                        <td className="border p-2">
+                          {!item.isBundling ||
+                          item.bundlingItems.length === 0 ? (
+                            <span className="text-slate-400 italic">—</span>
+                          ) : (
+                            <div className="space-y-1">
+                              {item.bundlingItems.map((b, i) => (
+                                <div
+                                  key={i}
+                                  className="flex justify-between text-xs bg-slate-100 px-2 py-1 rounded"
+                                >
+                                  <span>{b.namaBarang}</span>
+                                  <span className="font-semibold">
+                                    Rp {fmt(b.harga)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </td>
 
                         {/* === HARGA SUPPLIER === */}
