@@ -5,7 +5,6 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 
 import {
   listenAllTransaksi,
-  listenStockAll,
   listenMasterBarang,
   updateTransaksi,
   listenTransferRequests,
@@ -19,6 +18,40 @@ import {
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
+// ===================================================
+// 🔑 FINAL HELPER — REALTIME INVENTORY IMEI (NO HOOK)
+// ===================================================
+import { get, ref } from "firebase/database";
+import { db } from "../../firebase/FirebaseInit";
+
+export const getAvailableImeisFromInventoryReport = async (
+  toko,
+  namaBarang
+) => {
+  if (!toko || !namaBarang) return [];
+
+  const snap = await get(ref(db, "inventory"));
+  if (!snap.exists()) return [];
+
+  const result = [];
+
+  snap.forEach((child) => {
+    const row = child.val();
+
+    if (
+      String(row.toko || row.NAMA_TOKO).toUpperCase() ===
+        String(toko).toUpperCase() &&
+      String(row.namaBarang || row.NAMA_BARANG) === String(namaBarang) &&
+      String(row.status || row.STATUS) === "AVAILABLE" &&
+      row.imei
+    ) {
+      result.push(String(row.imei));
+    }
+  });
+
+  return result;
+};
+
 
 // =======================
 // LIST TOKO
@@ -57,6 +90,7 @@ const rupiah = (n) =>
     currency: "IDR",
     minimumFractionDigits: 0,
   });
+  
 
 // ======================================================================
 // COMPONENT UTAMA
@@ -140,24 +174,23 @@ export default function InventoryReport() {
     }
   }, [selectedToko]);
 
-  // ==========================
-  // LISTENER REALTIME: STOK
-  // ==========================
+  /* ================= LISTENER ================= */
   useEffect(() => {
-    const unsub = listenStockAll((snap) => setStockData(snap || {}));
-    return () => unsub && unsub();
-  }, []);
-
-  // ==========================
-  // REALTIME LISTENER
-  // ==========================
-  useEffect(() => {
-    const u1 = listenStockAll((s) => setStockData(s || {}));
-    const u2 = listenAllTransaksi((t) => setTransaksi(t || []));
+    const u1 = listenAllTransaksi(setTransaksi);
+    const u2 = listenTransferRequests(setTransferData);
+    const u3 = listenMasterBarang((rows) => {
+      const map = {};
+      (rows || []).forEach((b) => {
+        const key = `${b.NAMA_BRAND}|${b.NAMA_BARANG}`;
+        map[key] = b;
+      });
+      setMasterBarangMap(map);
+    });
 
     return () => {
       u1 && u1();
       u2 && u2();
+      u3 && u3();
     };
   }, []);
 
@@ -167,6 +200,8 @@ export default function InventoryReport() {
     }
   }, [selectedToko]);
 
+
+  
   // ==========================
   // STOCK BY TOKO (SINGLE SOURCE OF TRUTH)
   // ==========================
@@ -205,6 +240,8 @@ export default function InventoryReport() {
     return map;
   }, [transaksi, stockData]);
 
+  
+
   // ==========================
   // TOTAL SEMUA TOKO
   // ==========================
@@ -217,10 +254,10 @@ export default function InventoryReport() {
   // ==========================
   // STOCK PUSAT (FIX)
   // ==========================
-  const stockPembelianPusat = useMemo(() => {
-    const pusat = stockData["CILANGKAP PUSAT"] || {};
-    return Object.values(pusat).reduce((s, i) => s + Number(i.qty || 0), 0);
-  }, [stockData]);
+  // const stockPembelianPusat = useMemo(() => {
+  //   const pusat = stockData["CILANGKAP PUSAT"] || {};
+  //   return Object.values(pusat).reduce((s, i) => s + Number(i.qty || 0), 0);
+  // }, [stockData]);
 
   // ==========================
   // MASTER DATA PEMBELIAN (SINGLE SOURCE OF TRUTH)
@@ -231,26 +268,26 @@ export default function InventoryReport() {
     );
   }, [transaksi]);
 
-  const transferMap = useMemo(() => {
-    const map = {};
+  // const transferMap = useMemo(() => {
+  //   const map = {};
 
-    transferData.forEach((t) => {
-      if (t.status !== "Approved") return;
+  //   transferData.forEach((t) => {
+  //     if (t.status !== "Approved") return;
 
-      const qty = Array.isArray(t.imeis) ? t.imeis.length : Number(t.qty || 0);
-      const key = `${t.brand}|${t.barang}`;
+  //     const qty = Array.isArray(t.imeis) ? t.imeis.length : Number(t.qty || 0);
+  //     const key = `${t.brand}|${t.barang}`;
 
-      // OUT
-      if (!map[t.dari]) map[t.dari] = {};
-      map[t.dari][key] = (map[t.dari][key] || 0) - qty;
+  //     // OUT
+  //     if (!map[t.dari]) map[t.dari] = {};
+  //     map[t.dari][key] = (map[t.dari][key] || 0) - qty;
 
-      // IN
-      if (!map[t.ke]) map[t.ke] = {};
-      map[t.ke][key] = (map[t.ke][key] || 0) + qty;
-    });
+  //     // IN
+  //     if (!map[t.ke]) map[t.ke] = {};
+  //     map[t.ke][key] = (map[t.ke][key] || 0) + qty;
+  //   });
 
-    return map;
-  }, [transferData]);
+  //   return map;
+  // }, [transferData]);
 
   // ==========================
   // DETAIL TABLE
@@ -268,106 +305,78 @@ export default function InventoryReport() {
       .replace(/\s+/g, " ")
       .toUpperCase();
   
-  const detailTable = useMemo(() => {
-    if (!selectedToko) return [];
-
-    if (selectedToko === "CILANGKAP PUSAT") {
-      return Object.values(stockData["CILANGKAP PUSAT"] || {});
-    }
-
-    
-  
-    return pembelianApproved
-      .filter((t) => t.NAMA_TOKO === selectedToko)
-      .map((t) => {
-        t.STATUS === "Approved" &&
-        ["PEMBELIAN", "TRANSFER", "PENJUALAN"].includes(t.PAYMENT_METODE) &&
-        t.NAMA_TOKO === selectedToko
-        const qty = t.IMEI ? 1 : Number(t.QTY || 0);
-  
-        const brand = normalize(t.NAMA_BRAND || t.namaBrand);
-        const barang = normalize(t.NAMA_BARANG || t.namaBarang);
-        const key = `${brand}|${barang}`;
-  
-        const master = masterBarangMap[key] || {};
-  
-        // ======================
-        // HARGA (PASTI TERISI)
-        // ======================
-        const hargaSRP =
-          Number(master.hargaSRP) ||
-          Number(t.HARGA_SRP) ||
-          Number(t.hargaSRP) ||
-          0;
-  
-        const hargaGrosir =
-          Number(master.hargaGrosir) ||
-          Number(t.HARGA_GROSIR) ||
-          Number(t.hargaGrosir) ||
-          0;
-  
-        const hargaReseller =
-          Number(master.hargaReseller) ||
-          Number(t.HARGA_RESELLER) ||
-          Number(t.hargaReseller) ||
-          0;
-  
-        // ======================
-        // BUNDLING (MASTER → TRX)
-        // ======================
-        const band1 = master.band1 || t.NAMA_BANDLING_1 || "-";
-        const hband1 =
-          Number(master.hband1) || Number(t.HARGA_BANDLING_1) || 0;
-  
-        const band2 = master.band2 || t.NAMA_BANDLING_2 || "-";
-        const hband2 =
-          Number(master.hband2) || Number(t.HARGA_BANDLING_2) || 0;
-  
-        const band3 = master.band3 || t.NAMA_BANDLING_3 || "-";
-        const hband3 =
-          Number(master.hband3) || Number(t.HARGA_BANDLING_3) || 0;
-  
-        return {
-          id: t.id,
-          tokoId: t.tokoId,
-  
-          tanggal: t.TANGGAL_TRANSAKSI || "-",
-          noDo: t.NO_INVOICE || "-",
-          supplier: t.NAMA_SUPPLIER || "-",
-  
-          brand,
-          barang,
-          imei: t.IMEI || "-",
-          qty,
-  
-          // ===== HARGA =====
-          hargaSRP,
-          totalSRP: hargaSRP * qty,
-  
-          hargaGrosir,
-          totalGrosir: hargaGrosir * qty,
-  
-          hargaReseller,
-          totalReseller: hargaReseller * qty,
-  
-          // ===== BUNDLING =====
-          band1,
-          hband1,
-          totalBand1: hband1 * qty,
-  
-          band2,
-          hband2,
-          totalBand2: hband2 * qty,
-  
-          band3,
-          hband3,
-          totalBand3: hband3 * qty,
-  
-          transferIn: 0,
-          transferOut: 0,
-        };
-      });
-  }, [selectedToko, pembelianApproved, masterBarangMap]);
+      const detailTable = useMemo(() => {
+        if (!selectedToko) return [];
+      
+        return pembelianApproved
+          .filter((t) => t.NAMA_TOKO === selectedToko)
+          .map((t) => {
+            const qty = t.IMEI ? 1 : Number(t.QTY || 0);
+      
+            const brand = normalize(t.NAMA_BRAND || t.namaBrand);
+            const barang = normalize(t.NAMA_BARANG || t.namaBarang);
+            const key = `${brand}|${barang}`;
+      
+            const master = masterBarangMap[key] || {};
+      
+            const hargaSRP =
+              Number(master.hargaSRP) ||
+              Number(t.HARGA_SRP) ||
+              0;
+      
+            const hargaGrosir =
+              Number(master.hargaGrosir) ||
+              Number(t.HARGA_GROSIR) ||
+              0;
+      
+            const hargaReseller =
+              Number(master.hargaReseller) ||
+              Number(t.HARGA_RESELLER) ||
+              0;
+      
+            return {
+              id: t.id,
+              tokoId: t.tokoId,
+      
+              tanggal: t.TANGGAL_TRANSAKSI || "-",
+              noDo: t.NO_INVOICE || "-",
+              supplier: t.NAMA_SUPPLIER || "-",
+      
+              brand,
+              barang,
+              imei: t.IMEI || "-",
+              qty,
+      
+              hargaSRP,
+              totalSRP: hargaSRP * qty,
+      
+              hargaGrosir,
+              totalGrosir: hargaGrosir * qty,
+      
+              hargaReseller,
+              totalReseller: hargaReseller * qty,
+      
+              band1: master.band1 || t.NAMA_BANDLING_1 || "-",
+              hband1: Number(master.hband1 || t.HARGA_BANDLING_1 || 0),
+              totalBand1:
+                qty * Number(master.hband1 || t.HARGA_BANDLING_1 || 0),
+      
+              band2: master.band2 || t.NAMA_BANDLING_2 || "-",
+              hband2: Number(master.hband2 || t.HARGA_BANDLING_2 || 0),
+              totalBand2:
+                qty * Number(master.hband2 || t.HARGA_BANDLING_2 || 0),
+      
+              band3: master.band3 || t.NAMA_BANDLING_3 || "-",
+              hband3: Number(master.hband3 || t.HARGA_BANDLING_3 || 0),
+              totalBand3:
+                qty * Number(master.hband3 || t.HARGA_BANDLING_3 || 0),
+      
+              transferIn: 0,
+              transferOut: 0,
+            };
+          });
+      }, [selectedToko, pembelianApproved, masterBarangMap]);
+      
   
 
   // ======================================================================

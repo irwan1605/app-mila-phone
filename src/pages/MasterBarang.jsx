@@ -75,12 +75,11 @@ export default function MasterBarang() {
     hargaSRP: "",
     hargaGrosir: "",
     hargaReseller: "",
-  
+
     // === BUNDLING ===
     isBundling: false,
     bundlingItems: [], // [{ namaBarang, harga }]
   });
-  
 
   useEffect(() => {
     // RESET dulu
@@ -89,7 +88,7 @@ export default function MasterBarang() {
       isBundling: false,
       bundlingItems: [],
     }));
-  
+
     // MOTOR & SEPEDA → bundling harga 0
     if (
       form.kategori === "MOTOR LISTRIK" ||
@@ -101,14 +100,14 @@ export default function MasterBarang() {
           namaBarang: b.namaBarang,
           harga: 0,
         }));
-  
+
       setForm((f) => ({
         ...f,
         isBundling: true,
         bundlingItems: bundlingList,
       }));
     }
-  
+
     // ACCESSORIES → harga dari master bundling
     if (form.kategori === "ACCESSORIES") {
       const bundlingList = masterBundling
@@ -117,7 +116,7 @@ export default function MasterBarang() {
           namaBarang: b.namaBarang,
           harga: Number(b.hargaBundling || 0),
         }));
-  
+
       if (bundlingList.length > 0) {
         setForm((f) => ({
           ...f,
@@ -127,13 +126,11 @@ export default function MasterBarang() {
       }
     }
   }, [form.kategori, masterBundling]);
-  
 
   useEffect(() => {
     const unsub = listenMasterBarang(setMasterBarang);
     return () => unsub && unsub();
   }, []);
-
 
   useEffect(() => {
     const unsub = listenMasterBarangBundling(setMasterBundling);
@@ -256,7 +253,7 @@ export default function MasterBarang() {
 
   const filtered = useMemo(() => {
     if (!search) return rekapMasterBarang;
-  
+
     const q = search.toLowerCase();
     return rekapMasterBarang.filter(
       (x) =>
@@ -265,7 +262,6 @@ export default function MasterBarang() {
         x.kategori.toLowerCase().includes(q)
     );
   }, [search, rekapMasterBarang]);
-  
 
   const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
 
@@ -356,17 +352,8 @@ export default function MasterBarang() {
       HARGA_GROSIR: form.isBandling ? 0 : Number(form.hargaGrosir || 0),
       HARGA_RESELLER: form.isBandling ? 0 : Number(form.hargaReseller || 0),
 
-      IS_BANDLING: form.isBandling,
-      TIPE_BANDLING: form.tipeBandling,
-
-      NAMA_BANDLING_1: form.namaBandling1 || "",
-      HARGA_BANDLING_1: Number(form.hargaBandling1 || 0),
-
-      NAMA_BANDLING_2: form.namaBandling2 || "",
-      HARGA_BANDLING_2: Number(form.hargaBandling2 || 0),
-
-      NAMA_BANDLING_3: form.namaBandling3 || "",
-      HARGA_BANDLING_3: Number(form.hargaBandling3 || 0),
+      IS_BUNDLING: !!form.isBundling,
+      BUNDLING_ITEMS: form.isBundling ? form.bundlingItems : [],
 
       QTY: 1,
       PAYMENT_METODE: "PEMBELIAN",
@@ -769,27 +756,26 @@ export default function MasterBarang() {
               </div>
             </div>
             {form.isBundling && (
-  <div className="mt-4">
-    <label className="text-xs font-semibold">
-      Barang Bundling (otomatis dari Master Bundling)
-    </label>
+              <div className="mt-4">
+                <label className="text-xs font-semibold">
+                  Barang Bundling (otomatis dari Master Bundling)
+                </label>
 
-    <div className="mt-2 space-y-2">
-      {form.bundlingItems.map((b, i) => (
-        <div
-          key={i}
-          className="flex justify-between items-center bg-slate-100 px-3 py-2 rounded"
-        >
-          <span className="text-sm">{b.namaBarang}</span>
-          <span className="text-sm font-semibold">
-            Rp {Number(b.harga).toLocaleString("id-ID")}
-          </span>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-
+                <div className="mt-2 space-y-2">
+                  {form.bundlingItems.map((b, i) => (
+                    <div
+                      key={i}
+                      className="flex justify-between items-center bg-slate-100 px-3 py-2 rounded"
+                    >
+                      <span className="text-sm">{b.namaBarang}</span>
+                      <span className="text-sm font-semibold">
+                        Rp {Number(b.harga).toLocaleString("id-ID")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 mt-4">
               <button

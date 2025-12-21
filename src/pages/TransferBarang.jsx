@@ -1,29 +1,71 @@
 // src/pages/TransferBarang.jsx — FINAL OTOMATIS + SUPERADMIN APPROVE + VOID + PAGINATION ✅
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  FaExchangeAlt,
-  FaFileExcel,
-  FaPrint,
-  FaPlus,
-  FaCheck,
-  FaTimes,
-  FaFilePdf,
-} from "react-icons/fa";
+import { FaExchangeAlt, FaFileExcel, FaPrint, FaFilePdf,  FaPlus,} from "react-icons/fa";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import FirebaseService from "../services/FirebaseService";
 import { useLocation } from "react-router-dom";
-import {
-  addStock,
-  reduceStock,
-  addTransaksi,
-  listenStockAll,
-} from "../services/FirebaseService";
-
-
 import Logo from "../assets/logoMMT.png";
+import { ref, get, update, onValue } from "firebase/database";
+import { db } from "../firebase/FirebaseInit";
+import { reduceStock, addStock } from "../services/FirebaseService";
+// import { getAvailableImeisFromInventoryReport } from "./Reports/InventoryReport";
+
+export const approveTransferFINAL = async ({ transfer, performedBy }) => {
+  const { id, dari, ke, brand, barang, imeis = [] } = transfer;
+
+  if (!dari || !ke || !imeis.length) {
+    throw new Error("Data transfer tidak lengkap");
+  }
+
+  const sku = `${brand}_${barang}`.replace(/\s+/g, "_");
+  const now = new Date().toISOString();
+
+  // ===================== 1. PINDAHKAN IMEI =====================
+  const snap = await get(ref(db, "inventory"));
+  if (!snap.exists()) throw new Error("Inventory kosong");
+
+  const updates = {};
+
+  snap.forEach((child) => {
+    const row = child.val();
+    const rowImei = String(row.imei || row.IMEI);
+
+    if (
+      imeis.includes(rowImei) &&
+      String(row.toko || row.NAMA_TOKO || "").trim().toUpperCase() ===
+      String(dari).trim().toUpperCase()
+    ) {
+      updates[`inventory/${child.key}/toko`] = ke;
+      updates[`inventory/${child.key}/status`] = "AVAILABLE";
+      updates[`inventory/${child.key}/updatedAt`] = now;
+    }
+  });
+
+  if (!Object.keys(updates).length) {
+    throw new Error("IMEI tidak ditemukan di toko pengirim");
+  }
+
+  await update(ref(db), updates);
+
+  // ===================== 2. UPDATE STOCK =====================
+  await reduceStock(dari, sku, imeis.length);
+  await addStock(ke, sku, {
+    nama: barang,
+    qty: imeis.length,
+  });
+
+  // ===================== 3. UPDATE TRANSFER =====================
+  await update(ref(db, `transfer_requests/${id}`), {
+    status: "Approved",
+    approvedAt: now,
+    approvedBy: performedBy,
+  });
+
+  return true;
+};
 
 const TOKO_TUJUAN = [
   "CILANGKAP PUSAT",
@@ -60,24 +102,18 @@ const generateNoSuratJalan = () => {
     .padStart(3, "0")}`;
 };
 
-// const countAvailableStockByBarang = (stockByToko, namaBarang) => {
-//   return Object.values(stockByToko || {}).filter(
-//     (s) =>
-//       s.status === "AVAILABLE" && String(s.namaBarang) === String(namaBarang)
-//   ).length;
-// };
-
 export default function TransferBarang() {
   const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "CILANGKAP PUSAT";
+  const location = useLocation();
 
-  // ===================== FORM =====================
+  /* ================= STATE ================= */
   const [form, setForm] = useState({
     tanggal: new Date().toISOString().slice(0, 10),
     noDo: generateNoDO(),
     noSuratJalan: generateNoSuratJalan(),
     dari: TOKO_LOGIN,
     ke: "",
-    tokoPengirim: TOKO_LOGIN, // ✅ BARU
+    tokoPengirim: TOKO_LOGIN,
     pengirim: "",
     kategori: "",
     brand: "",
@@ -86,9 +122,7 @@ export default function TransferBarang() {
     qty: 0,
   });
 
-  const [imeiInput, setImeiInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const location = useLocation();
 
   // ===================== DATA REALTIME =====================
   const [history, setHistory] = useState([]);
@@ -97,11 +131,12 @@ export default function TransferBarang() {
   const [currentRole, setCurrentRole] = useState("USER");
   const [masterBarang, setMasterBarang] = useState([]);
   const [allTransaksi, setAllTransaksi] = useState([]);
-  const normalizeRole = (r) => String(r || "").toUpperCase();
   const [stockRealtime, setStockRealtime] = useState({});
   const [showPreview, setShowPreview] = useState(false);
-  const [stockAll, setStockAll] = useState({});
-  const [inventorySource, setInventorySource] = useState([]);
+  // const [inventoryData, setInventoryData] = useState([]);
+  // const [imeiOptions, setImeiOptions] = useState([]);
+  const [imeiInput, setImeiInput] = useState("");
+  const [inventory, setInventory] = useState([]);
 
 
   const [selectedSJ, setSelectedSJ] = useState(null);
@@ -113,46 +148,65 @@ export default function TransferBarang() {
   // ===================== PAGINATION =====================
   const [page, setPage] = useState(1);
   const PER_PAGE = 10;
-  
 
+  // useEffect(() => {
+  //   let active = true;
+
+  //   const loadImei = async () => {
+  //     if (!form.dari || !form.barang) {
+  //       setImeiOptions([]);
+  //       return;
+  //     }
+
+  //     const list = await getAvailableImeisFromInventoryReport(
+  //       form.dari,
+  //       form.barang
+  //     );
+
+  //     if (active) setImeiOptions(list);
+  //   };
+
+  //   loadImei();
+  //   return () => (active = false);
+  // }, [form.dari, form.barang]);
+
+  // useEffect(() => {
+  //   if (location?.state?.filterStatus) {
+  //     setFilterStatus(location.state.filterStatus);
+  //     setPage(1);
+  //   }
+  // }, [location]);
   useEffect(() => {
-    const unsub = FirebaseService.listenAllTransaksi((rows) => {
-      setInventorySource(Array.isArray(rows) ? rows : []);
+    const invRef = ref(db, "inventory");
+  
+    const unsub = onValue(invRef, (snap) => {
+      if (!snap.exists()) {
+        console.warn("❌ inventory kosong");
+        setInventory([]);
+        return;
+      }
+  
+      const arr = [];
+      snap.forEach((c) => {
+        arr.push({
+          id: c.key,
+          ...c.val(),
+        });
+      });
+  
+      console.log("✅ INVENTORY LOADED:", arr); // ⬅️ WAJIB ADA UNTUK DEBUG
+      setInventory(arr);
     });
-    return () => unsub && unsub();
+  
+    return () => unsub();
   }, []);
   
 
+  /* ================= HISTORY ================= */
   useEffect(() => {
-    const unsub = FirebaseService.listenAllTransaksi((rows) => {
-      setInventorySource(Array.isArray(rows) ? rows : []);
-    });
+    const unsub = FirebaseService.listenTransferRequests(setHistory);
     return () => unsub && unsub();
   }, []);
-  
-
-  useEffect(() => {
-    const unsub = listenStockAll((data) => {
-      setStockAll(data || {});
-    });
-    return () => unsub && unsub();
-  }, []);
-
-  useEffect(() => {
-    setForm((f) => ({
-      ...f,
-      imeis: [],
-      qty: 0,
-    }));
-    setImeiInput("");
-  }, [form.dari, form.barang]);
-
-  useEffect(() => {
-    if (location?.state?.filterStatus) {
-      setFilterStatus(location.state.filterStatus);
-      setPage(1);
-    }
-  }, [location]);
 
   useEffect(() => {
     const unsubUsers = FirebaseService.listenUsers((list) => {
@@ -165,12 +219,16 @@ export default function TransferBarang() {
       localStorage.getItem("TOKO_LOGIN");
 
       const me = arr.find(
-        (u) => u.username?.toLowerCase() === username.toLowerCase()
+        (u) =>
+          String(u.username).toLowerCase() === String(username).toLowerCase()
       );
-      
 
       if (me?.role) {
-        setCurrentRole(me.role.toUpperCase());
+        setCurrentRole(
+          String(me.role || "")
+            .toLowerCase()
+            .trim()
+        ); // ✅ SUPERADMIN REAL
       } else {
         setCurrentRole("USER");
       }
@@ -190,6 +248,41 @@ export default function TransferBarang() {
     };
   }, []);
 
+  // useEffect(() => {
+  //   if (!form.dari || !form.barang) {
+  //     setImeiOptions([]);
+  //     return;
+  //   }
+
+  //   const invRef = ref(db, "inventory");
+
+  //   const unsub = onValue(invRef, (snap) => {
+  //     if (!snap.exists()) {
+  //       setImeiOptions([]);
+  //       return;
+  //     }
+
+  //     const list = [];
+
+  //     snap.forEach((child) => {
+  //       const row = child.val();
+
+  //       if (
+  //         String(row.toko).toUpperCase() === String(form.dari).toUpperCase() &&
+  //         String(row.namaBarang) === String(form.barang) &&
+  //         String(row.status) === "AVAILABLE" &&
+  //         row.imei
+  //       ) {
+  //         list.push(String(row.imei));
+  //       }
+  //     });
+
+  //     setImeiOptions(list);
+  //   });
+
+  //   return () => unsub();
+  // }, [form.dari, form.barang]);
+
   // ===================== MASTER BARANG =====================
   useEffect(() => {
     const map = {};
@@ -206,102 +299,44 @@ export default function TransferBarang() {
     });
     setMasterBarang(Object.values(map));
   }, [allTransaksi]);
+  
 
-  // ===================== ADD IMEI =====================
+  useEffect(() => {
+    setForm((f) => ({ ...f, imeis: [], qty: 0 }));
+    setImeiInput("");
+  }, [form.tokoPengirim, form.barang]);
+  
+  
+
+  // ==========================================
+  // 🔐 IMEI TERSEDIA DI TOKO PENGIRIM (LOCK)
+  // ==========================================
+
   const addImei = () => {
-    const im = String(imeiInput || "").trim();
+    const im = imeiInput.trim();
     if (!im) return;
-
-    // ❌ TIDAK BOLEH IMEI DI LUAR STOK TOKO
+  
     if (!imeiSource.includes(im)) {
       alert("❌ IMEI tidak tersedia di stok toko ini");
       return;
     }
-
-    // ❌ DUPLIKAT
+  
     if (form.imeis.includes(im)) {
       alert("❌ IMEI sudah dipilih");
       return;
     }
-
+  
     setForm((f) => ({
       ...f,
       imeis: [...f.imeis, im],
       qty: f.imeis.length + 1,
     }));
-
+  
     setImeiInput("");
   };
-
-  // ===================== SOURCE IMEI =====================
-  const imeiSource = useMemo(() => {
-    if (!form.tokoPengirim || !form.barang) return [];
   
-    return inventorySource
-      .filter(
-        (t) =>
-          t.STATUS === "Approved" &&
-          t.IMEI && // hanya yang punya IMEI
-          String(t.NAMA_TOKO).toUpperCase() ===
-            String(form.tokoPengirim).toUpperCase() &&
-          String(t.NAMA_BARANG || "").toUpperCase().trim() ===
-            String(form.barang).toUpperCase().trim()
-      )
-      .map((t) => String(t.IMEI));
-  }, [inventorySource, form.tokoPengirim, form.barang]);
   
-
-  const removeImei = (idx) => {
-    const next = [...form.imeis];
-    next.splice(idx, 1);
-    setForm((f) => ({ ...f, imeis: next, qty: next.length }));
-  };
-
-  // ===================== SUBMIT TRANSFER =====================
-  const submitTransfer = async () => {
-    setLoading(true);
-    try {
-      if (!form.ke || !form.pengirim || !form.brand || !form.barang)
-        throw new Error("Lengkapi semua field!");
-      if (!form.imeis.length) throw new Error("Minimal 1 IMEI!");
-
-      const sku = `${form.brand}_${form.barang}`.replace(/\s+/g, "_");
-
-      // 🔒 FINAL CHECK
-      const invalid = form.imeis.some((im) => !imeiSource.includes(im));
-      if (invalid) {
-        throw new Error("Terdapat IMEI yang tidak valid untuk toko ini");
-      }
-
-      await FirebaseService.createTransferRequest({
-        ...form,
-        sku,
-        status: "Pending",
-        createdAt: new Date().toISOString(),
-      });
-
-      alert("✅ Transfer dikirim & menunggu APPROVE");
-
-      setForm({
-        tanggal: new Date().toISOString().slice(0, 10),
-        noDo: generateNoDO(),
-        noSuratJalan: generateNoSuratJalan(),
-        dari: TOKO_LOGIN,
-        ke: "",
-        tokoPengirim: TOKO_LOGIN,
-        pengirim: "",
-        kategori: "",
-        brand: "",
-        barang: "",
-        imeis: [],
-        qty: 0,
-      });
-    } catch (e) {
-      alert("❌ " + e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  
 
   useEffect(() => {
     if (location?.state?.fromInventory) {
@@ -323,140 +358,124 @@ export default function TransferBarang() {
     }
   }, [location]);
 
+  
+  // ===================== SOURCE IMEI =====================
+  const imeiSource = useMemo(() => {
+    if (!form.tokoPengirim || !form.barang) return [];
+  
+    const toko = String(form.tokoPengirim).trim().toUpperCase();
+    const barang = String(form.barang).trim().toUpperCase();
+  
+    const result = inventory
+      .filter((row) => {
+        const status = String(row.STATUS || "").toUpperCase();
+        const tokoInv = String(row.NAMA_TOKO || "").trim().toUpperCase();
+        const barangInv = String(row.NAMA_BARANG || "")
+          .trim()
+          .toUpperCase();
+  
+        return (
+          status === "AVAILABLE" &&
+          tokoInv === toko &&
+          barangInv === barang &&
+          row.IMEI
+        );
+      })
+      .map((row) => String(row.IMEI));
+  
+    console.log("✅ IMEI SOURCE:", result); // ⬅️ DEBUG PENTING
+    return result;
+  }, [inventory, form.tokoPengirim, form.barang]);
+  
+  
+  
+  
+  
+
+  const removeImei = (idx) => {
+    const next = [...form.imeis];
+    next.splice(idx, 1);
+    setForm((f) => ({ ...f, imeis: next, qty: next.length }));
+  };
+
+
+  // ===================== IMEI AVAILABLE (FINAL FIX) =====================
+  // const imeiAvailable = useMemo(() => {
+  //   if (!form.tokoPengirim || !form.barang) return [];
+
+  //   return inventoryData
+  //     .filter(
+  //       (i) =>
+  //         i.status === "AVAILABLE" &&
+  //         i.toko === form.tokoPengirim.toUpperCase() &&
+  //         i.namaBarang === form.barang
+  //     )
+  //     .map((i) => i.imei);
+  // }, [inventoryData, form.tokoPengirim, form.barang]);
+
+  /* ================= SUBMIT ================= */
+  const submitTransfer = async () => {
+    try {
+      setLoading(true);
+      if (!form.ke || !form.barang || !form.imeis.length)
+        throw new Error("Form belum lengkap");
+
+      await FirebaseService.createTransferRequest({
+        ...form,
+        dari: form.tokoPengirim,
+        qty: form.imeis.length,
+        status: "Pending",
+        createdAt: new Date().toISOString(),
+      });
+
+      alert("✅ Transfer dikirim (Pending)");
+      setForm({
+        tanggal: new Date().toISOString().slice(0, 10),
+        noDo: generateNoDO(),
+        noSuratJalan: generateNoSuratJalan(),
+        dari: TOKO_LOGIN,
+        ke: "",
+        tokoPengirim: TOKO_LOGIN,
+        pengirim: "",
+        kategori: "",
+        brand: "",
+        barang: "",
+        imeis: [],
+        qty: 0,
+      });
+    } catch (e) {
+      alert("❌ " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isSuperAdmin = (role) =>
+    String(role || "")
+      .toLowerCase()
+      .trim() === "superadmin";
+
+  // useEffect(() => {
+  //   console.log("DEBUG stockRealtime:", stockRealtime);
+  // }, [stockRealtime]);
+
   // ===================== ✅ APPROVE (SUPERADMIN ONLY) =====================
   const approveTransfer = async (row) => {
-    try {
-      // ===============================
-      // 🔧 FIX VARIABEL TIDAK TERDEFINISI
-      // ===============================
+    if (currentRole !== "superadmin") return alert("❌ Hanya SUPERADMIN");
 
-      const realFromToko = row.tokoPengirim || row.dari; // ✅ TOKO ASAL REAL
-      const realQty = Array.isArray(row.imeis)
-        ? row.imeis.length
-        : Number(row.qty || 0); // ✅ QTY REAL
+    await FirebaseService.approveTransferFINAL({
+      transfer: row,
+      performedBy: "SUPERADMIN",
+    });
 
-      const username =
-        JSON.parse(localStorage.getItem("user") || "{}")?.username ||
-        localStorage.getItem("USERNAME") ||
-        "SYSTEM";
-
-      if (currentRole !== "SUPERADMIN") {
-        setNotif("❌ Hanya SUPERADMIN yang boleh approve!");
-        return;
-      }
-
-      if (!row || row.status !== "Pending") {
-        setNotif("⚠️ Transfer sudah diproses!");
-        return;
-      }
-
-      const qty = Array.isArray(row.imeis)
-        ? row.imeis.length
-        : Number(row.qty || 0);
-
-
-      // ===============================
-      // 1️⃣ KURANGI STOK TOKO ASAL
-      // ===============================
-      await reduceStock(realFromToko, row.sku, realQty);
-
-      // ===============================
-      // 2️⃣ TAMBAH STOK TOKO TUJUAN
-      // ===============================
-      await addStock(row.ke, row.sku, {
-        namaBrand: row.brand,
-        namaBarang: row.barang,
-        qty: realQty,
-      });
-
-      // ===============================
-      // 3️⃣ CATAT TRANSAKSI TRANSFER
-      // ===============================
-      await addTransaksi(1, {
-        TANGGAL_TRANSAKSI: row.tanggal,
-        NO_INVOICE: row.noDo,
-        NAMA_TOKO: row.ke,
-        NAMA_BRAND: row.brand,
-        KATEGORI_BRAND: row.kategori,
-        NAMA_BARANG: row.barang,
-        QTY: qty,
-        PAYMENT_METODE: "TRANSFER",
-        STATUS: "Approved",
-        KETERANGAN: `TRANSFER DARI ${row.dari}`,
-      });
-
-      // ===============================
-      // 4️⃣ UPDATE STATUS TRANSFER
-      // ===============================
-      await FirebaseService.pushNotification({
-        message: `Transfer ${row.barang} (${row.qty}) dari ${row.dari} ke ${row.ke} APPROVED`,
-        createdAt: new Date().toISOString(),
-        type: "TRANSFER_APPROVED",
-        toko: row.ke,
-      });
-      
-
-      await FirebaseService.updateTransferRequest(row.id, {
-        status: "Approved",
-        approvedAt: new Date().toISOString(),
-      });
-
-      // ✅ PAKAI SKU PERSIS row.sku (tanpa /128GB, biar sama dengan MasterPembelian & StockOpname)
-      await FirebaseService.transferStock({
-        fromToko: realFromToko,
-        toToko: row.ke,
-        sku: row.sku,
-        qty: realQty,
-        nama: row.barang,
-        imei: (row.imeis || []).join(", "),
-        keterangan: `SJ:${row.noSuratJalan}`,
-        performedBy: username,
-      });
-
-      await FirebaseService.updateImeiStatus(row.ke, row.imeis, "AVAILABLE");
-
-      await FirebaseService.updateImeiStatus(row.ke, row.imeis, "AVAILABLE");
-
-      // ✅ CATAT PEMBELIAN JIKA MASUK PUSAT
-      if (row.ke === "CILANGKAP PUSAT") {
-        for (const im of row.imeis || []) {
-          await FirebaseService.addTransaksi(1, {
-            TANGGAL_TRANSAKSI: row.tanggal,
-            NO_INVOICE: row.noDo,
-            NAMA_TOKO: row.ke,
-            NAMA_USER: row.pengirim,
-            NAMA_BRAND: row.brand,
-            KATEGORI_BRAND: row.kategori,
-            NAMA_BARANG: row.barang,
-            IMEI: im,
-            QTY: 1,
-            PAYMENT_METODE: "PEMBELIAN",
-            STATUS: "Approved",
-            KETERANGAN: "TRANSFER MASUK",
-          });
-        }
-      }
-
-      // ✅ UPDATE STATUS DI FIREBASE REALTIME
-      await FirebaseService.updateTransferRequest(row.id, {
-        status: "Approved",
-        approvedBy: username,
-        approvedAt: new Date().toISOString(),
-      });
-
-      // ✅ NOTIFIKASI DARI STATE (BUKAN ALERT)
-      setNotif("✅ Transfer BERHASIL di-APPROVE oleh SUPERADMIN!");
-    } catch (err) {
-      console.error(err);
-      setNotif("❌ Gagal APPROVE: " + err.message);
-    }
+    alert("✅ TRANSFER APPROVED — STOK & IMEI PINDAH");
   };
 
   const rejectTransfer = async (id) => {
     try {
       const username = localStorage.getItem("USERNAME");
 
-      if (currentRole !== "superadmin") {
+      if (currentRole !== "SUPERADMIN") {
         setNotif("❌ Hanya SUPERADMIN yang boleh menolak transfer!");
         return;
       }
@@ -473,27 +492,12 @@ export default function TransferBarang() {
     }
   };
 
-  // ===================== ✅ VOID (BALIKKAN STOCK) =====================
+  /* ================= VOID ================= */
   const voidTransfer = async (row) => {
-    if (normalizeRole(currentRole) !== "SUPERADMIN")
-      return alert("❌ Hanya SUPERADMIN yang boleh VOID!");
+    if (currentRole !== "superadmin") return alert("❌ Hanya SUPERADMIN");
 
-    await FirebaseService.transferStock({
-      fromToko: row.ke,
-      toToko: row.tokoPengirim || row.dari,
-      sku: row.sku,
-      qty: row.qty,
-      nama: row.barang,
-      imei: (row.imeis || []).join(", "),
-      keterangan: "VOID TRANSFER",
-      performedBy: "SYSTEM",
-    });
-
-    await FirebaseService.updateTransferRequest(row.id, {
-      status: "Voided",
-    });
-
-    alert("✅ Transfer di-VOID & stok dikembalikan!");
+    await FirebaseService.voidTransferFINAL(row);
+    alert("✅ VOID — STOK KEMBALI");
   };
 
   // ===================== FILTER =====================
@@ -598,6 +602,12 @@ export default function TransferBarang() {
             className="input"
             placeholder="Toko Pengirim"
           />
+          <datalist id="toko-list">
+            {TOKO_TUJUAN.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
+
           {/* NAMA PENGIRIM */}
           <input
             list="pengirim-list"
@@ -774,30 +784,51 @@ export default function TransferBarang() {
         </thead>
         <tbody>
           {pagedHistory.map((row) => (
-            <tr
-              key={row.id}
-              onClick={() => setSelectedSJ(row)}
-              className="hover:bg-slate-50 cursor-pointer"
-            >
-              <td>{row.noSuratJalan}</td>
+            <tr key={row.id} className="hover:bg-slate-50">
+              <td
+                className="underline text-indigo-600 cursor-pointer"
+                onClick={() => setSelectedSJ(row)}
+              >
+                {row.noSuratJalan}
+              </td>
               <td>{row.barang}</td>
               <td>{row.dari}</td>
               <td>{row.ke}</td>
               <td>{row.qty}</td>
               <td>{row.status}</td>
-              <td>
-                {row.status === "Pending" && (
+              <td className="flex items-center gap-2">
+                {row.status === "Pending" && isSuperAdmin(currentRole) && (
                   <>
-                    <button onClick={() => approveTransfer(row)}>
-                      <FaCheck />
+                    <button
+                      type="button"
+                      onClick={() => approveTransfer(row)}
+                      className="px-4 py-2 rounded-xl 
+             bg-gradient-to-r from-green-500 to-emerald-600
+             text-white text-xs font-semibold shadow-lg
+             hover:scale-105 active:scale-95 transition"
+                    >
+                      ✓ APPROVE
                     </button>
-                    <button onClick={() => rejectTransfer(row.id)}>
-                      <FaTimes />
+                    <button
+                      type="button"
+                      onClick={() => rejectTransfer(row.id)}
+                      className="px-3 py-1 rounded-lg bg-gradient-to-r from-red-500 to-rose-600 
+                   text-white text-xs font-semibold shadow hover:scale-105 transition"
+                    >
+                      ✕ Reject
                     </button>
                   </>
                 )}
-                {row.status === "Approved" && (
-                  <button onClick={() => voidTransfer(row)}>VOID</button>
+
+                {row.status === "Approved" && isSuperAdmin(currentRole) && (
+                  <button
+                    type="button"
+                    onClick={() => voidTransfer(row)}
+                    className="px-3 py-1 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600
+                 text-white text-xs font-semibold shadow hover:scale-105 transition"
+                  >
+                    ⟳ VOID
+                  </button>
                 )}
               </td>
             </tr>
@@ -882,6 +913,19 @@ export default function TransferBarang() {
               </tr>
             </tbody>
           </table>
+          {isSuperAdmin(currentRole) && selectedSJ?.status === "Pending" && (
+            <button
+              onClick={async () => {
+                await approveTransfer(selectedSJ);
+                printSuratJalan();
+              }}
+              className="mt-4 btn-indigo mr-2"
+              type="button"
+            >
+              ✅ APPROVE & CETAK
+            </button>
+          )}
+
           <button
             onClick={() => setShowPreview(false)}
             className="mt-4 btn-red"

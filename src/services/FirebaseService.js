@@ -23,7 +23,8 @@ import {
   orderByChild,   // ⬅️ TAMBAH
   limitToLast,    // ⬅️ TAMBAH
   startAt,        // ⬅️ TAMBAH
-  endAt,        // ⬅️ TAMBAH
+  endAt,  
+  equalTo,      // ⬅️ TAMBAH
 } from "firebase/database";
 
 
@@ -673,11 +674,16 @@ export const transferStock = async ({
    INVENTORY WRAPPER — untuk integrasi DataManagement & Dashboard
 ============================================================ */
 
-export const pushNotification = (notif) => {
-  const id = Date.now();
-  return set(ref(db, `notifications/${id}`), notif);
-};
+// ===================== NOTIFICATION =====================
+const pushNotification = async (payload) => {
+  const id = Date.now().toString();
 
+  await set(ref(db, `notifications/${id}`), {
+    ...payload,
+    id,
+    createdAt: payload.createdAt || new Date().toISOString(),
+  });
+};
 
 /**
  * Ambil item stok berdasarkan toko + sku
@@ -692,6 +698,37 @@ export const getInventoryItem = async (tokoName, sku) => {
     return null;
   }
 };
+
+// ===================== UPDATE IMEI STATUS =====================
+// =====================
+// UPDATE IMEI STATUS TANPA QUERY (NO INDEX)
+// =====================
+export const updateImeiStatusSafe = async (toko, imeiList, status) => {
+  if (!toko || !Array.isArray(imeiList) || !imeiList.length) return;
+
+  const snap = await get(ref(db, "inventory"));
+  if (!snap.exists()) return;
+
+  const updates = {};
+
+  snap.forEach((child) => {
+    const row = child.val();
+    if (
+      imeiList.includes(String(row.IMEI)) &&
+      String(row.NAMA_TOKO).toUpperCase() === String(toko).toUpperCase()
+    ) {
+      updates[`inventory/${child.key}/STATUS`] = status;
+      updates[`inventory/${child.key}/NAMA_TOKO`] = toko;
+      updates[`inventory/${child.key}/updatedAt`] =
+        new Date().toISOString();
+    }
+  });
+
+  if (Object.keys(updates).length) {
+    await update(ref(db), updates); // 🔥 MULTI UPDATE (ATOMIC)
+  }
+};
+
 
 /**
  * Update stok (langsung overwrite field yang diberikan)
@@ -1381,6 +1418,323 @@ export const listenMasterBarangByKategori = (kategori, callback) => {
 
 
 
+// ===================================================
+// APPROVE TRANSFER — SAFE (NO QUERY, NO INDEX)
+// ===================================================
+// ===================================================
+// APPROVE TRANSFER — FINAL SAFE (NO QUERY, NO INDEX)
+// ===================================================
+// ===================================================
+// APPROVE TRANSFER — FINAL (SESUI STRUKTUR INVENTORY)
+// ===================================================
+// ===================================================
+// APPROVE TRANSFER — FINAL (SESUAI INVENTORY ROOT)
+// ===================================================
+export const approveTransferSafe = async ({
+  transfer,
+  performedBy,
+}) => {
+  const {
+    id,
+    imeis = [],
+    tokoPengirim,
+    dari,
+    ke,
+  } = transfer;
+
+  const fromToko = tokoPengirim || dari;
+  if (!fromToko || !ke) {
+    throw new Error("Toko asal / tujuan tidak valid");
+  }
+
+  const updates = {};
+  const invSnap = await get(ref(db, "inventory"));
+
+  if (!invSnap.exists()) {
+    throw new Error("Inventory kosong");
+  }
+
+  let found = 0;
+
+  invSnap.forEach((child) => {
+    const row = child.val();
+
+    if (
+      imeis.includes(String(row.imei)) &&
+      String(row.toko) === String(fromToko) &&
+      row.status === "AVAILABLE"
+    ) {
+      // 🔥 PINDAHKAN STOK (UBAH TOKO)
+      updates[`inventory/${child.key}/toko`] = ke;
+      updates[`inventory/${child.key}/status`] = "AVAILABLE";
+      updates[`inventory/${child.key}/updatedAt`] =
+        new Date().toISOString();
+
+      found++;
+    }
+  });
+
+  if (found !== imeis.length) {
+    throw new Error(
+      `IMEI tidak lengkap di ${fromToko} (ditemukan ${found}/${imeis.length})`
+    );
+  }
+
+  // ✅ UPDATE STATUS TRANSFER
+  updates[`transfer_requests/${id}/status`] = "Approved";
+  updates[`transfer_requests/${id}/approvedBy`] = performedBy;
+  updates[`transfer_requests/${id}/approvedAt`] =
+    new Date().toISOString();
+
+  await update(ref(db), updates);
+
+  return true;
+};
+
+
+
+// =======================================================
+// APPROVE TRANSFER + PINDAH STOCK (IMEI BASED)
+// =======================================================
+export const approveTransferAndMoveStock = async ({
+  transfer,
+  performedBy,
+}) => {
+  const {
+    id,
+    imeis = [],
+    tokoPengirim,
+    dari,
+    ke,
+  } = transfer;
+
+  const fromToko = tokoPengirim || dari;
+  const updates = {};
+
+  const snap = await get(ref(db, "inventory"));
+  if (!snap.exists()) throw new Error("Inventory kosong");
+
+  snap.forEach((child) => {
+    const row = child.val();
+
+    if (
+      imeis.includes(String(row.IMEI)) &&
+      String(row.NAMA_TOKO).toUpperCase() ===
+        String(fromToko).toUpperCase()
+    ) {
+      // ⬅️ STOK KELUAR DARI TOKO PENGIRIM
+      updates[`inventory/${child.key}/NAMA_TOKO`] = ke;
+      updates[`inventory/${child.key}/STATUS`] = "AVAILABLE";
+      updates[`inventory/${child.key}/updatedAt`] =
+        new Date().toISOString();
+    }
+  });
+
+  // ⬅️ UPDATE STATUS TRANSFER
+  updates[`transfer_requests/${id}/status`] = "Approved";
+  updates[`transfer_requests/${id}/approvedBy`] = performedBy;
+  updates[`transfer_requests/${id}/approvedAt`] =
+    new Date().toISOString();
+
+  await update(ref(db), updates);
+};
+
+// ===================================================
+// ===================== APPROVE TRANSFER FINAL (IMEI REAL) =====================
+
+
+/**
+ * APPROVE TRANSFER
+ * - IMEI pindah toko (inventory)
+ * - Stok toko pengirim berkurang
+ * - Stok toko penerima bertambah
+ * - Realtime ke InventoryReport & TransferBarang
+ */
+export const approveTransferFINAL = async (transfer, approvedBy) => {
+  const { id, dari, ke, brand, barang, imeis } = transfer;
+  const sku = `${brand}_${barang}`.replace(/\s+/g, "_");
+  const now = new Date().toISOString();
+
+  // 1️⃣ PINDAHKAN IMEI DI INVENTORY
+  const snap = await get(ref(db, "inventory"));
+  const updates = {};
+
+  snap.forEach((child) => {
+    const row = child.val();
+    const imei = String(row.IMEI || row.imei);
+
+    if (
+      imeis.includes(imei) &&
+      String(row.NAMA_TOKO).toUpperCase() ===
+        String(dari).toUpperCase()
+    ) {
+      updates[`inventory/${child.key}/NAMA_TOKO`] = ke;
+      updates[`inventory/${child.key}/STATUS`] = "AVAILABLE";
+      updates[`inventory/${child.key}/updatedAt`] = now;
+    }
+  });
+
+  await update(ref(db), updates);
+
+  // 2️⃣ UPDATE STOCK
+  await reduceStock(dari, sku, imeis.length);
+  await addStock(ke, sku, { nama: barang, qty: imeis.length });
+
+  // 3️⃣ UPDATE STATUS TRANSFER
+  await update(ref(db, `transfer_requests/${id}`), {
+    status: "Approved",
+    approvedAt: now,
+    approvedBy,
+  });
+};
+
+
+
+
+
+// ===================================================
+// 🔥 APPROVE TRANSFER — ABSOLUTE FINAL (NO STOCK READ)
+// ===================================================
+// ===================================================
+// 🔥 APPROVE TRANSFER — FINAL (TOTAL STOCK MODE)
+// ===================================================
+export const approveTransferABSOLUTE = async ({
+  transfer,
+  performedBy,
+}) => {
+  const {
+    id,
+    tokoPengirim,
+    dari,
+    ke,
+    qty,
+    stockSnapshot,
+  } = transfer;
+
+  const fromToko = tokoPengirim || dari;
+  const q = Number(qty || 0);
+
+  if (q <= 0) throw new Error("QTY tidak valid");
+
+  const updates = {};
+
+  // ⬅️ KURANGI STOK DI ITEM PERTAMA
+  updates[`stock/${fromToko}/${stockSnapshot.firstKey}/qty`] =
+    Number(stockSnapshot.firstItem.qty || 0) - q;
+
+  // ➡️ TAMBAH STOK KE TOKO TUJUAN
+  updates[`stock/${ke}/${stockSnapshot.firstKey}`] = {
+    ...stockSnapshot.firstItem,
+    qty:
+      Number(stockSnapshot.firstItem.qty || 0) + q,
+    updatedAt: Date.now(),
+  };
+
+  // ✅ UPDATE STATUS TRANSFER
+  updates[`transfer_requests/${id}/status`] = "Approved";
+  updates[`transfer_requests/${id}/approvedBy`] = performedBy;
+  updates[`transfer_requests/${id}/approvedAt`] =
+    new Date().toISOString();
+
+  await update(ref(db), updates);
+};
+
+// ===================================================
+// 🔥 APPROVE TRANSFER — REALTIME INVENTORY (FINAL)
+// ===================================================
+export const approveTransferAndMoveInventory = async ({
+  transfer,
+  performedBy,
+}) => {
+  const {
+    id,
+    dari,
+    ke,
+    imeis = [],
+  } = transfer;
+
+  if (!dari || !ke) {
+    throw new Error("Toko asal / tujuan tidak valid");
+  }
+  if (!imeis.length) {
+    throw new Error("IMEI kosong");
+  }
+
+  const invSnap = await get(ref(db, "inventory"));
+  if (!invSnap.exists()) {
+    throw new Error("Inventory kosong");
+  }
+
+  const updates = {};
+  let moved = 0;
+
+  invSnap.forEach((child) => {
+    const row = child.val();
+
+    if (
+      imeis.includes(String(row.imei)) &&
+      String(row.toko) === String(dari)
+    ) {
+      // 🔁 PINDAHKAN STOK (UNIT PER UNIT)
+      updates[`inventory/${child.key}/toko`] = ke;
+      updates[`inventory/${child.key}/updatedAt`] =
+        new Date().toISOString();
+
+      moved++;
+    }
+  });
+
+  if (moved !== imeis.length) {
+    throw new Error(
+      `IMEI tidak lengkap di ${dari} (ditemukan ${moved}/${imeis.length})`
+    );
+  }
+
+  // ✅ UPDATE STATUS TRANSFER
+  updates[`transfer_requests/${id}/status`] = "Approved";
+  updates[`transfer_requests/${id}/approvedBy`] = performedBy;
+  updates[`transfer_requests/${id}/approvedAt`] =
+    new Date().toISOString();
+
+  await update(ref(db), updates);
+
+  return true;
+};
+
+
+// ===================================================
+// 🔐 RESERVE IMEI (ANTI DOUBLE TRANSFER)
+// ===================================================
+export const reserveImeis = async (imeis = [], toko) => {
+  const snap = await get(ref(db, "inventory"));
+  if (!snap.exists()) throw new Error("Inventory kosong");
+
+  const updates = {};
+  let reserved = 0;
+
+  snap.forEach((child) => {
+    const row = child.val();
+    if (
+      imeis.includes(String(row.imei)) &&
+      row.toko === toko &&
+      row.status === "AVAILABLE"
+    ) {
+      updates[`inventory/${child.key}/status`] =
+        "RESERVED";
+      reserved++;
+    }
+  });
+
+  if (reserved !== imeis.length) {
+    throw new Error(
+      "Sebagian IMEI sudah dipakai / tidak tersedia"
+    );
+  }
+
+  await update(ref(db), updates);
+};
+
+
 
 
 
@@ -1522,6 +1876,8 @@ export const deleteMasterBarangBundling = masterBarangBundling.delete;
    SUPER SEARCH — Nama Barang / Brand / Kategori / SKU
    Cepat, kompatibel semua toko, hasil akurat untuk modal search.
 ============================================================ */
+
+
 
 export const getInventoryByName = async (keyword) => {
   if (!keyword) return [];
@@ -1692,6 +2048,14 @@ const FirebaseService = {
   updateTransaksi,
   updateTransferRequest,
   getStockTotalBySKU,
+  pushNotification,
+  approveTransferAndMoveStock,
+  approveTransferSafe,
+  approveTransferFINAL,
+  approveTransferABSOLUTE,
+  approveTransferAndMoveInventory, 
+  reserveImeis,
+  // updateImeiStatus,
 };
 
 export default FirebaseService;
