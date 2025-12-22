@@ -23,8 +23,7 @@ import {
   orderByChild,   // ⬅️ TAMBAH
   limitToLast,    // ⬅️ TAMBAH
   startAt,        // ⬅️ TAMBAH
-  endAt,  
-  equalTo,      // ⬅️ TAMBAH
+  endAt,     // ⬅️ TAMBAH
 } from "firebase/database";
 
 
@@ -1841,6 +1840,7 @@ export const updateMasterVoucher = masterVoucher.update;
 export const deleteMasterVoucher = masterVoucher.delete;
 
 const masterBarang = createMasterHelpers("masterBarang");
+
 export const addMasterBarang = masterBarang.add;
 export const updateMasterBarang = masterBarang.update;
 export const deleteMasterBarangMasing = masterBarang.delete;
@@ -1990,6 +1990,7 @@ const FirebaseService = {
   addPenjualan,
   addStock,
   addTransaksi,
+  addMasterBarang,
   adjustInventoryStock,
   createInventory,
   createTransferRequest,

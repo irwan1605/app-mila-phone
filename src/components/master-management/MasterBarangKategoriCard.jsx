@@ -1,123 +1,282 @@
 import React, { useEffect, useState } from "react";
+import { onValue, ref, off } from "firebase/database";
 import {
-  listenMasterBarangByKategori,
   addMasterBarang,
   updateMasterBarang,
   deleteMasterBarangMasing,
 } from "../../services/FirebaseService";
-import { FaPlus, FaEdit, FaTrash } from "react-icons/fa";
+import { db } from "../../firebase/FirebaseInit";
 
 export default function MasterBarangKategoriCard({ kategori }) {
-  const [rows, setRows] = useState([]);
-  const [form, setForm] = useState({
-    namaBrand: "",
+  // ===============================
+  // STATE FORM (SATU SUMBER DATA)
+  // ===============================
+  const [barang, setBarang] = useState({
+    brand: "",
     namaBarang: "",
-    sku: "",
-    hasIMEI: false,
+    harga: {
+      srp: "",
+      grosir: "",
+      reseller: "",
+    },
   });
+
+  const [listBarang, setListBarang] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [editId, setEditId] = useState(null);
 
+  // ===============================
+  // REALTIME LISTENER
+  // ===============================
   useEffect(() => {
-    const unsub = listenMasterBarangByKategori(kategori, setRows);
-    return () => unsub && unsub();
+    const barangRef = ref(db, "dataManagement/masterBarang");
+  
+    onValue(barangRef, (snap) => {
+      const data = snap.val() || {};
+      const filtered = Object.entries(data)
+        .map(([id, v]) => ({ id, ...v }))
+        .filter(
+          (b) => b.kategoriBarang === kategori.trim().toUpperCase()
+        );
+  
+      setListBarang(filtered);
+    });
+  
+    return () => off(barangRef);
   }, [kategori]);
+  
+  
 
-  const save = async () => {
-    if (!form.namaBarang) return alert("Nama barang wajib");
-
-    const payload = {
-      ...form,
-      kategoriBarang: kategori,
-    };
-
-    if (editId) {
-      await updateMasterBarang(editId, payload);
-    } else {
-      await addMasterBarang(payload);
-    }
-
-    setForm({ namaBrand: "", namaBarang: "", sku: "", hasIMEI: false });
+  // ===============================
+  // RESET FORM
+  // ===============================
+  const resetForm = () => {
+    setBarang({
+      brand: "",
+      namaBarang: "",
+      harga: { srp: "", grosir: "", reseller: "" },
+    });
     setEditId(null);
   };
 
-  return (
-    <div>
-      <h2 className="font-bold mb-3">MASTER BARANG – {kategori}</h2>
+  // ===============================
+  // SUBMIT (ADD / UPDATE)
+  // ===============================
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-      <div className="grid md:grid-cols-4 gap-2 mb-3">
-        <input
-          placeholder="Nama Brand"
-          value={form.namaBrand}
-          onChange={(e) => setForm({ ...form, namaBrand: e.target.value })}
-          className="border p-2 rounded"
-        />
-        <input
-          placeholder="Nama Barang"
-          value={form.namaBarang}
-          onChange={(e) => setForm({ ...form, namaBarang: e.target.value })}
-          className="border p-2 rounded"
-        />
-        <input
-          placeholder="SKU"
-          value={form.sku}
-          onChange={(e) => setForm({ ...form, sku: e.target.value })}
-          className="border p-2 rounded"
-        />
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={form.hasIMEI}
-            onChange={(e) => setForm({ ...form, hasIMEI: e.target.checked })}
-          />
-          Pakai IMEI
-        </label>
+    if (
+      !barang.brand ||
+      !barang.namaBarang ||
+      !barang.harga.srp ||
+      !barang.harga.grosir ||
+      !barang.harga.reseller
+    ) {
+      alert("Lengkapi semua field!");
+      return;
+    }
+
+    setLoading(true);
+
+    const payload = {
+      kategoriBarang: kategori.trim().toUpperCase(),
+      brand: barang.brand.trim(),
+      namaBarang: barang.namaBarang.trim(),
+      harga: {
+        srp: Number(barang.harga.srp),
+        grosir: Number(barang.harga.grosir),
+        reseller: Number(barang.harga.reseller),
+      },
+    };
+    
+
+    try {
+      if (editId) {
+        await updateMasterBarang(editId, payload);
+      } else {
+        await addMasterBarang(payload);
+      }
+      resetForm();
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menyimpan data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ===============================
+  // EDIT
+  // ===============================
+  const handleEdit = (item) => {
+    setEditId(item.id);
+    setBarang({
+      brand: item.brand,
+      namaBarang: item.namaBarang,
+      harga: {
+        srp: item.harga?.srp || "",
+        grosir: item.harga?.grosir || "",
+        reseller: item.harga?.reseller || "",
+      },
+    });
+  };
+
+  // ===============================
+  // DELETE
+  // ===============================
+  const handleDelete = async (id) => {
+    if (!window.confirm("Yakin hapus data ini?")) return;
+    await deleteMasterBarangMasing(id);
+  };
+
+  // ===============================
+  // RENDER
+  // ===============================
+  return (
+    <div className="space-y-6">
+      {/* HEADER */}
+      <div>
+        <h2 className="text-lg font-bold text-slate-800">
+          MASTER BARANG — {kategori}
+        </h2>
+        <p className="text-sm text-slate-500">
+          Simpan, Edit, Delete langsung realtime ke Firebase
+        </p>
       </div>
 
-      <button
-        onClick={save}
-        className="mb-4 bg-indigo-600 text-white px-4 py-2 rounded"
+      {/* FORM */}
+      <form
+        onSubmit={handleSubmit}
+        className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border"
       >
-        <FaPlus /> Simpan
-      </button>
+        <input
+          className="input border p-2 rounded"
+          placeholder="Nama Brand"
+          value={barang.brand}
+          onChange={(e) => setBarang({ ...barang, brand: e.target.value })}
+        />
 
-      <table className="w-full text-sm border">
-        <thead className="bg-slate-200">
-          <tr>
-            <th className="p-2">No</th>
-            <th className="p-2">Brand</th>
-            <th className="p-2">Nama Barang</th>
-            <th className="p-2">SKU</th>
-            <th className="p-2">IMEI</th>
-            <th className="p-2">Aksi</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.id} className="border-t">
-              <td className="p-2 text-center">{i + 1}</td>
-              <td className="p-2">{r.namaBrand}</td>
-              <td className="p-2">{r.namaBarang}</td>
-              <td className="p-2">{r.sku}</td>
-              <td className="p-2 text-center">
-                {r.hasIMEI ? "YA" : "TIDAK"}
-              </td>
-              <td className="p-2 flex gap-2 justify-center">
-                <button
-                  onClick={() => {
-                    setEditId(r.id);
-                    setForm(r);
-                  }}
-                >
-                  <FaEdit />
-                </button>
-                <button onClick={() => deleteMasterBarangMasing(r.id)}>
-                  <FaTrash />
-                </button>
-              </td>
+        <input
+          className="input border p-2 rounded"
+          placeholder="Nama Barang"
+          value={barang.namaBarang}
+          onChange={(e) =>
+            setBarang({ ...barang, namaBarang: e.target.value })
+          }
+        />
+
+        <input
+          type="number"
+          className="input border p-2 rounded"
+          placeholder="Harga SRP"
+          value={barang.harga.srp}
+          onChange={(e) =>
+            setBarang({
+              ...barang,
+              harga: { ...barang.harga, srp: e.target.value },
+            })
+          }
+        />
+
+        <input
+          type="number"
+          className="input border p-2 rounded"
+          placeholder="Harga Grosir"
+          value={barang.harga.grosir}
+          onChange={(e) =>
+            setBarang({
+              ...barang,
+              harga: { ...barang.harga, grosir: e.target.value },
+            })
+          }
+        />
+
+        <input
+          type="number"
+          className="input border p-2 rounded"
+          placeholder="Harga Reseller"
+          value={barang.harga.reseller}
+          onChange={(e) =>
+            setBarang({
+              ...barang,
+              harga: { ...barang.harga, reseller: e.target.value },
+            })
+          }
+        />
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="bg-indigo-600 text-white rounded py-2 hover:bg-indigo-700"
+        >
+          {editId ? "Update" : "Simpan"}
+        </button>
+
+        {editId && (
+          <button
+            type="button"
+            onClick={resetForm}
+            className="bg-gray-400 text-white rounded py-2"
+          >
+            Batal
+          </button>
+        )}
+      </form>
+
+      {/* TABLE */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full border text-sm">
+          <thead className="bg-slate-100">
+            <tr>
+              <th className="border px-3 py-2">Brand</th>
+              <th className="border px-3 py-2">Nama Barang</th>
+              <th className="border px-3 py-2">SRP</th>
+              <th className="border px-3 py-2">Grosir</th>
+              <th className="border px-3 py-2">Reseller</th>
+              <th className="border px-3 py-2">Aksi</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {listBarang.map((b) => (
+              <tr key={b.id}>
+                <td className="border px-3 py-2">{b.brand}</td>
+                <td className="border px-3 py-2">{b.namaBarang}</td>
+                <td className="border px-3 py-2">
+                  {b.harga?.srp?.toLocaleString()}
+                </td>
+                <td className="border px-3 py-2">
+                  {b.harga?.grosir?.toLocaleString()}
+                </td>
+                <td className="border px-3 py-2">
+                  {b.harga?.reseller?.toLocaleString()}
+                </td>
+                <td className="border px-3 py-2 space-x-2">
+                  <button
+                    onClick={() => handleEdit(b)}
+                    className="px-2 py-1 bg-amber-500 text-white rounded"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(b.id)}
+                    className="px-2 py-1 bg-red-600 text-white rounded"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+
+            {listBarang.length === 0 && (
+              <tr>
+                <td colSpan={6} className="text-center py-4 text-slate-400">
+                  Belum ada data
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

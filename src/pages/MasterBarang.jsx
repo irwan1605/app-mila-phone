@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  listenAllTransaksi,
-  addTransaksi,
-  updateTransaksi,
-  deleteTransaksi,
   listenMasterKategoriBarang,
   listenMasterBarang,
   listenMasterBarangBundling,
+  addMasterBarang, // ✅ TAMBAHKAN INI
+  updateMasterBarang,
+  deleteMasterBarangMasing,
 } from "../services/FirebaseService";
 
 import {
@@ -51,14 +50,13 @@ const KATEGORI_OPTIONS = [
 const fmt = (n) => Number(n || 0).toLocaleString("id-ID");
 
 export default function MasterBarang() {
-  const [allTransaksi, setAllTransaksi] = useState([]);
   const [search, setSearch] = useState("");
   const [showTambah, setShowTambah] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editData, setEditData] = useState(null);
   const TODAY = new Date().toISOString().slice(0, 10);
   const [isLoading, setIsLoading] = useState(true);
-  const [lastCount, setLastCount] = useState(0);
+
   const [kategoriList, setKategoriList] = useState([]);
 
   const [masterBarang, setMasterBarang] = useState([]);
@@ -144,37 +142,6 @@ export default function MasterBarang() {
     return () => unsub && unsub();
   }, []);
 
-  useEffect(() => {
-    if (lastCount === 0 && allTransaksi.length > 0) {
-      setLastCount(allTransaksi.length);
-      return;
-    }
-
-    if (allTransaksi.length > lastCount) {
-      alert("✅ Data Master Barang bertambah (Realtime)");
-    }
-
-    if (allTransaksi.length < lastCount) {
-      alert("🗑️ Data Master Barang berkurang (Realtime)");
-    }
-
-    setLastCount(allTransaksi.length);
-  }, [allTransaksi, lastCount]);
-
-  // =======================
-  // ✅ REALTIME FIREBASE MASTER BARANG
-  // =======================
-  useEffect(() => {
-    setIsLoading(true);
-
-    const unsub = listenAllTransaksi((rows) => {
-      setAllTransaksi(rows || []);
-      setIsLoading(false);
-    });
-
-    return () => typeof unsub === "function" && unsub();
-  }, []);
-
   // useEffect(() => {
   //   if (
   //     form.kategori !== "SEPEDA LISTRIK" &&
@@ -195,60 +162,56 @@ export default function MasterBarang() {
   //   }
   // }, [form.kategori]);
 
-  const counterKategori = useMemo(() => {
-    const map = {};
-
-    allTransaksi.forEach((t) => {
-      const kat = t.KATEGORI_BRAND || "TANPA KATEGORI";
-      const qty = Number(t.QTY || 0);
-      const metode = (t.PAYMENT_METODE || "").toUpperCase();
-
-      if (metode === "PEMBELIAN") {
-        map[kat] = (map[kat] || 0) + qty;
-      }
-
-      if (metode === "PENJUALAN") {
-        map[kat] = (map[kat] || 0) - qty;
-      }
-    });
-
-    // ❗ Jangan sampai minus
-    Object.keys(map).forEach((k) => {
-      if (map[k] < 0) map[k] = 0;
-    });
-
-    return map;
-  }, [allTransaksi]);
-
   // ================== REKAP MASTER BARANG ==================
   // ================== REKAP MASTER BARANG ==================
   const rekapMasterBarang = useMemo(() => {
-    const map = {};
-
-    allTransaksi.forEach((t) => {
-      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-      if (!map[key]) {
-        map[key] = {
-          key,
-          tanggal: t.TANGGAL_TRANSAKSI,
-          brand: t.NAMA_BRAND,
-          kategori: t.KATEGORI_BRAND,
-          barang: t.NAMA_BARANG,
-
-          hargaSRP: Number(t.HARGA_SRP || t.HARGA_UNIT || 0),
-          hargaGrosir: Number(t.HARGA_GROSIR || 0),
-          hargaReseller: Number(t.HARGA_RESELLER || 0),
-
-          IS_BUNDLING: Boolean(t.IS_BUNDLING),
-          BUNDLING_ITEMS: Array.isArray(t.BUNDLING_ITEMS)
-            ? t.BUNDLING_ITEMS
+    return masterBarang
+      // ✅ hanya data dari Tambah Master Barang
+      .filter((b) => b.CREATED_AT)
+      .map((b) => {
+        const srp =
+          b.harga?.srp ??
+          b.hargaSRP ??
+          b.HARGA_SRP ??
+          0;
+  
+        const grosir =
+          b.harga?.grosir ??
+          b.hargaGrosir ??
+          b.HARGA_GROSIR ??
+          0;
+  
+        const reseller =
+          b.harga?.reseller ??
+          b.hargaReseller ??
+          b.HARGA_RESELLER ??
+          0;
+  
+        return {
+          id: b.id,
+          key: b.id,
+  
+          // ✅ tanggal realtime
+          tanggal: b.tanggal,
+  
+          brand: b.brand,
+          kategori: b.kategoriBarang,
+          barang: b.namaBarang,
+  
+          // ✅ harga realtime (FIX)
+          hargaSRP: Number(srp),
+          hargaGrosir: Number(grosir),
+          hargaReseller: Number(reseller),
+  
+          IS_BUNDLING: Boolean(b.IS_BUNDLING),
+          BUNDLING_ITEMS: Array.isArray(b.BUNDLING_ITEMS)
+            ? b.BUNDLING_ITEMS
             : [],
         };
-      }
-    });
-
-    return Object.values(map);
-  }, [allTransaksi]);
+      });
+  }, [masterBarang]);
+  
+  
 
   const filtered = useMemo(() => {
     if (!search) return rekapMasterBarang;
@@ -281,18 +244,28 @@ export default function MasterBarang() {
   // }, [masterBarang]);
 
   const namaBarangByBrand = useMemo(() => {
-    if (!form.brand) return [];
+    if (!form.brand || !form.kategori) return [];
 
-    return masterBarang.filter((x) => x.namaBrand === form.brand);
-  }, [masterBarang, form.brand]);
+    return masterBarang.filter(
+      (x) =>
+        x.kategoriBarang === form.kategori &&
+        x.brand === form.brand &&
+        x.namaBarang?.toUpperCase().startsWith(form.brand.toUpperCase())
+    );
+  }, [masterBarang, form.brand, form.kategori]);
 
   const brandList = useMemo(() => {
+    if (!form.kategori) return [];
+
     const set = new Set();
     masterBarang.forEach((x) => {
-      if (x.namaBrand) set.add(x.namaBrand);
+      if (x.kategoriBarang === form.kategori && x.brand) {
+        set.add(x.brand);
+      }
     });
+
     return Array.from(set);
-  }, [masterBarang]);
+  }, [masterBarang, form.kategori]);
 
   // ================== EXPORT EXCEL ==================
   const exportExcel = () => {
@@ -325,64 +298,45 @@ export default function MasterBarang() {
 
   // ================== TAMBAH MASTER BARANG ==================
   const submitTambah = async () => {
-    const sudahAda = allTransaksi.some(
-      (t) =>
-        t.NAMA_BRAND?.toLowerCase() === form.brand.toLowerCase() &&
-        t.NAMA_BARANG?.toLowerCase() === form.barang.toLowerCase()
-    );
-
-    if (sudahAda) {
-      return alert("❌ Barang dengan Brand & Nama ini sudah terdaftar!");
-    }
-
     if (!form.brand || !form.barang || !form.kategori) {
       alert("Lengkapi semua field wajib!");
       return;
     }
 
     const payload = {
-      TANGGAL_TRANSAKSI: form.tanggal,
-      NAMA_BRAND: form.brand,
-      KATEGORI_BRAND: form.kategori,
-      NAMA_BARANG: form.barang,
-
-      HARGA_SRP: form.isBandling ? 0 : Number(form.hargaSRP || 0),
-      HARGA_UNIT: form.isBandling ? 0 : Number(form.hargaSRP || 0),
-      HARGA_GROSIR: form.isBandling ? 0 : Number(form.hargaGrosir || 0),
-      HARGA_RESELLER: form.isBandling ? 0 : Number(form.hargaReseller || 0),
-
-      NAMA_BANDLING_1: form.namaBandling1 || "",
-      HARGA_BANDLING_1: Number(form.hargaBandling1 || 0),
-
-      NAMA_BANDLING_2: form.namaBandling2 || "",
-      HARGA_BANDLING_2: Number(form.hargaBandling2 || 0),
-
-      NAMA_BANDLING_3: form.namaBandling3 || "",
-      HARGA_BANDLING_3: Number(form.hargaBandling3 || 0),
-
-      // ✅ FIX BUNDLING
-      IS_BUNDLING: !!form.isBundling,
+      tanggal: form.tanggal, // YYYY-MM-DD (LOCK TODAY)
+      brand: form.brand,
+      namaBarang: form.barang,
+      kategoriBarang: form.kategori,
+    
+      harga: {
+        srp: Number(form.hargaSRP || 0),
+        grosir: Number(form.hargaGrosir || 0),
+        reseller: Number(form.hargaReseller || 0),
+      },
+    
+      IS_BUNDLING: Boolean(form.isBundling),
       BUNDLING_ITEMS: form.isBundling ? form.bundlingItems : [],
-
-      QTY: 0,
-
-      // 🔥 PEMISAH UTAMA
-      PAYMENT_METODE: "MASTER_BARANG",
-      STATUS: "MASTER",
-      SOURCE_DATA: "MASTER_BARANG",
     
       CREATED_AT: Date.now(),
     };
+    
 
-    const totalAfter = masterBarang.length + 1;
-    const lastPage = Math.ceil(totalAfter / itemsPerPage);
-    setCurrentPage(lastPage);
+    try {
+      // ⬇️ SIMPAN KE MASTER BARANG
+      await addMasterBarang(payload);
 
-    await addTransaksi(1, payload);
+      // pindah ke halaman terakhir
+      const totalAfter = masterBarang.length + 1;
+      const lastPage = Math.ceil(totalAfter / itemsPerPage);
+      setCurrentPage(lastPage);
 
-    showNotif("✅ Master Barang berhasil ditambahkan!");
-
-    setShowTambah(false);
+      showNotif("✅ Master Barang berhasil ditambahkan!");
+      setShowTambah(false);
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menambahkan Master Barang");
+    }
   };
 
   // ================== OPEN EDIT ==================
@@ -402,71 +356,65 @@ export default function MasterBarang() {
   // ================== DELETE MASTER BARANG ==================
   const deleteItem = async (row) => {
     const confirmDelete = window.confirm(
-      `Yakin hapus Master Barang:\n\n${row.brand} - ${row.barang} ?`
+      `Yakin hapus Master Barang:\n\n${row.brand} - ${row.barang}?`
     );
     if (!confirmDelete) return;
 
-    const rows = allTransaksi.filter(
-      (t) => t.NAMA_BRAND === row.brand && t.NAMA_BARANG === row.barang
-    );
+    try {
+      // 🔥 HAPUS SEKALI SAJA (MASTER BARANG)
+      await deleteMasterBarangMasing(row.id);
 
-    for (const r of rows) {
-      await deleteTransaksi(r.tokoId || 1, r.id);
+      showNotif("🗑️ Master Barang berhasil dihapus!");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menghapus Master Barang");
     }
-
-    showNotif("🗑️ Master Barang berhasil dihapus!");
   };
 
   const submitEdit = async () => {
-    if (!editData?._originalBrand || !editData?._originalBarang) {
-      alert("Data referensi lama tidak ditemukan");
+    if (!editData?.id) {
+      alert("ID Master Barang tidak ditemukan");
       return;
     }
 
-    // ✅ CARI DATA BERDASARKAN NAMA LAMA
-    const rows = allTransaksi.filter(
-      (t) =>
-        t.NAMA_BRAND === editData._originalBrand &&
-        t.NAMA_BARANG === editData._originalBarang
-    );
+    const payload = {
+      brand: editData.brand,
+      namaBarang: editData.barang,
+      kategoriBarang: editData.kategori,
 
-    if (!rows.length) {
-      alert("Tidak ada data yang bisa diperbarui");
-      return;
+      harga: {
+        srp: Number(editData.hargaSRP || 0),
+        grosir: Number(editData.hargaGrosir || 0),
+        reseller: Number(editData.hargaReseller || 0),
+      },
+
+      // ===== BUNDLING (LEVEL ATAS) =====
+      IS_BUNDLING: Boolean(editData.IS_BUNDLING),
+
+      BUNDLING_ITEMS: Array.isArray(editData.BUNDLING_ITEMS)
+        ? editData.BUNDLING_ITEMS
+        : [],
+
+      NAMA_BANDLING_1: editData.NAMA_BANDLING_1 || "",
+      HARGA_BANDLING_1: Number(editData.HARGA_BANDLING_1 || 0),
+
+      NAMA_BANDLING_2: editData.NAMA_BANDLING_2 || "",
+      HARGA_BANDLING_2: Number(editData.HARGA_BANDLING_2 || 0),
+
+      NAMA_BANDLING_3: editData.NAMA_BANDLING_3 || "",
+      HARGA_BANDLING_3: Number(editData.HARGA_BANDLING_3 || 0),
+    };
+
+    try {
+      // 🔥 UPDATE SEKALI SAJA
+      await updateMasterBarang(editData.id, payload);
+
+      showNotif("✅ Master Barang berhasil diperbarui (Realtime)");
+      setShowEdit(false);
+    } catch (err) {
+      console.error(err);
+      alert("Gagal memperbarui Master Barang");
     }
-
-    for (const r of rows) {
-      await updateTransaksi(r.tokoId || 1, r.id, {
-        TANGGAL_TRANSAKSI: editData.tanggal,
-
-        // ✅ UPDATE KE NAMA BARU
-        NAMA_BRAND: editData.brand,
-        NAMA_BARANG: editData.barang,
-        KATEGORI_BRAND: editData.kategori,
-
-        HARGA_SRP: Number(editData.hargaSRP || 0),
-        HARGA_UNIT: Number(editData.hargaSRP || 0),
-        HARGA_GROSIR: Number(editData.hargaGrosir || 0),
-        HARGA_RESELLER: Number(editData.hargaReseller || 0),
-
-        NAMA_BANDLING_1: editData.NAMA_BANDLING_1 || "",
-        HARGA_BANDLING_1: Number(editData.HARGA_BANDLING_1 || 0),
-
-        NAMA_BANDLING_2: editData.NAMA_BANDLING_2 || "",
-        HARGA_BANDLING_2: Number(editData.HARGA_BANDLING_2 || 0),
-
-        NAMA_BANDLING_3: editData.NAMA_BANDLING_3 || "",
-        HARGA_BANDLING_3: Number(editData.HARGA_BANDLING_3 || 0),
-
-        IS_BUNDLING: Boolean(editData.IS_BUNDLING),
-        BUNDLING_ITEMS: Array.isArray(editData.BUNDLING_ITEMS)
-          ? editData.BUNDLING_ITEMS
-          : [],
-      });
-    }
-
-    showNotif("✅ Nama Brand & Nama Barang berhasil diperbarui (Realtime)");
-    setShowEdit(false);
   };
 
   // ================== UI ==================
@@ -511,17 +459,6 @@ export default function MasterBarang() {
             🔄 Sinkronisasi data dengan MASTER DATA
           </div>
         )}
-
-        <div className="flex flex-wrap gap-2 mb-3 text-xs font-semibold">
-          {Object.entries(counterKategori).map(([kat, total]) => (
-            <div
-              key={kat}
-              className="px-3 py-1 rounded-full bg-indigo-100 text-indigo-700"
-            >
-              {kat}: {total}
-            </div>
-          ))}
-        </div>
 
         {/* TABLE */}
         <div className="overflow-x-auto rounded-xl border">
@@ -688,14 +625,19 @@ export default function MasterBarang() {
                 <input
                   list="brand-master-list"
                   className="input"
-                  placeholder="Pilih Nama Brand"
+                  placeholder={
+                    form.kategori ? "Pilih Nama Brand" : "Pilih Kategori dulu"
+                  }
+                  disabled={!form.kategori}
                   value={form.brand}
                   onChange={(e) =>
                     setForm({
                       ...form,
                       brand: e.target.value,
                       barang: "",
-                      kategori: "",
+                      hargaSRP: "",
+                      hargaGrosir: "",
+                      hargaReseller: "",
                     })
                   }
                 />
@@ -725,7 +667,11 @@ export default function MasterBarang() {
                     setForm({
                       ...form,
                       barang: val,
-                      kategori: found?.kategoriBarang || "",
+
+                      // 🔥 AUTO ISI HARGA
+                      hargaSRP: found?.harga?.srp || "",
+                      hargaGrosir: found?.harga?.grosir || "",
+                      hargaReseller: found?.harga?.reseller || "",
                     });
                   }}
                 />
@@ -934,7 +880,7 @@ export default function MasterBarang() {
                 </div>
 
                 {/* Bandling edit — rapi di baris/kolom */}
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="text-xs text-slate-500">
                       Nama Bandling 1
@@ -1024,7 +970,7 @@ export default function MasterBarang() {
                       }
                     />
                   </div>
-                </div>
+                </div> */}
 
                 <div className="flex justify-end gap-3 mt-6">
                   <button
