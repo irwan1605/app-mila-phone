@@ -6,28 +6,15 @@ import {
   FaShoppingCart,
   FaBoxes,
   FaExchangeAlt,
-  FaSearch,
   FaSun,
   FaMoon,
 } from "react-icons/fa";
 
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
-
-import {
   listenPenjualanHemat,
   listenTransaksiByTokoHemat,
-  addTransaksi,
-  potongStockMasterByImei,
-  listenStockAll ,
 } from "../services/FirebaseService";
+
 import * as XLSX from "xlsx";
 
 // ======================= KONSTAN =======================
@@ -44,19 +31,6 @@ const TOKO_LIST = [
   { id: "10", tokoName: "SAWANGAN", code: "sawangan" },
 ];
 
-// Sama seperti MasterPenjualan
-const TIPE_BAYAR_OPTIONS = ["CASH", "PIUTANG", "DEBIT CARD"];
-const PAYMENT_METHOD_OPTIONS = [
-  "AKULAKU",
-  "KREDIVO",
-  "BRITAMA",
-  "BCA",
-  "BLI BLI",
-  "ONLINE SHOPE",
-  "HOME CREDIT INDONESIA (HCI)",
-  "SPEKTRA",
-];
-
 const fmt = (n) => {
   try {
     return Number(n || 0).toLocaleString("id-ID");
@@ -65,13 +39,6 @@ const fmt = (n) => {
   }
 };
 
-// Mapping status otomatis dari tipe bayar (sama seperti MasterPenjualan)
-const getStatusFromTipeBayar = (tipe) => {
-  const t = (tipe || "").toUpperCase();
-  if (t === "CASH" || t === "DEBIT CARD") return "LUNAS";
-  if (t === "PIUTANG") return "PIUTANG";
-  return "";
-};
 
 // Preset contoh untuk KREDIT/PIUTANG (boleh kamu sesuaikan)
 const CREDIT_PRESET = {
@@ -92,6 +59,9 @@ export default function DashboardToko(props) {
   const params = useParams();
   const tokoId = props.tokoId || params.tokoId || params.id;
   const navigate = useNavigate();
+  // ======================= ROLE USER =======================
+  const roleUser = localStorage.getItem("ROLE_USER");
+  const isPicToko = roleUser === "PIC_TOKO";
 
   const toko = TOKO_LIST.find((t) => t.id === String(tokoId));
 
@@ -132,11 +102,6 @@ export default function DashboardToko(props) {
     () => Math.max(1, Math.ceil((quickItems || []).length / perPage)),
     [quickItems, perPage]
   );
-
-  const paginatedQuickItems = useMemo(() => {
-    const start = (page - 1) * perPage;
-    return (quickItems || []).slice(start, start + perPage);
-  }, [quickItems, page, perPage]);
 
   // ======================= CHART VOID & RETURN PER TOKO =======================
   // eslint-disable-next-line no-unused-vars
@@ -289,52 +254,7 @@ export default function DashboardToko(props) {
       unsubToko && unsubToko();
     };
   }, [tokoId]);
-
-  // ======================= DATA CHART PENJUALAN PER TOKO =======================
-  const dataPenjualanPerToko = useMemo(() => {
-    const map = {};
-    TOKO_LIST.forEach((t) => {
-      map[t.tokoName] = 0;
-    });
-
-    (allTransaksi || []).forEach((x) => {
-      if ((x.STATUS || "").toUpperCase() !== "APPROVED") return;
-
-      const tokoName = x.NAMA_TOKO || "";
-      const total = Number(x.HARGA_TOTAL || x.TOTAL || 0);
-
-      if (!map[tokoName]) map[tokoName] = 0;
-      map[tokoName] += total;
-    });
-
-    return Object.entries(map).map(([tokoName, total]) => ({
-      tokoName,
-      total,
-    }));
-  }, [allTransaksi]);
-
-  // ======================= DATA CHART STOK PER TOKO =======================
-  const dataStockPerToko = useMemo(() => {
-    const map = {};
-    TOKO_LIST.forEach((t) => {
-      map[t.tokoName] = 0;
-    });
-
-    (allTransaksi || []).forEach((x) => {
-      if ((x.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return;
-
-      const tokoName = x.NAMA_TOKO || "";
-      const qty = Number(x.QTY || 0);
-
-      if (!map[tokoName]) map[tokoName] = 0;
-      map[tokoName] += qty;
-    });
-
-    return Object.entries(map).map(([tokoName, total]) => ({
-      tokoName,
-      total,
-    }));
-  }, [allTransaksi]);
+ 
 
   // ======================= FILTER REALTIME VOID & RETURN (KHUSUS TOKO INI) =======================
   const dataVoidRealtime = useMemo(() => {
@@ -440,13 +360,6 @@ export default function DashboardToko(props) {
     }));
   }, [laporanReturn]);
 
-  const statusPembayaran = useMemo(() => {
-    if (paymentType === "CASH") return getStatusFromTipeBayar("CASH");
-    if (paymentType === "TRANSFER") return getStatusFromTipeBayar("DEBIT CARD");
-    if (paymentType === "KREDIT") return getStatusFromTipeBayar("PIUTANG");
-    return "";
-  }, [paymentType]);
-
   // ======================= HANDLER =======================
 
   const handleToggleTheme = () => {
@@ -455,14 +368,11 @@ export default function DashboardToko(props) {
 
   const handleOpen = (type) => {
     if (!toko) return;
-  
+
     // ✅ PAKAI CODE / SLUG TOKO, BUKAN ID ANGKA
     const tokoSlug =
-      toko.code ||
-      (toko.tokoName || "")
-        .toLowerCase()
-        .replace(/\s+/g, "-");
-  
+      toko.code || (toko.tokoName || "").toLowerCase().replace(/\s+/g, "-");
+
     if (type === "penjualan") {
       navigate(`/toko/${tokoSlug}/penjualan`);
     } else if (type === "stock") {
@@ -471,12 +381,10 @@ export default function DashboardToko(props) {
           lockedToko: toko.tokoName, // 🔒 kunci toko
         },
       });
-      
     } else if (type === "transfer") {
       navigate("/transfer-barang");
     }
   };
-  
 
   const handleAddItemByImei = () => {
     const imei = searchImei.trim();
@@ -530,39 +438,9 @@ export default function DashboardToko(props) {
     setSearchImei("");
   };
 
-  const handleRemoveItem = (id) => {
-    setQuickItems((prev) => prev.filter((x) => x.id !== id));
-  };
+  
 
-  const handlePaymentClick = (type) => {
-    setPaymentType(type);
-    // reset kredit jika bukan kredit
-    if (type !== "KREDIT") {
-      setCreditForm({
-        paymentMethod: "",
-        mdr: "",
-        kategoriHarga: "",
-        mpProtec: "",
-        tenor: "",
-      });
-    }
-  };
-
-  const handleCreditChange = (field, value) => {
-    setCreditForm((prev) => {
-      const next = { ...prev, [field]: value };
-      if (field === "paymentMethod") {
-        const preset = CREDIT_PRESET[value];
-        if (preset) {
-          next.mdr = preset.mdr;
-          next.kategoriHarga = preset.kategoriHarga;
-          next.mpProtec = preset.mpProtec;
-          next.tenor = preset.tenor;
-        }
-      }
-      return next;
-    });
-  };
+ 
 
   const buildInvoiceHtml = (invoiceNo, tanggal) => {
     const rowsHtml = (quickItems || [])
@@ -641,113 +519,18 @@ export default function DashboardToko(props) {
     `;
   };
 
-  const handlePreviewInvoice = () => {
-    if (!quickItems.length) {
-      alert("Belum ada barang di tabel penjualan.");
+  const handleQuickSellByImei = () => {
+    const imei = searchImei.trim();
+    if (!imei) {
+      alert("Masukkan IMEI terlebih dahulu");
       return;
     }
-    const tanggal = new Date().toISOString().slice(0, 10);
-    const invoiceNo = `INV-${tokoId || "X"}-${Date.now()}`;
-    const html = buildInvoiceHtml(invoiceNo, tanggal);
 
-    const win = window.open("", "_blank");
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-    }
-  };
-
-  const handleSimpanCetak = async () => {
-    try {
-      if (!quickItems.length) {
-        alert("Belum ada barang di tabel penjualan.");
-        return;
-      }
-      if (!paymentType) {
-        alert("Pilih jenis pembayaran terlebih dahulu.");
-        return;
-      }
-
-      const tanggal = new Date().toISOString().slice(0, 10);
-      const invoiceNo = `INV-${tokoId || "X"}-${Date.now()}`;
-
-      const tipeBayarForStatus =
-        paymentType === "CASH"
-          ? "CASH"
-          : paymentType === "TRANSFER"
-          ? "DEBIT CARD"
-          : "PIUTANG";
-
-      const status = getStatusFromTipeBayar(tipeBayarForStatus);
-
-      const paymentMethodFinal =
-        paymentType === "CASH"
-          ? "TUNAI"
-          : paymentType === "TRANSFER"
-          ? "TRANSFER BANK"
-          : creditForm.paymentMethod || "";
-
-      for (const it of quickItems) {
-        const payload = {
-          TANGGAL_TRANSAKSI: tanggal,
-          NO_INVOICE: invoiceNo,
-          NAMA_TOKO: toko ? toko.tokoName : "",
-          NAMA_BRAND: it.namaBrand || "",
-          NAMA_BARANG: it.namaBarang || "",
-          IMEI: it.imei || "",
-          QTY: 1,
-          HARGA_UNIT: Number(it.hargaUnit || 0),
-          TOTAL: Number(it.hargaUnit || 0),
-
-          PAYMENT_METHOD: paymentMethodFinal,
-          KATEGORI_BAYAR: tipeBayarForStatus,
-          MDR: creditForm.mdr || "",
-          KATEGORI_HARGA: creditForm.kategoriHarga || "",
-          MP_PROTEK: creditForm.mpProtec || "",
-          TENOR: creditForm.tenor || "",
-
-          PAYMENT_METODE: "PENJUALAN",
-          STATUS: status,
-        };
-
-        // ✅ SIMPAN KE MASTER PENJUALAN TOKO
-        await addTransaksi(tokoId, payload);
-
-        // ✅ TANDAI STOK DI PUSAT BERKURANG (IMEI SOLD)
-        await addTransaksi("1", {
-          ...payload,
-          NAMA_TOKO: "CILANGKAP PUSAT",
-          STATUS: "LUNAS",
-          PAYMENT_METODE: "STOCK_KURANG",
-        });
-
-        // ✅ PANGGIL FUNGSI MASTER BARANG (JIKA ADA)
-        if (typeof potongStockMasterByImei === "function") {
-          await potongStockMasterByImei(it.imei);
-        }
-      }
-
-      // ✅ HAPUS DRAFT SETELAH BERHASIL
-      localStorage.removeItem(DRAFT_KEY);
-
-      alert("✅ Penjualan berhasil disimpan & stok otomatis berkurang.");
-
-      handlePreviewInvoice();
-
-      setQuickItems([]);
-      setPaymentType("");
-      setCreditForm({
-        paymentMethod: "",
-        mdr: "",
-        kategoriHarga: "",
-        mpProtec: "",
-        tenor: "",
-      });
-      setPage(1);
-    } catch (err) {
-      console.error("handleSimpanCetak error:", err);
-      alert("❌ Gagal menyimpan penjualan.");
-    }
+    navigate(`/toko/${toko.code}/penjualan`, {
+      state: {
+        quickImei: imei,
+      },
+    });
   };
 
   // ======================= HANDLE TIDAK ADA TOKO =======================
@@ -800,6 +583,23 @@ export default function DashboardToko(props) {
               Kelola penjualan, stok, dan mutasi barang untuk toko ini secara
               realtime terintegrasi dengan Firebase.
             </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={searchImei}
+              onChange={(e) => setSearchImei(e.target.value)}
+              placeholder="Scan / Input IMEI"
+              className="px-3 py-2 rounded-xl border text-sm w-44"
+            />
+
+            <button
+              onClick={handleQuickSellByImei}
+              className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+            >
+              Tambah
+            </button>
           </div>
 
           <div className="flex items-center gap-3 justify-end">
@@ -860,26 +660,28 @@ export default function DashboardToko(props) {
           </button>
 
           {/* STOCK OPNAME */}
-          <button
-            onClick={() => handleOpen("stock")}
-            className="group relative overflow-hidden flex flex-col items-start justify-between bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 text-white rounded-2xl p-5 shadow-xl shadow-emerald-900/40 border border-white/10 hover:border-emerald-300/60 hover:shadow-2xl hover:-translate-y-1 hover:scale-[1.01] transition-all duration-300 text-left"
-          >
-            <span className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10 blur-3xl group-hover:bg-white/20 transition-all" />
-            <div className="flex items-center justify-between w-full relative">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.2em] opacity-80">
-                  Menu
-                </p>
-                <p className="font-semibold text-lg mt-1">Stock Opname</p>
+          {!isPicToko && (
+            <button
+              onClick={() => handleOpen("stock")}
+              className="group relative overflow-hidden flex flex-col items-start justify-between bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 text-white rounded-2xl p-5 shadow-xl shadow-emerald-900/40 border border-white/10 hover:border-emerald-300/60 hover:shadow-2xl hover:-translate-y-1 hover:scale-[1.01] transition-all duration-300 text-left"
+            >
+              <span className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10 blur-3xl group-hover:bg-white/20 transition-all" />
+              <div className="flex items-center justify-between w-full relative">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.2em] opacity-80">
+                    Menu
+                  </p>
+                  <p className="font-semibold text-lg mt-1">Stock Opname</p>
+                </div>
+                <div className="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center shadow-md shadow-black/30">
+                  <FaBoxes className="text-white text-2xl" />
+                </div>
               </div>
-              <div className="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center shadow-md shadow-black/30">
-                <FaBoxes className="text-white text-2xl" />
-              </div>
-            </div>
-            <p className="text-xs sm:text-sm mt-3 opacity-90">
-              Cek dan sesuaikan stok fisik dengan sistem secara berkala.
-            </p>
-          </button>
+              <p className="text-xs sm:text-sm mt-3 opacity-90">
+                Cek dan sesuaikan stok fisik dengan sistem secara berkala.
+              </p>
+            </button>
+          )}
 
           {/* TRANSFER GUDANG */}
           <button
@@ -902,296 +704,6 @@ export default function DashboardToko(props) {
               Pindahkan stok antar toko atau ke gudang pusat dengan kontrol.
             </p>
           </button>
-        </div>
-
-        {/* ================= PENJUALAN CEPAT VIA IMEI ================= */}
-        <div
-          className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl mt-6`}
-        >
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-4">
-            <div>
-              <h2 className="font-semibold text-base sm:text-lg">
-                Penjualan Cepat via IMEI
-              </h2>
-              <p className={`text-xs sm:text-sm ${subTextClass}`}>
-                Masukkan IMEI untuk menambahkan barang ke tabel penjualan. Bisa
-                lebih dari 1 barang / jenis.
-              </p>
-            </div>
-            <div className="flex gap-2 w-full md:w-auto">
-              <div className="flex-1 flex items-center gap-2 bg-slate-900/40 rounded-xl px-3 py-2 border border-slate-700/60">
-                <FaSearch className="text-slate-400 text-sm" />
-                <input
-                  value={searchImei}
-                  onChange={(e) => setSearchImei(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleAddItemByImei();
-                  }}
-                  className="bg-transparent outline-none text-xs sm:text-sm flex-1"
-                  placeholder="Masukkan IMEI lalu Enter..."
-                />
-              </div>
-              <button
-                onClick={handleAddItemByImei}
-                className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-900/40"
-              >
-                Tambah
-              </button>
-            </div>
-          </div>
-
-          {/* TABEL ITEM */}
-          <div className="w-full overflow-x-auto rounded-xl border border-slate-700/60 mb-3">
-            <table className="min-w-full text-xs sm:text-sm">
-              <thead className={isDark ? "bg-slate-900/80" : "bg-slate-100"}>
-                <tr>
-                  <th className="px-2 py-2 text-left">#</th>
-                  <th className="px-2 py-2 text-left">Tanggal</th>
-                  <th className="px-2 py-2 text-left">No Invoice</th>
-                  <th className="px-2 py-2 text-left">Brand</th>
-                  <th className="px-2 py-2 text-left">Barang</th>
-                  <th className="px-2 py-2 text-left">IMEI</th>
-                  <th className="px-2 py-2 text-right">Harga Unit</th>
-                  <th className="px-2 py-2 text-center">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quickItems.length === 0 ? (
-                  <tr>
-                    <td className="px-3 py-3 text-center text-xs" colSpan={8}>
-                      Belum ada item. Cari IMEI di atas untuk menambahkan
-                      barang.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedQuickItems.map((it, idx) => (
-                    <tr
-                      key={it.id}
-                      className={
-                        isDark
-                          ? "border-t border-slate-800/80 hover:bg-slate-800/70"
-                          : "border-t border-slate-200 hover:bg-slate-50"
-                      }
-                    >
-                      <td className="px-2 py-2">
-                        {(page - 1) * perPage + idx + 1}
-                      </td>
-                      <td className="px-2 py-2 whitespace-nowrap">
-                        {it.tanggal}
-                      </td>
-                      <td className="px-2 py-2 whitespace-nowrap">
-                        {it.noInvoice}
-                      </td>
-                      <td className="px-2 py-2 whitespace-nowrap">
-                        {it.namaBrand}
-                      </td>
-                      <td className="px-2 py-2 whitespace-nowrap">
-                        {it.namaBarang}
-                      </td>
-                      <td className="px-2 py-2 whitespace-nowrap font-mono">
-                        {it.imei}
-                      </td>
-                      <td className="px-2 py-2 text-right whitespace-nowrap">
-                        Rp {fmt(it.hargaUnit)}
-                      </td>
-                      <td className="px-2 py-2 text-center">
-                        <button
-                          onClick={() => handleRemoveItem(it.id)}
-                          className="text-[11px] px-2 py-1 rounded-lg bg-red-500/80 hover:bg-red-500 text-white"
-                        >
-                          Hapus
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* ✅ NAVIGASI PAGE TABEL (TETAP DI BAWAH, TIDAK MEMECAH TABEL) */}
-          {quickItems.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4 text-xs sm:text-sm">
-              <span className={subTextClass}>
-                Menampilkan {paginatedQuickItems.length} dari{" "}
-                {quickItems.length} item
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className={`px-3 py-1 rounded-lg border text-xs ${
-                    page === 1
-                      ? "opacity-40 cursor-not-allowed"
-                      : "hover:bg-slate-800/60"
-                  }`}
-                >
-                  Sebelumnya
-                </button>
-                <span className={subTextClass}>
-                  Hal {page} / {totalPage}
-                </span>
-                <button
-                  disabled={page === totalPage}
-                  onClick={() => setPage((p) => Math.min(totalPage, p + 1))}
-                  className={`px-3 py-1 rounded-lg border text-xs ${
-                    page === totalPage || totalPage === 0
-                      ? "opacity-40 cursor-not-allowed"
-                      : "hover:bg-slate-800/60"
-                  }`}
-                >
-                  Berikutnya
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* TOMBOL PEMBAYARAN */}
-          <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between mb-4">
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => handlePaymentClick("CASH")}
-                className={`px-3 py-2 rounded-full text-xs sm:text-sm border ${
-                  paymentType === "CASH"
-                    ? "bg-emerald-500 text-white border-emerald-400"
-                    : "bg-slate-900/40 border-slate-700 text-slate-200"
-                }`}
-              >
-                CASH
-              </button>
-              <button
-                onClick={() => handlePaymentClick("TRANSFER")}
-                className={`px-3 py-2 rounded-full text-xs sm:text-sm border ${
-                  paymentType === "TRANSFER"
-                    ? "bg-sky-500 text-white border-sky-400"
-                    : "bg-slate-900/40 border-slate-700 text-slate-200"
-                }`}
-              >
-                TRANSFER DEBIT
-              </button>
-              <button
-                onClick={() => handlePaymentClick("KREDIT")}
-                className={`px-3 py-2 rounded-full text-xs sm:text-sm border ${
-                  paymentType === "KREDIT"
-                    ? "bg-amber-500 text-white border-amber-400"
-                    : "bg-slate-900/40 border-slate-700 text-slate-200"
-                }`}
-              >
-                KREDIT / PIUTANG
-              </button>
-            </div>
-
-            <div className={`text-xs ${subTextClass}`}>
-              Status:{" "}
-              <span className="font-semibold text-slate-100">
-                {statusPembayaran || "-"}
-              </span>
-            </div>
-          </div>
-
-          {/* FORM KREDIT */}
-          {paymentType === "KREDIT" && (
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4 text-xs sm:text-sm">
-              <div className="flex flex-col gap-1">
-                <label className={subTextClass}>PAYMENT METODE</label>
-                <select
-                  value={creditForm.paymentMethod}
-                  onChange={(e) =>
-                    handleCreditChange("paymentMethod", e.target.value)
-                  }
-                  className="rounded-lg px-2 py-1 bg-slate-900/60 border border-slate-700 outline-none"
-                >
-                  <option value="">- Pilih -</option>
-                  {PAYMENT_METHOD_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className={subTextClass}>MDR (%)</label>
-                <input
-                  value={creditForm.mdr}
-                  onChange={(e) => handleCreditChange("mdr", e.target.value)}
-                  className="rounded-lg px-2 py-1 bg-slate-900/60 border border-slate-700 outline-none"
-                  placeholder="MDR"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className={subTextClass}>KATEGORI HARGA</label>
-                <input
-                  value={creditForm.kategoriHarga}
-                  onChange={(e) =>
-                    handleCreditChange("kategoriHarga", e.target.value)
-                  }
-                  className="rounded-lg px-2 py-1 bg-slate-900/60 border border-slate-700 outline-none"
-                  placeholder="KREDIT / REGULER"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className={subTextClass}>MP PROTEK</label>
-                <input
-                  value={creditForm.mpProtec}
-                  onChange={(e) =>
-                    handleCreditChange("mpProtec", e.target.value)
-                  }
-                  className="rounded-lg px-2 py-1 bg-slate-900/60 border border-slate-700 outline-none"
-                  placeholder="YA / TIDAK"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className={subTextClass}>TENOR</label>
-                <input
-                  value={creditForm.tenor}
-                  onChange={(e) => handleCreditChange("tenor", e.target.value)}
-                  className="rounded-lg px-2 py-1 bg-slate-900/60 border border-slate-700 outline-none"
-                  placeholder="Bulan"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* SUMMARY & ACTION */}
-          <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-            <div className="text-xs sm:text-sm space-y-1">
-              <p>
-                <span className={subTextClass}>Jenis Pembayaran:</span>{" "}
-                <span className="font-semibold">
-                  {paymentType === "CASH"
-                    ? "CASH"
-                    : paymentType === "TRANSFER"
-                    ? "TRANSFER DEBIT"
-                    : paymentType === "KREDIT"
-                    ? "KREDIT / PIUTANG"
-                    : "-"}
-                </span>
-              </p>
-              <p>
-                <span className={subTextClass}>Jumlah QTY:</span>{" "}
-                <span className="font-semibold">{totalQty}</span>
-              </p>
-              <p>
-                <span className={subTextClass}>Total Bayar:</span>{" "}
-                <span className="font-semibold">Rp {fmt(totalBayar)}</span>
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2 justify-end">
-              <button
-                onClick={handlePreviewInvoice}
-                className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-sm shadow-lg"
-              >
-                Preview Invoice
-              </button>
-              <button
-                onClick={handleSimpanCetak}
-                className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold shadow-lg"
-              >
-                Simpan & Cetak
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1298,107 +810,6 @@ export default function DashboardToko(props) {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-      </div>
-
-      {/* ================= CHART PENJUALAN & STOK ================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-        <div
-          className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="font-semibold text-sm sm:text-base">
-                Total Penjualan per Toko
-              </h3>
-              <p className={`text-[11px] ${subTextClass}`}>
-                Berdasarkan transaksi berstatus{" "}
-                <span className="text-emerald-300">APPROVED</span>
-              </p>
-            </div>
-          </div>
-          <div className="h-64 sm:h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dataPenjualanPerToko}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke={isDark ? "#1f2937" : "#e5e7eb"}
-                />
-                <XAxis
-                  dataKey="name"
-                  tick={{
-                    fill: isDark ? "#9ca3af" : "#4b5563",
-                    fontSize: 10,
-                  }}
-                />
-                <YAxis
-                  tick={{
-                    fill: isDark ? "#9ca3af" : "#4b5563",
-                    fontSize: 10,
-                  }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: isDark ? "#020617" : "#f9fafb",
-                    border: "1px solid #4b5563",
-                    borderRadius: "0.75rem",
-                    fontSize: 11,
-                    color: "#e5e7eb",
-                  }}
-                />
-                <Bar dataKey="total" radius={[8, 8, 2, 2]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div
-          className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl`}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="font-semibold text-sm sm:text-base">
-                Stock Barang per Toko
-              </h3>
-              <p className={`text-[11px] ${subTextClass}`}>
-                Berdasarkan total Qty dari transaksi{" "}
-                <span className="text-sky-300">PEMBELIAN</span>
-              </p>
-            </div>
-          </div>
-          <div className="h-64 sm:h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dataStockPerToko}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke={isDark ? "#1f2937" : "#e5e7eb"}
-                />
-                <XAxis
-                  dataKey="name"
-                  tick={{
-                    fill: isDark ? "#9ca3af" : "#4b5563",
-                    fontSize: 10,
-                  }}
-                />
-                <YAxis
-                  tick={{
-                    fill: isDark ? "#9ca3af" : "#4b5563",
-                    fontSize: 10,
-                  }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: isDark ? "#020617" : "#f9fafb",
-                    border: "1px solid #4b5563",
-                    borderRadius: "0.75rem",
-                    fontSize: 11,
-                    color: "#e5e7eb",
-                  }}
-                />
-                <Bar dataKey="total" radius={[8, 8, 2, 2]} />
-              </BarChart>
-            </ResponsiveContainer>
           </div>
         </div>
       </div>

@@ -19,20 +19,16 @@ import {
   push,
   remove,
   runTransaction,
-  query,          // ⬅️ TAMBAH
-  orderByChild,   // ⬅️ TAMBAH
-  limitToLast,    // ⬅️ TAMBAH
-  startAt,        // ⬅️ TAMBAH
-  endAt,     // ⬅️ TAMBAH
+  query, // ⬅️ TAMBAH
+  orderByChild, // ⬅️ TAMBAH
+  limitToLast, // ⬅️ TAMBAH
+  startAt, // ⬅️ TAMBAH
+  endAt, // ⬅️ TAMBAH
 } from "firebase/database";
-
-
 
 /* ============================================================
    HELPERS
 ============================================================ */
-
-
 
 export const unlockImei = async (imei) => {
   await set(ref(db, `imeiLocks/${imei}`), null);
@@ -41,8 +37,6 @@ export const unlockImei = async (imei) => {
 export const rollbackStock = async (toko, sku, qty) => {
   await updateStockAtomic(toko, sku, qty);
 };
-
-
 
 // 🧾 SIMPAN AUDIT LOG
 export const addAuditLog = async (logId, data) => {
@@ -56,7 +50,6 @@ export const addAuditLog = async (logId, data) => {
 export const updateAuditLog = async (logId, data) => {
   await update(ref(db, `auditLogs/${logId}`), data);
 };
-
 
 // 🔒 LOCK IMEI SECARA ATOMIC (ANTI DOUBLE SALES)
 export const lockImeiAtomic = async (imei, payload) => {
@@ -103,8 +96,6 @@ export const updateStockAtomic = async (toko, sku, diffQty) => {
   }
 };
 
-
-
 /**
  * Normalize transaksi row into consistent shape used by app
  * Ensures id, tokoId, TOKO exist.
@@ -135,7 +126,6 @@ const normalizeTransaksi = (id, row = {}, tokoId = null, tokoName = "") => {
    TOKO HELPERS
 ============================================================ */
 
-
 // CREATE
 export const addMasterKategoriBarang = async (data) => {
   try {
@@ -151,7 +141,6 @@ export const addMasterKategoriBarang = async (data) => {
     throw err; // ⬅️ WAJIB agar React tahu error Firebase
   }
 };
-
 
 // READ (LISTEN)
 export const listenMasterKategoriBarang = (callback) => {
@@ -233,11 +222,7 @@ export const listenTransaksiByToko = (tokoId, callback) => {
  * - limit: jumlah data terakhir (default 200)
  * - startDate / endDate: filter range tanggal (opsional, format "YYYY-MM-DD")
  */
-export const listenTransaksiByTokoHemat = (
-  tokoId,
-  options = {},
-  callback
-) => {
+export const listenTransaksiByTokoHemat = (tokoId, options = {}, callback) => {
   const { limit = 200, startDate, endDate } = options || {};
 
   const baseRef = ref(db, `toko/${tokoId}/transaksi`);
@@ -295,9 +280,6 @@ export const listenTransaksiByTokoHemat = (
 
   return () => unsub && unsub();
 };
-
-
-
 
 /**
  * Delete transaksi by id
@@ -391,7 +373,6 @@ export const forceDeleteTransaksi = async (tokoId, matchFn) => {
   }
 };
 
-
 /* ============================================================
    USERS MANAGEMENT
 ============================================================ */
@@ -457,7 +438,7 @@ export const deletePenjualan = (id) => {
 };
 
 export const listenPenjualan = (callback) => {
-  const r = ref(db, "penjualan");
+  const r = ref(db, "penjualan,transaksi");
 
   const unsub = onValue(
     r,
@@ -478,6 +459,13 @@ export const listenPenjualan = (callback) => {
       callback([]);
     }
   );
+  return onValue(r, (snap) => {
+    const data = snap.val() || {};
+    const list = Object.values(data).filter(
+      (x) => x.PAYMENT_METODE === "PENJUALAN"
+    );
+    callback(list);
+  });
   return () => unsub && unsub();
 };
 
@@ -529,7 +517,6 @@ export const listenPenjualanHemat = (callback, options = {}) => {
   return () => unsub && unsub();
 };
 
-
 /* ============================================================
    STOCK MANAGEMENT + TRANSFER STOCK
 ============================================================ */
@@ -568,7 +555,6 @@ export const addStock = async (toko, sku, payload) => {
     updatedAt: Date.now(),
   });
 };
-
 
 // Kurangi stok
 // Kurangi stok (mendukung model qty langsung & model varian / child)
@@ -628,7 +614,6 @@ export const reduceStock = async (tokoName, sku, qty) => {
 
   return result.snapshot.val();
 };
-
 
 // Transfer stok antar toko
 export const transferStock = async ({
@@ -718,8 +703,7 @@ export const updateImeiStatusSafe = async (toko, imeiList, status) => {
     ) {
       updates[`inventory/${child.key}/STATUS`] = status;
       updates[`inventory/${child.key}/NAMA_TOKO`] = toko;
-      updates[`inventory/${child.key}/updatedAt`] =
-        new Date().toISOString();
+      updates[`inventory/${child.key}/updatedAt`] = new Date().toISOString();
     }
   });
 
@@ -727,7 +711,6 @@ export const updateImeiStatusSafe = async (toko, imeiList, status) => {
     await update(ref(db), updates); // 🔥 MULTI UPDATE (ATOMIC)
   }
 };
-
 
 /**
  * Update stok (langsung overwrite field yang diberikan)
@@ -1066,8 +1049,6 @@ export const deleteMasterPelanggan = async (id) => {
   return true;
 };
 
-
-
 export const getStockTotalBySKU = async (toko, sku) => {
   const snap = await get(ref(db, `stock/${toko}/${sku}`));
   if (!snap.exists()) return 0;
@@ -1087,9 +1068,6 @@ export const getStockTotalBySKU = async (toko, sku) => {
 
   return total;
 };
-
-
-
 
 /* ============================================================
    MASTER MANAGEMENT (REALTIME CRUD)
@@ -1166,7 +1144,6 @@ export const listenMasterBarang = (callback) => {
   return () => unsub && unsub();
 };
 
-
 // ==============================
 // LISTEN INVENTORY REPORT by Toko
 // ==============================
@@ -1185,8 +1162,6 @@ export const listenInventoryReport = (namaToko, callback) => {
     (err) => console.error("ERROR LISTEN INVENTORY:", err)
   );
 };
-
-
 
 // ================================
 // STOCK ACTIVITY LOGGER
@@ -1219,10 +1194,6 @@ export const logStockActivity = async ({
   }
 };
 
-
-
-
-
 // =======================
 // UPDATE TRANSAKSI
 // =======================
@@ -1238,13 +1209,10 @@ export const updateTransaksi = async (tokoId, id, data) => {
   const { tokoId: _t, TOKO: _T, ...safeData } = data || {};
 
   try {
-    await update(
-      ref(db, `toko/${tokoId}/transaksi/${id}`),
-      {
-        ...safeData,
-        updatedAt: new Date().toISOString(),
-      }
-    );
+    await update(ref(db, `toko/${tokoId}/transaksi/${id}`), {
+      ...safeData,
+      updatedAt: new Date().toISOString(),
+    });
 
     return { success: true };
   } catch (err) {
@@ -1252,8 +1220,6 @@ export const updateTransaksi = async (tokoId, id, data) => {
     return { success: false, error: err };
   }
 };
-
-
 
 /**
  * Add transaksi: writes a new transaksi and ensures id is stored in the object.
@@ -1273,26 +1239,23 @@ export const addTransaksi = async (tokoId, data) => {
     await update(ref(db, `toko/${tokoId}/transaksi/${r.key}`), { id: r.key });
   } catch (e) {
     // ignore update error (best-effort)
-    
-    
+
     if (!tokoId) throw new Error("TOKO LOGIN WAJIB");
 
     const safePayload = {
       ...data,
-      tokoId,            // ⬅️ FORCE
-      TOKO: tokoId,      // ⬅️ FORCE
+      tokoId, // ⬅️ FORCE
+      TOKO: tokoId, // ⬅️ FORCE
       createdAt: new Date().toISOString(),
     };
-    
-  
+
     const r = push(ref(db, `toko/${tokoId}/transaksi`));
     await set(r, safePayload);
-    
-  console.warn("Could not set id field on new transaksi:", e);
+
+    console.warn("Could not set id field on new transaksi:", e);
   }
   return r.key;
 };
-
 
 // =======================
 // RETURN / BALIK STOK (AMAN)
@@ -1331,7 +1294,6 @@ export const returnStock = async (tokoName, sku, qty = 1) => {
 // 🔥 MIGRASI KATEGORI STOCK (SEKALI JALAN)
 // ======================================================
 
-
 export const migrateStockKategori = async () => {
   const stockRef = ref(db, "stock");
   const snap = await get(stockRef);
@@ -1347,10 +1309,7 @@ export const migrateStockKategori = async () => {
   Object.entries(stock).forEach(([namaToko, items]) => {
     Object.entries(items || {}).forEach(([sku, item]) => {
       let kategori =
-        item.kategori ||
-        item.KATEGORI_BRAND ||
-        item.kategoriBrand ||
-        "";
+        item.kategori || item.KATEGORI_BRAND || item.kategoriBrand || "";
 
       kategori = kategori.toUpperCase().trim();
 
@@ -1371,7 +1330,6 @@ export const migrateStockKategori = async () => {
   }
 };
 
-
 // baru pakai di function
 export const addLogPembelian = async (data) => {
   const db = getDatabase();
@@ -1381,8 +1339,6 @@ export const addLogPembelian = async (data) => {
     createdAt: Date.now(),
   });
 };
-
-
 
 // 🔒 CEK IMEI SUDAH DIJUAL ATAU BELUM
 export const checkImeiAvailable = async (imei) => {
@@ -1403,7 +1359,6 @@ export const lockImei = async (imei, data) => {
 // MASTER BARANG (BY KATEGORI)
 // =======================
 
-
 export const listenMasterBarangByKategori = (kategori, callback) => {
   const r = ref(db, "dataManagement/masterBarang");
   return onValue(r, (snap) => {
@@ -1414,8 +1369,6 @@ export const listenMasterBarangByKategori = (kategori, callback) => {
     callback(arr);
   });
 };
-
-
 
 // ===================================================
 // APPROVE TRANSFER — SAFE (NO QUERY, NO INDEX)
@@ -1429,17 +1382,8 @@ export const listenMasterBarangByKategori = (kategori, callback) => {
 // ===================================================
 // APPROVE TRANSFER — FINAL (SESUAI INVENTORY ROOT)
 // ===================================================
-export const approveTransferSafe = async ({
-  transfer,
-  performedBy,
-}) => {
-  const {
-    id,
-    imeis = [],
-    tokoPengirim,
-    dari,
-    ke,
-  } = transfer;
+export const approveTransferSafe = async ({ transfer, performedBy }) => {
+  const { id, imeis = [], tokoPengirim, dari, ke } = transfer;
 
   const fromToko = tokoPengirim || dari;
   if (!fromToko || !ke) {
@@ -1466,8 +1410,7 @@ export const approveTransferSafe = async ({
       // 🔥 PINDAHKAN STOK (UBAH TOKO)
       updates[`inventory/${child.key}/toko`] = ke;
       updates[`inventory/${child.key}/status`] = "AVAILABLE";
-      updates[`inventory/${child.key}/updatedAt`] =
-        new Date().toISOString();
+      updates[`inventory/${child.key}/updatedAt`] = new Date().toISOString();
 
       found++;
     }
@@ -1482,15 +1425,12 @@ export const approveTransferSafe = async ({
   // ✅ UPDATE STATUS TRANSFER
   updates[`transfer_requests/${id}/status`] = "Approved";
   updates[`transfer_requests/${id}/approvedBy`] = performedBy;
-  updates[`transfer_requests/${id}/approvedAt`] =
-    new Date().toISOString();
+  updates[`transfer_requests/${id}/approvedAt`] = new Date().toISOString();
 
   await update(ref(db), updates);
 
   return true;
 };
-
-
 
 // =======================================================
 // APPROVE TRANSFER + PINDAH STOCK (IMEI BASED)
@@ -1499,13 +1439,7 @@ export const approveTransferAndMoveStock = async ({
   transfer,
   performedBy,
 }) => {
-  const {
-    id,
-    imeis = [],
-    tokoPengirim,
-    dari,
-    ke,
-  } = transfer;
+  const { id, imeis = [], tokoPengirim, dari, ke } = transfer;
 
   const fromToko = tokoPengirim || dari;
   const updates = {};
@@ -1518,29 +1452,25 @@ export const approveTransferAndMoveStock = async ({
 
     if (
       imeis.includes(String(row.IMEI)) &&
-      String(row.NAMA_TOKO).toUpperCase() ===
-        String(fromToko).toUpperCase()
+      String(row.NAMA_TOKO).toUpperCase() === String(fromToko).toUpperCase()
     ) {
       // ⬅️ STOK KELUAR DARI TOKO PENGIRIM
       updates[`inventory/${child.key}/NAMA_TOKO`] = ke;
       updates[`inventory/${child.key}/STATUS`] = "AVAILABLE";
-      updates[`inventory/${child.key}/updatedAt`] =
-        new Date().toISOString();
+      updates[`inventory/${child.key}/updatedAt`] = new Date().toISOString();
     }
   });
 
   // ⬅️ UPDATE STATUS TRANSFER
   updates[`transfer_requests/${id}/status`] = "Approved";
   updates[`transfer_requests/${id}/approvedBy`] = performedBy;
-  updates[`transfer_requests/${id}/approvedAt`] =
-    new Date().toISOString();
+  updates[`transfer_requests/${id}/approvedAt`] = new Date().toISOString();
 
   await update(ref(db), updates);
 };
 
 // ===================================================
 // ===================== APPROVE TRANSFER FINAL (IMEI REAL) =====================
-
 
 /**
  * APPROVE TRANSFER
@@ -1564,8 +1494,7 @@ export const approveTransferFINAL = async (transfer, approvedBy) => {
 
     if (
       imeis.includes(imei) &&
-      String(row.NAMA_TOKO).toUpperCase() ===
-        String(dari).toUpperCase()
+      String(row.NAMA_TOKO).toUpperCase() === String(dari).toUpperCase()
     ) {
       updates[`inventory/${child.key}/NAMA_TOKO`] = ke;
       updates[`inventory/${child.key}/STATUS`] = "AVAILABLE";
@@ -1587,28 +1516,14 @@ export const approveTransferFINAL = async (transfer, approvedBy) => {
   });
 };
 
-
-
-
-
 // ===================================================
 // 🔥 APPROVE TRANSFER — ABSOLUTE FINAL (NO STOCK READ)
 // ===================================================
 // ===================================================
 // 🔥 APPROVE TRANSFER — FINAL (TOTAL STOCK MODE)
 // ===================================================
-export const approveTransferABSOLUTE = async ({
-  transfer,
-  performedBy,
-}) => {
-  const {
-    id,
-    tokoPengirim,
-    dari,
-    ke,
-    qty,
-    stockSnapshot,
-  } = transfer;
+export const approveTransferABSOLUTE = async ({ transfer, performedBy }) => {
+  const { id, tokoPengirim, dari, ke, qty, stockSnapshot } = transfer;
 
   const fromToko = tokoPengirim || dari;
   const q = Number(qty || 0);
@@ -1624,16 +1539,14 @@ export const approveTransferABSOLUTE = async ({
   // ➡️ TAMBAH STOK KE TOKO TUJUAN
   updates[`stock/${ke}/${stockSnapshot.firstKey}`] = {
     ...stockSnapshot.firstItem,
-    qty:
-      Number(stockSnapshot.firstItem.qty || 0) + q,
+    qty: Number(stockSnapshot.firstItem.qty || 0) + q,
     updatedAt: Date.now(),
   };
 
   // ✅ UPDATE STATUS TRANSFER
   updates[`transfer_requests/${id}/status`] = "Approved";
   updates[`transfer_requests/${id}/approvedBy`] = performedBy;
-  updates[`transfer_requests/${id}/approvedAt`] =
-    new Date().toISOString();
+  updates[`transfer_requests/${id}/approvedAt`] = new Date().toISOString();
 
   await update(ref(db), updates);
 };
@@ -1645,12 +1558,7 @@ export const approveTransferAndMoveInventory = async ({
   transfer,
   performedBy,
 }) => {
-  const {
-    id,
-    dari,
-    ke,
-    imeis = [],
-  } = transfer;
+  const { id, dari, ke, imeis = [] } = transfer;
 
   if (!dari || !ke) {
     throw new Error("Toko asal / tujuan tidak valid");
@@ -1670,14 +1578,10 @@ export const approveTransferAndMoveInventory = async ({
   invSnap.forEach((child) => {
     const row = child.val();
 
-    if (
-      imeis.includes(String(row.imei)) &&
-      String(row.toko) === String(dari)
-    ) {
+    if (imeis.includes(String(row.imei)) && String(row.toko) === String(dari)) {
       // 🔁 PINDAHKAN STOK (UNIT PER UNIT)
       updates[`inventory/${child.key}/toko`] = ke;
-      updates[`inventory/${child.key}/updatedAt`] =
-        new Date().toISOString();
+      updates[`inventory/${child.key}/updatedAt`] = new Date().toISOString();
 
       moved++;
     }
@@ -1692,14 +1596,12 @@ export const approveTransferAndMoveInventory = async ({
   // ✅ UPDATE STATUS TRANSFER
   updates[`transfer_requests/${id}/status`] = "Approved";
   updates[`transfer_requests/${id}/approvedBy`] = performedBy;
-  updates[`transfer_requests/${id}/approvedAt`] =
-    new Date().toISOString();
+  updates[`transfer_requests/${id}/approvedAt`] = new Date().toISOString();
 
   await update(ref(db), updates);
 
   return true;
 };
-
 
 // ===================================================
 // 🔐 RESERVE IMEI (ANTI DOUBLE TRANSFER)
@@ -1718,31 +1620,42 @@ export const reserveImeis = async (imeis = [], toko) => {
       row.toko === toko &&
       row.status === "AVAILABLE"
     ) {
-      updates[`inventory/${child.key}/status`] =
-        "RESERVED";
+      updates[`inventory/${child.key}/status`] = "RESERVED";
       reserved++;
     }
   });
 
   if (reserved !== imeis.length) {
-    throw new Error(
-      "Sebagian IMEI sudah dipakai / tidak tersedia"
-    );
+    throw new Error("Sebagian IMEI sudah dipakai / tidak tersedia");
   }
 
   await update(ref(db), updates);
 };
 
+export const getMasterTokoById = async (tokoId) => {
+  const snap = await get(ref(db, `masterToko/${tokoId}`));
+  return snap.val();
+};
 
+// export const listenMasterToko = (callback) => {
+//   const r = ref(db, "masterToko");
+//   return onValue(r, (snap) => {
+//     const val = snap.val() || {};
+//     const list = Object.keys(val).map((id) => ({
+//       id,
+//       ...val[id],
+//     }));
+//     callback(list);
+//   });
+// };
 
-
-
-
-
-
-
-
-
+// FirebaseService.js
+// export const listenMasterToko = (cb) => {
+//   return onValue(ref(db, "masterToko"), (snap) => {
+//     const val = snap.val() || {};
+//     cb(Object.entries(val).map(([id, v]) => ({ id, ...v })));
+//   });
+// };
 
 /* =========================
    INIT MASTER HELPERS
@@ -1784,7 +1697,9 @@ export const updateMasterSalesTitipan = masterSalesTitipan.update;
 export const deleteMasterSalesTitipan = masterSalesTitipan.delete;
 
 // MASTER TOKO
+// MASTER TOKO
 const masterToko = createMasterHelpers("masterToko");
+
 export const listenMasterToko = masterToko.listen;
 export const addMasterToko = masterToko.add;
 export const updateMasterToko = masterToko.update;
@@ -1865,9 +1780,6 @@ export const addMasterBarangBundling = masterBarangBundling.add;
 export const updateMasterBarangBundling = masterBarangBundling.update;
 export const deleteMasterBarangBundling = masterBarangBundling.delete;
 
-
-
-
 /* ============================================================
    SEARCH INVENTORY BY NAMA BARANG (UNTUK NAMA BARANG SEARCH MODAL)
 ============================================================ */
@@ -1876,8 +1788,6 @@ export const deleteMasterBarangBundling = masterBarangBundling.delete;
    SUPER SEARCH — Nama Barang / Brand / Kategori / SKU
    Cepat, kompatibel semua toko, hasil akurat untuk modal search.
 ============================================================ */
-
-
 
 export const getInventoryByName = async (keyword) => {
   if (!keyword) return [];
@@ -1899,7 +1809,9 @@ export const getInventoryByName = async (keyword) => {
 
         const nama = String(item.nama || item.namaBarang || "").toLowerCase();
         const brand = String(item.brand || item.namaBrand || "").toLowerCase();
-        const kategori = String(item.kategori || item.kategoriBarang || "").toLowerCase();
+        const kategori = String(
+          item.kategori || item.kategoriBarang || ""
+        ).toLowerCase();
         const imei = String(item.imei || "").toLowerCase();
 
         // MATCH LOGIC (lebih akurat)
@@ -1933,9 +1845,8 @@ export const getInventoryByName = async (keyword) => {
 };
 
 export const listenStockByCategory = (tokoName, kategori, callback) => {
-  return onValue(
-    ref(db, `stock/${tokoName}/byKategori/${kategori}`),
-    (snap) => callback(snap.val() || [])
+  return onValue(ref(db, `stock/${tokoName}/byKategori/${kategori}`), (snap) =>
+    callback(snap.val() || [])
   );
 };
 
@@ -1970,8 +1881,6 @@ export const listenMasterPembelian = (callback) => {
   );
   return () => unsub && unsub();
 };
-
-
 
 /* ============================================================
    DEFAULT EXPORT
@@ -2023,7 +1932,7 @@ const FirebaseService = {
   listenMasterSupplier,
   listenMasterToko,
   listenPenjualan,
-  listenPenjualanHemat,      // ✅ fungsi hemat-kuota baru
+  listenPenjualanHemat, // ✅ fungsi hemat-kuota baru
   listenStockAll,
   listenTransaksiByToko,
   listenTransaksiByTokoHemat, // ✅ fungsi hemat-kuota baru
@@ -2054,7 +1963,7 @@ const FirebaseService = {
   approveTransferSafe,
   approveTransferFINAL,
   approveTransferABSOLUTE,
-  approveTransferAndMoveInventory, 
+  approveTransferAndMoveInventory,
   reserveImeis,
   // updateImeiStatus,
 };

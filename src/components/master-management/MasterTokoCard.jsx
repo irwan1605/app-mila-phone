@@ -1,4 +1,3 @@
-// src/components/master-management/MasterTokoCard.jsx
 import React from "react";
 import MasterCrudCard from "./MasterCrudCard";
 
@@ -9,30 +8,32 @@ export default function MasterTokoCard() {
       label: "Nama Toko",
       required: true,
       disabledOnCreate: true,
+      disabledOnEdit: true, // 🔒 nama toko tidak boleh diubah
     },
     {
       name: "alamat",
       label: "Alamat",
       type: "textarea",
+      required: true,
     },
   ];
 
   return (
     <MasterCrudCard
       title="MASTER TOKO"
-      subtitle="Edit data toko yang sudah terdaftar"
+      subtitle="Edit & Hapus data toko (Tambah dinonaktifkan)"
       collectionKey="masterToko"
       fields={fields}
       excelFileName="Master_Toko"
 
       listenFnName="listenMasterToko"
       updateFnName="updateMasterToko"
+      deleteFnName="deleteMasterToko"
 
-      addFnName={null}       // ❌ tidak bisa tambah
-      deleteFnName={null}    // ❌ tidak bisa hapus
+      addFnName={null}        // ❌ tidak bisa tambah
+      disableCreate={true}   // ❌ form tambah dimatikan
 
-      submitLabel="Edit Data"
-      disableCreate={true}
+      submitLabel="Simpan Perubahan"
     />
   );
 }

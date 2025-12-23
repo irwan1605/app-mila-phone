@@ -609,6 +609,20 @@ const Sidebar = ({ role, toko, onLogout }) => {
               <span className="ml-2">LAPORAN PERSEDIAAN</span>
             </Link>
 
+            <Link
+              to="/stok-opname"
+                state={{
+                onlyMyToko: true,
+                tokoId: picTokoId,
+              }}
+              className={`flex items-center p-2 hover:bg-blue-500 ${
+                activePath === "/stok-opname" ? "bg-blue-600" : ""
+              }`}
+            >
+              <AiOutlineDatabase className="text-lg" />
+              <span className="ml-2">Laporan Stok Opname</span>
+            </Link>
+
             {/* 4️⃣ TRANSFER GUDANG TOKO SENDIRI (REALTIME LOGIN PIC) */}
             <Link
               to="/transfer-barang"

@@ -8,9 +8,11 @@ import {
   useParams,
 } from "react-router-dom";
 
+
 /* Layout */
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
+
 
 /* Pages */
 import Dashboard from "./pages/Dashboard";
@@ -116,6 +118,8 @@ export default function App() {
 
   /* Realtime Firebase Users */
   const [users, setUsers] = useState(defaultUsers);
+
+ 
 
   useEffect(() => {
     getAllUsersOnce().then((u) => {
@@ -235,7 +239,7 @@ export default function App() {
                   {/* MASTER MANAGEMENT */}
                   <Route path="/data-management" element={<DataManagement />} />
 
-                   {/* PRINT */}
+                  {/* PRINT */}
 
                   {/* <Route path="/print/sales" element={<PrintSalesReport />} />
                   <Route path="/print/inventory" element={<PrintInventory />} />
