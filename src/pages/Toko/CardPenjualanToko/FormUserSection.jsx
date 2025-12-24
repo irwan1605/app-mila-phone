@@ -1,9 +1,9 @@
 // ============================================================
-// FormUserSection.jsx — FINAL STABLE (NO WARNING)
-// Dropdown Toko FIX (Superadmin & PIC)
+// FormUserSection.jsx — FINAL FIX (MASTER TOKO REALTIME)
+// Tahap 1 | Nama Toko AUTO (PIC) & Selectable (Superadmin)
 // ============================================================
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo } from "react";
 
 export default function FormUserSection({
   value,
@@ -21,171 +21,189 @@ export default function FormUserSection({
     typeof userLogin?.role === "string" &&
     userLogin.role.startsWith("pic_toko");
 
-  /* ================= MASTER TOKO (STRING) ================= */
-  const tokoNames = useMemo(
-    () => masterToko.map((t) => t?.namaToko).filter(Boolean),
-    [masterToko]
+  /* ================= NORMALISASI MASTER TOKO ================= */
+  // masterToko dari Firebase berbentuk OBJECT → kita jadikan ARRAY
+  const tokoList = useMemo(() => {
+    if (Array.isArray(masterToko)) return masterToko;
+
+    if (masterToko && typeof masterToko === "object") {
+      return Object.entries(masterToko).map(([id, v]) => ({
+        id,
+        namaToko: v?.namaToko || "",
+        alamat: v?.alamat || "",
+      }));
+    }
+
+    return [];
+  }, [masterToko]);
+
+  const namaTokoList = useMemo(
+    () => tokoList.map((t) => t.namaToko).filter(Boolean),
+    [tokoList]
   );
 
-  /* ================= AUTO SET TOKO PIC (ONCE) ================= */
-  const hasAutoSetRef = useRef(false);
-
+  /* ================= AUTO SET TOKO (PIC TOKO) ================= */
   useEffect(() => {
     if (!isPicToko) return;
-    if (hasAutoSetRef.current) return;
     if (!userLogin?.tokoId) return;
+    if (!tokoList.length) return;
 
-    const toko = masterToko.find(
+    const toko = tokoList.find(
       (t) => String(t.id) === String(userLogin.tokoId)
     );
 
-    if (toko?.namaToko) {
-      hasAutoSetRef.current = true;
+    if (!toko) return;
+
+    if (value.namaToko !== toko.namaToko) {
       onChange({
         ...value,
         namaToko: toko.namaToko,
       });
     }
-  }, [isPicToko, userLogin, masterToko, value, onChange]);
+  }, [isPicToko, userLogin, tokoList, value, onChange]);
 
-  /* ================= VALIDASI MANUAL INPUT ================= */
-  const handleTokoChange = (val) => {
-    const upper = val.toUpperCase();
-
-    // boleh ketik, tapi harus cocok master
-    if (upper === "" || tokoNames.includes(upper)) {
-      onChange({ ...value, namaToko: upper });
-    }
+  /* ================= HANDLER ================= */
+  const setField = (key, val) => {
+    onChange({ ...value, [key]: val });
   };
 
   /* ================= RENDER ================= */
   return (
-    <div>
-      <h2 className="font-bold text-sm mb-3">🧾 DATA PELANGGAN (TAHAP 1)</h2>
+    <div className="space-y-3">
+      <h2 className="text-sm font-bold">DATA PELANGGAN — TAHAP 1</h2>
 
-      <div className="space-y-3">
-        {/* TANGGAL */}
-        <div>
-          <label className="text-xs font-semibold">Tanggal</label>
-          <input
-            type="date"
-            className="w-full border rounded-lg px-2 py-1 text-sm bg-gray-100"
-            value={value.tanggalPembelian}
-            readOnly
-          />
-        </div>
+      {/* TANGGAL */}
+      <div>
+        <label className="text-xs font-semibold">Tanggal</label>
+        <input
+          type="date"
+          className="w-full border rounded-lg px-2 py-1 text-sm bg-gray-100"
+          value={value.tanggalPembelian}
+          readOnly
+        />
+      </div>
 
-        {/* NO FAKTUR */}
-        <div>
-          <label className="text-xs font-semibold">No Faktur</label>
-          <input
-            className="w-full border rounded-lg px-2 py-1 text-sm bg-gray-100"
-            value={value.noFaktur}
-            readOnly
-          />
-        </div>
+      {/* NO FAKTUR */}
+      <div>
+        <label className="text-xs font-semibold">No Faktur</label>
+        <input
+          className="w-full border rounded-lg px-2 py-1 text-sm bg-gray-100"
+          value={value.noFaktur}
+          readOnly
+        />
+      </div>
 
-        {/* NAMA TOKO — FINAL FIX */}
-        <div>
-          <label className="text-xs font-semibold">Nama Toko *</label>
-          <input
-            list="list-toko"
-            className="w-full border rounded-lg px-2 py-1 text-sm"
-            value={value.namaToko}
-            disabled={isPicToko}
-            placeholder={
-              isPicToko ? "Otomatis sesuai akun" : "Pilih / ketik nama toko"
+      {/* NAMA PELANGGAN */}
+      <div>
+        <label className="text-xs font-semibold">Nama Pelanggan *</label>
+        <input
+          className="w-full border rounded-lg px-2 py-1 text-sm"
+          value={value.namaPelanggan}
+          onChange={(e) =>
+            setField("namaPelanggan", e.target.value.toUpperCase())
+          }
+        />
+      </div>
+
+      {/* ID PELANGGAN */}
+      <div>
+        <label className="text-xs font-semibold">ID Pelanggan *</label>
+        <input
+          className="w-full border rounded-lg px-2 py-1 text-sm"
+          value={value.idPelanggan}
+          onChange={(e) =>
+            setField("idPelanggan", e.target.value.toUpperCase())
+          }
+        />
+      </div>
+
+      {/* NO TELEPON */}
+      <div>
+        <label className="text-xs font-semibold">No Telepon *</label>
+        <input
+          className="w-full border rounded-lg px-2 py-1 text-sm"
+          value={value.noTelepon}
+          onChange={(e) => setField("noTelepon", e.target.value)}
+        />
+      </div>
+
+      {/* ================= NAMA TOKO (FINAL FIX) ================= */}
+      <div>
+        <label className="text-xs font-semibold">
+          Nama Toko {isPicToko && "(Auto)"}
+        </label>
+
+        <input
+          list="list-toko"
+          className={`w-full border rounded-lg px-2 py-1 text-sm ${
+            isPicToko ? "bg-gray-100" : ""
+          }`}
+          value={value.namaToko}
+          readOnly={isPicToko}
+          onChange={(e) => {
+            const val = e.target.value.toUpperCase();
+
+            // VALIDASI: harus sesuai master toko
+            if (
+              val &&
+              !namaTokoList.includes(val) &&
+              isSuperAdmin
+            ) {
+              return;
             }
-            onChange={(e) => handleTokoChange(e.target.value)}
-          />
+
+            setField("namaToko", val);
+          }}
+        />
+
+        {/* DROPDOWN / AUTOCOMPLETE */}
+        {isSuperAdmin && (
           <datalist id="list-toko">
-            {tokoNames.map((t) => (
-              <option key={t} value={t} />
+            {namaTokoList.map((n) => (
+              <option key={n} value={n} />
             ))}
           </datalist>
+        )}
 
-          {value.namaToko && !tokoNames.includes(value.namaToko) && (
-            <p className="text-xs text-red-500 mt-1">
-              Nama toko tidak terdaftar di MASTER TOKO
-            </p>
-          )}
-        </div>
+        {!isPicToko && (
+          <p className="text-[11px] text-gray-500">
+            Ketik atau pilih nama toko sesuai Master Toko
+          </p>
+        )}
+      </div>
 
-        {/* NAMA PELANGGAN */}
-        <div>
-          <label className="text-xs font-semibold">Nama Pelanggan *</label>
-          <input
-            className="w-full border rounded-lg px-2 py-1 text-sm"
-            value={value.namaPelanggan}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                namaPelanggan: e.target.value.toUpperCase(),
-              })
-            }
-          />
-        </div>
+      {/* SALES */}
+      <div>
+        <label className="text-xs font-semibold">Nama Sales *</label>
+        <select
+          className="w-full border rounded-lg px-2 py-1 text-sm"
+          value={value.namaSales}
+          onChange={(e) => setField("namaSales", e.target.value)}
+        >
+          <option value="">-- PILIH SALES --</option>
+          {users.map((u) => (
+            <option key={u.id || u.username} value={u.name}>
+              {u.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        {/* ID PELANGGAN */}
-        <div>
-          <label className="text-xs font-semibold">ID Pelanggan *</label>
-          <input
-            className="w-full border rounded-lg px-2 py-1 text-sm"
-            value={value.idPelanggan}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                idPelanggan: e.target.value.toUpperCase(),
-              })
-            }
-          />
-        </div>
-
-        {/* NO TELP */}
-        <div>
-          <label className="text-xs font-semibold">No Telepon *</label>
-          <input
-            className="w-full border rounded-lg px-2 py-1 text-sm"
-            value={value.noTelepon}
-            onChange={(e) => onChange({ ...value, noTelepon: e.target.value })}
-          />
-        </div>
-
-        {/* SALES */}
-        <div>
-          <label className="text-xs font-semibold">Nama Sales *</label>
-          <select
-            className="w-full border rounded-lg px-2 py-1 text-sm"
-            value={value.namaSales}
-            onChange={(e) => onChange({ ...value, namaSales: e.target.value })}
-          >
-            <option value="">-- PILIH SALES --</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.name}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* SALES TITIPAN */}
-        <div>
-          <label className="text-xs font-semibold">Sales Titipan *</label>
-          <select
-            className="w-full border rounded-lg px-2 py-1 text-sm"
-            value={value.salesTitipan}
-            onChange={(e) =>
-              onChange({ ...value, salesTitipan: e.target.value })
-            }
-          >
-            <option value="">-- PILIH --</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.name}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* SALES TITIPAN */}
+      <div>
+        <label className="text-xs font-semibold">Sales Titipan *</label>
+        <select
+          className="w-full border rounded-lg px-2 py-1 text-sm"
+          value={value.salesTitipan}
+          onChange={(e) => setField("salesTitipan", e.target.value)}
+        >
+          <option value="">-- PILIH SALES TITIPAN --</option>
+          {users.map((u) => (
+            <option key={u.id || u.username} value={u.name}>
+              {u.name}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );
