@@ -1,7 +1,24 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import MasterCrudCard from "./MasterCrudCard";
+import { listenMasterToko } from "../../services/FirebaseService";
 
 export default function MasterTokoCard() {
+  const [rows, setRows] = useState([]);
+
+  // 🔥 NORMALISASI DATA MASTER TOKO
+  useEffect(() => {
+    const unsub = listenMasterToko((data) => {
+      const normalized = (Array.isArray(data) ? data : []).map((t) => ({
+        ...t,
+        // ⬇️ PASTIKAN FIELD INI ADA UNTUK TABLE
+        namaToko: t.namaToko || "",
+      }));
+      setRows(normalized);
+    });
+
+    return () => unsub && unsub();
+  }, []);
+
   const fields = [
     {
       name: "namaToko",
@@ -13,7 +30,6 @@ export default function MasterTokoCard() {
     {
       name: "alamat",
       label: "Alamat",
-      type: "textarea",
       required: true,
     },
   ];
@@ -25,14 +41,11 @@ export default function MasterTokoCard() {
       collectionKey="masterToko"
       fields={fields}
       excelFileName="Master_Toko"
-
-      listenFnName="listenMasterToko"
+      listenData={rows}              
       updateFnName="updateMasterToko"
       deleteFnName="deleteMasterToko"
-
-      addFnName={null}        // ❌ tidak bisa tambah
-      disableCreate={true}   // ❌ form tambah dimatikan
-
+      addFnName={null}
+      disableCreate={true}
       submitLabel="Simpan Perubahan"
     />
   );

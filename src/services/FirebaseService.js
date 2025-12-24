@@ -1637,25 +1637,25 @@ export const getMasterTokoById = async (tokoId) => {
   return snap.val();
 };
 
-// export const listenMasterToko = (callback) => {
-//   const r = ref(db, "masterToko");
-//   return onValue(r, (snap) => {
-//     const val = snap.val() || {};
-//     const list = Object.keys(val).map((id) => ({
-//       id,
-//       ...val[id],
-//     }));
-//     callback(list);
-//   });
-// };
+export const listenMasterToko = (callback) => {
+  const r = ref(db, "masterToko");
 
-// FirebaseService.js
-// export const listenMasterToko = (cb) => {
-//   return onValue(ref(db, "masterToko"), (snap) => {
-//     const val = snap.val() || {};
-//     cb(Object.entries(val).map(([id, v]) => ({ id, ...v })));
-//   });
-// };
+  const unsubscribe = onValue(r, (snapshot) => {
+    const raw = snapshot.val() || {};
+
+    // 🔑 convert object → array
+    const list = Object.keys(raw).map((id) => ({
+      id,
+      ...raw[id],
+    }));
+
+    callback(list);
+  });
+
+  // ✅ wajib return unsubscribe
+  return () => unsubscribe();
+};
+
 
 /* =========================
    INIT MASTER HELPERS
@@ -1700,7 +1700,7 @@ export const deleteMasterSalesTitipan = masterSalesTitipan.delete;
 // MASTER TOKO
 const masterToko = createMasterHelpers("masterToko");
 
-export const listenMasterToko = masterToko.listen;
+// export const listenMasterToko = masterToko.listen;
 export const addMasterToko = masterToko.add;
 export const updateMasterToko = masterToko.update;
 export const deleteMasterToko = masterToko.delete;

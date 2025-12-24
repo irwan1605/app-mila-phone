@@ -1,5 +1,5 @@
 // ============================================================
-// CardPenjualanToko.jsx — FINAL STABLE (NO ERROR / NO WARNING)
+// CardPenjualanToko.jsx — FINAL FIX (TOKO MUNCUL 100%)
 // Tahap 1 → Tahap 2 → Tahap 3
 // ============================================================
 
@@ -45,99 +45,100 @@ export default function CardPenjualanToko() {
     }
   }, []);
 
-  /* ================= ROLE ================= */
- // ROLE & AKSES TOKO (FINAL)
-const isSuperAdmin =
-userLogin?.role === "superadmin" ||
-userLogin?.role === "admin";
+  const isSuperAdmin =
+    userLogin?.role === "superadmin" || userLogin?.role === "admin";
 
-const isPicToko =
-typeof userLogin?.role === "string" &&
-userLogin.role.startsWith("pic_toko");
-
-const canSelectToko = isSuperAdmin;
-
+  const isPicToko =
+    typeof userLogin?.role === "string" &&
+    userLogin.role.startsWith("pic_toko");
 
   /* ================= MASTER DATA ================= */
   const [users, setUsers] = useState([]);
   const [masterToko, setMasterToko] = useState([]);
   const [penjualanList, setPenjualanList] = useState([]);
 
+  /* 🔥 FIX UTAMA — NORMALISASI MASTER TOKO */
   useEffect(() => {
-    const u1 = listenUsers((rows) => setUsers(rows || []));
-    const u2 = listenMasterToko((rows) =>
-      setMasterToko(Array.isArray(rows) ? rows : [])
+    const unsubUsers = listenUsers((rows) =>
+      setUsers(Array.isArray(rows) ? rows : [])
     );
-    const u3 = listenPenjualan((rows) =>
+
+    const unsubToko = listenMasterToko((rows) => {
+      /**
+       * rows dari Firebase berbentuk OBJECT:
+       * { "-Nx1": {...}, "-Nx2": {...} }
+       */
+      if (!rows || typeof rows !== "object") {
+        setMasterToko([]);
+        return;
+      }
+
+      const parsed = Object.entries(rows).map(([id, val]) => ({
+        id,
+        namaToko: val?.namaToko?.toUpperCase() || "",
+        alamat: val?.alamat || "",
+      }));
+
+      setMasterToko(parsed);
+    });
+
+    const unsubPenjualan = listenPenjualan((rows) =>
       setPenjualanList(Array.isArray(rows) ? rows : [])
     );
 
     return () => {
-      u1 && u1();
-      u2 && u2();
-      u3 && u3();
+      unsubUsers && unsubUsers();
+      unsubToko && unsubToko();
+      unsubPenjualan && unsubPenjualan();
     };
   }, []);
 
-  useEffect(() => {
-    const unsub = listenMasterToko((rows) => {
-      setMasterToko(Array.isArray(rows) ? rows : []);
-    });
-    return () => unsub && unsub();
-  }, []);
+ /* ================= TAHAP 1 ================= */
+ const today = new Date().toISOString().slice(0, 10);
 
-  
-  
-  
+ const [userForm, setUserForm] = useState({
+   tanggalPembelian: today,
+   noFaktur: "",
+   namaPelanggan: "",
+   idPelanggan: "",
+   noTelepon: "",
+   namaToko: "",
+   namaSales: "",
+   salesTitipan: "",
+ });
 
-  /* ================= TAHAP 1 ================= */
-  const today = new Date().toISOString().slice(0, 10);
-
-  const [userForm, setUserForm] = useState({
-    tanggalPembelian: today,
-    noFaktur: "",
-    namaPelanggan: "",
-    idPelanggan: "",
-    noTelepon: "",
-    namaToko: "",
-    namaSales: "",
-    salesTitipan: "",
-  });
-
-  /* AUTO TOKO UNTUK PIC */
+  /* 🔒 AUTO SET TOKO UNTUK PIC TOKO */
   useEffect(() => {
     if (!isPicToko || !userLogin?.tokoId || !masterToko.length) return;
-  
+
     const toko = masterToko.find(
       (t) => String(t.id) === String(userLogin.tokoId)
     );
-  
-    if (toko) {
-      setUserForm((prev) => ({
-        ...prev,
+
+    if (toko && userForm.namaToko !== toko.namaToko) {
+      setUserForm((p) => ({
+        ...p,
         namaToko: toko.namaToko,
-        tokoId: toko.id,
       }));
     }
-  }, [isPicToko, userLogin, masterToko]);
-  
+  }, [isPicToko, userLogin, masterToko, userForm.namaToko]);
 
-  /* AUTO FAKTUR */
-  useEffect(() => {
-    const d = new Date();
-    const prefix = `${String(d.getFullYear()).slice(2)}${String(
-      d.getMonth() + 1
-    ).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+ /* AUTO FAKTUR */
+ useEffect(() => {
+  const d = new Date();
+  const prefix = `${String(d.getFullYear()).slice(2)}${String(
+    d.getMonth() + 1
+  ).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 
-    const key = `INV_${prefix}`;
-    const next = Number(localStorage.getItem(key) || 0) + 1;
-    localStorage.setItem(key, next);
+  const key = `INV_${prefix}`;
+  const next = Number(localStorage.getItem(key) || 0) + 1;
+  localStorage.setItem(key, next);
 
-    setUserForm((p) => ({
-      ...p,
-      noFaktur: `${prefix}${String(next).padStart(3, "0")}`,
-    }));
-  }, []);
+  setUserForm((p) => ({
+    ...p,
+    noFaktur: `${prefix}${String(next).padStart(3, "0")}`,
+  }));
+}, []);
 
   const tahap1Complete = Boolean(
     userForm.namaPelanggan &&
@@ -150,17 +151,15 @@ const canSelectToko = isSuperAdmin;
 
   /* ================= TAHAP 2 ================= */
   const [items, setItems] = useState([]);
-
   const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
 
   const tahap2Complete = useMemo(() => {
     if (!safeItems.length) return false;
-
-    return safeItems.every((it) => {
-      if (it.isImei)
-        return Array.isArray(it.imeiList) && it.imeiList.length > 0;
-      return Number(it.qty || 0) > 0;
-    });
+    return safeItems.every((it) =>
+      it.isImei
+        ? Array.isArray(it.imeiList) && it.imeiList.length > 0
+        : Number(it.qty || 0) > 0
+    );
   }, [safeItems]);
 
   /* ================= TOTAL ================= */
@@ -169,11 +168,7 @@ const canSelectToko = isSuperAdmin;
     safeItems.forEach((it) => {
       total += Number(it.hargaUnit || 0) * Number(it.qty || 0);
     });
-
-    return {
-      totalItems: safeItems.length,
-      totalAmount: total,
-    };
+    return { totalItems: safeItems.length, totalAmount: total };
   }, [safeItems]);
 
   /* ================= TAHAP 3 ================= */
@@ -224,9 +219,7 @@ const canSelectToko = isSuperAdmin;
     } catch (e) {
       for (const it of safeItems) {
         if (it.isImei) {
-          for (const im of it.imeiList) {
-            await unlockImei(im);
-          }
+          for (const im of it.imeiList) await unlockImei(im);
         }
       }
       alert("❌ Gagal simpan transaksi");
@@ -246,28 +239,19 @@ const canSelectToko = isSuperAdmin;
         {/* TAHAP 1 */}
         <div className="bg-white rounded-2xl shadow-lg p-5">
           <FormUserSection
-          value={userForm}
-          onChange={setUserForm}
-          users={users}
-          tahap={1}
-          canSelectToko={canSelectToko}
-          masterToko={masterToko}
-          userLogin={userLogin}
+            value={userForm}
+            onChange={setUserForm}
+            users={users}
+            masterToko={masterToko}
+            isSuperAdmin={isSuperAdmin}
+            isPicToko={isPicToko}
+            userLogin={userLogin}
           />
         </div>
 
         {/* TAHAP 2 */}
-        <div
-          className={`bg-white rounded-2xl shadow-lg p-5 ${
-            !tahap1Complete && "opacity-50"
-          }`}
-        >
+        <div className={`bg-white rounded-2xl shadow-lg p-5 ${!tahap1Complete && "opacity-50"}`}>
           <h2 className="font-bold mb-2">📦 INPUT BARANG — TAHAP 2</h2>
-          {!tahap1Complete && (
-            <p className="text-xs text-red-500">
-              Lengkapi Tahap 1 terlebih dahulu
-            </p>
-          )}
           <FormItemSection
             value={items}
             onChange={setItems}
@@ -277,17 +261,8 @@ const canSelectToko = isSuperAdmin;
         </div>
 
         {/* TAHAP 3 */}
-        <div
-          className={`bg-white rounded-2xl shadow-lg p-5 ${
-            !tahap2Complete && "opacity-50"
-          }`}
-        >
+        <div className={`bg-white rounded-2xl shadow-lg p-5 ${!tahap2Complete && "opacity-50"}`}>
           <h2 className="font-bold mb-2">💳 PEMBAYARAN — TAHAP 3</h2>
-          {!tahap2Complete && (
-            <p className="text-xs text-red-500">
-              Lengkapi Tahap 2 terlebih dahulu
-            </p>
-          )}
           <FormPaymentSection
             value={paymentForm}
             onChange={setPaymentForm}
@@ -297,7 +272,6 @@ const canSelectToko = isSuperAdmin;
         </div>
       </div>
 
-      {/* FOOTER */}
       <div className="flex justify-between items-center">
         <strong>{formatRupiah(totals.totalAmount)}</strong>
         <button

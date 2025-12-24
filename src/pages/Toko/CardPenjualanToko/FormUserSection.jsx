@@ -1,35 +1,69 @@
-import React, { useEffect, useMemo } from "react";
+// ============================================================
+// FormUserSection.jsx — FINAL STABLE (NO WARNING)
+// Dropdown Toko FIX (Superadmin & PIC)
+// ============================================================
+
+import React, { useEffect, useMemo, useRef } from "react";
 
 export default function FormUserSection({
   value,
   onChange,
   users = [],
   masterToko = [],
-  canSelectToko = false,
+  userLogin = {},
   tahap = 1,
 }) {
-  const handleChange = (key, val) => {
-    onChange({ ...value, [key]: val });
+  /* ================= ROLE ================= */
+  const isSuperAdmin =
+    userLogin?.role === "superadmin" || userLogin?.role === "admin";
+
+  const isPicToko =
+    typeof userLogin?.role === "string" &&
+    userLogin.role.startsWith("pic_toko");
+
+  /* ================= MASTER TOKO (STRING) ================= */
+  const tokoNames = useMemo(
+    () => masterToko.map((t) => t?.namaToko).filter(Boolean),
+    [masterToko]
+  );
+
+  /* ================= AUTO SET TOKO PIC (ONCE) ================= */
+  const hasAutoSetRef = useRef(false);
+
+  useEffect(() => {
+    if (!isPicToko) return;
+    if (hasAutoSetRef.current) return;
+    if (!userLogin?.tokoId) return;
+
+    const toko = masterToko.find(
+      (t) => String(t.id) === String(userLogin.tokoId)
+    );
+
+    if (toko?.namaToko) {
+      hasAutoSetRef.current = true;
+      onChange({
+        ...value,
+        namaToko: toko.namaToko,
+      });
+    }
+  }, [isPicToko, userLogin, masterToko, value, onChange]);
+
+  /* ================= VALIDASI MANUAL INPUT ================= */
+  const handleTokoChange = (val) => {
+    const upper = val.toUpperCase();
+
+    // boleh ketik, tapi harus cocok master
+    if (upper === "" || tokoNames.includes(upper)) {
+      onChange({ ...value, namaToko: upper });
+    }
   };
 
-  // 🔁 NORMALISASI masterToko (OBJECT → ARRAY)
-  const tokoList = useMemo(() => {
-    if (Array.isArray(masterToko)) return masterToko;
-
-    // FIREBASE OBJECT → ARRAY
-    return Object.keys(masterToko || {}).map((id) => ({
-      id,
-      ...masterToko[id],
-    }));
-  }, [masterToko]);
-
+  /* ================= RENDER ================= */
   return (
-    <div className="relative">
-      <h2 className="font-bold text-slate-700 text-sm mb-3">
-        DATA PELANGGAN (TAHAP 1)
-      </h2>
+    <div>
+      <h2 className="font-bold text-sm mb-3">🧾 DATA PELANGGAN (TAHAP 1)</h2>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {/* TANGGAL */}
         <div>
           <label className="text-xs font-semibold">Tanggal</label>
@@ -51,6 +85,32 @@ export default function FormUserSection({
           />
         </div>
 
+        {/* NAMA TOKO — FINAL FIX */}
+        <div>
+          <label className="text-xs font-semibold">Nama Toko *</label>
+          <input
+            list="list-toko"
+            className="w-full border rounded-lg px-2 py-1 text-sm"
+            value={value.namaToko}
+            disabled={isPicToko}
+            placeholder={
+              isPicToko ? "Otomatis sesuai akun" : "Pilih / ketik nama toko"
+            }
+            onChange={(e) => handleTokoChange(e.target.value)}
+          />
+          <datalist id="list-toko">
+            {tokoNames.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
+
+          {value.namaToko && !tokoNames.includes(value.namaToko) && (
+            <p className="text-xs text-red-500 mt-1">
+              Nama toko tidak terdaftar di MASTER TOKO
+            </p>
+          )}
+        </div>
+
         {/* NAMA PELANGGAN */}
         <div>
           <label className="text-xs font-semibold">Nama Pelanggan *</label>
@@ -58,7 +118,10 @@ export default function FormUserSection({
             className="w-full border rounded-lg px-2 py-1 text-sm"
             value={value.namaPelanggan}
             onChange={(e) =>
-              handleChange("namaPelanggan", e.target.value)
+              onChange({
+                ...value,
+                namaPelanggan: e.target.value.toUpperCase(),
+              })
             }
           />
         </div>
@@ -70,56 +133,23 @@ export default function FormUserSection({
             className="w-full border rounded-lg px-2 py-1 text-sm"
             value={value.idPelanggan}
             onChange={(e) =>
-              handleChange("idPelanggan", e.target.value)
+              onChange({
+                ...value,
+                idPelanggan: e.target.value.toUpperCase(),
+              })
             }
           />
         </div>
 
-        {/* NO TELEPON */}
+        {/* NO TELP */}
         <div>
           <label className="text-xs font-semibold">No Telepon *</label>
           <input
             className="w-full border rounded-lg px-2 py-1 text-sm"
             value={value.noTelepon}
-            onChange={(e) =>
-              handleChange("noTelepon", e.target.value)
-            }
+            onChange={(e) => onChange({ ...value, noTelepon: e.target.value })}
           />
         </div>
-
-      {/* =======================
-    NAMA TOKO
-======================= */}
-<div>
-  <label className="text-xs font-semibold">Nama Toko *</label>
-
-  {/* SUPERADMIN → BISA PILIH */}
-  {canSelectToko ? (
-    <select
-      className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
-      value={value.namaToko}
-      onChange={(e) =>
-        onChange({ ...value, namaToko: e.target.value })
-      }
-    >
-      <option value="">-- PILIH TOKO --</option>
-      {masterToko.map((t) => (
-        <option key={t.id} value={t.namaToko}>
-          {t.namaToko}
-        </option>
-      ))}
-    </select>
-  ) : (
-    /* PIC TOKO → AUTO & LOCK */
-    <input
-      type="text"
-      className="w-full border rounded-lg px-2 py-1 text-sm bg-gray-100"
-      value={value.namaToko}
-      readOnly
-    />
-  )}
-</div>
-
 
         {/* SALES */}
         <div>
@@ -127,11 +157,11 @@ export default function FormUserSection({
           <select
             className="w-full border rounded-lg px-2 py-1 text-sm"
             value={value.namaSales}
-            onChange={(e) => handleChange("namaSales", e.target.value)}
+            onChange={(e) => onChange({ ...value, namaSales: e.target.value })}
           >
             <option value="">-- PILIH SALES --</option>
             {users.map((u) => (
-              <option key={u.id || u.username} value={u.name}>
+              <option key={u.id} value={u.name}>
                 {u.name}
               </option>
             ))}
@@ -145,12 +175,12 @@ export default function FormUserSection({
             className="w-full border rounded-lg px-2 py-1 text-sm"
             value={value.salesTitipan}
             onChange={(e) =>
-              handleChange("salesTitipan", e.target.value)
+              onChange({ ...value, salesTitipan: e.target.value })
             }
           >
-            <option value="">-- PILIH SALES --</option>
+            <option value="">-- PILIH --</option>
             {users.map((u) => (
-              <option key={u.id || u.username} value={u.name}>
+              <option key={u.id} value={u.name}>
                 {u.name}
               </option>
             ))}
