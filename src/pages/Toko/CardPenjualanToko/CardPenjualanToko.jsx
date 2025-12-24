@@ -22,6 +22,10 @@ import {
 
 import ExportExcelButton from "../../../components/ExportExcelButton";
 import logoUrl from "../../../assets/logoMMT.png";
+import {
+  getAvailableImeisFromInventoryReport,
+} from "../../Reports/InventoryReport";
+
 
 /* ================= UTIL ================= */
 const formatRupiah = (n) =>
@@ -56,6 +60,12 @@ export default function CardPenjualanToko() {
   const [users, setUsers] = useState([]);
   const [masterToko, setMasterToko] = useState([]);
   const [penjualanList, setPenjualanList] = useState([]);
+    /* ================= TAHAP 2 ================= */
+    const [items, setItems] = useState([]);
+    /* ================= PENJUALAN CEPAT IMEI ================= */
+const [imeiQuick, setImeiQuick] = useState("");
+const [loadingQuick, setLoadingQuick] = useState(false);
+
 
   /* 🔥 FIX UTAMA — NORMALISASI MASTER TOKO */
   useEffect(() => {
@@ -140,17 +150,45 @@ export default function CardPenjualanToko() {
   }));
 }, []);
 
-  const tahap1Complete = Boolean(
-    userForm.namaPelanggan &&
-      userForm.idPelanggan &&
-      userForm.noTelepon &&
-      userForm.namaSales &&
-      userForm.salesTitipan &&
-      userForm.namaToko
-  );
+const tahap1Complete = Boolean(
+  userForm.namaPelanggan &&
+    userForm.idPelanggan &&
+    userForm.noTelepon &&
+    userForm.namaSales &&
+    userForm.salesTitipan &&
+    userForm.namaToko
+);
 
-  /* ================= TAHAP 2 ================= */
-  const [items, setItems] = useState([]);
+/* ================= AUTO INIT TAHAP 2 ================= */
+useEffect(() => {
+  if (!tahap1Complete) return;
+
+  if (items.length === 0) {
+    setItems([
+      {
+        id: Date.now(),
+        kategoriBarang: "",
+        namaBrand: "",
+        namaBarang: "",
+        sku: "",
+        imeiList: [],
+        qty: 0,
+        hargaUnit: 0,
+        skemaHarga: "SRP",
+        namaBundling: "",
+        hargaBundling: 0,
+        qtyBundling: 0,
+        isImei: false,
+      },
+    ]);
+  }
+}, [tahap1Complete, items.length]);
+
+
+
+
+
+
   const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
 
   const tahap2Complete = useMemo(() => {
@@ -230,6 +268,84 @@ export default function CardPenjualanToko() {
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-xl font-bold">PENJUALAN</h1>
+
+      {/* ================= PENJUALAN CEPAT VIA IMEI ================= */}
+<div className="bg-indigo-600 rounded-2xl p-5 text-white shadow-xl">
+  <h2 className="text-lg font-bold mb-2">
+    ⚡ PENJUALAN CEPAT (SCAN / CARI IMEI)
+  </h2>
+
+  <div className="flex flex-col md:flex-row gap-3">
+    <input
+      className="flex-1 rounded-xl px-4 py-3 text-black text-lg"
+      placeholder="Scan / ketik nomor IMEI di sini..."
+      value={imeiQuick}
+      onChange={(e) => setImeiQuick(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          document.getElementById("btn-quick-imei")?.click();
+        }
+      }}
+    />
+
+    <button
+      id="btn-quick-imei"
+      disabled={!imeiQuick || loadingQuick}
+      onClick={async () => {
+        try {
+          setLoadingQuick(true);
+
+          const imei = imeiQuick.trim();
+          if (!imei) return;
+
+          // 🔥 Ambil data dari InventoryReport
+          const data =
+            await getAvailableImeisFromInventoryReport(
+              userForm.namaToko,
+              imei
+            );
+
+          if (!data || !data.namaBarang) {
+            alert("❌ IMEI tidak ditemukan / sudah terjual");
+            return;
+          }
+
+          // 🔥 AUTO ISI TAHAP 2
+          setItems([
+            {
+              id: Date.now(),
+              kategoriBarang: data.kategoriBarang,
+              namaBrand: data.namaBrand,
+              namaBarang: data.namaBarang,
+              sku: data.sku,
+              imeiList: [imei],
+              qty: 1,
+              skemaHarga: "SRP",
+              hargaUnit: Number(data.hargaSRP || 0),
+              namaBundling: "",
+              hargaBundling: 0,
+              qtyBundling: 0,
+              isImei: true,
+            },
+          ]);
+
+          setImeiQuick("");
+        } finally {
+          setLoadingQuick(false);
+        }
+      }}
+      className="bg-black/30 hover:bg-black/50 transition px-6 py-3 rounded-xl font-bold text-lg"
+    >
+      {loadingQuick ? "⏳" : "CARI"}
+    </button>
+  </div>
+
+  <p className="text-sm mt-2 opacity-90">
+    👉 Cukup scan IMEI → Barang otomatis masuk TAHAP 2  
+    👉 Tinggal isi TAHAP 1 & PEMBAYARAN
+  </p>
+</div>
+
 
       <div className="flex justify-end">
         <ExportExcelButton transaksi={penjualanList} />

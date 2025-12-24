@@ -49,7 +49,7 @@ const TOKO_LIST = [
 
 const BRAND_OPTIONS = [
   "OFERO",
-  "UWNFLY",
+  "UWINFLY",
   "E NINE",
   "ZXTEX",
   "UNITED",
