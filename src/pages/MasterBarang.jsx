@@ -55,15 +55,9 @@ export default function MasterBarang() {
   const [showEdit, setShowEdit] = useState(false);
   const [editData, setEditData] = useState(null);
   const TODAY = new Date().toISOString().slice(0, 10);
-  const [isLoading, setIsLoading] = useState(true);
 
-  const [kategoriList, setKategoriList] = useState([]);
-
-  const [masterBarang, setMasterBarang] = useState([]);
-  const [masterBundling, setMasterBundling] = useState([]);
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [showModal, setShowModal] = useState(false); // ✅ FIX ERROR
+  const [loadingSave, setLoadingSave] = useState(false);
 
   const [form, setForm] = useState({
     tanggal: TODAY,
@@ -78,6 +72,14 @@ export default function MasterBarang() {
     isBundling: false,
     bundlingItems: [], // [{ namaBarang, harga }]
   });
+
+  const [kategoriList, setKategoriList] = useState([]);
+
+  const [masterBarang, setMasterBarang] = useState([]);
+  const [masterBundling, setMasterBundling] = useState([]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     // RESET dulu
@@ -165,53 +167,43 @@ export default function MasterBarang() {
   // ================== REKAP MASTER BARANG ==================
   // ================== REKAP MASTER BARANG ==================
   const rekapMasterBarang = useMemo(() => {
-    return masterBarang
-      // ✅ hanya data dari Tambah Master Barang
-      .filter((b) => b.CREATED_AT)
-      .map((b) => {
-        const srp =
-          b.harga?.srp ??
-          b.hargaSRP ??
-          b.HARGA_SRP ??
-          0;
-  
-        const grosir =
-          b.harga?.grosir ??
-          b.hargaGrosir ??
-          b.HARGA_GROSIR ??
-          0;
-  
-        const reseller =
-          b.harga?.reseller ??
-          b.hargaReseller ??
-          b.HARGA_RESELLER ??
-          0;
-  
-        return {
-          id: b.id,
-          key: b.id,
-  
-          // ✅ tanggal realtime
-          tanggal: b.tanggal,
-  
-          brand: b.brand,
-          kategori: b.kategoriBarang,
-          barang: b.namaBarang,
-  
-          // ✅ harga realtime (FIX)
-          hargaSRP: Number(srp),
-          hargaGrosir: Number(grosir),
-          hargaReseller: Number(reseller),
-  
-          IS_BUNDLING: Boolean(b.IS_BUNDLING),
-          BUNDLING_ITEMS: Array.isArray(b.BUNDLING_ITEMS)
-            ? b.BUNDLING_ITEMS
-            : [],
-        };
-      });
+    return (
+      masterBarang
+        // ✅ hanya data dari Tambah Master Barang
+        .filter((b) => b.CREATED_AT)
+        .map((b) => {
+          const srp = b.harga?.srp ?? b.hargaSRP ?? b.HARGA_SRP ?? 0;
+
+          const grosir =
+            b.harga?.grosir ?? b.hargaGrosir ?? b.HARGA_GROSIR ?? 0;
+
+          const reseller =
+            b.harga?.reseller ?? b.hargaReseller ?? b.HARGA_RESELLER ?? 0;
+
+          return {
+            id: b.id,
+            key: b.id,
+
+            // ✅ tanggal realtime
+            tanggal: b.tanggal,
+
+            brand: b.brand,
+            kategori: b.kategoriBarang,
+            barang: b.namaBarang,
+
+            // ✅ harga realtime (FIX)
+            hargaSRP: Number(srp),
+            hargaGrosir: Number(grosir),
+            hargaReseller: Number(reseller),
+
+            IS_BUNDLING: Boolean(b.IS_BUNDLING),
+            BUNDLING_ITEMS: Array.isArray(b.BUNDLING_ITEMS)
+              ? b.BUNDLING_ITEMS
+              : [],
+          };
+        })
+    );
   }, [masterBarang]);
-  
-  
 
   const filtered = useMemo(() => {
     if (!search) return rekapMasterBarang;
@@ -298,33 +290,49 @@ export default function MasterBarang() {
 
   // ================== TAMBAH MASTER BARANG ==================
   const submitTambah = async () => {
-    if (!form.brand || !form.barang || !form.kategori) {
-      alert("Lengkapi semua field wajib!");
+    if (!form.kategori || !form.brand || !form.barang) {
+      alert("Lengkapi semua data wajib");
       return;
     }
 
-    const payload = {
-      tanggal: form.tanggal, // YYYY-MM-DD (LOCK TODAY)
-      brand: form.brand,
-      namaBarang: form.barang,
-      kategoriBarang: form.kategori,
-    
-      harga: {
-        srp: Number(form.hargaSRP || 0),
-        grosir: Number(form.hargaGrosir || 0),
-        reseller: Number(form.hargaReseller || 0),
-      },
-    
-      IS_BUNDLING: Boolean(form.isBundling),
-      BUNDLING_ITEMS: form.isBundling ? form.bundlingItems : [],
-    
-      CREATED_AT: Date.now(),
-    };
-    
-
     try {
+      setLoadingSave(true);
+
+      const payload = {
+        tanggal: form.tanggal, // YYYY-MM-DD (LOCK TODAY)
+        brand: form.brand,
+        namaBarang: form.barang,
+        kategoriBarang: form.kategori,
+
+        harga: {
+          srp: Number(form.hargaSRP || 0),
+          grosir: Number(form.hargaGrosir || 0),
+          reseller: Number(form.hargaReseller || 0),
+        },
+
+        IS_BUNDLING: Boolean(form.isBundling),
+        BUNDLING_ITEMS: form.isBundling ? form.bundlingItems : [],
+
+        CREATED_AT: Date.now(),
+      };
+
       // ⬇️ SIMPAN KE MASTER BARANG
       await addMasterBarang(payload);
+
+      // ✅ RESET FORM
+      setForm({
+        kategori: "",
+        brand: "",
+        barang: "",
+        hargaSRP: "",
+        hargaGrosir: "",
+        hargaReseller: "",
+        isBundling: false,
+        bundlingItems: [],
+      });
+
+      // ✅ TUTUP MODAL
+      setShowModal(false);
 
       // pindah ke halaman terakhir
       const totalAfter = masterBarang.length + 1;
@@ -334,11 +342,12 @@ export default function MasterBarang() {
       showNotif("✅ Master Barang berhasil ditambahkan!");
       setShowTambah(false);
     } catch (err) {
-      console.error(err);
-      alert("Gagal menambahkan Master Barang");
+      console.error("Gagal simpan Master Barang:", err);
+      alert("Terjadi kesalahan saat menyimpan data");
+    } finally {
+      setLoadingSave(false);
     }
   };
-
   // ================== OPEN EDIT ==================
   const openEdit = (row) => {
     setEditData({
@@ -453,12 +462,6 @@ export default function MasterBarang() {
             </button>
           </div>
         </div>
-
-        {isLoading && (
-          <div className="mb-3 text-sm text-indigo-600 font-semibold animate-pulse">
-            🔄 Sinkronisasi data dengan MASTER DATA
-          </div>
-        )}
 
         {/* TABLE */}
         <div className="overflow-x-auto rounded-xl border">
@@ -601,18 +604,27 @@ export default function MasterBarang() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold">
-                  {" "}
-                  Kategori Barang
-                </label>
+                <label className="text-xs font-semibold">Kategori Barang</label>
+
                 <select
                   className="input"
                   value={form.kategori}
                   onChange={(e) =>
-                    setForm({ ...form, kategori: e.target.value })
+                    setForm({
+                      ...form,
+                      kategori: e.target.value,
+                      brand: "", // reset brand
+                      barang: "", // reset barang
+                      hargaSRP: "",
+                      hargaGrosir: "",
+                      hargaReseller: "",
+                      isBundling: false,
+                      bundlingItems: [],
+                    })
                   }
                 >
                   <option value="">Pilih Kategori</option>
+
                   {kategoriList.map((k) => (
                     <option key={k.id} value={k.namaKategori}>
                       {k.namaKategori}
@@ -620,6 +632,7 @@ export default function MasterBarang() {
                   ))}
                 </select>
               </div>
+
               <div>
                 <label className="text-xs font-semibold">Nama Brand</label>
                 <input
@@ -751,9 +764,14 @@ export default function MasterBarang() {
               </button>
               <button
                 onClick={submitTambah}
-                className="bg-indigo-600 text-white px-3 py-1 rounded flex items-center"
+                disabled={loadingSave}
+                className={`px-4 py-2 rounded text-white ${
+                  loadingSave
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-emerald-600"
+                }`}
               >
-                <FaSave className="mr-1" /> Simpan
+                {loadingSave ? "Menyimpan..." : "Simpan"}
               </button>
             </div>
           </div>
