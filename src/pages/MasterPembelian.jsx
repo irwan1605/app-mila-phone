@@ -117,34 +117,27 @@ export default function MasterPembelian() {
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterSupplier, setMasterSupplier] = useState([]);
   const [masterBundling, setMasterBundling] = useState([]);
+ 
 
   const masterBarangMap = useMemo(() => {
     const map = {};
-  
-    (allTransaksi || []).forEach((t) => {
-      // 🔒 HANYA PEMBELIAN NYATA
-      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return;
-      if (t.STATUS !== "Approved") return;
-      if (!t.NAMA_BRAND || !t.NAMA_BARANG) return;
-  
-      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-  
-      if (!map[key]) {
-        map[key] = {
-          hargaSRP: Number(t.HARGA_SRP || t.HARGA_UNIT || 0),
-          hargaGrosir: Number(t.HARGA_GROSIR || 0),
-          hargaReseller: Number(t.HARGA_RESELLER || 0),
-          isBundling: Boolean(t.IS_BUNDLING),
-          bundlingItems: Array.isArray(t.BUNDLING_ITEMS)
-            ? t.BUNDLING_ITEMS
-            : [],
-        };
-      }
+
+    masterBarang.forEach((b) => {
+      if (!b.brand || !b.namaBarang) return;
+
+      const key = `${b.brand}|${b.namaBarang}`;
+
+      map[key] = {
+        hargaSRP: Number(b.harga?.srp ?? b.hargaSRP ?? 0),
+        hargaGrosir: Number(b.harga?.grosir ?? b.hargaGrosir ?? 0),
+        hargaReseller: Number(b.harga?.reseller ?? b.hargaReseller ?? 0),
+        isBundling: Boolean(b.IS_BUNDLING),
+        bundlingItems: Array.isArray(b.BUNDLING_ITEMS) ? b.BUNDLING_ITEMS : [],
+      };
     });
-  
+
     return map;
-  }, [allTransaksi]);
-  
+  }, [masterBarang]);
 
   const [tambahForm, setTambahForm] = useState({
     tanggal: TODAY,
@@ -408,14 +401,14 @@ export default function MasterPembelian() {
           barang,
           kategoriBrand: t.KATEGORI_BRAND,
 
-          // 🔥 AUTO DARI MASTER BARANG
-          hargaSRP: masterRef ? masterRef.hargaSRP : 0,
-          hargaGrosir: masterRef ? masterRef.hargaGrosir : 0,
-          hargaReseller: masterRef ? masterRef.hargaReseller : 0,
-          isBundling: masterRef ? masterRef.isBundling : false,
-          bundlingItems: masterRef ? masterRef.bundlingItems : [],
+          // 🔥 MASTER BARANG (FIX)
+          hargaSRP: masterRef.hargaSRP || 0,
+          hargaGrosir: masterRef.hargaGrosir || 0,
+          hargaReseller: masterRef.hargaReseller || 0,
+          isBundling: masterRef.isBundling || false,
+          bundlingItems: masterRef.bundlingItems || [],
 
-          // PEMBELIAN
+          // 🔥 PEMBELIAN
           hargaSup: Number(t.HARGA_SUPLAYER || 0),
           imeis: [],
           totalQty: 0,
@@ -1193,37 +1186,37 @@ export default function MasterPembelian() {
             className="bg-white rounded-2xl shadow-inner overflow-x-auto border border-slate-100 mt-2"
           >
             <table className="w-full text-xs md:text-sm border-collapse">
-              <thead className="bg-slate-50">
+              <thead className="bg-slate-50 sticky top-0 z-10">
                 <tr>
                   <th className="border p-2">No</th>
                   <th className="border p-2">Tanggal</th>
-                  <th className="border p-2">No Delivery Order</th>
-                  <th className="border p-2">Nama Supplier</th>
-                  <th className="border p-2">Nama Toko</th>
-                  <th className="border p-2">Nama Brand</th>
-                  <th className="border p-2">Kategori Brand</th>
+                  <th className="border p-2">No DO</th>
+                  <th className="border p-2">Supplier</th>
+                  <th className="border p-2">Toko</th>
+                  <th className="border p-2">Brand</th>
+                  <th className="border p-2">Kategori</th>
                   <th className="border p-2">Nama Barang</th>
                   <th className="border p-2">IMEI / No Mesin</th>
-                  {/* <th className="border p-2 text-right">Harga SRP</th>
-                  <th className="border p-2 text-right">Harga Grosir</th>
-                  <th className="border p-2 text-right">Harga Reseller</th> */}
-                  {/* <th className="border p-2">Barang Bundling</th> */}
 
-                  <th className="border p-2 text-right">
-                    Harga Supplier (Satuan)
-                  </th>
+                  {/* === MASTER BARANG === */}
+                  <th className="border p-2 text-right">Harga SRP</th>
+                  <th className="border p-2 text-right">Harga Grosir</th>
+                  <th className="border p-2 text-right">Harga Reseller</th>
+                  <th className="border p-2">Barang Bundling</th>
+
+                  {/* === PEMBELIAN === */}
+                  <th className="border p-2 text-right">Harga Supplier</th>
                   <th className="border p-2 text-center">Qty</th>
-                  <th className="border p-2 text-right">
-                    Total Harga Supplier
-                  </th>
+                  <th className="border p-2 text-right">Total Harga</th>
                   <th className="border p-2 text-center">Aksi</th>
                 </tr>
               </thead>
+
               <tbody>
                 {paginatedPurchases.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={12}
+                      colSpan={17}
                       className="p-4 border text-center text-gray-500"
                     >
                       Tidak ada data pembelian.
@@ -1238,6 +1231,10 @@ export default function MasterPembelian() {
                             im.toLowerCase().includes(search.toLowerCase())
                           );
 
+                    const bundlingItems = Array.isArray(item.bundlingItems)
+                      ? item.bundlingItems
+                      : [];
+
                     return (
                       <tr
                         key={item.key}
@@ -1246,6 +1243,7 @@ export default function MasterPembelian() {
                         <td className="border p-2 text-center">
                           {(currentPage - 1) * itemsPerPage + idx + 1}
                         </td>
+
                         <td className="border p-2">{item.tanggal}</td>
                         <td className="border p-2">{item.noDo}</td>
                         <td className="border p-2">{item.supplier}</td>
@@ -1254,45 +1252,42 @@ export default function MasterPembelian() {
                         <td className="border p-2">
                           {item.kategoriBrand || "-"}
                         </td>
-                        <td className="border p-2">{item.barang}</td>
+                        <td className="border p-2 font-medium">
+                          {item.barang}
+                        </td>
+
                         <td className="border p-2 whitespace-pre-wrap font-mono text-[11px]">
                           {shownImeis.length ? shownImeis.join("\n") : "-"}
                         </td>
 
-                        {/* <td className="border p-2 text-right">
-                          Rp {fmt(item.hargaSRP)}
+                        {/* === MASTER BARANG === */}
+                        <td className="border p-2 text-right">
+                          Rp {fmt(item.hargaSRP ?? 0)}
+                        </td>
+                        <td className="border p-2 text-right">
+                          Rp {fmt(item.hargaGrosir ?? 0)}
+                        </td>
+                        <td className="border p-2 text-right">
+                          Rp {fmt(item.hargaReseller ?? 0)}
                         </td>
 
-                        <td className="border p-2 text-right">
-                          Rp {fmt(item.hargaGrosir)}
-                        </td>
-
-                        <td className="border p-2 text-right">
-                          Rp {fmt(item.hargaReseller)}
-                        </td> */}
-
-                        {/* <td className="border p-2">
-                          {!item.isBundling ||
-                          item.bundlingItems.length === 0 ? (
+                        <td className="border p-2">
+                          {(item.bundlingItems || []).length === 0 ? (
                             <span className="text-slate-400 italic">—</span>
                           ) : (
-                            <div className="space-y-1">
-                              {item.bundlingItems.map((b, i) => (
-                                <div
-                                  key={i}
-                                  className="flex justify-between text-xs bg-slate-100 px-2 py-1 rounded"
-                                >
-                                  <span>{b.namaBarang}</span>
-                                  <span className="font-semibold">
-                                    Rp {fmt(b.harga)}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
+                            item.bundlingItems.map((b, i) => (
+                              <div
+                                key={i}
+                                className="flex justify-between text-xs"
+                              >
+                                <span>{b.namaBarang}</span>
+                                <span>Rp {fmt(b.harga)}</span>
+                              </div>
+                            ))
                           )}
-                        </td> */}
+                        </td>
 
-                        {/* === HARGA SUPPLIER === */}
+                        {/* === PEMBELIAN === */}
                         <td className="border p-2 text-right">
                           Rp {fmt(item.hargaSup)}
                         </td>
@@ -1308,14 +1303,12 @@ export default function MasterPembelian() {
                         <td className="border p-2 text-center space-x-2">
                           <button
                             className="inline-flex items-center justify-center p-[6px] rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
-                            title="Edit"
                             onClick={() => openEdit(item)}
                           >
                             <FaEdit />
                           </button>
                           <button
                             className="inline-flex items-center justify-center p-[6px] rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
-                            title="Hapus"
                             onClick={() => deletePembelian(item)}
                           >
                             <FaTrash />
@@ -1591,29 +1584,23 @@ export default function MasterPembelian() {
               </div>
             )}
 
-            {/* ================== BANDLING SECTION ================== */}
+            {/* ================== BUNDLING SECTION ================== */}
+            <h4 className="mt-3 font-bold text-blue-600">Bundling Produk</h4>
 
-            <h4 className="mt-3 font-bold text-blue-600">Bandling Produk</h4>
-
-            {tambahForm.isBundling && (
-              <div className="mt-3">
-                <label className="text-xs font-semibold text-slate-600">
-                  Barang Bundling (otomatis)
-                </label>
-
-                <div className="mt-2 space-y-2">
-                  {tambahForm.bundlingItems.map((b, i) => (
-                    <div
-                      key={i}
-                      className="flex justify-between items-center bg-slate-100 px-3 py-2 rounded"
-                    >
-                      <span className="text-sm">{b.namaBarang}</span>
-                      <span className="text-sm font-semibold">
-                        Rp {Number(b.harga).toLocaleString("id-ID")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+            {!tambahForm.isBundling ||
+            (tambahForm.bundlingItems || []).length === 0 ? (
+              <span className="text-slate-400 italic">—</span>
+            ) : (
+              <div className="space-y-1">
+                {tambahForm.bundlingItems.map((b, i) => (
+                  <div
+                    key={i}
+                    className="flex justify-between text-xs bg-slate-100 px-2 py-1 rounded"
+                  >
+                    <span className="truncate">{b.namaBarang}</span>
+                    <span className="font-semibold">Rp {fmt(b.harga)}</span>
+                  </div>
+                ))}
               </div>
             )}
 

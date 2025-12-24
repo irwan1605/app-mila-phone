@@ -167,43 +167,34 @@ export default function MasterBarang() {
   // ================== REKAP MASTER BARANG ==================
   // ================== REKAP MASTER BARANG ==================
   const rekapMasterBarang = useMemo(() => {
-    return (
-      masterBarang
-        // ✅ hanya data dari Tambah Master Barang
-        .filter((b) => b.CREATED_AT)
-        .map((b) => {
-          const srp = b.harga?.srp ?? b.hargaSRP ?? b.HARGA_SRP ?? 0;
-
-          const grosir =
-            b.harga?.grosir ?? b.hargaGrosir ?? b.HARGA_GROSIR ?? 0;
-
-          const reseller =
-            b.harga?.reseller ?? b.hargaReseller ?? b.HARGA_RESELLER ?? 0;
-
-          return {
-            id: b.id,
-            key: b.id,
-
-            // ✅ tanggal realtime
-            tanggal: b.tanggal,
-
-            brand: b.brand,
-            kategori: b.kategoriBarang,
-            barang: b.namaBarang,
-
-            // ✅ harga realtime (FIX)
-            hargaSRP: Number(srp),
-            hargaGrosir: Number(grosir),
-            hargaReseller: Number(reseller),
-
-            IS_BUNDLING: Boolean(b.IS_BUNDLING),
-            BUNDLING_ITEMS: Array.isArray(b.BUNDLING_ITEMS)
-              ? b.BUNDLING_ITEMS
-              : [],
-          };
-        })
-    );
+    return masterBarang
+      .filter((b) => b.CREATED_AT) // hanya master barang asli
+      .map((b) => {
+        const harga = b.harga || {};
+  
+        return {
+          id: b.id,
+          key: b.id,
+  
+          tanggal: b.tanggal || "-",
+          kategori: b.kategoriBarang || "-",
+          brand: b.brand || "-",
+          barang: b.namaBarang || "-",
+  
+          // 🔥 SEMUA HARGA (PASTI ADA)
+          hargaSRP: Number(harga.srp ?? b.hargaSRP ?? 0),
+          hargaGrosir: Number(harga.grosir ?? b.hargaGrosir ?? 0),
+          hargaReseller: Number(harga.reseller ?? b.hargaReseller ?? 0),
+  
+          // 🔥 BUNDLING (AMAN)
+          IS_BUNDLING: Boolean(b.IS_BUNDLING),
+          BUNDLING_ITEMS: Array.isArray(b.BUNDLING_ITEMS)
+            ? b.BUNDLING_ITEMS
+            : [],
+        };
+      });
   }, [masterBarang]);
+  
 
   const filtered = useMemo(() => {
     if (!search) return rekapMasterBarang;
