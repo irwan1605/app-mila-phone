@@ -31,6 +31,8 @@ import {
   FaPlus,
   FaTimes,
 } from "react-icons/fa";
+import TabelPembelianDraft from "./table/TabelPembelianDraft";
+import CetakInvoicePembelian from "./Print/CetakInvoicePembelian";
 
 // (omitting repeated comments for brevity in this preview)
 
@@ -45,23 +47,6 @@ const TOKO_LIST = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
-];
-
-const BRAND_OPTIONS = [
-  "OFERO",
-  "UWINFLY",
-  "E NINE",
-  "ZXTEX",
-  "UNITED",
-  "RAKATA",
-  "OPPO",
-  "SAMSUNG",
-  "REALME",
-  "VIVO",
-  "IPHONE",
-  "ZTE NUBIA",
-  "XIOMI",
-  "INFINIX",
 ];
 
 const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
@@ -117,7 +102,10 @@ export default function MasterPembelian() {
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterSupplier, setMasterSupplier] = useState([]);
   const [masterBundling, setMasterBundling] = useState([]);
- 
+  const [draftItems, setDraftItems] = useState([]); // ← KERANJANG PEMBELIAN
+  const [editDraftId, setEditDraftId] = useState(null);
+  const [showDraftTable, setShowDraftTable] = useState(false);
+  const [showInvoice, setShowInvoice] = useState(false);
 
   const masterBarangMap = useMemo(() => {
     const map = {};
@@ -320,6 +308,23 @@ export default function MasterPembelian() {
     return masterSupplier.map((s) => s.namaSupplier).filter(Boolean);
   }, [masterSupplier]);
 
+  // ===============================
+  // BRAND LIST DARI MASTER BARANG (FINAL)
+  // ===============================
+  const brandList = useMemo(() => {
+    if (!tambahForm.kategoriBrand) return [];
+
+    const set = new Set();
+
+    masterBarang.forEach((b) => {
+      if (b.kategoriBarang === tambahForm.kategoriBrand && b.brand) {
+        set.add(b.brand);
+      }
+    });
+
+    return Array.from(set).sort();
+  }, [masterBarang, tambahForm.kategoriBrand]);
+
   // const brandOptions = useMemo(() => {
   //   return Array.from(
   //     new Set(masterBarang.map((b) => b.NAMA_BRAND).filter(Boolean))
@@ -352,14 +357,6 @@ export default function MasterPembelian() {
       .filter(Boolean);
   }, [masterBarang, tambahForm.brand, tambahForm.kategoriBrand]);
 
-  const brandOptionsDynamic = useMemo(() => {
-    const set = new Set(BRAND_OPTIONS);
-    masterBarangList.forEach((x) => {
-      if (x.brand) set.add(x.brand);
-    });
-    return Array.from(set);
-  }, [masterBarangList]);
-
   // const namaBarangOptions = useMemo(() => {
   //   if (!tambahForm.brand) {
   //     return Array.from(
@@ -375,6 +372,110 @@ export default function MasterPembelian() {
   //     )
   //   );
   // }, [masterBarangList, tambahForm.brand]);
+
+  const getAllDraftImeis = () => {
+    return draftItems.flatMap((d) => d.imeis || []);
+  };
+
+  const handleAddDraftItem = () => {
+    const { brand, kategoriBrand, barang, hargaSup, imeiList, qty } =
+      tambahForm;
+
+    if (!brand || !kategoriBrand || !barang || !hargaSup) {
+      alert("Lengkapi data barang terlebih dahulu");
+      return;
+    }
+
+    let finalQty = 0;
+    let imeis = [];
+
+    const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(kategoriBrand);
+
+    if (isKategoriImei) {
+      imeis = String(imeiList || "")
+        .split("\n")
+        .map((x) => x.trim())
+        .filter(Boolean);
+
+      if (!imeis.length) {
+        alert("IMEI wajib diisi");
+        return;
+      }
+
+      /* ===============================
+         VALIDASI DUPLIKASI IMEI
+      =============================== */
+
+      // 1. duplikat di textarea
+      const seen = new Set();
+      const dupLocal = imeis.find((i) => {
+        if (seen.has(i)) return true;
+        seen.add(i);
+        return false;
+      });
+      if (dupLocal) {
+        alert(`❌ IMEI duplikat di input: ${dupLocal}`);
+        return;
+      }
+
+      // 2. duplikat antar draft
+      const draftImeis = getAllDraftImeis();
+      const dupDraft = imeis.find((i) => draftImeis.includes(i));
+      if (dupDraft) {
+        alert(`❌ IMEI ${dupDraft} sudah ada di daftar pembelian sementara`);
+        return;
+      }
+
+      // 3. duplikat di database
+      const err = validateImeisNew(imeis);
+      if (err.length) {
+        alert(err.join("\n"));
+        return;
+      }
+
+      finalQty = imeis.length;
+    } else {
+      finalQty = Number(qty || 0);
+      if (!finalQty) {
+        alert("Qty wajib diisi");
+        return;
+      }
+    }
+
+    setDraftItems((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        tanggal: tambahForm.tanggal,
+        noDo: tambahForm.noDo,
+        supplier: tambahForm.supplier,
+        namaToko: tokoTujuan,
+
+        brand,
+        kategoriBrand,
+        barang,
+
+        hargaSup: Number(hargaSup),
+        qty: finalQty,
+        imeis,
+
+        bundlingItems: tambahForm.bundlingItems || [],
+
+        total: Number(hargaSup) * finalQty,
+      },
+    ]);
+
+    // reset form BARANG SAJA (DO tetap)
+    setTambahForm((p) => ({
+      ...p,
+      brand: "",
+      kategoriBrand: "",
+      barang: "",
+      hargaSup: "",
+      imeiList: "",
+      qty: 1,
+    }));
+  };
 
   const groupedPembelian = useMemo(() => {
     const map = {};
@@ -774,6 +875,17 @@ export default function MasterPembelian() {
       qty,
     } = tambahForm;
 
+    // ===== CEK DUPLIKAT IMEI DI SEMUA DRAFT =====
+    const allDraftImeis = getAllDraftImeis();
+    const seenDraft = new Set();
+    for (const im of allDraftImeis) {
+      if (seenDraft.has(im)) {
+        alert(`❌ IMEI duplikat di daftar pembelian: ${im}`);
+        return;
+      }
+      seenDraft.add(im);
+    }
+
     const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(kategoriBrand);
     const isAccessories = kategoriBrand === "ACCESORIES";
 
@@ -858,6 +970,9 @@ export default function MasterPembelian() {
     const sku = makeSku(brand, barang);
 
     try {
+      /* ===============================
+         IMEI → 1 BARIS PER IMEI
+      =============================== */
       if (isKategoriImei) {
         for (const im of imeis) {
           const payload = {
@@ -866,60 +981,60 @@ export default function MasterPembelian() {
             NAMA_SUPPLIER: supplier,
             NAMA_USER: "SYSTEM",
             NAMA_TOKO: namaToko,
+
             NAMA_BRAND: brand,
             KATEGORI_BRAND: kategoriBrand,
             NAMA_BARANG: barang,
+
             QTY: 1,
             IMEI: im,
             NOMOR_UNIK: `PEMBELIAN|${brand}|${barang}|${im}`,
+
             HARGA_SUPLAYER: hSup,
             HARGA_UNIT: hSup,
             TOTAL: hSup,
-            NAMA_BANDLING_1: tambahForm.namaBandling1,
-            HARGA_BANDLING_1: Number(tambahForm.hargaBandling1),
-            NAMA_BANDLING_2: tambahForm.namaBandling2,
-            HARGA_BANDLING_2: Number(tambahForm.hargaBandling2),
-            NAMA_BANDLING_3: tambahForm.namaBandling3,
-            HARGA_BANDLING_3: Number(tambahForm.hargaBandling3),
+
+            IS_BUNDLING: isBandlingItem,
+            BUNDLING_ITEMS: tambahForm.bundlingItems || [],
             HARGA_BANDLING_DIPAKAI: hargaBandlingDipakai,
+
             PAYMENT_METODE: "PEMBELIAN",
             SYSTEM_PAYMENT: "SYSTEM",
-            KETERANGAN: "Pembelian",
             STATUS: "Approved",
+            CREATED_AT: Date.now(),
           };
+
           await addTransaksi(tokoId, payload);
         }
       } else {
-        const sama = (allTransaksi || []).filter(
-          (t) =>
-            (t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
-            t.NAMA_BRAND === brand &&
-            t.NAMA_BARANG === barang &&
-            !t.IMEI &&
-            t.NAMA_SUPPLIER === supplier &&
-            t.NO_INVOICE === noDo
-        );
-
-        for (const s of sama) {
-          const tId = s.tokoId || 1;
-          if (s.id) {
-            await deleteTransaksi(tId, s.id);
-          }
-        }
-
-        // 2️⃣ 🔥 PAYLOAD DITEMPATKAN DI SINI 🔥
+        /* ===============================
+         NON IMEI → 1 BARIS PER BARANG
+      =============================== */
         const payload = {
-          KATEGORI_BRAND: tambahForm.kategoriBrand,
-          NAMA_BRAND: tambahForm.brand,
-          NAMA_BARANG: tambahForm.barang,
-          QTY: Number(tambahForm.qty || 1),
+          TANGGAL_TRANSAKSI: tanggal,
+          NO_INVOICE: noDo,
+          NAMA_SUPPLIER: supplier,
+          NAMA_USER: "SYSTEM",
+          NAMA_TOKO: namaToko,
 
-          IS_BUNDLING: tambahForm.isBundling,
-          BUNDLING_ITEMS: tambahForm.bundlingItems,
+          NAMA_BRAND: brand,
+          KATEGORI_BRAND: kategoriBrand,
+          NAMA_BARANG: barang,
+
+          QTY: finalQty,
+          IMEI: "",
+
+          HARGA_SUPLAYER: hSup,
+          HARGA_UNIT: hSup,
+          TOTAL: hSup * finalQty,
+
+          IS_BUNDLING: isBandlingItem,
+          BUNDLING_ITEMS: tambahForm.bundlingItems || [],
+          HARGA_BANDLING_DIPAKAI: hargaBandlingDipakai,
 
           PAYMENT_METODE: "PEMBELIAN",
+          SYSTEM_PAYMENT: "SYSTEM",
           STATUS: "Approved",
-
           CREATED_AT: Date.now(),
         };
 
@@ -952,6 +1067,17 @@ export default function MasterPembelian() {
       • Stok CILANGKAP PUSAT bertambah
       • Stok ${tokoTujuan} otomatis bertambah`
       );
+
+      /* ===============================
+       UPDATE STOK TOKO TUJUAN
+    =============================== */
+      if (tokoTujuan && tokoTujuan !== "CILANGKAP PUSAT") {
+        await addStock(tokoTujuan, sku, {
+          brand,
+          barang,
+          qty: finalQty,
+        });
+      }
 
       if (isBandlingItem) {
         const skuBandling = `BANDLING-${tipeBandling}`;
@@ -1371,9 +1497,51 @@ export default function MasterPembelian() {
       </div>
 
       {/* MODAL TAMBAH PEMBELIAN */}
+      {/* MODAL TAMBAH PEMBELIAN */}
       {showTambah && (
         <div className="fixed inset-0 bg-black/40 flex justify-center items-start py-10 z-50 overflow-y-auto">
           <div className="bg-white text-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl p-5">
+            <TabelPembelianDraft
+              draftItems={draftItems}
+              onDelete={(id) =>
+                setDraftItems((prev) => prev.filter((x) => x.id !== id))
+              }
+              onEdit={(item) => {
+                setTambahForm({
+                  ...tambahForm,
+                  brand: item.brand,
+                  kategoriBrand: item.kategoriBrand,
+                  barang: item.barang,
+                  hargaSup: item.hargaSup,
+                  imeiList: (item.imeis || []).join("\n"),
+                  qty: item.qty,
+                });
+                setDraftItems((prev) => prev.filter((x) => x.id !== item.id));
+                setShowDraftTable(false);
+                setShowTambah(true);
+              }}
+              onSubmit={() => {
+                setShowDraftTable(false);
+                submitTambah(); // ⬅ SIMPAN FINAL KE MASTER PEMBELIAN
+              }}
+              onPreview={() => {
+                setShowDraftTable(false);
+                setShowInvoice(true);
+              }}
+            />
+
+            {showInvoice && (
+              <div className="fixed inset-0 bg-black/40 z-50 flex justify-center items-start py-6 overflow-y-auto">
+                <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl p-4">
+                  <CetakInvoicePembelian
+                    draftItems={draftItems}
+                    onClose={() => setShowInvoice(false)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* HEADER */}
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-bold text-slate-800">
                 Tambah Pembelian
@@ -1386,6 +1554,7 @@ export default function MasterPembelian() {
               </button>
             </div>
 
+            {/* FORM */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Tanggal */}
               <div>
@@ -1415,6 +1584,7 @@ export default function MasterPembelian() {
                 />
               </div>
 
+              {/* Nama Toko */}
               <div>
                 <label className="text-xs font-semibold text-slate-600">
                   Nama Toko
@@ -1458,26 +1628,7 @@ export default function MasterPembelian() {
                 </datalist>
               </div>
 
-              {/* Brand */}
-              <div>
-                <label className="text-xs font-semibold text-slate-600">
-                  Nama Brand
-                </label>
-                <input
-                  list="brand-list"
-                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
-                  placeholder="Pilih / ketik brand"
-                  value={tambahForm.brand}
-                  onChange={(e) => handleTambahChange("brand", e.target.value)}
-                />
-                <datalist id="brand-list">
-                  {brandOptionsDynamic.map((b) => (
-                    <option key={b} value={b} />
-                  ))}
-                </datalist>
-              </div>
-
-              {/* Kategori Brand */}
+              {/* Kategori */}
               <div>
                 <label className="text-xs font-semibold text-slate-600">
                   Kategori Brand
@@ -1498,6 +1649,38 @@ export default function MasterPembelian() {
                 </select>
               </div>
 
+              {/* Brand */}
+              <div>
+                <label className="text-xs font-semibold">Nama Brand</label>
+
+                <input
+                  list="brand-master-list"
+                  className="input"
+                  placeholder={
+                    tambahForm.kategoriBrand
+                      ? "Pilih Nama Brand"
+                      : "Pilih Kategori dulu"
+                  }
+                  disabled={!tambahForm.kategoriBrand}
+                  value={tambahForm.brand}
+                  onChange={(e) =>
+                    setTambahForm((prev) => ({
+                      ...prev,
+                      brand: e.target.value,
+                      barang: "", // reset barang
+                      imeiList: "",
+                      qty: 1,
+                    }))
+                  }
+                />
+
+                <datalist id="brand-master-list">
+                  {brandList.map((b, i) => (
+                    <option key={i} value={b} />
+                  ))}
+                </datalist>
+              </div>
+
               {/* Nama Barang */}
               <div>
                 <label className="text-xs font-semibold text-slate-600">
@@ -1506,7 +1689,6 @@ export default function MasterPembelian() {
                 <input
                   list="barang-list"
                   className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
-                  placeholder="Pilih / ketik nama barang"
                   value={tambahForm.barang}
                   onChange={(e) => handleTambahChange("barang", e.target.value)}
                 />
@@ -1517,7 +1699,7 @@ export default function MasterPembelian() {
                 </datalist>
               </div>
 
-              {/* Harga Supplier */}
+              {/* Harga */}
               <div>
                 <label className="text-xs font-semibold text-slate-600">
                   Harga Supplier
@@ -1525,7 +1707,6 @@ export default function MasterPembelian() {
                 <input
                   type="number"
                   className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
-                  placeholder="0"
                   value={tambahForm.hargaSup}
                   onChange={(e) =>
                     handleTambahChange("hargaSup", e.target.value)
@@ -1533,49 +1714,55 @@ export default function MasterPembelian() {
                 />
               </div>
 
-              {/* Qty */}
-              <div>
-                <label className="text-xs font-semibold text-slate-600">
-                  Qty
-                </label>
-                <input
-                  type="number"
-                  className={`w-full border rounded-lg px-2 py-2 text-sm bg-slate-50 ${
-                    KATEGORI_WAJIB_IMEI.includes(tambahForm.kategoriBrand)
-                      ? "text-slate-500"
-                      : ""
-                  }`}
-                  value={tambahForm.qty}
-                  onChange={(e) =>
-                    !KATEGORI_WAJIB_IMEI.includes(tambahForm.kategoriBrand) &&
-                    handleTambahChange("qty", e.target.value)
-                  }
-                  readOnly={KATEGORI_WAJIB_IMEI.includes(
-                    tambahForm.kategoriBrand
-                  )}
-                />
-                {KATEGORI_WAJIB_IMEI.includes(tambahForm.kategoriBrand) && (
-                  <p className="text-[10px] text-amber-600 mt-1">
-                    Qty otomatis mengikuti jumlah baris IMEI.
-                  </p>
-                )}
-              </div>
+            {/* Qty */}
+<div>
+  <label className="text-xs font-semibold text-slate-600">
+    Qty
+  </label>
+  <input
+    type="number"
+    min={1}
+    className={`w-full border rounded-lg px-2 py-2 text-sm bg-slate-50 ${
+      KATEGORI_WAJIB_IMEI.includes(tambahForm.kategoriBrand)
+        ? "text-slate-500"
+        : ""
+    }`}
+    value={tambahForm.qty}
+    readOnly={KATEGORI_WAJIB_IMEI.includes(tambahForm.kategoriBrand)}
+    onChange={(e) => {
+      // ✅ HANYA ACCESSORIES & NON-IMEI BOLEH MANUAL
+      if (
+        !KATEGORI_WAJIB_IMEI.includes(tambahForm.kategoriBrand)
+      ) {
+        handleTambahChange("qty", e.target.value);
+      }
+    }}
+  />
+
+  {KATEGORI_WAJIB_IMEI.includes(tambahForm.kategoriBrand) && (
+    <p className="text-[10px] text-amber-600 mt-1">
+      Qty otomatis mengikuti jumlah IMEI
+    </p>
+  )}
+
+  {tambahForm.kategoriBrand === "ACCESSORIES" && (
+    <p className="text-[10px] text-emerald-600 mt-1">
+      Qty dapat diinput manual untuk Accessories
+    </p>
+  )}
+</div>
+
             </div>
 
-            {/* IMEI hanya jika bukan ACCESORIES */}
+            {/* IMEI */}
             {tambahForm.kategoriBrand !== "ACCESORIES" && (
               <div className="mt-3">
                 <label className="text-xs font-semibold text-slate-600">
-                  No IMEI / No Mesin{" "}
-                  <span className="font-normal">
-                    (1 per baris – wajib untuk SEPEDA LISTRIK / MOTOR LISTRIK /
-                    HANDPHONE)
-                  </span>
+                  No IMEI / No Mesin (1 per baris)
                 </label>
                 <textarea
                   rows={4}
                   className="w-full border rounded-lg px-2 py-2 text-xs font-mono bg-slate-50"
-                  placeholder={`Contoh:\nIMEI-001\nIMEI-002`}
                   value={tambahForm.imeiList}
                   onChange={(e) =>
                     handleTambahChange("imeiList", e.target.value)
@@ -1584,38 +1771,68 @@ export default function MasterPembelian() {
               </div>
             )}
 
-            {/* ================== BUNDLING SECTION ================== */}
-            <h4 className="mt-3 font-bold text-blue-600">Bundling Produk</h4>
+            {/* ===== DRAFT TABLE ===== */}
+            {draftItems.length > 0 && (
+              <>
+                <div className="mt-4 border rounded-xl overflow-hidden shadow-sm">
+                  <table className="w-full text-xs">
+                    <tbody>
+                      {draftItems.map((d) => (
+                        <tr key={d.id}>
+                          <td className="border p-2">{d.barang}</td>
+                          <td className="border p-2 text-center">{d.qty}</td>
+                          <td className="border p-2 text-right">
+                            Rp {fmt(d.total)}
+                          </td>
+                          <td className="border p-2 text-center">
+                            <button
+                              onClick={() =>
+                                setDraftItems((p) =>
+                                  p.filter((x) => x.id !== d.id)
+                                )
+                              }
+                              className="text-rose-600"
+                            >
+                              <FaTrash />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-            {!tambahForm.isBundling ||
-            (tambahForm.bundlingItems || []).length === 0 ? (
-              <span className="text-slate-400 italic">—</span>
-            ) : (
-              <div className="space-y-1">
-                {tambahForm.bundlingItems.map((b, i) => (
-                  <div
-                    key={i}
-                    className="flex justify-between text-xs bg-slate-100 px-2 py-1 rounded"
-                  >
-                    <span className="truncate">{b.namaBarang}</span>
-                    <span className="font-semibold">Rp {fmt(b.harga)}</span>
-                  </div>
-                ))}
-              </div>
+                <div className="mt-3 flex justify-end font-bold">
+                  Rp {fmt(draftItems.reduce((s, i) => s + i.total, 0))}
+                </div>
+              </>
             )}
 
+            {/* FOOTER */}
             <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={() => setShowTambah(false)}
-                className="px-3 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded-lg text-sm"
+                onClick={handleAddDraftItem}
+                className="px-3 py-2 bg-emerald-600 text-white rounded-xl"
               >
-                <FaTimes className="inline mr-1" /> Batal
+                <FaPlus /> Tambah ke Daftar
               </button>
               <button
-                onClick={submitTambah}
-                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm flex items-center shadow-md"
+                onClick={() => setShowTambah(false)}
+                className="px-3 py-1 bg-gray-400 text-white rounded-lg"
               >
-                <FaSave className="inline mr-1" /> Simpan
+                Batal
+              </button>
+              <button
+                onClick={handleAddDraftItem}
+                className="px-3 py-2 bg-emerald-600 text-white rounded-xl"
+              >
+                <FaPlus /> Tambah Pembelian
+              </button>
+              <button
+                onClick={() => setShowDraftTable(true)}
+                className="px-3 py-2 bg-indigo-600 text-white rounded-xl"
+              >
+                Lihat Daftar Pembelian
               </button>
             </div>
           </div>
