@@ -45,8 +45,9 @@ const fmt = (n) => {
             <th className="border p-2">Tanggal</th>
             <th className="border p-2">No DO</th>
             <th className="border p-2">Supplier</th>
-            <th className="border p-2">Nama Barang</th>
-            <th className="border p-2 text-right">Harga</th>
+            <th className="border p-2 text-center">Nama Brand</th>
+            <th className="border p-2 text-center">Nama Barang</th>
+            <th className="border p-2 text-right">Harga Supllier</th>
             <th className="border p-2 text-center">Qty</th>
             <th className="border p-2 text-right">Total</th>
             <th className="border p-2 text-center">Aksi</th>
@@ -58,6 +59,7 @@ const fmt = (n) => {
               <td className="border p-2">{d.tanggal}</td>
               <td className="border p-2">{d.noDo}</td>
               <td className="border p-2">{d.supplier}</td>
+              <td className="border p-2">{d.brand}</td>
               <td className="border p-2">{d.barang}</td>
               <td className="border p-2 text-right">
                 Rp {fmt(d.hargaSup)}

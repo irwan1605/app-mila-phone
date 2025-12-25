@@ -477,6 +477,114 @@ export default function MasterPembelian() {
     }));
   };
 
+  const submitDraftPembelian = async () => {
+    if (!draftItems || draftItems.length === 0) {
+      alert("❌ Tidak ada data pembelian untuk disimpan.");
+      return;
+    }
+  
+    try {
+      for (const d of draftItems) {
+        const {
+          tanggal,
+          noDo,
+          supplier,
+          namaToko,
+          brand,
+          kategoriBrand,
+          barang,
+          hargaSup,
+          qty,
+          imeis = [],
+          bundlingItems = [],
+        } = d;
+  
+        const tokoId = TOKO_LIST.indexOf(namaToko) + 1;
+        const hSup = Number(hargaSup || 0);
+  
+        if (!tanggal || !noDo || !supplier || !brand || !barang) {
+          alert("❌ Data draft tidak lengkap.");
+          return;
+        }
+  
+        const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(kategoriBrand);
+  
+        // ===============================
+        // IMEI → 1 BARIS PER IMEI
+        // ===============================
+        if (isKategoriImei) {
+          for (const im of imeis) {
+            await addTransaksi(tokoId, {
+              TANGGAL_TRANSAKSI: tanggal,
+              NO_INVOICE: noDo,
+              NAMA_SUPPLIER: supplier,
+              NAMA_USER: "SYSTEM",
+              NAMA_TOKO: namaToko,
+  
+              NAMA_BRAND: brand,
+              KATEGORI_BRAND: kategoriBrand,
+              NAMA_BARANG: barang,
+  
+              QTY: 1,
+              IMEI: im,
+  
+              HARGA_SUPLAYER: hSup,
+              HARGA_UNIT: hSup,
+              TOTAL: hSup,
+  
+              IS_BUNDLING: bundlingItems.length > 0,
+              BUNDLING_ITEMS: bundlingItems,
+  
+              PAYMENT_METODE: "PEMBELIAN",
+              STATUS: "Approved",
+              CREATED_AT: Date.now(),
+            });
+          }
+        } else {
+          // ===============================
+          // NON IMEI → 1 BARIS PER BARANG
+          // ===============================
+          await addTransaksi(tokoId, {
+            TANGGAL_TRANSAKSI: tanggal,
+            NO_INVOICE: noDo,
+            NAMA_SUPPLIER: supplier,
+            NAMA_USER: "SYSTEM",
+            NAMA_TOKO: namaToko,
+  
+            NAMA_BRAND: brand,
+            KATEGORI_BRAND: kategoriBrand,
+            NAMA_BARANG: barang,
+  
+            QTY: qty,
+            IMEI: "",
+  
+            HARGA_SUPLAYER: hSup,
+            HARGA_UNIT: hSup,
+            TOTAL: hSup * qty,
+  
+            IS_BUNDLING: bundlingItems.length > 0,
+            BUNDLING_ITEMS: bundlingItems,
+  
+            PAYMENT_METODE: "PEMBELIAN",
+            STATUS: "Approved",
+            CREATED_AT: Date.now(),
+          });
+        }
+      }
+  
+      alert("✅ Pembelian berhasil disimpan ke MASTER PEMBELIAN");
+  
+      // 🔥 RESET SEMUA
+      setDraftItems([]);
+      setShowDraftTable(false);
+      setShowTambah(false);
+    } catch (err) {
+      console.error("submitDraftPembelian error:", err);
+      alert("❌ Gagal menyimpan pembelian.");
+    }
+  };
+  
+
   const groupedPembelian = useMemo(() => {
     const map = {};
 
@@ -1522,7 +1630,7 @@ export default function MasterPembelian() {
               }}
               onSubmit={() => {
                 setShowDraftTable(false);
-                submitTambah(); // ⬅ SIMPAN FINAL KE MASTER PEMBELIAN
+                submitDraftPembelian(); // ⬅ SIMPAN FINAL KE MASTER PEMBELIAN
               }}
               onPreview={() => {
                 setShowDraftTable(false);
