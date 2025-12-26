@@ -8,11 +8,9 @@ import {
   useParams,
 } from "react-router-dom";
 
-
 /* Layout */
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
-
 
 /* Pages */
 import Dashboard from "./pages/Dashboard";
@@ -68,6 +66,8 @@ import MasterKaryawan from "./pages/MasterKaryawan";
 import CardPenjualanToko from "./pages/Toko/CardPenjualanToko/CardPenjualanToko";
 import CardStockOpnameToko from "./pages/Toko/CardStockOpnameToko";
 import CardTransferGudangToko from "./pages/Toko/CardTransferGudangToko";
+import DetailStockAllToko from "./pages/table/DetailStockAllToko";
+import DetailStockToko from "./pages/table/DetailStockToko";
 
 /* ===========================
     Utility role → toko
@@ -118,8 +118,6 @@ export default function App() {
 
   /* Realtime Firebase Users */
   const [users, setUsers] = useState(defaultUsers);
-
- 
 
   useEffect(() => {
     getAllUsersOnce().then((u) => {
@@ -218,6 +216,15 @@ export default function App() {
                     path="/inventory-report"
                     element={<InventoryReport />}
                   />
+                  <Route
+                    path="/table/detail-stock-all-toko"
+                    element={<DetailStockAllToko />}
+                  />
+                  <Route
+                    path="/table/detail-stock-toko"
+                    element={<DetailStockToko />}
+                  />
+
                   <Route path="/finance-report" element={<FinanceReport />} />
                   <Route
                     path="/finance-report-monthly"

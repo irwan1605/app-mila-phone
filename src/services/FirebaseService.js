@@ -438,20 +438,23 @@ export const deletePenjualan = (id) => {
 };
 
 export const listenPenjualan = (callback) => {
-  const r = ref(db, "penjualan,transaksi");
+  const r = ref(db, "penjualan");
 
   const unsub = onValue(
     r,
     (snap) => {
       const raw = snap.val() || {};
-      const list = Object.entries(raw).map(([id, item]) =>
-        normalizeTransaksi(id, item)
-      );
+      const list = Object.entries(raw).map(([id, item]) => ({
+        id,
+        ...item,
+      }));
+
       list.sort(
         (a, b) =>
           new Date(b.TANGGAL_TRANSAKSI || 0) -
           new Date(a.TANGGAL_TRANSAKSI || 0)
       );
+
       callback(list);
     },
     (err) => {
@@ -459,13 +462,8 @@ export const listenPenjualan = (callback) => {
       callback([]);
     }
   );
-  return onValue(r, (snap) => {
-    const data = snap.val() || {};
-    const list = Object.values(data).filter(
-      (x) => x.PAYMENT_METODE === "PENJUALAN"
-    );
-    callback(list);
-  });
+
+  // ✅ SATU-SATUNYA RETURN (TIDAK UNREACHABLE)
   return () => unsub && unsub();
 };
 
@@ -1637,24 +1635,60 @@ export const getMasterTokoById = async (tokoId) => {
   return snap.val();
 };
 
+/* =========================
+   MASTER TOKO (FINAL & CONSISTENT)
+   Path: /masterToko
+========================= */
+
 export const listenMasterToko = (callback) => {
   const r = ref(db, "masterToko");
+  const unsub = onValue(
+    r,
+    (snap) => {
+      const raw = snap.val() || {};
 
-  const unsubscribe = onValue(r, (snapshot) => {
-    const raw = snapshot.val() || {};
+      const list = Object.entries(raw)
+        .map(([id, v]) => ({
+          id,
+          nama: v?.nama?.trim() || "",
+          alamat: v?.alamat?.trim() || "",
+        }))
+        // 🔥 FILTER DATA KOSONG
+        .filter((x) => x.nama !== "");
 
-    // 🔑 convert object → array
-    const list = Object.keys(raw).map((id) => ({
-      id,
-      ...raw[id],
-    }));
+      callback(list);
+    },
+    (err) => {
+      console.error("listenMasterToko error:", err);
+      callback([]);
+    }
+  );
 
-    callback(list);
-  });
-
-  // ✅ wajib return unsubscribe
-  return () => unsubscribe();
+  return () => unsub && unsub();
 };
+
+export const addMasterToko = async (data) => {
+  const r = push(ref(db, "masterToko"));
+  await set(r, {
+    nama: data.nama.trim(),
+    alamat: data.alamat?.trim() || "",
+    createdAt: new Date().toISOString(),
+  });
+  return r.key;
+};
+
+export const updateMasterToko = async (id, data) => {
+  return update(ref(db, `masterToko/${id}`), {
+    nama: data.nama.trim(),
+    alamat: data.alamat?.trim() || "",
+    updatedAt: new Date().toISOString(),
+  });
+};
+
+export const deleteMasterToko = async (id) => {
+  return remove(ref(db, `masterToko/${id}`));
+};
+
 
 
 /* =========================
@@ -1696,14 +1730,6 @@ export const addMasterSalesTitipan = masterSalesTitipan.add;
 export const updateMasterSalesTitipan = masterSalesTitipan.update;
 export const deleteMasterSalesTitipan = masterSalesTitipan.delete;
 
-// MASTER TOKO
-// MASTER TOKO
-const masterToko = createMasterHelpers("masterToko");
-
-// export const listenMasterToko = masterToko.listen;
-export const addMasterToko = masterToko.add;
-export const updateMasterToko = masterToko.update;
-export const deleteMasterToko = masterToko.delete;
 
 // MASTER BARANG & HARGA
 const masterBarangHarga = createMasterHelpers("masterBarangHarga");

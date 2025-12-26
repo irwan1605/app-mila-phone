@@ -8,6 +8,7 @@ import {
   listenMasterBarang,
   updateTransaksi,
   listenTransferRequests,
+  listenMasterToko,
 } from "../../services/FirebaseService";
 import {
   FaSearch,
@@ -52,22 +53,9 @@ export const getAvailableImeisFromInventoryReport = async (
   return result;
 };
 
-
 // =======================
 // LIST TOKO
 // =======================
-const TOKO_LIST = [
-  "CILANGKAP PUSAT",
-  "CIBINONG",
-  "GAS ALAM",
-  "CITEUREUP",
-  "CIRACAS",
-  "METLAND 1",
-  "METLAND 2",
-  "PITARA",
-  "KOTA WISATA",
-  "SAWANGAN",
-];
 
 const CARD_COLORS = [
   "from-emerald-500 to-teal-500",
@@ -90,7 +78,6 @@ const rupiah = (n) =>
     currency: "IDR",
     minimumFractionDigits: 0,
   });
-  
 
 // ======================================================================
 // COMPONENT UTAMA
@@ -108,6 +95,14 @@ export default function InventoryReport() {
   const tableRef = useRef(null);
   const [transferData, setTransferData] = useState([]);
   const [masterBarangMap, setMasterBarangMap] = useState({});
+  const [masterToko, setMasterToko] = useState([]);
+
+  useEffect(() => {
+    const unsub = listenMasterToko((rows) => {
+      setMasterToko(rows || []);
+    });
+    return () => unsub && unsub();
+  }, []);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -200,47 +195,43 @@ export default function InventoryReport() {
     }
   }, [selectedToko]);
 
+  // ✅ HELPER (BUKAN HOOK)
+  const resolveNamaToko = (trx) => {
+    if (trx?.NAMA_TOKO) return trx.NAMA_TOKO;
+    if (trx?.tokoId) {
+      const t = masterToko.find((x) => String(x.id) === String(trx.tokoId));
+      return t?.nama || "-";
+    }
+    return "-";
+  };
 
-  
   // ==========================
   // STOCK BY TOKO (SINGLE SOURCE OF TRUTH)
   // ==========================
   const stokByToko = useMemo(() => {
     const map = {};
 
-
-    TOKO_LIST.forEach((toko) => {
-      map[toko] = { kategori: {}, items: [] };
+    // init semua toko
+    masterToko.forEach((t) => {
+      map[t.nama] = { kategori: {}, items: [] };
     });
 
-    // PUSAT → dari stockData
-    Object.values(stockData["CILANGKAP PUSAT"] || {}).forEach((s) => {
-      const kat = s.kategoriBrand || "LAINNYA";
-      map["CILANGKAP PUSAT"].kategori[kat] =
-        (map["CILANGKAP PUSAT"].kategori[kat] || 0) + Number(s.qty || 0);
-
-      map["CILANGKAP PUSAT"].items.push(s);
-    });
-
-    // TOKO → dari transaksi pembelian
+    // transaksi pembelian
     transaksi.forEach((t) => {
       if (t.STATUS !== "Approved" || t.PAYMENT_METODE !== "PEMBELIAN") return;
 
-      const toko = t.NAMA_TOKO;
+      const toko = resolveNamaToko(t);
       if (!map[toko]) return;
 
       const kat = t.KATEGORI_BRAND || "LAINNYA";
       const qty = t.IMEI ? 1 : Number(t.QTY || 0);
 
       map[toko].kategori[kat] = (map[toko].kategori[kat] || 0) + qty;
-
       map[toko].items.push(t);
     });
 
     return map;
-  }, [transaksi, stockData]);
-
-  
+  }, [transaksi, masterToko]);
 
   // ==========================
   // TOTAL SEMUA TOKO
@@ -304,80 +295,69 @@ export default function InventoryReport() {
       .trim()
       .replace(/\s+/g, " ")
       .toUpperCase();
-  
-      const detailTable = useMemo(() => {
-        if (!selectedToko) return [];
-      
-        return pembelianApproved
-          .filter((t) => t.NAMA_TOKO === selectedToko)
-          .map((t) => {
-            const qty = t.IMEI ? 1 : Number(t.QTY || 0);
-      
-            const brand = normalize(t.NAMA_BRAND || t.namaBrand);
-            const barang = normalize(t.NAMA_BARANG || t.namaBarang);
-            const key = `${brand}|${barang}`;
-      
-            const master = masterBarangMap[key] || {};
-      
-            const hargaSRP =
-              Number(master.hargaSRP) ||
-              Number(t.HARGA_SRP) ||
-              0;
-      
-            const hargaGrosir =
-              Number(master.hargaGrosir) ||
-              Number(t.HARGA_GROSIR) ||
-              0;
-      
-            const hargaReseller =
-              Number(master.hargaReseller) ||
-              Number(t.HARGA_RESELLER) ||
-              0;
-      
-            return {
-              id: t.id,
-              tokoId: t.tokoId,
-      
-              tanggal: t.TANGGAL_TRANSAKSI || "-",
-              noDo: t.NO_INVOICE || "-",
-              supplier: t.NAMA_SUPPLIER || "-",
-      
-              brand,
-              barang,
-              imei: t.IMEI || "-",
-              qty,
-      
-              hargaSRP,
-              totalSRP: hargaSRP * qty,
-      
-              hargaGrosir,
-              totalGrosir: hargaGrosir * qty,
-      
-              hargaReseller,
-              totalReseller: hargaReseller * qty,
-      
-              band1: master.band1 || t.NAMA_BANDLING_1 || "-",
-              hband1: Number(master.hband1 || t.HARGA_BANDLING_1 || 0),
-              totalBand1:
-                qty * Number(master.hband1 || t.HARGA_BANDLING_1 || 0),
-      
-              band2: master.band2 || t.NAMA_BANDLING_2 || "-",
-              hband2: Number(master.hband2 || t.HARGA_BANDLING_2 || 0),
-              totalBand2:
-                qty * Number(master.hband2 || t.HARGA_BANDLING_2 || 0),
-      
-              band3: master.band3 || t.NAMA_BANDLING_3 || "-",
-              hband3: Number(master.hband3 || t.HARGA_BANDLING_3 || 0),
-              totalBand3:
-                qty * Number(master.hband3 || t.HARGA_BANDLING_3 || 0),
-      
-              transferIn: 0,
-              transferOut: 0,
-            };
-          });
-      }, [selectedToko, pembelianApproved, masterBarangMap]);
-      
-  
+
+  const detailTable = useMemo(() => {
+    if (!selectedToko) return [];
+
+    return pembelianApproved
+      .filter((t) => resolveNamaToko(t) === selectedToko)
+      .map((t) => {
+        const qty = t.IMEI ? 1 : Number(t.QTY || 0);
+
+        const brand = normalize(t.NAMA_BRAND || t.namaBrand);
+        const barang = normalize(t.NAMA_BARANG || t.namaBarang);
+        const key = `${brand}|${barang}`;
+
+        const master = masterBarangMap[key] || {};
+
+        const hargaSRP = Number(master.hargaSRP) || Number(t.HARGA_SRP) || 0;
+        const hargaGrosir =
+          Number(master.hargaGrosir) || Number(t.HARGA_GROSIR) || 0;
+        const hargaReseller =
+          Number(master.hargaReseller) || Number(t.HARGA_RESELLER) || 0;
+
+        return {
+          id: t.id,
+          tokoId: t.tokoId,
+
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
+          noDo: t.NO_INVOICE || "-",
+          supplier: t.NAMA_SUPPLIER || "-",
+
+          // ✅ NAMA TOKO DARI MASTER TOKO
+          namaToko: resolveNamaToko(t),
+
+          brand,
+          barang,
+          imei: t.IMEI || "-",
+          qty,
+
+          hargaSRP,
+          totalSRP: hargaSRP * qty,
+
+          hargaGrosir,
+          totalGrosir: hargaGrosir * qty,
+
+          hargaReseller,
+          totalReseller: hargaReseller * qty,
+
+          band1: master.band1 || t.NAMA_BANDLING_1 || "-",
+          hband1: Number(master.hband1 || t.HARGA_BANDLING_1 || 0),
+          totalBand1: qty * Number(master.hband1 || t.HARGA_BANDLING_1 || 0),
+
+          band2: master.band2 || t.NAMA_BANDLING_2 || "-",
+          hband2: Number(master.hband2 || t.HARGA_BANDLING_2 || 0),
+          totalBand2: qty * Number(master.hband2 || t.HARGA_BANDLING_2 || 0),
+
+          band3: master.band3 || t.NAMA_BANDLING_3 || "-",
+          hband3: Number(master.hband3 || t.HARGA_BANDLING_3 || 0),
+          totalBand3: qty * Number(master.hband3 || t.HARGA_BANDLING_3 || 0),
+
+          transferIn: 0,
+          transferOut: 0,
+        };
+      });
+  }, [selectedToko, pembelianApproved, masterBarangMap, masterToko]);
 
   // ======================================================================
   // PAGINATION
@@ -389,20 +369,20 @@ export default function InventoryReport() {
   // CARD KECIL PER TOKO + KATEGORI
   // ==========================
   const cardStockPerToko = useMemo(() => {
-    return TOKO_LIST.map((toko) => {
+    return masterToko.map((toko) => {
       const kategori = {};
 
       pembelianApproved.forEach((t) => {
-        if (t.NAMA_TOKO !== toko) return;
+        if (resolveNamaToko(t) !== toko.nama) return;
 
         const k = t.KATEGORI_BRAND || "LAINNYA";
         const qty = t.IMEI ? 1 : Number(t.QTY || 0);
         kategori[k] = (kategori[k] || 0) + qty;
       });
 
-      return { toko, kategori };
+      return { toko: toko.nama, kategori };
     });
-  }, [pembelianApproved]);
+  }, [pembelianApproved, masterToko]);
 
   // ==========================
   // EXPORT
@@ -427,10 +407,14 @@ export default function InventoryReport() {
         {/* ================================================================== */}
         {/* CARD BESAR PUSAT */}
         <div
-          onClick={() => {
-            setSelectedToko("CILANGKAP PUSAT");
-            setPage(1);
-          }}
+          onClick={() =>
+            navigate("/table/detail-stock-all-toko", {
+              state: {
+                title: "Detail Stok: TOTAL STOCK SEMUA TOKO CILANGKAP PUSAT",
+                source: "ALL_TOKO",
+              },
+            })
+          }
           className="cursor-pointer rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-500 p-6 mb-6 shadow-2xl"
         >
           <div className="flex gap-4 items-center">
@@ -455,13 +439,18 @@ export default function InventoryReport() {
           {cardStockPerToko.map((t, i) => (
             <div
               key={t.toko}
-              onClick={() => {
-                setSelectedToko(t.toko);
-                setPage(1);
-              }}
+              onClick={() =>
+                navigate("/table/detail-stock-toko", {
+                  state: {
+                    namaToko: t.toko,
+                    title: `Detail Stok Toko : ${t.toko}`,
+                    source: "CARD_TOKO",
+                  },
+                })
+              }
               className={`cursor-pointer rounded-2xl p-4 bg-gradient-to-br ${
                 CARD_COLORS[i % CARD_COLORS.length]
-              }`}
+              } hover:scale-105 transition-transform`}
             >
               <div className="font-bold mb-2">{t.toko}</div>
               {Object.entries(t.kategori).map(([k, v]) => (
@@ -473,221 +462,6 @@ export default function InventoryReport() {
             </div>
           ))}
         </div>
-
-        {/* ================================================================== */}
-        {/* SEARCH */}
-        {/* ================================================================== */}
-        {selectedToko && (
-          <div
-            ref={tableRef}
-            className="bg-white/10 backdrop-blur-md p-4 rounded-xl mb-5 flex items-center"
-          >
-            <FaSearch className="text-white text-lg" />
-            <input
-              placeholder="Cari brand / barang / IMEI..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="ml-3 flex-1 bg-transparent text-white outline-none placeholder-white/50"
-            />
-          </div>
-        )}
-
-        {/* ================================================================== */}
-        {/* TABEL DETAIL */}
-        {/* ================================================================== */}
-        {selectedToko && (
-          <div
-            ref={tableRef}
-            className="bg-blue-900 p-6 rounded-2xl shadow-2xl overflow-auto"
-          >
-            {/* EXPORT BUTTON */}
-            <div className="flex justify-between mb-4">
-              <h2 className="text-xl font-bold">Detail Stok: {selectedToko}</h2>
-
-              <button
-                onClick={exportToExcel}
-                className="
-                  px-4 py-2 rounded-lg 
-                  bg-gradient-to-r from-green-400 to-emerald-500
-                  hover:scale-105 hover:shadow-xl shadow-green-400/50
-                  transition-all duration-200 text-white font-semibold
-                "
-              >
-                📤 Export Excel
-              </button>
-            </div>
-
-            {/* ================================================================== */}
-            {/* TABLE */}
-            {/* ================================================================== */}
-            <table className="w-full text-sm min-w-[2000px]">
-              <thead>
-                <tr className="border-b border-blue-700 bg-blue-800">
-                  <th className="p-2">Tanggal</th>
-                  <th className="p-2">NO DO</th>
-                  <th className="p-2">Supplier</th>
-                  <th className="p-2">Brand</th>
-                  <th className="p-2">Barang</th>
-                  <th className="p-2">IMEI</th>
-                  <th className="p-2 text-right">Qty</th>
-                  <th className="p-2 text-right">SRP</th>
-                  <th className="p-2 text-right">Total SRP</th>
-                  <th className="p-2 text-right">Grosir</th>
-                  <th className="p-2 text-right">Total Grosir</th>
-                  <th className="p-2 text-right">Reseller</th>
-                  <th className="p-2 text-right">Total Reseller</th>
-
-                  <th className="p-2">Bandling 1</th>
-                  <th className="p-2 text-right">Harga</th>
-                  <th className="p-2 text-right">Total</th>
-
-                  <th className="p-2">Bandling 2</th>
-                  <th className="p-2 text-right">Harga</th>
-                  <th className="p-2 text-right">Total</th>
-
-                  <th className="p-2">Bandling 3</th>
-                  <th className="p-2 text-right">Harga</th>
-                  <th className="p-2 text-right">Total</th>
-                  <th className="p-2">Transfer Masuk</th>
-                  <th className="p-2">Transfer Keluar</th>
-
-                  <th className="p-2">Aksi</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {data.map((row, i) => (
-                  <tr
-                    key={i}
-                    className="border-b border-blue-700 hover:bg-blue-800 transition"
-                  >
-                    <td className="p-2">{row.tanggal}</td>
-                    <td className="p-2">{row.noDo}</td>
-                    <td className="p-2">{row.supplier}</td>
-                    <td className="p-2">{row.brand}</td>
-                    <td className="p-2">{row.barang}</td>
-                    <td className="p-2">{row.imei}</td>
-                    <td className="p-2 text-right">{row.qty}</td>
-                    <td className="p-2 text-right">{rupiah(row.hargaSRP)}</td>
-                    <td className="p-2 text-right">{rupiah(row.totalSRP)}</td>
-                    <td className="p-2 text-right">
-                      {rupiah(row.hargaGrosir)}
-                    </td>
-                    <td className="p-2 text-right">
-                      {rupiah(row.totalGrosir)}
-                    </td>
-                    <td className="p-2 text-right">
-                      {rupiah(row.hargaReseller)}
-                    </td>
-                    <td className="p-2 text-right">
-                      {rupiah(row.totalReseller)}
-                    </td>
-
-                    <td className="p-2">{row.band1}</td>
-                    <td className="p-2 text-right">{rupiah(row.hband1)}</td>
-                    <td className="p-2 text-right">{rupiah(row.totalBand1)}</td>
-
-                    <td className="p-2">{row.band2}</td>
-                    <td className="p-2 text-right">{rupiah(row.hband2)}</td>
-                    <td className="p-2 text-right">{rupiah(row.totalBand2)}</td>
-
-                    <td className="p-2">{row.band3}</td>
-                    <td className="p-2 text-right">{rupiah(row.hband3)}</td>
-                    <td className="p-2 text-right">{rupiah(row.totalBand3)}</td>
-                    <td className="p-2 text-center">{row.transferIn}</td>
-                    <td className="p-2 text-center">{row.transferOut}</td>
-
-                    {/* ACTION BUTTON PREMIUM */}
-                    <td className="p-2 text-center">
-                      {/* APPROVE */}
-                      <button
-                        onClick={() =>
-                          updateTransaksi(row.tokoId, row.id, {
-                            STATUS: "Approved",
-                          })
-                        }
-                        className="
-                          px-3 py-1 rounded-lg 
-                          bg-gradient-to-r from-green-500 to-emerald-600
-                          hover:scale-105 shadow-md hover:shadow-green-400/50
-                          flex items-center gap-1 mx-auto text-white
-                          transition-all duration-200
-                        "
-                      >
-                        <FaCheckCircle />
-                        Approve
-                      </button>
-
-                      {/* EDIT */}
-                      <button
-                        onClick={() => alert("Edit fitur modal akan ditambah.")}
-                        className="
-                          mt-2 px-3 py-1 rounded-lg 
-                          bg-gradient-to-r from-blue-500 to-indigo-600
-                          hover:scale-105 shadow-md hover:shadow-blue-400/50
-                          flex items-center gap-1 mx-auto text-white
-                          transition-all duration-200
-                        "
-                      >
-                        <FaEdit />
-                        Edit
-                      </button>
-
-                      {/* TRANSFER */}
-                      <button
-                        onClick={() =>
-                          navigate("/transfer-barang", {
-                            state: {
-                              brand: row.brand,
-                              barang: row.barang,
-                              qty: row.qty,
-                              imei: row.imei,
-                            },
-                          })
-                        }
-                        className="
-                          mt-2 px-3 py-1 rounded-lg 
-                          bg-gradient-to-r from-yellow-400 to-orange-500
-                          hover:scale-105 shadow-md hover:shadow-yellow-400/50
-                          flex items-center gap-1 mx-auto text-white
-                          transition-all duration-200
-                        "
-                      >
-                        <FaExchangeAlt />
-                        Transfer
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* ================================================================== */}
-            {/* PAGINATION */}
-            {/* ================================================================== */}
-            <div className="flex justify-between mt-4 text-white">
-              <button
-                disabled={page === 1}
-                onClick={() => setPage(page - 1)}
-                className="px-3 py-1 bg-blue-700 rounded disabled:opacity-40"
-              >
-                Prev
-              </button>
-
-              <span>
-                Page {page} / {pageCount}
-              </span>
-
-              <button
-                disabled={page === pageCount}
-                onClick={() => setPage(page + 1)}
-                className="px-3 py-1 bg-blue-700 rounded disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
