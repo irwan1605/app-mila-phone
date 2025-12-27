@@ -18,13 +18,11 @@ import {
   unlockImei,
   updateStockAtomic,
   listenPenjualan,
+  getAvailableImeisFromInventory ,
 } from "../../../services/FirebaseService";
 
 import ExportExcelButton from "../../../components/ExportExcelButton";
 import logoUrl from "../../../assets/logoMMT.png";
-import {
-  getAvailableImeisFromInventoryReport,
-} from "../../Reports/InventoryReport";
 
 
 /* ================= UTIL ================= */
@@ -300,7 +298,7 @@ useEffect(() => {
 
           // 🔥 Ambil data dari InventoryReport
           const data =
-            await getAvailableImeisFromInventoryReport(
+            await getAvailableImeisFromInventory (
               userForm.namaToko,
               imei
             );

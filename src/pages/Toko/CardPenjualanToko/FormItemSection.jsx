@@ -6,8 +6,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   listenMasterBarang,
   listenMasterBarangBundling,
+  getAvailableImeisFromInventory 
 } from "../../../services/FirebaseService";
-import { getAvailableImeisFromInventoryReport } from "../../Reports/InventoryReport";
 
 /* ================= KONSTANTA ================= */
 
@@ -127,7 +127,7 @@ export default function FormItemSection({
                 if (!imei) return;
 
                 // 🔥 ambil data inventory
-                const data = await getAvailableImeisFromInventoryReport(
+                const data = await getAvailableImeisFromInventory (
                   tokoLogin,
                   imei
                 );
@@ -339,7 +339,7 @@ export default function FormItemSection({
                     onFocus={async () => {
                       if (!item.namaBarang) return;
 
-                      const imeis = await getAvailableImeisFromInventoryReport(
+                      const imeis = await getAvailableImeisFromInventory (
                         tokoLogin,
                         item.namaBarang
                       );

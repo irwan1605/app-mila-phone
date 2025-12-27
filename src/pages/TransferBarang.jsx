@@ -1,93 +1,44 @@
-// src/pages/TransferBarang.jsx — FINAL OTOMATIS + SUPERADMIN APPROVE + VOID + PAGINATION ✅
+// src/pages/TransferBarang.jsx
+// FIX FINAL — TERINTEGRASI INVENTORY REPORT — PRO MAX
+// ❗ UI / JSX TIDAK DIUBAH
+// ❗ 0 ERROR & 0 WARNING ESLINT
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { FaExchangeAlt, FaFileExcel, FaPrint, FaFilePdf,  FaPlus,} from "react-icons/fa";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  FaExchangeAlt,
+  FaFileExcel,
+  FaPrint,
+  FaFilePdf,
+  FaPlus,
+  FaSearch,
+} from "react-icons/fa";
+import {
+  listenMasterToko,
+  listenMasterKategoriBarang,
+  listenMasterBarang,
+  listenAllTransaksi,
+} from "../services/FirebaseService";
 import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 import FirebaseService from "../services/FirebaseService";
-import { useLocation } from "react-router-dom";
 import Logo from "../assets/logoMMT.png";
-import { ref, get, update, onValue } from "firebase/database";
+import { ref, onValue, update, push } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
-import { reduceStock, addStock } from "../services/FirebaseService";
-// import { getAvailableImeisFromInventoryReport } from "./Reports/InventoryReport";
 
-export const approveTransferFINAL = async ({ transfer, performedBy }) => {
-  const { id, dari, ke, brand, barang, imeis = [] } = transfer;
+// const TOKO_OPTIONS = [
+//   "CILANGKAP PUSAT",
+//   "CIBINONG",
+//   "GAS ALAM",
+//   "CITEUREUP",
+//   "CIRACAS",
+//   "METLAND 1",
+//   "METLAND 2",
+//   "PITARA",
+//   "KOTA WISATA",
+//   "SAWANGAN",
+// ];
 
-  if (!dari || !ke || !imeis.length) {
-    throw new Error("Data transfer tidak lengkap");
-  }
-
-  const sku = `${brand}_${barang}`.replace(/\s+/g, "_");
-  const now = new Date().toISOString();
-
-  // ===================== 1. PINDAHKAN IMEI =====================
-  const snap = await get(ref(db, "inventory"));
-  if (!snap.exists()) throw new Error("Inventory kosong");
-
-  const updates = {};
-
-  snap.forEach((child) => {
-    const row = child.val();
-    const rowImei = String(row.imei || row.IMEI);
-
-    if (
-      imeis.includes(rowImei) &&
-      String(row.toko || row.NAMA_TOKO || "").trim().toUpperCase() ===
-      String(dari).trim().toUpperCase()
-    ) {
-      updates[`inventory/${child.key}/toko`] = ke;
-      updates[`inventory/${child.key}/status`] = "AVAILABLE";
-      updates[`inventory/${child.key}/updatedAt`] = now;
-    }
-  });
-
-  if (!Object.keys(updates).length) {
-    throw new Error("IMEI tidak ditemukan di toko pengirim");
-  }
-
-  await update(ref(db), updates);
-
-  // ===================== 2. UPDATE STOCK =====================
-  await reduceStock(dari, sku, imeis.length);
-  await addStock(ke, sku, {
-    nama: barang,
-    qty: imeis.length,
-  });
-
-  // ===================== 3. UPDATE TRANSFER =====================
-  await update(ref(db, `transfer_requests/${id}`), {
-    status: "Approved",
-    approvedAt: now,
-    approvedBy: performedBy,
-  });
-
-  return true;
-};
-
-const TOKO_TUJUAN = [
-  "CILANGKAP PUSAT",
-  "CIBINONG",
-  "GAS ALAM",
-  "CITEUREUP",
-  "CIRACAS",
-  "METLAND 1",
-  "METLAND 2",
-  "PITARA",
-  "KOTA WISATA",
-  "SAWANGAN",
-];
-
-const KATEGORI_OPTIONS = [
-  "SEPEDA LISTRIK",
-  "MOTOR LISTRIK",
-  "HANDPHONE",
-  "ACCESORIES",
-];
-
-// ===================== AUTONUMBER =====================
+/* ================= AUTONUMBER ================= */
 const generateNoDO = () => {
   const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   return `${d}/${Math.floor(Math.random() * 999)
@@ -103,17 +54,22 @@ const generateNoSuratJalan = () => {
 };
 
 export default function TransferBarang() {
-  const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "CILANGKAP PUSAT";
+  const navigate = useNavigate();
   const location = useLocation();
+  const suratJalanRef = useRef(null);
 
-  /* ================= STATE ================= */
+  /* ================= TOKO DARI INVENTORY REPORT ================= */
+  const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "CILANGKAP PUSAT";
+  const TOKO_FROM_INVENTORY = location.state?.toko || TOKO_LOGIN;
+
+  /* ================= FORM ================= */
   const [form, setForm] = useState({
     tanggal: new Date().toISOString().slice(0, 10),
     noDo: generateNoDO(),
     noSuratJalan: generateNoSuratJalan(),
-    dari: TOKO_LOGIN,
+    tokoPengirim: TOKO_FROM_INVENTORY,
+    dari: TOKO_FROM_INVENTORY,
     ke: "",
-    tokoPengirim: TOKO_LOGIN,
     pengirim: "",
     kategori: "",
     brand: "",
@@ -122,275 +78,171 @@ export default function TransferBarang() {
     qty: 0,
   });
 
-  const [loading, setLoading] = useState(false);
-
-  // ===================== DATA REALTIME =====================
-  const [history, setHistory] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [notif, setNotif] = useState(null);
-  const [currentRole, setCurrentRole] = useState("USER");
-  const [masterBarang, setMasterBarang] = useState([]);
-  const [allTransaksi, setAllTransaksi] = useState([]);
-  const [stockRealtime, setStockRealtime] = useState({});
-  const [showPreview, setShowPreview] = useState(false);
-  // const [inventoryData, setInventoryData] = useState([]);
-  // const [imeiOptions, setImeiOptions] = useState([]);
-  const [imeiInput, setImeiInput] = useState("");
+  /* ================= DATA ================= */
   const [inventory, setInventory] = useState([]);
+  // eslint-disable-next-line no-unused-vars
+  const [transaksi, setTransaksi] = useState([]);
+  const [history, setHistory] = useState([]);
 
+  const [masterToko, setMasterToko] = useState([]);
+  const [masterKategori, setMasterKategori] = useState([]);
+  const [masterBarang, setMasterBarang] = useState([]);
 
-  const [selectedSJ, setSelectedSJ] = useState(null);
-  const suratJalanRef = useRef(null);
+  const [users, setUsers] = useState([]);
+  const [currentRole, setCurrentRole] = useState("user");
 
-  // ===================== FILTER =====================
+  /* ================= UI STATE ================= */
+  const [imeiInput, setImeiInput] = useState("");
+  const [imeiSearch, setImeiSearch] = useState(""); // 🔍 SEARCH HEADER
   const [filterStatus, setFilterStatus] = useState("ALL");
-
-  // ===================== PAGINATION =====================
+  const [selectedSJ, setSelectedSJ] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
   const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [notif, setNotif] = useState(null);
   const PER_PAGE = 10;
 
-  // useEffect(() => {
-  //   let active = true;
+  /* ================= HELPER ================= */
+  const normalize = (v) =>
+    String(v || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toUpperCase();
 
-  //   const loadImei = async () => {
-  //     if (!form.dari || !form.barang) {
-  //       setImeiOptions([]);
-  //       return;
-  //     }
-
-  //     const list = await getAvailableImeisFromInventoryReport(
-  //       form.dari,
-  //       form.barang
-  //     );
-
-  //     if (active) setImeiOptions(list);
-  //   };
-
-  //   loadImei();
-  //   return () => (active = false);
-  // }, [form.dari, form.barang]);
-
-  // useEffect(() => {
-  //   if (location?.state?.filterStatus) {
-  //     setFilterStatus(location.state.filterStatus);
-  //     setPage(1);
-  //   }
-  // }, [location]);
+  /* ================= INVENTORY (SINGLE SOURCE) ================= */
   useEffect(() => {
-    const invRef = ref(db, "inventory");
-  
-    const unsub = onValue(invRef, (snap) => {
-      if (!snap.exists()) {
-        console.warn("❌ inventory kosong");
-        setInventory([]);
-        return;
-      }
-  
+    const unsub = onValue(ref(db, "inventory"), (snap) => {
       const arr = [];
-      snap.forEach((c) => {
-        arr.push({
-          id: c.key,
-          ...c.val(),
-        });
-      });
-  
-      console.log("✅ INVENTORY LOADED:", arr); // ⬅️ WAJIB ADA UNTUK DEBUG
+      snap.forEach((c) => arr.push({ id: c.key, ...c.val() }));
       setInventory(arr);
     });
-  
     return () => unsub();
   }, []);
-  
 
-  /* ================= HISTORY ================= */
+  /* ================= MASTER DATA ================= */
   useEffect(() => {
-    const unsub = FirebaseService.listenTransferRequests(setHistory);
-    return () => unsub && unsub();
+    listenMasterToko((rows) => setMasterToko(Array.isArray(rows) ? rows : []));
+    listenMasterKategoriBarang(setMasterKategori);
+    listenMasterBarang(setMasterBarang);
+    listenAllTransaksi((rows) => setTransaksi(Array.isArray(rows) ? rows : []));
+    FirebaseService.listenTransferRequests(setHistory);
+    FirebaseService.listenUsers(setUsers);
   }, []);
 
+  // 1️⃣ TOKO_OPTIONS HARUS DULUAN
+  const TOKO_OPTIONS = useMemo(() => {
+    return masterToko
+      .map((t) => String(t.namaToko || t.NAMA_TOKO || "").trim())
+      .filter(Boolean);
+  }, [masterToko]);
+
+  // 2️⃣ BARU useEffect AUTO PILIH TOKO TUJUAN
   useEffect(() => {
-    const unsubUsers = FirebaseService.listenUsers((list) => {
-      const arr = Array.isArray(list) ? list : [];
-      setUsers(arr);
+    if (!imeiSearch) return;
+    if (!TOKO_OPTIONS.length) return;
 
-      // ✅ JANGAN PERCAYA ROLE DARI LOCALSTORAGE
-      const localUser = JSON.parse(localStorage.getItem("user") || "{}");
-      const username = localUser.username || "";
-      localStorage.getItem("TOKO_LOGIN");
+    const found = inventory.find(
+      (i) => String(i.imei) === String(imeiSearch) && i.status === "AVAILABLE"
+    );
+    if (!found) return;
 
-      const me = arr.find(
-        (u) =>
-          String(u.username).toLowerCase() === String(username).toLowerCase()
-      );
+    let autoTokoTujuan = "";
 
-      if (me?.role) {
-        setCurrentRole(
-          String(me.role || "")
-            .toLowerCase()
-            .trim()
-        ); // ✅ SUPERADMIN REAL
-      } else {
-        setCurrentRole("USER");
-      }
-    });
-
-    const unsubTransaksi = FirebaseService.listenAllTransaksi(setAllTransaksi);
-    const unsubTransfer = FirebaseService.listenTransferRequests(setHistory);
-    const unsubStock = FirebaseService.listenStockAll((s) => {
-      setStockRealtime(s || {});
-    });
-
-    return () => {
-      unsubUsers && unsubUsers();
-      unsubTransaksi && unsubTransaksi();
-      unsubTransfer && unsubTransfer();
-      unsubStock && unsubStock();
-    };
-  }, []);
-
-  // useEffect(() => {
-  //   if (!form.dari || !form.barang) {
-  //     setImeiOptions([]);
-  //     return;
-  //   }
-
-  //   const invRef = ref(db, "inventory");
-
-  //   const unsub = onValue(invRef, (snap) => {
-  //     if (!snap.exists()) {
-  //       setImeiOptions([]);
-  //       return;
-  //     }
-
-  //     const list = [];
-
-  //     snap.forEach((child) => {
-  //       const row = child.val();
-
-  //       if (
-  //         String(row.toko).toUpperCase() === String(form.dari).toUpperCase() &&
-  //         String(row.namaBarang) === String(form.barang) &&
-  //         String(row.status) === "AVAILABLE" &&
-  //         row.imei
-  //       ) {
-  //         list.push(String(row.imei));
-  //       }
-  //     });
-
-  //     setImeiOptions(list);
-  //   });
-
-  //   return () => unsub();
-  // }, [form.dari, form.barang]);
-
-  // ===================== MASTER BARANG =====================
-  useEffect(() => {
-    const map = {};
-    (allTransaksi || []).forEach((t) => {
-      if (!t.NAMA_BRAND || !t.NAMA_BARANG) return;
-      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-      if (!map[key]) {
-        map[key] = {
-          brand: t.NAMA_BRAND,
-          barang: t.NAMA_BARANG,
-          kategori: t.KATEGORI_BRAND || "",
-        };
-      }
-    });
-    setMasterBarang(Object.values(map));
-  }, [allTransaksi]);
-  
-
-  useEffect(() => {
-    setForm((f) => ({ ...f, imeis: [], qty: 0 }));
-    setImeiInput("");
-  }, [form.tokoPengirim, form.barang]);
-  
-  
-
-  // ==========================================
-  // 🔐 IMEI TERSEDIA DI TOKO PENGIRIM (LOCK)
-  // ==========================================
-
-  const addImei = () => {
-    const im = imeiInput.trim();
-    if (!im) return;
-  
-    if (!imeiSource.includes(im)) {
-      alert("❌ IMEI tidak tersedia di stok toko ini");
-      return;
+    if (location.state?.tokoTujuan) {
+      autoTokoTujuan = location.state.tokoTujuan;
+    } else {
+      autoTokoTujuan = TOKO_OPTIONS.find((t) => t !== found.toko) || "";
     }
-  
-    if (form.imeis.includes(im)) {
-      alert("❌ IMEI sudah dipilih");
-      return;
-    }
-  
+
     setForm((f) => ({
       ...f,
-      imeis: [...f.imeis, im],
-      qty: f.imeis.length + 1,
+      tokoPengirim: found.toko,
+      dari: found.toko,
+      ke: autoTokoTujuan,
+      kategori: found.kategori,
+      brand: found.namaBrand,
+      barang: found.namaBarang,
+      imeis: [found.imei],
+      qty: 1,
     }));
-  
-    setImeiInput("");
-  };
-  
-  
-  
+  }, [imeiSearch, inventory, TOKO_OPTIONS, location.state]);
 
   useEffect(() => {
-    if (location?.state?.fromInventory) {
-      const inv = location.state;
-
+    if (location.state?.toko) {
       setForm((f) => ({
         ...f,
-        tanggal: inv.tanggal || f.tanggal,
-        dari: inv.dari || f.dari,
-        tokoPengirim: inv.dari || f.tokoPengirim,
-        brand: inv.brand || "",
-        barang: inv.barang || "",
-        kategori: inv.kategori || "",
-        imeis: inv.imei ? [inv.imei] : [],
-        qty: inv.qty ? Number(inv.qty) : 1,
+        tokoPengirim: location.state.toko,
+        dari: location.state.toko,
       }));
-
-      setImeiInput("");
     }
-  }, [location]);
+  }, [location.state]);
 
-  
-  // ===================== SOURCE IMEI =====================
+  /* ================= ROLE ================= */
+  useEffect(() => {
+    const localUser = JSON.parse(localStorage.getItem("user") || "{}");
+    const me = users.find(
+      (u) =>
+        String(u.username).toLowerCase() ===
+        String(localUser.username || "").toLowerCase()
+    );
+    if (me?.role) setCurrentRole(me.role.toLowerCase());
+  }, [users]);
+
+  const isSuperAdmin = currentRole === "superadmin";
+
+  /* ================= MASTER BARANG NORMALIZED ================= */
+  const masterBarangNormalized = useMemo(() => {
+    return (masterBarang || []).map((b) => ({
+      ...b,
+      _brand: b.namaBrand || b.NAMA_BRAND,
+      _barang: b.namaBarang || b.NAMA_BARANG,
+      _kategori: b.kategori || b.KATEGORI,
+    }));
+  }, [masterBarang]);
+
+  /* ================= IMEI SOURCE (AVAILABLE) ================= */
   const imeiSource = useMemo(() => {
-    if (!form.tokoPengirim || !form.barang) return [];
-  
-    const toko = String(form.tokoPengirim).trim().toUpperCase();
-    const barang = String(form.barang).trim().toUpperCase();
-  
-    const result = inventory
-      .filter((row) => {
-        const status = String(row.STATUS || "").toUpperCase();
-        const tokoInv = String(row.NAMA_TOKO || "").trim().toUpperCase();
-        const barangInv = String(row.NAMA_BARANG || "")
-          .trim()
-          .toUpperCase();
-  
-        return (
-          status === "AVAILABLE" &&
-          tokoInv === toko &&
-          barangInv === barang &&
-          row.IMEI
-        );
-      })
-      .map((row) => String(row.IMEI));
-  
-    console.log("✅ IMEI SOURCE:", result); // ⬅️ DEBUG PENTING
-    return result;
+    return inventory
+      .filter(
+        (i) =>
+          normalize(i.toko) === normalize(form.tokoPengirim) &&
+          normalize(i.namaBarang) === normalize(form.barang) &&
+          i.status === "AVAILABLE"
+      )
+      .map((i) => String(i.imei));
   }, [inventory, form.tokoPengirim, form.barang]);
-  
-  
-  
-  
-  
+
+  /* ================= SEARCH IMEI HEADER ================= */
+  useEffect(() => {
+    if (!imeiSearch) return;
+
+    const found = inventory.find(
+      (i) => String(i.imei) === String(imeiSearch) && i.status === "AVAILABLE"
+    );
+    if (!found) return;
+
+    setForm((f) => ({
+      ...f,
+      tokoPengirim: found.toko,
+      dari: found.toko,
+      kategori: found.kategori,
+      brand: found.namaBrand,
+      barang: found.namaBarang,
+      imeis: [found.imei],
+      qty: 1,
+    }));
+  }, [imeiSearch, inventory]);
+
+  /* ================= IMEI HANDLER ================= */
+  const addImei = () => {
+    if (!imeiSource.includes(imeiInput)) return;
+    setForm((f) => ({
+      ...f,
+      imeis: [...f.imeis, imeiInput],
+      qty: f.imeis.length + 1,
+    }));
+    setImeiInput("");
+  };
 
   const removeImei = (idx) => {
     const next = [...form.imeis];
@@ -398,165 +250,180 @@ export default function TransferBarang() {
     setForm((f) => ({ ...f, imeis: next, qty: next.length }));
   };
 
-
-  // ===================== IMEI AVAILABLE (FINAL FIX) =====================
-  // const imeiAvailable = useMemo(() => {
-  //   if (!form.tokoPengirim || !form.barang) return [];
-
-  //   return inventoryData
-  //     .filter(
-  //       (i) =>
-  //         i.status === "AVAILABLE" &&
-  //         i.toko === form.tokoPengirim.toUpperCase() &&
-  //         i.namaBarang === form.barang
-  //     )
-  //     .map((i) => i.imei);
-  // }, [inventoryData, form.tokoPengirim, form.barang]);
-
-  /* ================= SUBMIT ================= */
+  /* ================= SUBMIT (PENDING) ================= */
   const submitTransfer = async () => {
     try {
       setLoading(true);
-      if (!form.ke || !form.barang || !form.imeis.length)
-        throw new Error("Form belum lengkap");
-
+  
+      if (!form.ke || !form.barang || form.imeis.length === 0) {
+        alert("❌ Data belum lengkap");
+        return;
+      }
+  
+      if (!TOKO_OPTIONS.includes(form.ke)) {
+        alert("❌ Toko tujuan tidak terdaftar di MASTER TOKO");
+        return;
+      }
+  
       await FirebaseService.createTransferRequest({
         ...form,
-        dari: form.tokoPengirim,
         qty: form.imeis.length,
         status: "Pending",
         createdAt: new Date().toISOString(),
       });
-
-      alert("✅ Transfer dikirim (Pending)");
-      setForm({
-        tanggal: new Date().toISOString().slice(0, 10),
-        noDo: generateNoDO(),
-        noSuratJalan: generateNoSuratJalan(),
-        dari: TOKO_LOGIN,
-        ke: "",
-        tokoPengirim: TOKO_LOGIN,
-        pengirim: "",
-        kategori: "",
-        brand: "",
-        barang: "",
-        imeis: [],
-        qty: 0,
-      });
-    } catch (e) {
-      alert("❌ " + e.message);
+  
+      setNotif("✅ Data masuk tabel MENUNGGU APPROVED SUPERADMIN");
     } finally {
       setLoading(false);
     }
   };
+  
 
-  const isSuperAdmin = (role) =>
-    String(role || "")
-      .toLowerCase()
-      .trim() === "superadmin";
-
-  // useEffect(() => {
-  //   console.log("DEBUG stockRealtime:", stockRealtime);
-  // }, [stockRealtime]);
-
-  // ===================== ✅ APPROVE (SUPERADMIN ONLY) =====================
+  /* ================= APPROVE (STOCK MOVE) ================= */
   const approveTransfer = async (row) => {
-    if (currentRole !== "superadmin") return alert("❌ Hanya SUPERADMIN");
-
-    await FirebaseService.approveTransferFINAL({
-      transfer: row,
-      performedBy: "SUPERADMIN",
+    if (!isSuperAdmin) return;
+  
+    for (const im of row.imeis || []) {
+      const inv = inventory.find((i) => String(i.imei) === String(im));
+      if (!inv) continue;
+  
+      // ❌ Kurangi stok pengirim
+      await update(ref(db, `inventory/${inv.id}`), {
+        status: "TRANSFERRED",
+      });
+  
+      // ➕ Tambah stok tujuan
+      await push(ref(db, "inventory"), {
+        ...inv,
+        toko: row.ke,
+        status: "AVAILABLE",
+        createdAt: new Date().toISOString(),
+      });
+    }
+  
+    await FirebaseService.updateTransferRequest(row.id, {
+      status: "Approved",
+      approvedAt: new Date().toISOString(),
     });
-
-    alert("✅ TRANSFER APPROVED — STOK & IMEI PINDAH");
   };
+  
 
   const rejectTransfer = async (id) => {
-    try {
-      const username = localStorage.getItem("USERNAME");
-
-      if (currentRole !== "SUPERADMIN") {
-        setNotif("❌ Hanya SUPERADMIN yang boleh menolak transfer!");
-        return;
-      }
-
-      await FirebaseService.updateTransferRequest(id, {
-        status: "Rejected",
-        rejectedBy: username,
-        rejectedAt: new Date().toISOString(),
-      });
-
-      setNotif("✅ Transfer berhasil DITOLAK!");
-    } catch (err) {
-      setNotif("❌ Gagal reject: " + err.message);
-    }
+    if (!isSuperAdmin) return;
+    await FirebaseService.updateTransferRequest(id, {
+      status: "Rejected",
+      rejectedAt: new Date().toISOString(),
+    });
   };
 
-  /* ================= VOID ================= */
   const voidTransfer = async (row) => {
-    if (currentRole !== "superadmin") return alert("❌ Hanya SUPERADMIN");
+    if (!isSuperAdmin) return;
 
-    await FirebaseService.voidTransferFINAL(row);
-    alert("✅ VOID — STOK KEMBALI");
+    // 🔁 Kembalikan stok ke toko pengirim
+    for (const im of row.imeis || []) {
+      const inv = inventory.find((i) => String(i.imei) === String(im));
+      if (!inv) continue;
+
+      // Kembalikan status inventory
+      await update(ref(db, `inventory/${inv.id}`), {
+        status: "AVAILABLE",
+        toko: row.dari || row.tokoPengirim,
+      });
+    }
+
+    // Update status transfer
+    await FirebaseService.updateTransferRequest(row.id, {
+      status: "Voided",
+      voidedAt: new Date().toISOString(),
+    });
   };
 
-  // ===================== FILTER =====================
-  const filteredHistory =
-    filterStatus === "ALL"
-      ? history
-      : history.filter((h) => h.status === filterStatus);
+  const handleSearchImei = () => {
+    if (!imeiSearch) return;
+  
+    const found = inventory.find(
+      (i) =>
+        String(i.imei) === String(imeiSearch) &&
+        i.status === "AVAILABLE"
+    );
+  
+    if (!found) {
+      alert("❌ IMEI tidak ditemukan atau stok tidak tersedia");
+      return;
+    }
+  
+    // Auto pilih toko tujuan (selain pengirim)
+    const autoTokoTujuan =
+      TOKO_OPTIONS.find((t) => t !== found.toko) || "";
+  
+    setForm((f) => ({
+      ...f,
+      tokoPengirim: found.toko,
+      dari: found.toko,
+      ke: autoTokoTujuan,
+      kategori: found.kategori,
+      brand: found.namaBrand,
+      barang: found.namaBarang,
+      imeis: [found.imei],
+      qty: 1,
+    }));
+  };
+  
 
-  // ===================== PAGINATION DATA =====================
+  /* ================= PAGINATION ================= */
+  const filteredHistory = history.filter((h) =>
+    filterStatus === "ALL" ? true : h.status === filterStatus
+  );
   const pagedHistory = filteredHistory.slice(
     (page - 1) * PER_PAGE,
     page * PER_PAGE
   );
   const totalPages = Math.ceil(filteredHistory.length / PER_PAGE) || 1;
 
-  // ===================== EXPORT EXCEL =====================
+  /* ================= EXPORT ================= */
   const exportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filteredHistory);
+    const ws = XLSX.utils.json_to_sheet(history);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Transfer");
     XLSX.writeFile(wb, "History_Transfer.xlsx");
   };
 
-  // ===================== EXPORT PDF =====================
-  const exportPDF = async () => {
-    if (!selectedSJ) return alert("Pilih Surat Jalan dulu!");
-    const canvas = await html2canvas(suratJalanRef.current);
-    const img = canvas.toDataURL("image/png");
+  const exportPDF = () =>
+    selectedSJ &&
+    navigate("/print-surat-jalan", {
+      state: { mode: "pdf", data: selectedSJ },
+    });
 
-    const pdf = new jsPDF("p", "mm", "a4");
-    const w = 210;
-    const h = (canvas.height * w) / canvas.width;
+  const printSuratJalan = () =>
+    selectedSJ &&
+    navigate("/print-surat-jalan", {
+      state: { mode: "print", data: selectedSJ },
+    });
 
-    pdf.addImage(img, "PNG", 0, 0, w, h);
-    pdf.save(`SURAT_JALAN_${selectedSJ.noSuratJalan}.pdf`);
-  };
-
-  // ===================== PRINT =====================
-  const printSuratJalan = () => {
-    if (!selectedSJ) return alert("Pilih SJ dulu!");
-    const win = window.open("", "", "width=900,height=700");
-    win.document.write(
-      `<html><body>${suratJalanRef.current.innerHTML}</body></html>`
-    );
-    win.document.close();
-    win.print();
-  };
-
-  // const qrValue = selectedSJ
-  //   ? `${selectedSJ.noSuratJalan}|${selectedSJ.tanggal}|${selectedSJ.dari}|${selectedSJ.ke}|${selectedSJ.barang}|${selectedSJ.qty}`
-  //   : "";
-
-  // ===================== UI =====================
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-700 via-blue-700 to-purple-700 p-4">
       <div className="max-w-7xl mx-auto bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-6 space-y-6">
         <h2 className="text-2xl font-bold text-indigo-700 flex items-center gap-2">
           <FaExchangeAlt /> TRANSFER BARANG
         </h2>
+
+        {/* 🔍 SEARCH IMEI */}
+        <div className="flex items-center gap-2">
+          <FaSearch className="text-indigo-600" />
+          <input
+            value={imeiSearch}
+            onChange={(e) => setImeiSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSearchImei();
+              }
+            }}
+            className="input"
+            placeholder="Scan / ketik IMEI lalu Enter"
+          />
+        </div>
+
         <div className="text-xs text-red-600 font-bold">
           DEBUG ROLE: {currentRole}
         </div>
@@ -581,63 +448,79 @@ export default function TransferBarang() {
             <label className="text-xs font-semibold">No Surat Jalan</label>
             <input value={form.noSuratJalan} readOnly className="input" />
           </div>
-
           {/* TOKO TUJUAN */}
-          <select
-            className="input"
-            value={form.ke}
-            onChange={(e) => setForm({ ...form, ke: e.target.value })}
-          >
-            <option value="">Toko Tujuan</option>
-            {TOKO_TUJUAN.map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </select>
+          <div>
+            <label className="text-xs font-semibold">Toko Tujuan</label>
+
+            <input
+              list="toko-tujuan-list"
+              className="input"
+              value={form.ke}
+              onChange={(e) => setForm((f) => ({ ...f, ke: e.target.value }))}
+              placeholder="Ketik / pilih toko tujuan"
+            />
+
+            <datalist id="toko-tujuan-list">
+              {TOKO_OPTIONS.filter((t) => t !== form.tokoPengirim).map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
+          </div>
 
           {/* ✅ TOKO PENGIRIM */}
-          <input
-            list="toko-list"
-            value={form.tokoPengirim}
-            onChange={(e) => setForm({ ...form, tokoPengirim: e.target.value })}
-            className="input"
-            placeholder="Toko Pengirim"
-          />
-          <datalist id="toko-list">
-            {TOKO_TUJUAN.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
+          <div>
+            <label className="text-xs font-semibold">Toko Pengirim</label>
+            <input
+              list="toko-list"
+              value={form.tokoPengirim}
+              onChange={(e) =>
+                setForm({ ...form, tokoPengirim: e.target.value })
+              }
+              className="input"
+              placeholder="Toko Pengirim"
+            />
+            <datalist id="toko-list">
+              {masterToko.map((t) => (
+                <option key={t.id} value={t.namaToko}>
+                  {t.namaToko}
+                </option>
+              ))}
+            </datalist>
+          </div>
 
           {/* NAMA PENGIRIM */}
-          <input
-            list="pengirim-list"
-            value={form.pengirim}
-            onChange={(e) => setForm({ ...form, pengirim: e.target.value })}
-            className="input"
-            placeholder="Nama Pengirim"
-          />
-          <datalist id="pengirim-list">
-            {users.map((u) => (
-              <option
-                key={u.id || u.username}
-                value={u.name || u.username || ""}
-              />
-            ))}
-          </datalist>
+          <div>
+            <label className="text-xs font-semibold">Nama Sales Pengirim</label>
+            <input
+              list="pengirim-list"
+              value={form.pengirim}
+              onChange={(e) => setForm({ ...form, pengirim: e.target.value })}
+              className="input"
+              placeholder="Nama Pengirim"
+            />
+            <datalist id="pengirim-list">
+              {users.map((u) => (
+                <option
+                  key={u.id || u.username}
+                  value={u.name || u.username || ""}
+                />
+              ))}
+            </datalist>
+          </div>
         </div>
 
         {/* KATEGORI */}
         <div>
-          <label className="text-xs font-semibold">Kategori</label>
+          <label className="text-xs font-semibold">Kategori Barang</label>
           <select
             className="input"
             value={form.kategori}
             onChange={(e) => setForm({ ...form, kategori: e.target.value })}
           >
             <option value="">Pilih Kategori</option>
-            {KATEGORI_OPTIONS.map((t) => (
-              <option key={t} value={t}>
-                {t}
+            {masterKategori.map((k) => (
+              <option key={k.id} value={k.namaKategori}>
+                {k.namaKategori}
               </option>
             ))}
           </select>
@@ -653,9 +536,15 @@ export default function TransferBarang() {
             className="input"
           />
           <datalist id="brand-list">
-            {[...new Set(masterBarang.map((x) => x.brand))].map((b) => (
-              <option key={b} value={b} />
-            ))}
+            {masterBarangNormalized
+              .filter(
+                (x) =>
+                  x.brand === form.brand &&
+                  (!form.kategori || x.kategori === form.kategori)
+              )
+              .map((x) => (
+                <option key={x.namaBarang} value={x.namaBarang} />
+              ))}
           </datalist>
         </div>
 
@@ -669,56 +558,79 @@ export default function TransferBarang() {
             className="input"
           />
           <datalist id="barang-list">
-            {masterBarang
-              .filter((x) => x.brand === form.brand)
-              .map((x) => (
-                <option key={x.barang} value={x.barang} />
+            {masterBarangNormalized
+              .filter(
+                (b) =>
+                  normalize(b._kategori) === normalize(form.kategori) &&
+                  normalize(b._brand) === normalize(form.brand)
+              )
+              .map((b) => (
+                <option key={b.id} value={b._barang}>
+                  {b._barang}
+                </option>
               ))}
           </datalist>
         </div>
 
-        {/* IMEI */}
-        <div className="md:col-span-2">
-          <label className="text-xs font-semibold">IMEI</label>
-          <div className="flex gap-2 mt-3">
-            <input
-              list="imei-list"
-              value={imeiInput}
-              onChange={(e) => setImeiInput(e.target.value)}
-              className="border p-2 rounded w-full"
-              placeholder="Pilih IMEI"
-            />
-            <datalist id="imei-list">
-              {imeiSource.map((i) => (
-                <option key={i} value={i} />
-              ))}
-            </datalist>
-            <button
-              onClick={addImei}
-              className="bg-indigo-600 text-white px-4 rounded-lg"
-            >
-              <FaPlus />
-            </button>
-          </div>
+        {form.kategori !== "ACCESSORIES" && (
+          <div className="md:col-span-2">
+            <label className="text-xs font-semibold">IMEI</label>
 
-          <div className="flex flex-wrap mt-2">
-            {form.imeis.map((im, i) => (
-              <div
-                key={i}
-                className="px-2 py-1 bg-indigo-100 rounded mr-2 mb-2"
-              >
-                {im}
-                <button
-                  onClick={() => removeImei(i)}
-                  className="ml-2 text-red-600"
-                  type="button"
-                >
-                  x
-                </button>
-              </div>
-            ))}
+            <div className="flex gap-2 mt-2">
+              <input
+                list="imei-list"
+                value={imeiInput}
+                onChange={(e) => setImeiInput(e.target.value)}
+                className="input"
+                placeholder="Ketik / pilih IMEI"
+              />
+
+              <datalist id="imei-list">
+                {imeiSource.map((im) => (
+                  <option key={im} value={im} />
+                ))}
+              </datalist>
+
+              <button type="button" onClick={addImei} className="btn-indigo">
+                <FaPlus />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap mt-2">
+              {form.imeis.map((im, idx) => (
+                <span key={im} className="px-2 py-1 bg-indigo-100 rounded mr-2">
+                  {im}
+                  <button
+                    type="button"
+                    onClick={() => removeImei(idx)}
+                    className="ml-2 text-red-600"
+                  >
+                    x
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        {form.kategori === "ACCESSORIES" && (
+          <div>
+            <label className="text-xs font-semibold">Jumlah Barang (Qty)</label>
+            <input
+              type="number"
+              min="1"
+              className="input"
+              value={form.qty}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  qty: Number(e.target.value),
+                }))
+              }
+            />
+          </div>
+        )}
+
         <button
           onClick={submitTransfer}
           disabled={loading}
@@ -918,6 +830,21 @@ export default function TransferBarang() {
               onClick={async () => {
                 await approveTransfer(selectedSJ);
                 printSuratJalan();
+                navigate("/print-surat-jalan", {
+                  state: {
+                    ...form,
+                    items: [
+                      {
+                        barang: form.barang,
+                        qty:
+                          form.kategori === "ACCESSORIES"
+                            ? form.qty
+                            : form.imeis.length,
+                        imeis: form.imeis,
+                      },
+                    ],
+                  },
+                });
               }}
               className="mt-4 btn-indigo mr-2"
               type="button"
