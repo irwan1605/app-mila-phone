@@ -766,19 +766,11 @@ export const adjustInventoryStock = async (tokoName, sku, delta) => {
 
 // buat transfer request (push ke "transfer_requests")
 // ================= TRANSFER BARANG =================
-export const createTransferRequest = async (payload) => {
-  const r = ref(db, "transferRequests");
-  const newRef = push(r);
-
-  await set(newRef, {
-    ...payload,
-    status: payload.status || "Pending",
-    CREATED_AT: Date.now(),
-  });
-
-  return newRef.key;
+// ================= CREATE TRANSFER REQUEST =================
+export const createTransferRequest = async (data) => {
+  const r = ref(db, "transfer_barang");
+  return push(r, data);
 };
-
 
 // listen transfer requests (for admin)
 export const listenTransferRequests = (callback) => {
@@ -1487,63 +1479,66 @@ export const approveTransferAndMoveStock = async ({
  * - Stok toko penerima bertambah
  * - Realtime ke InventoryReport & TransferBarang
  */
-export const approveTransferFINAL = async ({ transfer, performedBy }) => {
-  const { id, dari, ke, brand, barang, imeis = [], qty } = transfer;
+// ================= APPROVE TRANSFER (FINAL & REALTIME) =================
+export const approveTransferFINAL = async ({ transfer }) => {
+  try {
+    // 1️⃣ Pindahkan setiap IMEI
+    for (const im of transfer.imeis || []) {
+      // Cari transaksi asal (berdasarkan IMEI)
+      const fromRef = ref(
+        db,
+        `toko/${transfer.tokoPengirim}/transaksi`
+      );
 
-  if (!dari || !ke) {
-    throw new Error("Data transfer tidak lengkap");
-  }
+      // Ambil snapshot transaksi toko pengirim
+      const snap = await get(fromRef);
+      let trxId = null;
+      let trxData = null;
 
-  const sku = `${brand}_${barang}`.replace(/\s+/g, "_").toUpperCase();
-  const jumlah = imeis.length > 0 ? imeis.length : Number(qty || 0);
-  const now = new Date().toISOString();
+      snap.forEach((c) => {
+        if (String(c.val().IMEI) === String(im)) {
+          trxId = c.key;
+          trxData = c.val();
+        }
+      });
 
-  // =========================
-  // 1️⃣ PINDAHKAN IMEI (JIKA ADA)
-  // =========================
-  if (imeis.length) {
-    const snap = await get(ref(db, "inventory"));
-    const updates = {};
+      if (!trxId || !trxData) continue;
 
-    snap.forEach((child) => {
-      const row = child.val();
-      const rowImei = String(row.IMEI || row.imei);
+      // 2️⃣ Hapus dari toko pengirim
+      await remove(
+        ref(db, `toko/${transfer.tokoPengirim}/transaksi/${trxId}`)
+      );
 
-      if (
-        imeis.includes(rowImei) &&
-        String(row.NAMA_TOKO || row.toko).toUpperCase() ===
-          String(dari).toUpperCase()
-      ) {
-        updates[`inventory/${child.key}/NAMA_TOKO`] = ke;
-        updates[`inventory/${child.key}/updatedAt`] = now;
-      }
-    });
-
-    if (Object.keys(updates).length) {
-      await update(ref(db), updates);
+      // 3️⃣ Tambah ke toko tujuan
+      await push(
+        ref(db, `toko/${transfer.ke}/transaksi`),
+        {
+          ...trxData,
+          NAMA_TOKO: transfer.ke,
+          UPDATED_AT: Date.now(),
+        }
+      );
     }
+
+    // 4️⃣ Update status transfer
+    await update(ref(db, `transfer_barang/${transfer.id}`), {
+      status: "Approved",
+      approvedAt: Date.now(),
+    });
+  } catch (err) {
+    console.error("approveTransferFINAL ERROR:", err);
+    throw err;
   }
-
-  // =========================
-  // 2️⃣ UPDATE STOCK (INI KUNCI CARD)
-  // =========================
-  await reduceStock(dari, sku, jumlah);
-  await addStock(ke, sku, {
-    namaBarang: barang,
-    qty: jumlah,
-  });
-
-  // =========================
-  // 3️⃣ UPDATE STATUS TRANSFER
-  // =========================
-  await update(ref(db, `transfer_requests/${id}`), {
-    status: "Approved",
-    approvedAt: now,
-    approvedBy: performedBy,
-  });
-
-  return true;
 };
+
+// ================= REJECT TRANSFER =================
+export const rejectTransferFINAL = async (transfer) => {
+  await update(ref(db, `transfer_barang/${transfer.id}`), {
+    status: "Rejected",
+    rejectedAt: Date.now(),
+  });
+};
+
 
 
 // ===================================================
@@ -1672,20 +1667,26 @@ export const getMasterTokoById = async (tokoId) => {
    Path: /masterToko
 ========================= */
 
-// ================= MASTER TOKO =================
+/* =========================
+   MASTER TOKO (FINAL)
+   Path: /masterToko
+========================= */
+
+// LISTEN REALTIME
 export const listenMasterToko = (cb) => {
-  const r = ref(db, "master/toko");
+  const r = ref(db, "masterToko");
   return onValue(r, (snap) => {
     const data = snap.val() || {};
     const rows = Object.entries(data).map(([id, v]) => ({
       id,
-      namaToko: v.namaToko, // 🔥 HARUS namaToko
+      nama: v.nama || "",
+      alamat: v.alamat || "",
     }));
     cb(rows);
   });
 };
 
-
+// ADD
 export const addMasterToko = async (data) => {
   const r = push(ref(db, "masterToko"));
   await set(r, {
@@ -1696,6 +1697,7 @@ export const addMasterToko = async (data) => {
   return r.key;
 };
 
+// UPDATE
 export const updateMasterToko = async (id, data) => {
   return update(ref(db, `masterToko/${id}`), {
     nama: data.nama.trim(),
@@ -1704,6 +1706,7 @@ export const updateMasterToko = async (id, data) => {
   });
 };
 
+// DELETE
 export const deleteMasterToko = async (id) => {
   return remove(ref(db, `masterToko/${id}`));
 };
@@ -1722,8 +1725,8 @@ export const getAvailableImeisFromInventory = async (toko, namaBarang) => {
     if (
       String(row.toko || row.NAMA_TOKO).toUpperCase() ===
         String(toko).toUpperCase() &&
-      String(row.namaBarang || row.NAMA_BARANG)
-        .toUpperCase() === String(namaBarang).toUpperCase() &&
+      String(row.namaBarang || row.NAMA_BARANG).toUpperCase() ===
+        String(namaBarang).toUpperCase() &&
       String(row.status || row.STATUS).toUpperCase() === "AVAILABLE" &&
       (row.imei || row.IMEI)
     ) {
@@ -1734,7 +1737,34 @@ export const getAvailableImeisFromInventory = async (toko, namaBarang) => {
   return result;
 };
 
+export const approveTransferRequest = async (transfer) => {
+  const { tokoPengirim, ke, imeis = [], qty, barang } = transfer;
 
+  // === KATEGORI IMEI ===
+  if (imeis.length) {
+    for (const im of imeis) {
+      // pindahkan inventory
+      await update(ref(db, `inventory/${tokoPengirim}/${im}`), {
+        STATUS: "TRANSFERRED",
+      });
+
+      await set(ref(db, `inventory/${ke}/${im}`), {
+        ...transfer,
+        STATUS: "AVAILABLE",
+      });
+    }
+  }
+
+  // === STOCK AGREGAT ===
+  await updateStockAtomic(tokoPengirim, barang, -qty);
+
+  await updateStockAtomic(ke, barang, qty);
+
+  await update(ref(db, `transferRequests/${transfer.id}`), {
+    status: "Approved",
+    approvedAt: Date.now(),
+  });
+};
 
 /* =========================
    INIT MASTER HELPERS
@@ -1774,7 +1804,6 @@ export const listenMasterSalesTitipan = masterSalesTitipan.listen;
 export const addMasterSalesTitipan = masterSalesTitipan.add;
 export const updateMasterSalesTitipan = masterSalesTitipan.update;
 export const deleteMasterSalesTitipan = masterSalesTitipan.delete;
-
 
 // MASTER BARANG & HARGA
 const masterBarangHarga = createMasterHelpers("masterBarangHarga");

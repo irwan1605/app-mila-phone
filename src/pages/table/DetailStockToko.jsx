@@ -297,11 +297,13 @@ export default function DetailStockToko() {
                     </td>
                     <td className="px-3 py-2 text-right font-mono">
                       <button
-                        onClick={() =>
-                          navigate("/transfer-barang", {
-                            state: r,
-                          })
-                        }
+                       onClick={() =>
+                        navigate("/transfer-barang", {
+                          state: {
+                            tokoPengirim: namaToko, // ⬅️ INI PENTING
+                          },
+                        })
+                      }
                         title="Transfer Barang"
                         className="
     group flex items-center gap-2

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   listenMasterToko,
-  // addMasterToko,
+  addMasterToko,
   updateMasterToko,
   deleteMasterToko,
 } from "../../services/FirebaseService";
@@ -12,7 +12,7 @@ import {
   FaSave,
   FaTrash,
   FaTimes,
-  // FaPlus,
+  FaPlus,
 } from "react-icons/fa";
 
 export default function MasterTokoCard() {
@@ -20,38 +20,37 @@ export default function MasterTokoCard() {
   const [editId, setEditId] = useState(null);
 
   const [form, setForm] = useState({ nama: "", alamat: "" });
-  // const [tambahForm, setTambahForm] = useState({ nama: "", alamat: "" });
+  const [tambahForm, setTambahForm] = useState({ nama: "", alamat: "" });
 
   // =============================
   // 🔄 LISTENER REALTIME (SERVICE)
   // =============================
   useEffect(() => {
     const unsubscribe = listenMasterToko((list) => {
-      setTokoList(
-        (list || []).filter((x) => x.nama && x.nama.trim() !== "")
-      );
+      setTokoList(list || []);
     });
   
     return () => unsubscribe && unsubscribe();
   }, []);
   
+  
 
   // =============================
   // ➕ TAMBAH TOKO
   // =============================
-  // const tambahToko = async () => {
-  //   if (!tambahForm.nama.trim()) {
-  //     alert("Nama toko wajib diisi");
-  //     return;
-  //   }
+  const tambahToko = async () => {
+    if (!tambahForm.nama.trim()) {
+      alert("Nama toko wajib diisi");
+      return;
+    }
 
-  //   await addMasterToko({
-  //     nama: tambahForm.nama.trim(),
-  //     alamat: tambahForm.alamat.trim(),
-  //   });
+    await addMasterToko({
+      nama: tambahForm.nama.trim(),
+      alamat: tambahForm.alamat.trim(),
+    });
 
-  //   setTambahForm({ nama: "", alamat: "" });
-  // };
+    setTambahForm({ nama: "", alamat: "" });
+  };
 
   // =============================
   // ✏️ EDIT

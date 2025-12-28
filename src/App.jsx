@@ -36,7 +36,6 @@ import StockMotorListrikPusat from "./pages/stock/StockMotorListrikPusat";
 import InputPenjualan from "./pages/InputPenjualan";
 import StrukPenjualan from "./pages/StrukPenjualan";
 import StrukPenjualanIMEI from "./pages/StrukPenjualanIMEI";
-import SuratJalan from "./pages/SuratJalan";
 import Invoice from "./pages/Invoice";
 import FinanceReportMonthly from "./pages/Reports/FinanceReportMonthly";
 import FinanceReport from "./pages/Reports/FinanceReport";
@@ -245,23 +244,6 @@ export default function App() {
 
                   {/* MASTER MANAGEMENT */}
                   <Route path="/data-management" element={<DataManagement />} />
-
-                  {/* PRINT */}
-
-                  {/* <Route path="/print/sales" element={<PrintSalesReport />} />
-                  <Route path="/print/inventory" element={<PrintInventory />} />
-                  <Route
-                    path="/print/stock-opname"
-                    element={<PrintStockOpname />}
-                  />
-                  <Route path="/print/keuangan" element={<PrintKeuangan />} />
-                  <Route
-                    path="/print/surat-jalan/:invoice"
-                    element={<PrintSuratJalan />}
-                  /> */}
-
-                  {/* Surat Jalan, Faktur, Invoice, Struk */}
-                  <Route path="/surat-jalan" element={<SuratJalan />} />
 
                   {/* Cetak Faktur PRO MAX (halaman khusus) */}
                   <Route path="/cetak-faktur" element={<CetakFaktur />} />
