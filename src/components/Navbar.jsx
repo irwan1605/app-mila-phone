@@ -9,8 +9,7 @@ import {
   listenTransferRequests,
 } from "../services/FirebaseService";
 import { FaBell } from "react-icons/fa";
-
-
+import FirebaseService from "../services/FirebaseService";
 
 const Navbar = ({ user, onLogout }) => {
   const [showWhatsAppDropdown, setShowWhatsAppDropdown] = useState(false);
@@ -18,6 +17,7 @@ const Navbar = ({ user, onLogout }) => {
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const [notifTransfer, setNotifTransfer] = useState([]);
+  const [pendingTransfer, setPendingTransfer] = useState([]);
 
   // ✅ SAFE USER DARI LOCALSTORAGE
   const activeUser = useMemo(() => {
@@ -28,16 +28,20 @@ const Navbar = ({ user, onLogout }) => {
     }
   }, [user]);
 
-  
-
-  
+  useEffect(() => {
+    return FirebaseService.listenTransferRequests((rows) => {
+      const pending = (rows || []).filter(
+        (t) => t.status === "Pending"
+      );
+      setPendingTransfer(pending);
+    });
+  }, []);
 
   useEffect(() => {
     if (notifTransfer.length > 0) {
       console.log("🔔 Ada transfer menunggu approval");
     }
   }, [notifTransfer]);
-  
 
   useEffect(() => {
     const unsub = listenTransferRequests((list) => {
@@ -112,30 +116,36 @@ const Navbar = ({ user, onLogout }) => {
       </h1>
 
       <div
-  className="relative flex items-center gap-3 cursor-pointer"
-  onClick={() =>
-    navigate("/transfer-barang", {
-      state: { filterStatus: "Pending" },
-    })
-  }
->
-  {/* ICON */}
-  <FaBell className="text-xl text-white hover:scale-110 transition" />
-
-  {/* BADGE */}
-  {notifTransfer.length > 0 && (
-    <span
-      className="
-        absolute -top-2 -right-2 
-        bg-red-600 text-white text-xs 
-        rounded-full px-2 py-0.5
-        animate-pulse
-      "
+      onClick={() => navigate("/transfer-barang")}
+      className={`
+        relative cursor-pointer
+        ${pendingTransfer.length > 0 ? "animate-pulse" : ""}
+      `}
     >
-      {notifTransfer.length}
-    </span>
-  )}
-   </div>
+      <FaBell
+        className={`
+          text-2xl transition-all duration-300
+          ${
+            pendingTransfer.length > 0
+              ? "text-red-500 drop-shadow-[0_0_12px_rgba(255,0,0,0.9)] animate-bounce"
+              : "text-gray-500"
+          }
+        `}
+      />
+    
+      {pendingTransfer.length > 0 && (
+        <span
+          className="
+            absolute -top-2 -right-2
+            bg-red-600 text-white text-xs
+            px-2 py-0.5 rounded-full
+            animate-ping
+          "
+        >
+          {pendingTransfer.length}
+        </span>
+      )}
+      </div>
 
       <div className="flex items-center gap-4" ref={dropdownRef}>
         {/* ✅ ✅ ✅ USER ICON + NAMA USER */}

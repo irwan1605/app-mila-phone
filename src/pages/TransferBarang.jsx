@@ -346,50 +346,51 @@ export default function TransferBarang() {
   /* ================= SUBMIT ================= */
   // ================= SUBMIT TRANSFER (FINAL, TANPA ERROR) =================
   // ================= SUBMIT TRANSFER (FINAL, REALTIME) =================
-  const submitTransfer = async () => {
-    console.log("🔥 SUBMIT TRANSFER DIKLIK");
-
-    try {
-      // VALIDASI WAJIB
-      if (
-        !form.tokoPengirim ||
-        !form.ke ||
-        !form.brand ||
-        !form.barang ||
-        !Array.isArray(form.imeis) ||
-        form.imeis.length === 0
-      ) {
-        alert("❌ Data transfer belum lengkap");
-        return;
-      }
-
-      const payload = {
-        tanggal: form.tanggal,
-        noDo: form.noDo,
-        noSuratJalan: form.noSuratJalan,
-        pengirim: form.pengirim || "SYSTEM",
-        tokoPengirim: form.tokoPengirim,
-        dari: form.tokoPengirim,
-        ke: form.ke,
-        brand: form.brand,
-        barang: form.barang,
-        imeis: form.imeis,
-        qty: form.imeis.length,
-        status: "Pending",
-        createdAt: Date.now(),
-      };
-
-      console.log("📦 DATA DIKIRIM KE FIREBASE:", payload);
-
-      // ⬇️ WAJIB KE NODE INI
-      await FirebaseService.createTransferRequest(payload);
-
-      alert("✅ Transfer berhasil dikirim (MENUNGGU APPROVE)");
-    } catch (err) {
-      console.error("❌ SUBMIT TRANSFER ERROR:", err);
-      alert("❌ Gagal submit transfer");
+  // ================= SUBMIT TRANSFER (FINAL) =================
+// ================= SUBMIT TRANSFER (FINAL 100%) =================
+const submitTransfer = async () => {
+  try {
+    // VALIDASI
+    if (
+      !form.tokoPengirim ||
+      !form.ke ||
+      !form.barang ||
+      !Array.isArray(form.imeis) ||
+      form.imeis.length === 0
+    ) {
+      alert("❌ Data transfer belum lengkap");
+      return;
     }
-  };
+
+    const payload = {
+      tanggal: form.tanggal,
+      noDo: form.noDo,
+      noSuratJalan: form.noSuratJalan,
+      pengirim: form.pengirim || "SYSTEM",
+
+      tokoPengirim: form.tokoPengirim,
+      dari: form.tokoPengirim,
+      ke: form.ke,
+
+      brand: form.brand,
+      barang: form.barang,
+      imeis: form.imeis,
+      qty: form.imeis.length,
+
+      // 🔒 KUNCI STATUS
+      status: "Pending",
+      createdAt: Date.now(),
+    };
+
+    await FirebaseService.createTransferRequest(payload);
+
+    alert("✅ Transfer berhasil (Menunggu Approved Superadmin)");
+  } catch (err) {
+    console.error(err);
+    alert("❌ Gagal submit transfer");
+  }
+};
+
 
   /* ================= RENDER ================= */
   return (
@@ -636,19 +637,7 @@ export default function TransferBarang() {
             placeholder="Qty"
           />
         )}
-        <div>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="input max-w-xs"
-          >
-            <option value="ALL">SEMUA</option>
-            <option value="Pending">Pending</option>
-            <option value="Approved">Approved</option>
-            <option value="Rejected">Rejected</option>
-            <option value="Voided">Voided</option>
-          </select>
-        </div>
+      
         <button
           onClick={submitTransfer}
           disabled={loading}

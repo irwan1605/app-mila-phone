@@ -1,33 +1,27 @@
-import React, { forwardRef } from "react";
+// src/pages/PrintSuratJalan.jsx
+import React, { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
+import { ref, get } from "firebase/database";
+import { db } from "../../firebase/FirebaseInit";
 import Logo from "../../assets/logoMMT.png";
 
-/**
- * PrintSuratJalan.jsx
- * -------------------
- * Props:
- * - data : object transfer (1 surat jalan)
- *
- * Siap:
- * - Print langsung (window.print)
- * - Export PDF (html2canvas / jsPDF)
- */
-const PrintSuratJalan = forwardRef(({ data }, ref) => {
+export default function PrintSuratJalan() {
+  const { id } = useParams();
+  const [data, setData] = useState(null);
+  const printRef = useRef(null);
+
+  useEffect(() => {
+    get(ref(db, `surat_jalan/${id}`)).then((snap) => {
+      if (snap.exists()) setData(snap.val());
+    });
+  }, [id]);
+
   if (!data) return null;
 
-  const {
-    noSuratJalan,
-    tanggal,
-    tokoPengirim,
-    ke,
-    pengirim,
-    items = [],
-  } = data;
-
   return (
-    <div ref={ref} className="print-wrapper">
-      <div className="a4-page">
-        {/* ================= HEADER ================= */}
-        <div className="header">
+    <div className="p-6">
+      <div ref={printRef} className="bg-white p-6 w-[210mm] mx-auto">
+        <div className="text-center mb-4">
           <img src={Logo} alt="Logo" className="logo" />
 
           <div className="company">
@@ -37,59 +31,49 @@ const PrintSuratJalan = forwardRef(({ data }, ref) => {
 
           <div className="doc-title">
             <h2>SURAT JALAN</h2>
-            <p>No: {noSuratJalan}</p>
+            <p>No: {data.noSuratJalan}</p>
           </div>
         </div>
 
-        {/* ================= INFO ================= */}
-        <table className="info-table">
+        <table className="w-full text-sm border mb-4">
           <tbody>
             <tr>
               <td>Tanggal</td>
-              <td>: {tanggal}</td>
-              <td>Toko Pengirim</td>
-              <td>: {tokoPengirim}</td>
+              <td>{data.tanggal}</td>
             </tr>
             <tr>
-              <td>Nama Pengirim</td>
-              <td>: {pengirim || "-"}</td>
-              <td>Toko Tujuan</td>
-              <td>: {ke}</td>
+              <td>Dari</td>
+              <td>{data.tokoPengirim}</td>
+            </tr>
+            <tr>
+              <td>Ke</td>
+              <td>{data.tokoTujuan}</td>
+            </tr>
+            <tr>
+              <td>Pengirim</td>
+              <td>{data.pengirim}</td>
             </tr>
           </tbody>
         </table>
 
-        {/* ================= BARANG ================= */}
-        <table className="item-table">
+        <table className="w-full text-sm border">
           <thead>
             <tr>
-              <th style={{ width: "5%" }}>No</th>
-              <th style={{ width: "35%" }}>Nama Barang</th>
-              <th style={{ width: "10%" }}>Qty</th>
-              <th style={{ width: "50%" }}>IMEI / Keterangan</th>
+              <th className="border px-2">No</th>
+              <th className="border px-2">Barang</th>
+              <th className="border px-2">Qty</th>
+              <th className="border px-2">IMEI</th>
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 && (
-              <tr>
-                <td colSpan="4" style={{ textAlign: "center" }}>
-                  Tidak ada data barang
-                </td>
-              </tr>
-            )}
-
-            {items.map((it, i) => (
-              <tr key={i}>
-                <td style={{ textAlign: "center" }}>{i + 1}</td>
-                <td>{it.barang}</td>
-                <td style={{ textAlign: "center" }}>{it.qty}</td>
-                <td style={{ fontSize: "11px" }}>
-                  {(it.imeis || []).length > 0
-                    ? it.imeis.join(", ")
-                    : "-"}
-                </td>
-              </tr>
-            ))}
+            <tr>
+              <td className="border px-2 text-center">1</td>
+              <td className="border px-2">{data.barang}</td>
+              <td className="border px-2 text-center">{data.qty}</td>
+              <td className="border px-2 text-xs">
+                {(data.imeis || []).join(", ")}
+              </td>
+            </tr>
           </tbody>
         </table>
 
@@ -104,15 +88,22 @@ const PrintSuratJalan = forwardRef(({ data }, ref) => {
         {/* ================= TTD ================= */}
         <div className="signature">
           <div>
-            <p>Pengirim</p>
-            <div className="sign-box" />
-            <p className="name">{pengirim || "_________________"}</p>
+            <tr>
+              <td className="border px-2">Pengirim</td>
+              <td className="border px-2">{data.pengirim}</td>
+            </tr>
           </div>
 
           <div>
             <p>Penerima</p>
             <div className="sign-box" />
             <p className="name">_________________</p>
+          </div>
+
+          <div className="flex justify-center mt-6 gap-4">
+            <button onClick={() => window.print()} className="btn-indigo">
+              🖨️ PRINT
+            </button>
           </div>
         </div>
       </div>
@@ -244,6 +235,4 @@ const PrintSuratJalan = forwardRef(({ data }, ref) => {
       `}</style>
     </div>
   );
-});
-
-export default PrintSuratJalan;
+}

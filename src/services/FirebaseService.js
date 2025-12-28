@@ -768,28 +768,22 @@ export const adjustInventoryStock = async (tokoName, sku, delta) => {
 // ================= TRANSFER BARANG =================
 // ================= CREATE TRANSFER REQUEST =================
 export const createTransferRequest = async (data) => {
-  const r = ref(db, "transfer_barang");
-  return push(r, data);
+  return push(ref(db, "transfer_barang"), data);
 };
 
 // listen transfer requests (for admin)
 export const listenTransferRequests = (callback) => {
-  const r = ref(db, "transfer_requests");
-  const unsub = onValue(
-    r,
-    (snap) => {
-      const raw = snap.val() || {};
-      const arr = Object.entries(raw).map(([id, v]) => ({ id, ...v }));
-      // only pending by default
-      callback(arr.filter((x) => !x.status || x.status === "Pending"));
-    },
-    (err) => {
-      console.error(err);
-      callback([]);
-    }
-  );
-  return () => unsub && unsub();
+  const r = ref(db, "transfer_barang");
+  return onValue(r, (snap) => {
+    const raw = snap.val() || {};
+    const arr = Object.entries(raw).map(([id, v]) => ({
+      id,
+      ...v,
+    }));
+    callback(arr); // ⬅️ JANGAN FILTER
+  });
 };
+
 
 // update transfer request (approve / reject)
 export const updateTransferRequest = (id, data) => {
@@ -1480,47 +1474,40 @@ export const approveTransferAndMoveStock = async ({
  * - Realtime ke InventoryReport & TransferBarang
  */
 // ================= APPROVE TRANSFER (FINAL & REALTIME) =================
+// ================= APPROVE + SURAT JALAN =================
 export const approveTransferFINAL = async ({ transfer }) => {
   try {
-    // 1️⃣ Pindahkan setiap IMEI
     for (const im of transfer.imeis || []) {
-      // Cari transaksi asal (berdasarkan IMEI)
-      const fromRef = ref(
-        db,
-        `toko/${transfer.tokoPengirim}/transaksi`
+      const snap = await get(
+        ref(db, `toko/${transfer.tokoPengirim}/transaksi`)
       );
 
-      // Ambil snapshot transaksi toko pengirim
-      const snap = await get(fromRef);
-      let trxId = null;
+      let trxKey = null;
       let trxData = null;
 
       snap.forEach((c) => {
         if (String(c.val().IMEI) === String(im)) {
-          trxId = c.key;
+          trxKey = c.key;
           trxData = c.val();
         }
       });
 
-      if (!trxId || !trxData) continue;
+      if (!trxKey || !trxData) continue;
 
-      // 2️⃣ Hapus dari toko pengirim
+      // 1️⃣ Hapus dari toko pengirim
       await remove(
-        ref(db, `toko/${transfer.tokoPengirim}/transaksi/${trxId}`)
+        ref(db, `toko/${transfer.tokoPengirim}/transaksi/${trxKey}`)
       );
 
-      // 3️⃣ Tambah ke toko tujuan
-      await push(
-        ref(db, `toko/${transfer.ke}/transaksi`),
-        {
-          ...trxData,
-          NAMA_TOKO: transfer.ke,
-          UPDATED_AT: Date.now(),
-        }
-      );
+      // 2️⃣ Tambah ke toko tujuan
+      await push(ref(db, `toko/${transfer.ke}/transaksi`), {
+        ...trxData,
+        NAMA_TOKO: transfer.ke,
+        UPDATED_AT: Date.now(),
+      });
     }
 
-    // 4️⃣ Update status transfer
+    // 3️⃣ UPDATE STATUS (PENTING: JANGAN REMOVE)
     await update(ref(db, `transfer_barang/${transfer.id}`), {
       status: "Approved",
       approvedAt: Date.now(),
@@ -1531,6 +1518,16 @@ export const approveTransferFINAL = async ({ transfer }) => {
   }
 };
 
+
+
+export const editTransferFINAL = async (id, data) => {
+  await update(ref(db, `transfer_barang/${id}`), {
+    ...data,
+    editedAt: Date.now(),
+  });
+};
+
+
 // ================= REJECT TRANSFER =================
 export const rejectTransferFINAL = async (transfer) => {
   await update(ref(db, `transfer_barang/${transfer.id}`), {
@@ -1538,7 +1535,6 @@ export const rejectTransferFINAL = async (transfer) => {
     rejectedAt: Date.now(),
   });
 };
-
 
 
 // ===================================================
