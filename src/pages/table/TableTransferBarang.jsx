@@ -11,18 +11,19 @@ export default function TableTransferBarang({ currentRole }) {
   const navigate = useNavigate();
   const [filterStatus, setFilterStatus] = useState("ALL");
 
- useEffect(() => {
-  return onValue(ref(db, "transfer_barang"), (snap) => {
-    const arr = [];
-    snap.forEach((c) =>
-      arr.push({ id: c.key, ...c.val() })
-    );
-    setRows(arr);
-  });
-}, []);
+  useEffect(() => {
+    return onValue(ref(db, "transfer_barang"), (snap) => {
+      const arr = [];
+      snap.forEach((c) => arr.push({ id: c.key, ...c.val() }));
+      setRows(arr);
+    });
+  }, []);
 
   return (
-    <div className="mt-8 bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-6">
+    <div
+      id="table-transfer-barang"
+      className="mt-8 bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-6"
+    >
       <h3 className="text-xl font-extrabold mb-4 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
         📦 TABEL TRANSFER BARANG
       </h3>

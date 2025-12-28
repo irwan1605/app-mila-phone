@@ -122,16 +122,20 @@ export default function TransferBarang() {
     });
   }, []);
 
-  // ================= TOKO PENGIRIM DARI CARD KECIL =================
-  useEffect(() => {
-    if (location.state?.tokoPengirim) {
-      setForm((f) => ({
-        ...f,
-        tokoPengirim: location.state.tokoPengirim,
-        dari: location.state.tokoPengirim,
-      }));
-    }
-  }, [location.state]);
+// ================= DARI NOTIFIKASI NAVBAR =================
+useEffect(() => {
+  if (location.state?.fromNotif) {
+    // set filter ke Pending
+    setFilterStatus(location.state.filterStatus || "Pending");
+
+    // scroll ke table transfer
+    setTimeout(() => {
+      const el = document.getElementById("table-transfer-barang");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    }, 300);
+  }
+}, [location.state]);
+
 
   /* ================= MASTER DATA ================= */
   useEffect(() => {

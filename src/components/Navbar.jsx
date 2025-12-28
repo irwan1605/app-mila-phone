@@ -116,7 +116,14 @@ const Navbar = ({ user, onLogout }) => {
       </h1>
 
       <div
-      onClick={() => navigate("/transfer-barang")}
+      onClick={() =>
+        navigate("/transfer-barang", {
+          state: {
+            fromNotif: true,
+            filterStatus: "Pending",
+          },
+        })
+      }
       className={`
         relative cursor-pointer
         ${pendingTransfer.length > 0 ? "animate-pulse" : ""}
@@ -124,7 +131,7 @@ const Navbar = ({ user, onLogout }) => {
     >
       <FaBell
         className={`
-          text-2xl transition-all duration-300
+          text-2xl transition-all
           ${
             pendingTransfer.length > 0
               ? "text-red-500 drop-shadow-[0_0_12px_rgba(255,0,0,0.9)] animate-bounce"

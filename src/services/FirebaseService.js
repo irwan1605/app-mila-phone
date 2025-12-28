@@ -1733,6 +1733,58 @@ export const getAvailableImeisFromInventory = async (toko, namaBarang) => {
   return result;
 };
 
+export const findImeiPenjualan = async (imei, tokoId) => {
+  if (!imei || !tokoId) return null;
+
+  const snap = await get(ref(db, `toko/${tokoId}/transaksi`));
+  if (!snap.exists()) return null;
+
+  let found = null;
+
+  snap.forEach((trx) => {
+    const v = trx.val();
+
+    if (
+      String(v.IMEI || "").trim() === String(imei).trim() &&
+      String(v.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
+      String(v.STATUS || "").toUpperCase() === "APPROVED"
+    ) {
+      found = {
+        imei: v.IMEI,
+        kategoriBarang: v.KATEGORI_BRAND,
+        namaBrand: v.NAMA_BRAND,
+        namaBarang: v.NAMA_BARANG,
+        hargaUnit: Number(v.HARGA_UNIT || 0),
+        tokoNama: v.NAMA_TOKO,
+      };
+    }
+  });
+
+  return found;
+};
+
+/**
+ * ===============================
+ * CEK IMEI SUDAH TERJUAL
+ * ===============================
+ */
+export const isImeiSudahTerjual = async (imei) => {
+  const snap = await get(ref(db, `penjualan_imei/${imei}`));
+  return snap.exists();
+};
+
+/**
+ * ===============================
+ * LOCK IMEI SAAT PENJUALAN
+ * ===============================
+ */
+export const lockImeiPenjualan = async (imei, payload) => {
+  await set(ref(db, `penjualan_imei/${imei}`), {
+    ...payload,
+    soldAt: Date.now(),
+  });
+};
+
 export const approveTransferRequest = async (transfer) => {
   const { tokoPengirim, ke, imeis = [], qty, barang } = transfer;
 
@@ -1760,6 +1812,41 @@ export const approveTransferRequest = async (transfer) => {
     status: "Approved",
     approvedAt: Date.now(),
   });
+};
+
+export const findImeiForPenjualan = async (imei, toko) => {
+  if (!imei || !toko) return null;
+
+  const snap = await get(ref(db, "toko"));
+  if (!snap.exists()) return null;
+
+  let found = null;
+
+  snap.forEach((tokoSnap) => {
+    const transaksiSnap = tokoSnap.child("transaksi");
+    if (!transaksiSnap.exists()) return;
+
+    transaksiSnap.forEach((trx) => {
+      const v = trx.val();
+      if (
+        String(v.IMEI).trim() === String(imei).trim() &&
+        String(v.NAMA_TOKO).toUpperCase() === String(toko).toUpperCase() &&
+        String(v.PAYMENT_METODE).toUpperCase() === "PEMBELIAN" &&
+        String(v.STATUS).toUpperCase() === "APPROVED"
+      ) {
+        found = {
+          kategoriBarang: v.KATEGORI_BRAND,
+          namaBrand: v.NAMA_BRAND,
+          namaBarang: v.NAMA_BARANG,
+          sku: v.SKU || "",
+          hargaSRP: v.HARGA_SRP || v.HARGA_UNIT || 0,
+          imei: v.IMEI,
+        };
+      }
+    });
+  });
+
+  return found;
 };
 
 /* =========================
