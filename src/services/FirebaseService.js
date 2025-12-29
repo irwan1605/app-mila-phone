@@ -1733,34 +1733,30 @@ export const getAvailableImeisFromInventory = async (toko, namaBarang) => {
   return result;
 };
 
+// ===============================
+// CARI IMEI UNTUK PENJUALAN CEPAT
+// ===============================
 export const findImeiPenjualan = async (imei, tokoId) => {
-  if (!imei || !tokoId) return null;
-
   const snap = await get(ref(db, `toko/${tokoId}/transaksi`));
   if (!snap.exists()) return null;
 
-  let found = null;
+  const data = snap.val();
 
-  snap.forEach((trx) => {
-    const v = trx.val();
-
+  for (const key in data) {
     if (
-      String(v.IMEI || "").trim() === String(imei).trim() &&
-      String(v.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
-      String(v.STATUS || "").toUpperCase() === "APPROVED"
+      data[key].IMEI === imei &&
+      data[key].STATUS === "Approved"
     ) {
-      found = {
-        imei: v.IMEI,
-        kategoriBarang: v.KATEGORI_BRAND,
-        namaBrand: v.NAMA_BRAND,
-        namaBarang: v.NAMA_BARANG,
-        hargaUnit: Number(v.HARGA_UNIT || 0),
-        tokoNama: v.NAMA_TOKO,
+      return {
+        kategoriBarang: data[key].KATEGORI_BRAND,
+        namaBrand: data[key].NAMA_BRAND,
+        namaBarang: data[key].NAMA_BARANG,
+        hargaUnit: data[key].HARGA_UNIT,
       };
     }
-  });
+  }
 
-  return found;
+  return null; // ⚠️ BOLEH null, TIDAK BOLEH alert
 };
 
 /**
@@ -1848,6 +1844,76 @@ export const findImeiForPenjualan = async (imei, toko) => {
 
   return found;
 };
+
+
+export const getImeiDetailByToko = async (namaToko, imei) => {
+  if (!namaToko || !imei) return null;
+
+  const snap = await get(ref(db, "toko"));
+  if (!snap.exists()) return null;
+
+  let found = null;
+
+  snap.forEach((tokoSnap) => {
+    const transaksiSnap = tokoSnap.child("transaksi");
+    transaksiSnap.forEach((trx) => {
+      const v = trx.val();
+
+      if (
+        v?.IMEI === imei &&
+        v?.STATUS === "Approved" &&
+        v?.NAMA_TOKO === namaToko
+      ) {
+        found = {
+          imei: v.IMEI,
+          kategoriBarang: v.KATEGORI_BRAND,
+          namaBrand: v.NAMA_BRAND,
+          namaBarang: v.NAMA_BARANG,
+          sku: v.SKU || "",
+          harga: {
+            srp: Number(v.HARGA_UNIT || 0),
+            grosir: Number(v.HARGA_UNIT || 0),
+            reseller: Number(v.HARGA_UNIT || 0),
+          },
+        };
+      }
+    });
+  });
+
+  return found;
+};
+
+/* =========================================================
+   LIST IMEI TOKO (AUTOCOMPLETE SAAT KETIK)
+   ========================================================= */
+export const getImeiListByToko = async (namaToko, keyword = "") => {
+  if (!namaToko) return [];
+
+  const snap = await get(ref(db, "toko"));
+  if (!snap.exists()) return [];
+
+  const list = [];
+
+  snap.forEach((tokoSnap) => {
+    const transaksiSnap = tokoSnap.child("transaksi");
+    transaksiSnap.forEach((trx) => {
+      const v = trx.val();
+
+      if (
+        v?.STATUS === "Approved" &&
+        v?.NAMA_TOKO === namaToko &&
+        v?.IMEI &&
+        String(v.IMEI).includes(keyword)
+      ) {
+        list.push(v.IMEI);
+      }
+    });
+  });
+
+  // Hilangkan duplikat
+  return [...new Set(list)].slice(0, 20);
+};
+
 
 /* =========================
    INIT MASTER HELPERS

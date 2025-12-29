@@ -1,86 +1,89 @@
-// ============================================================
-// FormUserSection.jsx — FINAL FIX (MASTER TOKO REALTIME)
-// Tahap 1 | Nama Toko AUTO (PIC) & Selectable (Superadmin)
-// ============================================================
+// ===================================================
+// FormUserSection.jsx — FINAL FIX 100%
+// Master Toko + Master Sales REALTIME
+// TERHUBUNG LANGSUNG KE TAHAP 2
+// ===================================================
 
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  listenMasterToko,
+  listenMasterSales,
+} from "../../../services/FirebaseService";
 
-export default function FormUserSection({
-  value,
-  onChange,
-  users = [],
-  masterToko = [],
-  userLogin = {},
-  tahap = 1,
-}) {
-  /* ================= ROLE ================= */
-  const isSuperAdmin =
-    userLogin?.role === "superadmin" || userLogin?.role === "admin";
+export default function FormUserSection({ value, onChange }) {
+  /* ================= STATE ================= */
 
-  const isPicToko =
-    typeof userLogin?.role === "string" &&
-    userLogin.role.startsWith("pic_toko");
+  const [masterToko, setMasterToko] = useState([]);
+  const [masterSales, setMasterSales] = useState([]);
 
-  /* ================= NORMALISASI MASTER TOKO ================= */
-  // masterToko dari Firebase berbentuk OBJECT → kita jadikan ARRAY
-  const tokoList = useMemo(() => {
-    if (Array.isArray(masterToko)) return masterToko;
+  /* ================= LISTENER REALTIME ================= */
 
-    if (masterToko && typeof masterToko === "object") {
-      return Object.entries(masterToko).map(([id, v]) => ({
-        id,
-        namaToko: v?.namaToko || "",
-        alamat: v?.alamat || "",
-      }));
-    }
+  useEffect(() => {
+    const unsubToko = listenMasterToko((rows) => {
+      setMasterToko(Array.isArray(rows) ? rows : []);
+    });
 
-    return [];
-  }, [masterToko]);
+    const unsubSales = listenMasterSales((rows) => {
+      setMasterSales(Array.isArray(rows) ? rows : []);
+    });
 
-  const namaTokoList = useMemo(
-    () => tokoList.map((t) => t.namaToko).filter(Boolean),
-    [tokoList]
+    return () => {
+      unsubToko && unsubToko();
+      unsubSales && unsubSales();
+    };
+  }, []);
+
+  /* ================= SAFE FORM ================= */
+  const form = useMemo(
+    () => ({
+      tanggal: value?.tanggal || "",
+      noFaktur: value?.noFaktur || "",
+      namaPelanggan: value?.namaPelanggan || "",
+      idPelanggan: value?.idPelanggan || "",
+      noTlpPelanggan : value?.noTlpPelanggan || "",
+      namaToko: value?.namaToko || "",
+      namaSales: value?.namaSales || "",
+      salesTitipan: value?.salesTitipan || "",
+    }),
+    [value]
   );
 
-  /* ================= AUTO SET TOKO (PIC TOKO) ================= */
-  useEffect(() => {
-    if (!isPicToko) return;
-    if (!userLogin?.tokoId) return;
-    if (!tokoList.length) return;
-
-    const toko = tokoList.find(
-      (t) => String(t.id) === String(userLogin.tokoId)
-    );
-
-    if (!toko) return;
-
-    if (value.namaToko !== toko.namaToko) {
-      onChange({
-        ...value,
-        namaToko: toko.namaToko,
-      });
-    }
-  }, [isPicToko, userLogin, tokoList, value, onChange]);
-
-  /* ================= HANDLER ================= */
-  const setField = (key, val) => {
-    onChange({ ...value, [key]: val });
+  const update = (patch) => {
+    onChange({ ...form, ...patch });
   };
-  
+
+  /* ================= FILTER SALES BY TOKO ================= */
+
+  const salesList = useMemo(() => {
+    if (!form.namaToko) return [];
+    return masterSales.filter(
+      (s) => s?.toko === form.namaToko && s?.jenis === "SALES"
+    );
+  }, [masterSales, form.namaToko]);
+
+  const phone = value?.noTlpPelanggan ?? "";
+
+  const salesTitipanList = useMemo(() => {
+    if (!form.namaToko) return [];
+    return masterSales.filter(
+      (s) => s?.toko === form.namaToko && s?.jenis === "SALES_TITIPAN"
+    );
+  }, [masterSales, form.namaToko]);
 
   /* ================= RENDER ================= */
+
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-bold">DATA PELANGGAN — TAHAP 1</h2>
+      <h2 className="font-bold mb-2">👤 DATA PENJUALAN — TAHAP 1</h2>
 
       {/* TANGGAL */}
       <div>
         <label className="text-xs font-semibold">Tanggal</label>
         <input
           type="date"
-          className="w-full border rounded-lg px-2 py-1 text-sm bg-gray-100"
-          value={value.tanggalPembelian}
-          readOnly
+          className="w-full border rounded-lg px-2 py-1 text-sm text-black"
+          value={form.tanggal}
+          disabled
         />
       </div>
 
@@ -88,103 +91,84 @@ export default function FormUserSection({
       <div>
         <label className="text-xs font-semibold">No Faktur</label>
         <input
-          className="w-full border rounded-lg px-2 py-1 text-sm bg-gray-100"
-          value={value.noFaktur}
-          readOnly
+          className="w-full border rounded-lg px-2 py-1 text-sm bg-gray-100 text-black"
+          value={form.noFaktur}
+          disabled
         />
       </div>
 
       {/* NAMA PELANGGAN */}
       <div>
-        <label className="text-xs font-semibold">Nama Pelanggan *</label>
+        <label className="text-xs font-semibold">Nama Pelanggan</label>
         <input
-          className="w-full border rounded-lg px-2 py-1 text-sm"
-          value={value.namaPelanggan}
-          onChange={(e) =>
-            setField("namaPelanggan", e.target.value.toUpperCase())
-          }
+          className="w-full border rounded px-2 py-1 text-black"
+          value={form.namaPelanggan}
+          onChange={(e) => update({ namaPelanggan: e.target.value })}
         />
       </div>
 
       {/* ID PELANGGAN */}
       <div>
-        <label className="text-xs font-semibold">ID Pelanggan *</label>
+        <label className="text-xs font-semibold">ID Pelanggan</label>
         <input
+          className="w-full border rounded px-2 py-1 text-black"
+          value={form.idPelanggan}
+          onChange={(e) => update({ idPelanggan: e.target.value })}
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-semibold">No Tlp Pelanggan</label>
+        <input
+          type="tel"
           className="w-full border rounded-lg px-2 py-1 text-sm"
-          value={value.idPelanggan}
+          placeholder="08xxxxxxxxxx"
+          value={phone}
           onChange={(e) =>
-            setField("idPelanggan", e.target.value.toUpperCase())
+            onChange({
+              ...value,
+              noTlpPelanggan: e.target.value,
+            })
           }
         />
       </div>
 
-      {/* NO TELEPON */}
+      {/* NAMA TOKO */}
       <div>
-        <label className="text-xs font-semibold">No Telepon *</label>
-        <input
-          className="w-full border rounded-lg px-2 py-1 text-sm"
-          value={value.noTelepon}
-          onChange={(e) => setField("noTelepon", e.target.value)}
-        />
-      </div>
-
-      {/* ================= NAMA TOKO (FINAL FIX) ================= */}
-      <div>
-        <label className="text-xs font-semibold">
-          Nama Toko {isPicToko && "(Auto)"}
-        </label>
-
-        <input
-          list="list-toko"
-          className={`w-full border rounded-lg px-2 py-1 text-sm ${
-            isPicToko ? "bg-gray-100" : ""
-          }`}
-          value={value.namaToko}
-          readOnly={isPicToko}
-          onChange={(e) => {
-            const val = e.target.value.toUpperCase();
-
-            // VALIDASI: harus sesuai master toko
-            if (
-              val &&
-              !namaTokoList.includes(val) &&
-              isSuperAdmin
-            ) {
-              return;
-            }
-
-            setField("namaToko", val);
-          }}
-        />
-
-        {/* DROPDOWN / AUTOCOMPLETE */}
-        {isSuperAdmin && (
-          <datalist id="list-toko">
-            {namaTokoList.map((n) => (
-              <option key={n} value={n} />
-            ))}
-          </datalist>
-        )}
-
-        {!isPicToko && (
-          <p className="text-[11px] text-gray-500">
-            Ketik atau pilih nama toko sesuai Master Toko
-          </p>
-        )}
-      </div>
-
-      {/* SALES */}
-      <div>
-        <label className="text-xs font-semibold">Nama Sales *</label>
+        <label className="text-xs font-semibold">Nama Toko</label>
         <select
-          className="w-full border rounded-lg px-2 py-1 text-sm"
-          value={value.namaSales}
-          onChange={(e) => setField("namaSales", e.target.value)}
+          className="w-full border rounded px-2 py-1 text-black"
+          value={form.namaToko}
+          onChange={(e) =>
+            update({
+              namaToko: e.target.value,
+              namaSales: "",
+              salesTitipan: "",
+            })
+          }
         >
-          <option value="">-- PILIH SALES --</option>
-          {users.map((u) => (
-            <option key={u.id || u.username} value={u.name}>
-              {u.name}
+          <option value="">-- Pilih Toko --</option>
+          {masterToko.map((t) => (
+            <option key={t.id} value={t.nama}>
+              {t.nama}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* NAMA SALES */}
+      <div>
+        <label className="text-xs font-semibold">Nama Sales</label>
+        <select
+          className="w-full border rounded px-2 py-1 text-black"
+          disabled={!form.namaToko}
+          value={form.namaSales}
+          onChange={(e) => update({ namaSales: e.target.value })}
+        >
+          <option value="">-- Pilih Sales --</option>
+          {masterSales.map((s) => (
+            <option key={s.id} value={s.namaSales}>
+              {s.namaSales}
             </option>
           ))}
         </select>
@@ -192,20 +176,25 @@ export default function FormUserSection({
 
       {/* SALES TITIPAN */}
       <div>
-        <label className="text-xs font-semibold">Sales Titipan *</label>
+        <label className="text-xs font-semibold">Sales Titipan</label>
         <select
-          className="w-full border rounded-lg px-2 py-1 text-sm"
-          value={value.salesTitipan}
-          onChange={(e) => setField("salesTitipan", e.target.value)}
+          className="w-full border rounded px-2 py-1 text-black"
+          disabled={!form.namaToko}
+          value={form.salesTitipan}
+          onChange={(e) => update({ salesTitipan: e.target.value })}
         >
-          <option value="">-- PILIH SALES TITIPAN --</option>
-          {users.map((u) => (
-            <option key={u.id || u.username} value={u.name}>
-              {u.name}
+          <option value="">-- Pilih Sales Titipan --</option>
+          {masterSales.map((s) => (
+            <option key={s.id} value={s.namaSales}>
+              {s.namaSales}
             </option>
           ))}
         </select>
       </div>
+
+      <p className="text-[11px] text-gray-500">
+        ✅ Lengkapi Tahap 1 → TAHAP 2 otomatis aktif
+      </p>
     </div>
   );
 }

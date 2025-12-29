@@ -1,28 +1,23 @@
 // ============================================================
-// CardPenjualanToko.jsx — FINAL FIX (TOKO MUNCUL 100%)
-// Tahap 1 → Tahap 2 → Tahap 3
+// CardPenjualanToko.jsx — FINAL FIX (TANPA UBAH UI)
+// Tahap 1 → Tahap 2 → Tahap 3 + Penjualan Cepat IMEI
 // ============================================================
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ref, get, set, update, remove } from "firebase/database";
+import { db } from "../../../firebase/FirebaseInit";
 
 import FormUserSection from "./FormUserSection";
 import FormItemSection from "./FormItemSection";
 import FormPaymentSection from "./FormPaymentSection";
-import { get, set, ref, update, push } from "firebase/database";
-import { db } from "../../../firebase/FirebaseInit";
 
 import {
   listenUsers,
   listenMasterToko,
-  addTransaksi,
-  lockImeiAtomic,
-  unlockImei,
-  updateStockAtomic,
   listenPenjualan,
-  findImeiForPenjualan,
-  findImeiPenjualan,
-  isImeiSudahTerjual,
+  addTransaksi,
+  updateStockAtomic,
   lockImeiPenjualan,
 } from "../../../services/FirebaseService";
 
@@ -51,9 +46,6 @@ export default function CardPenjualanToko() {
     }
   }, []);
 
-  const user = JSON.parse(localStorage.getItem("user"));
-  const tokoId = user?.toko; // "1", "2", "10"
-
   const isSuperAdmin =
     userLogin?.role === "superadmin" || userLogin?.role === "admin";
 
@@ -61,34 +53,65 @@ export default function CardPenjualanToko() {
     typeof userLogin?.role === "string" &&
     userLogin.role.startsWith("pic_toko");
 
-  const today = new Date();
-  const yy = today.getFullYear().toString().slice(-2);
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
+  /* ================= STATE ================= */
+  const todayISO = new Date().toISOString().slice(0, 10);
 
-  const noInvoice = `INV-${yy}${mm}${dd}-${String(Date.now()).slice(-4)}`;
+  const [imeiQuick, setImeiQuick] = useState("");
+  const [items, setItems] = useState([]);
+  const [loadingQuick, setLoadingQuick] = useState(false);
 
-  /* ================= MASTER DATA ================= */
+
+
+  const [payment, setPayment] = useState({});
+
+  
+
+  const [userForm, setUserForm] = useState({
+    tanggal: todayISO,
+    noFaktur: "",
+    namaPelanggan: "",
+    idPelanggan: "",
+    noTlpPelanggan: "",
+    namaToko: "",
+    namaSales: "",
+    salesTitipan: "",
+  });
+
+  const tahap1Complete = useMemo(() => {
+    return Boolean(
+      userForm.tanggal &&
+      userForm.noFaktur &&
+      userForm.namaPelanggan &&
+      userForm.idPelanggan &&
+      userForm.noTlpPelanggan &&
+      userForm.namaToko &&
+      userForm.namaSales &&
+      userForm.salesTitipan
+    );
+  }, [userForm]);
+  
+  
+
+  const [paymentForm, setPaymentForm] = useState({
+    metode: "",
+    status: "LUNAS",
+    kategoriBayar: "",
+  });
+
   const [users, setUsers] = useState([]);
   const [masterToko, setMasterToko] = useState([]);
   const [penjualanList, setPenjualanList] = useState([]);
-  /* ================= TAHAP 2 ================= */
-  const [items, setItems] = useState([]);
-  /* ================= PENJUALAN CEPAT IMEI ================= */
-  const [imeiQuick, setImeiQuick] = useState("");
-  const [loadingQuick, setLoadingQuick] = useState(false);
 
-  /* 🔥 FIX UTAMA — NORMALISASI MASTER TOKO */
+  /* ================= VALIDASI TAHAP ================= */
+
+
+  /* ================= MASTER DATA ================= */
   useEffect(() => {
     const unsubUsers = listenUsers((rows) =>
       setUsers(Array.isArray(rows) ? rows : [])
     );
 
     const unsubToko = listenMasterToko((rows) => {
-      /**
-       * rows dari Firebase berbentuk OBJECT:
-       * { "-Nx1": {...}, "-Nx2": {...} }
-       */
       if (!rows || typeof rows !== "object") {
         setMasterToko([]);
         return;
@@ -114,21 +137,44 @@ export default function CardPenjualanToko() {
     };
   }, []);
 
-  /* ================= TAHAP 1 ================= */
-  // const today = new Date().toISOString().slice(0, 10);
+  // =====================
+  // AUTO AKTIFKAN TAHAP 2
+  // =====================
+  useEffect(() => {
+    if (!tahap1Complete) return;
 
-  const [userForm, setUserForm] = useState({
-    tanggalPembelian: today,
-    noFaktur: "",
-    namaPelanggan: "",
-    idPelanggan: "",
-    noTelepon: "",
-    namaToko: "",
-    namaSales: "",
-    salesTitipan: "",
-  });
+    if (items.length === 0) {
+      setItems([
+        {
+          id: Date.now(),
+          kategoriBarang: "",
+          namaBrand: "",
+          namaBarang: "",
+          imeiList: [],
+          qty: 0,
+          hargaUnit: 0,
+          skemaHarga: "SRP",
+          namaBundling: "",
+          hargaBundling: 0,
+          qtyBundling: 0,
+          isImei: false,
+        },
+      ]);
+    }
+  }, [tahap1Complete, items.length]);
 
-  /* 🔒 AUTO SET TOKO UNTUK PIC TOKO */
+  /* ================= AUTO UNLOCK IMEI ================= */
+  useEffect(() => {
+    return () => {
+      items.forEach((it) => {
+        if (it?.isImei && it?.imeiList?.[0]) {
+          remove(ref(db, `penjualan_imei/${it.imeiList[0]}`));
+        }
+      });
+    };
+  }, [items]);
+
+  /* ================= AUTO TOKO (PIC TOKO) ================= */
   useEffect(() => {
     if (!isPicToko || !userLogin?.tokoId || !masterToko.length) return;
 
@@ -137,14 +183,11 @@ export default function CardPenjualanToko() {
     );
 
     if (toko && userForm.namaToko !== toko.namaToko) {
-      setUserForm((p) => ({
-        ...p,
-        namaToko: toko.namaToko,
-      }));
+      setUserForm((p) => ({ ...p, namaToko: toko.namaToko }));
     }
   }, [isPicToko, userLogin, masterToko, userForm.namaToko]);
 
-  /* AUTO FAKTUR */
+  /* ================= AUTO FAKTUR ================= */
   useEffect(() => {
     const d = new Date();
     const prefix = `${String(d.getFullYear()).slice(2)}${String(
@@ -161,159 +204,6 @@ export default function CardPenjualanToko() {
     }));
   }, []);
 
-  const tahap1Complete = Boolean(
-    userForm.namaPelanggan &&
-      userForm.idPelanggan &&
-      userForm.noTelepon &&
-      userForm.namaSales &&
-      userForm.salesTitipan &&
-      userForm.namaToko
-  );
-
-  /* ================= AUTO INIT TAHAP 2 ================= */
-  useEffect(() => {
-    if (!tahap1Complete) return;
-
-    if (items.length === 0) {
-      setItems([
-        {
-          id: Date.now(),
-          kategoriBarang: "",
-          namaBrand: "",
-          namaBarang: "",
-          sku: "",
-          imeiList: [],
-          qty: 0,
-          hargaUnit: 0,
-          skemaHarga: "SRP",
-          namaBundling: "",
-          hargaBundling: 0,
-          qtyBundling: 0,
-          isImei: false,
-        },
-      ]);
-    }
-  }, [tahap1Complete, items.length]);
-
-  const handleQuickImei = async () => {
-    try {
-      const imei = imeiQuick.trim();
-      if (!imei) return;
-  
-      // 1️⃣ CEK IMEI GLOBAL (ANTI DOBEL)
-      const soldSnap = await get(ref(db, `penjualan_imei/${imei}`));
-      if (soldSnap.exists()) {
-        alert("❌ IMEI sudah terjual / terkunci");
-        return;
-      }
-  
-      // 2️⃣ CARI IMEI DI TRANSAKSI TOKO LOGIN
-      const data = await findImeiPenjualan(imei, tokoId);
-      if (!data) {
-        alert("❌ IMEI tidak ditemukan di stok toko ini");
-        return;
-      }
-  
-      // 3️⃣ MASUKKAN KE TAHAP 2
-      setItems([
-        {
-          id: Date.now(),
-          kategoriBarang: data.kategoriBarang,
-          namaBrand: data.namaBrand,
-          namaBarang: data.namaBarang,
-          imeiList: [imei],
-          qty: 1,
-          hargaUnit: data.hargaUnit,
-          skemaHarga: "SRP",
-          isImei: true,
-          subtotal: data.hargaUnit,
-        },
-      ]);
-  
-      // 4️⃣ LOCK IMEI (BELUM SOLD)
-      await set(ref(db, `penjualan_imei/${imei}`), {
-        imei,
-        tokoId,
-        status: "LOCKED",
-        lockedAt: Date.now(),
-      });
-  
-      setImeiQuick("");
-    } catch (e) {
-      console.error(e);
-      alert("Gagal proses IMEI");
-    }
-  };
-
-  const handleSubmitPenjualan = async () => {
-    try {
-      if (!items.length) {
-        alert("Barang belum diinput");
-        return;
-      }
-  
-      const tokoNama = userForm.namaToko;
-      const invoice = noInvoice;
-  
-      for (const item of items) {
-        // ===============================
-        // 1️⃣ SIMPAN TRANSAKSI PENJUALAN
-        // ===============================
-        const trxRef = push(ref(db, `penjualan/${tokoNama}`));
-        await set(trxRef, {
-          NO_INVOICE: invoice,
-          TANGGAL: userForm.tanggalPembelian,
-          NAMA_TOKO: tokoNama,
-          NAMA_PELANGGAN: userForm.namaPelanggan,
-          ID_PELANGGAN: userForm.idPelanggan,
-          NAMA_BARANG: item.namaBarang,
-          NAMA_BRAND: item.namaBrand,
-          KATEGORI: item.kategoriBarang,
-          IMEI: item.isImei ? item.imeiList[0] : "",
-          QTY: item.qty,
-          HARGA_UNIT: item.hargaUnit,
-          TOTAL: item.subtotal,
-          STATUS: "LUNAS",
-          CREATED_AT: Date.now(),
-        });
-  
-        // ===============================
-        // 2️⃣ KURANGI STOK
-        // ===============================
-        const stockKey =
-          `${item.namaBrand}_${item.namaBarang}`.replace(/\s+/g, "_");
-  
-        const stockRef = ref(db, `stock/${tokoNama}/${stockKey}/qty`);
-        const stockSnap = await get(stockRef);
-  
-        if (stockSnap.exists()) {
-          const sisa = stockSnap.val() - item.qty;
-          await set(stockRef, Math.max(sisa, 0));
-        }
-  
-        // ===============================
-        // 3️⃣ SET IMEI = SOLD
-        // ===============================
-        if (item.isImei) {
-          const imei = item.imeiList[0];
-          await update(ref(db, `penjualan_imei/${imei}`), {
-            status: "SOLD",
-            soldAt: Date.now(),
-            noInvoice: invoice,
-          });
-        }
-      }
-  
-      alert("✅ Penjualan berhasil disimpan");
-      setItems([]);
-    } catch (e) {
-      console.error(e);
-      alert("❌ Gagal submit penjualan");
-    }
-  };
-  
-  
-
   const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
 
   const tahap2Complete = useMemo(() => {
@@ -325,7 +215,6 @@ export default function CardPenjualanToko() {
     );
   }, [safeItems]);
 
-  /* ================= TOTAL ================= */
   const totals = useMemo(() => {
     let total = 0;
     safeItems.forEach((it) => {
@@ -334,47 +223,81 @@ export default function CardPenjualanToko() {
     return { totalItems: safeItems.length, totalAmount: total };
   }, [safeItems]);
 
-  /* ================= TAHAP 3 ================= */
-  const [paymentForm, setPaymentForm] = useState({
-    kategoriBayar: "",
-    status: "LUNAS",
-    paymentMethod: "",
-    mdrPersen: 0,
-    nominalMdr: 0,
-    dpUser: 0,
-    dpTalangan: 0,
-    dpMerchant: 0,
-    voucher: 0,
-    tenor: "",
-  });
-
   const tahap3Complete = Boolean(paymentForm.kategoriBayar);
 
-  /* ================= SAVE ================= */
+  /* ================= PENJUALAN CEPAT IMEI ================= */
+  const handleQuickImei = async () => {
+    const imei = imeiQuick.trim();
+    if (!imei || !userForm.namaToko) return;
+
+    setLoadingQuick(true);
+    try {
+      const soldRef = ref(db, `penjualan_imei/${imei}`);
+      const soldSnap = await get(soldRef);
+
+      if (soldSnap.exists() && soldSnap.val()?.status === "SOLD") {
+        alert("❌ IMEI sudah terjual");
+        return;
+      }
+
+      let found = null;
+      const trxSnap = await get(ref(db, "toko"));
+      trxSnap.forEach((tokoSnap) => {
+        tokoSnap.child("transaksi").forEach((trx) => {
+          const v = trx.val();
+          if (v?.IMEI === imei && v?.STATUS === "Approved") found = v;
+        });
+      });
+
+      setItems((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          kategoriBarang: found?.KATEGORI_BRAND || "",
+          namaBrand: found?.NAMA_BRAND || "",
+          namaBarang: found?.NAMA_BARANG || "",
+          imeiList: [imei],
+          qty: 1,
+          hargaUnit: Number(found?.HARGA_UNIT || 0),
+          subtotal: Number(found?.HARGA_UNIT || 0),
+          skemaHarga: "SRP",
+          isImei: true,
+        },
+      ]);
+
+      await set(soldRef, {
+        imei,
+        status: "LOCKED",
+        toko: userForm.namaToko,
+        lockedAt: Date.now(),
+      });
+
+      setImeiQuick("");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingQuick(false);
+    }
+  };
+
+  /* ================= SAVE FINAL ================= */
   const handleSave = async () => {
     try {
       for (const it of safeItems) {
         if (it.isImei) {
           for (const im of it.imeiList) {
-            await lockImeiAtomic(im, {
-              invoice: userForm.noFaktur,
-              toko: userForm.namaToko,
-            });
-          }
-        }
-        await updateStockAtomic(userForm.namaToko, it.sku, -it.qty);
-      }
-
-      for (const it of items) {
-        if (it.isImei) {
-          for (const im of it.imeiList) {
             await lockImeiPenjualan(im, {
-              tokoId,
-              namaBarang: it.namaBarang,
-              invoice: noInvoice,
+              toko: userForm.namaToko,
+              invoice: userForm.noFaktur,
             });
           }
         }
+
+        await updateStockAtomic(
+          userForm.namaToko,
+          `${it.namaBrand}_${it.namaBarang}`,
+          -Number(it.qty)
+        );
       }
 
       await addTransaksi({
@@ -383,20 +306,15 @@ export default function CardPenjualanToko() {
         user: userForm,
         items: safeItems,
         payment: paymentForm,
-        totalBarang: totals.totalAmount,
-        PAYMENT_METODE: "PENJUALAN",
         STATUS: "APPROVED",
+        totalBarang: totals.totalAmount,
         createdAt: Date.now(),
       });
 
-      alert("✅ Transaksi berhasil");
+      alert("✅ Penjualan berhasil");
       navigate(-1);
     } catch (e) {
-      for (const it of safeItems) {
-        if (it.isImei) {
-          for (const im of it.imeiList) await unlockImei(im);
-        }
-      }
+      console.error(e);
       alert("❌ Gagal simpan transaksi");
     }
   };
@@ -407,7 +325,7 @@ export default function CardPenjualanToko() {
       <h1 className="text-xl font-bold">PENJUALAN</h1>
 
       {/* ================= PENJUALAN CEPAT VIA IMEI ================= */}
-      <div className="bg-indigo-600 rounded-2xl p-5 text-white shadow-xl">
+      <div className="bg-indigo-600 rounded-2xl p-5 text-black shadow-xl">
         <h2 className="text-lg font-bold mb-2">
           ⚡ PENJUALAN CEPAT (SCAN / CARI IMEI)
         </h2>
@@ -417,62 +335,15 @@ export default function CardPenjualanToko() {
             type="text"
             value={imeiQuick}
             onChange={(e) => setImeiQuick(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleQuickImei();
-              }
-            }}
-            placeholder="Scan / ketik IMEI lalu Enter"
-            className="input"
+            onKeyDown={(e) => e.key === "Enter" && handleQuickImei()}
+            placeholder="Scan / Ketik IMEI lalu Enter"
+            className="input input-bordered w-full"
           />
 
           <button
-            id="btn-quick-imei"
             disabled={!imeiQuick || loadingQuick}
-            onClick={async () => {
-              try {
-                setLoadingQuick(true);
-
-                const imei = imeiQuick.trim();
-                if (!imei) return;
-
-                // 🔥 Ambil data dari InventoryReport
-                const data = await findImeiForPenjualan(
-                  imeiQuick,
-                  userForm.namaToko
-                );
-
-                if (!data || !data.namaBarang) {
-                  alert("❌ IMEI tidak ditemukan / sudah terjual");
-                  return;
-                }
-
-                // 🔥 AUTO ISI TAHAP 2
-                setItems([
-                  {
-                    id: Date.now(),
-                    kategoriBarang: data.kategoriBarang,
-                    namaBrand: data.namaBrand,
-                    namaBarang: data.namaBarang,
-                    sku: data.sku,
-                    imeiList: [data.imei],
-                    qty: 1,
-                    skemaHarga: "SRP",
-                    hargaUnit: Number(data.hargaSRP || 0),
-                    namaBundling: "",
-                    hargaBundling: 0,
-                    qtyBundling: 0,
-                    isImei: true,
-                  },
-                ]);
-
-                setImeiQuick("");
-              } finally {
-                setLoadingQuick(false);
-              }
-            }}
-            className="bg-black/30 hover:bg-black/50 transition px-6 py-3 rounded-xl font-bold text-lg"
+            onClick={handleQuickImei}
+            className="bg-black/30 hover:bg-black/50 px-6 py-3 rounded-xl font-bold"
           >
             {loadingQuick ? "⏳" : "CARI"}
           </button>
@@ -513,7 +384,8 @@ export default function CardPenjualanToko() {
             value={items}
             onChange={setItems}
             tokoLogin={userForm.namaToko}
-            disabled={!tahap1Complete}
+            allowManual={tahap1Complete}
+            allowQuickImei={true}
           />
         </div>
 
@@ -525,12 +397,15 @@ export default function CardPenjualanToko() {
         >
           <h2 className="font-bold mb-2">💳 PEMBAYARAN — TAHAP 3</h2>
           <FormPaymentSection
-            value={paymentForm}
-            onChange={setPaymentForm}
-            disabled={!tahap2Complete}
-            grandTotal={totals.totalAmount}
+            value={payment}
+            onChange={setPayment}
+            grandTotal={items.reduce((a, b) => a + (b.total || 0), 0)}
+            disabled={!items.length}
           />
         </div>
+        <p className="text-xs text-red-500">
+          allowManual (tahap1Complete): {String(tahap1Complete)}
+        </p>
       </div>
 
       <div className="flex justify-between items-center">

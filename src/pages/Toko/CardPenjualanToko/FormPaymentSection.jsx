@@ -1,7 +1,8 @@
 // =======================================================
-// FormPaymentSection.jsx — FINAL
+// FormPaymentSection.jsx — FINAL FIX (NO WARNING)
 // Tahap 3 | CASH & KREDIT | MDR + GRAND TOTAL
 // =======================================================
+
 import React, { useEffect, useMemo, useState } from "react";
 import { listenMasterPaymentMetode } from "../../../services/FirebaseService";
 
@@ -9,9 +10,11 @@ export default function FormPaymentSection({
   value,
   onChange,
   disabled = false,
-  totalBarang = 0,
+  grandTotal = 0,      // dari parent (CardPenjualanToko)
 }) {
   const [masterPayment, setMasterPayment] = useState([]);
+
+  /* ================= LISTENER ================= */
 
   useEffect(() => {
     const unsub = listenMasterPaymentMetode((rows) => {
@@ -20,46 +23,69 @@ export default function FormPaymentSection({
     return () => unsub && unsub();
   }, []);
 
-  const payment = value ?? {};
+  /* ================= SAFE VALUE ================= */
 
-  const status = payment.status ?? "LUNAS";
-  const paymentMethod = payment.paymentMethod ?? "CASH";
-  const mdrPersen = Number(payment.mdr ?? 0);
-  const dpUser = Number(payment.dpUser ?? 0);
-  const dpTalangan = Number(payment.dpTalangan ?? 0);
-  const dpMerchant = Number(payment.dpMerchant ?? 0);
-  const voucher = Number(payment.voucher ?? 0);
+  const payment = useMemo(
+    () => ({
+      status: value?.status || "LUNAS",
+      kategoriBayar: value?.kategoriBayar || "",
+      paymentMethod: value?.paymentMethod || "CASH",
+      mdr: Number(value?.mdr || 0),
+      dpUser: Number(value?.dpUser || 0),
+      dpTalangan: Number(value?.dpTalangan || 0),
+      dpMerchant: Number(value?.dpMerchant || 0),
+      voucher: Number(value?.voucher || 0),
+      nominalMdr: Number(value?.nominalMdr || 0),
+      grandTotal: Number(value?.grandTotal || grandTotal),
+    }),
+    [value, grandTotal]
+  );
+
+  /* ================= HITUNG MDR ================= */
 
   const nominalMdr = useMemo(() => {
-    return Math.round((totalBarang * mdrPersen) / 100);
-  }, [totalBarang, mdrPersen]);
+    if (payment.status !== "PIUTANG") return 0;
+    if (payment.paymentMethod !== "KREDIT") return 0;
+    return Math.round((grandTotal * payment.mdr) / 100);
+  }, [grandTotal, payment.status, payment.paymentMethod, payment.mdr]);
 
-  const grandTotal = useMemo(() => {
-    if (status === "LUNAS" || paymentMethod === "CASH") {
-      return totalBarang;
+  /* ================= HITUNG GRAND TOTAL ================= */
+
+  const finalGrandTotal = useMemo(() => {
+    if (payment.status === "LUNAS" || payment.paymentMethod === "CASH") {
+      return grandTotal;
     }
+
     return (
-      totalBarang + nominalMdr + dpTalangan - dpUser - dpMerchant - voucher
+      grandTotal +
+      nominalMdr +
+      payment.dpTalangan -
+      payment.dpUser -
+      payment.dpMerchant -
+      payment.voucher
     );
   }, [
-    status,
-    paymentMethod,
-    totalBarang,
+    grandTotal,
     nominalMdr,
-    dpTalangan,
-    dpUser,
-    dpMerchant,
-    voucher,
+    payment.status,
+    payment.paymentMethod,
+    payment.dpTalangan,
+    payment.dpUser,
+    payment.dpMerchant,
+    payment.voucher,
   ]);
+
+  /* ================= SYNC KE PARENT ================= */
 
   useEffect(() => {
     onChange({
       ...payment,
       nominalMdr,
-      grandTotal,
+      grandTotal: finalGrandTotal,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nominalMdr, grandTotal]);
+  }, [nominalMdr, finalGrandTotal]); // ✅ aman & stabil
+
+  /* ================= RENDER ================= */
 
   return (
     <fieldset disabled={disabled} className={disabled ? "opacity-50" : ""}>
@@ -72,21 +98,23 @@ export default function FormPaymentSection({
           )}
         </div>
 
-        <h2 className="text-sm font-bold mb-3">💳 PEMBAYARAN (TAHAP 3)</h2>
+        <h2 className="text-sm font-bold mb-3">
+          💳 PEMBAYARAN — TAHAP 3
+        </h2>
 
         <div className="space-y-3 text-sm">
-          {/* STATUS */}
+          {/* ================= STATUS ================= */}
           <div>
             <label className="font-semibold">Status Pembayaran</label>
             <select
               className="w-full border rounded-lg px-2 py-1"
-              value={status}
+              value={payment.status}
               onChange={(e) =>
                 onChange({
                   ...payment,
                   status: e.target.value,
                   paymentMethod:
-                    e.target.value === "LUNAS" ? "CASH" : paymentMethod,
+                    e.target.value === "LUNAS" ? "CASH" : payment.paymentMethod,
                 })
               }
             >
@@ -95,12 +123,12 @@ export default function FormPaymentSection({
             </select>
           </div>
 
-          {/* KATEGORI BAYAR */}
+          {/* ================= KATEGORI BAYAR ================= */}
           <div>
             <label className="font-semibold">Kategori Bayar</label>
             <select
               className="w-full border rounded-lg px-2 py-1"
-              value={payment.kategoriBayar ?? ""}
+              value={payment.kategoriBayar}
               onChange={(e) =>
                 onChange({ ...payment, kategoriBayar: e.target.value })
               }
@@ -114,13 +142,13 @@ export default function FormPaymentSection({
             </select>
           </div>
 
-          {/* PAYMENT METHOD */}
-          {status === "PIUTANG" && (
+          {/* ================= PAYMENT METHOD ================= */}
+          {payment.status === "PIUTANG" && (
             <div>
               <label className="font-semibold">Payment Metode</label>
               <select
                 className="w-full border rounded-lg px-2 py-1"
-                value={paymentMethod}
+                value={payment.paymentMethod}
                 onChange={(e) =>
                   onChange({
                     ...payment,
@@ -134,102 +162,103 @@ export default function FormPaymentSection({
             </div>
           )}
 
-          {/* KREDIT DETAIL */}
-          {status === "PIUTANG" && paymentMethod === "KREDIT" && (
-            <>
-              <div>
-                <label className="font-semibold">MDR (%)</label>
-                <input
-                  type="number"
-                  className="w-full border rounded-lg px-2 py-1"
-                  value={mdrPersen}
-                  onChange={(e) =>
-                    onChange({
-                      ...payment,
-                      mdr: Number(e.target.value || 0),
-                    })
-                  }
-                />
-              </div>
+          {/* ================= DETAIL KREDIT ================= */}
+          {payment.status === "PIUTANG" &&
+            payment.paymentMethod === "KREDIT" && (
+              <>
+                <div>
+                  <label className="font-semibold">MDR (%)</label>
+                  <input
+                    type="number"
+                    className="w-full border rounded-lg px-2 py-1"
+                    value={payment.mdr}
+                    onChange={(e) =>
+                      onChange({
+                        ...payment,
+                        mdr: Number(e.target.value || 0),
+                      })
+                    }
+                  />
+                </div>
 
-              <div>
-                <label className="font-semibold">Nominal MDR</label>
-                <input
-                  readOnly
-                  className="w-full border rounded-lg px-2 py-1 bg-gray-100"
-                  value={nominalMdr.toLocaleString("id-ID")}
-                />
-              </div>
+                <div>
+                  <label className="font-semibold">Nominal MDR</label>
+                  <input
+                    readOnly
+                    className="w-full border rounded-lg px-2 py-1 bg-gray-100"
+                    value={nominalMdr.toLocaleString("id-ID")}
+                  />
+                </div>
 
-              <div>
-                <label className="font-semibold">DP User</label>
-                <input
-                  type="number"
-                  className="w-full border rounded-lg px-2 py-1"
-                  value={dpUser}
-                  onChange={(e) =>
-                    onChange({
-                      ...payment,
-                      dpUser: Number(e.target.value || 0),
-                    })
-                  }
-                />
-              </div>
+                <div>
+                  <label className="font-semibold">DP User</label>
+                  <input
+                    type="number"
+                    className="w-full border rounded-lg px-2 py-1"
+                    value={payment.dpUser}
+                    onChange={(e) =>
+                      onChange({
+                        ...payment,
+                        dpUser: Number(e.target.value || 0),
+                      })
+                    }
+                  />
+                </div>
 
-              <div>
-                <label className="font-semibold">DP Talangan</label>
-                <input
-                  type="number"
-                  className="w-full border rounded-lg px-2 py-1"
-                  value={dpTalangan}
-                  onChange={(e) =>
-                    onChange({
-                      ...payment,
-                      dpTalangan: Number(e.target.value || 0),
-                    })
-                  }
-                />
-              </div>
+                <div>
+                  <label className="font-semibold">DP Talangan</label>
+                  <input
+                    type="number"
+                    className="w-full border rounded-lg px-2 py-1"
+                    value={payment.dpTalangan}
+                    onChange={(e) =>
+                      onChange({
+                        ...payment,
+                        dpTalangan: Number(e.target.value || 0),
+                      })
+                    }
+                  />
+                </div>
 
-              <div>
-                <label className="font-semibold">DP Merchant</label>
-                <input
-                  type="number"
-                  className="w-full border rounded-lg px-2 py-1"
-                  value={dpMerchant}
-                  onChange={(e) =>
-                    onChange({
-                      ...payment,
-                      dpMerchant: Number(e.target.value || 0),
-                    })
-                  }
-                />
-              </div>
+                <div>
+                  <label className="font-semibold">DP Merchant</label>
+                  <input
+                    type="number"
+                    className="w-full border rounded-lg px-2 py-1"
+                    value={payment.dpMerchant}
+                    onChange={(e) =>
+                      onChange({
+                        ...payment,
+                        dpMerchant: Number(e.target.value || 0),
+                      })
+                    }
+                  />
+                </div>
 
-              <div>
-                <label className="font-semibold">Voucher Diskon</label>
-                <input
-                  type="number"
-                  className="w-full border rounded-lg px-2 py-1"
-                  value={voucher}
-                  onChange={(e) =>
-                    onChange({
-                      ...payment,
-                      voucher: Number(e.target.value || 0),
-                    })
-                  }
-                />
-              </div>
-            </>
-          )}
+                <div>
+                  <label className="font-semibold">Voucher Diskon</label>
+                  <input
+                    type="number"
+                    className="w-full border rounded-lg px-2 py-1"
+                    value={payment.voucher}
+                    onChange={(e) =>
+                      onChange({
+                        ...payment,
+                        voucher: Number(e.target.value || 0),
+                      })
+                    }
+                  />
+                </div>
+              </>
+            )}
 
-          {/* GRAND TOTAL */}
+          {/* ================= GRAND TOTAL ================= */}
           <div>
             <label className="font-bold">GRAND TOTAL</label>
             <input
               readOnly
               className="w-full border rounded-lg px-2 py-2 bg-indigo-50 font-bold text-indigo-700"
-              value={grandTotal.toLocaleString("id-ID")}
+              value={finalGrandTotal.toLocaleString("id-ID")}
             />
           </div>
         </div>

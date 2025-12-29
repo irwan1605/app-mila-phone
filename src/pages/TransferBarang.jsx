@@ -122,20 +122,19 @@ export default function TransferBarang() {
     });
   }, []);
 
-// ================= DARI NOTIFIKASI NAVBAR =================
-useEffect(() => {
-  if (location.state?.fromNotif) {
-    // set filter ke Pending
-    setFilterStatus(location.state.filterStatus || "Pending");
+  // ================= DARI NOTIFIKASI NAVBAR =================
+  useEffect(() => {
+    if (location.state?.fromNotif) {
+      // set filter ke Pending
+      setFilterStatus(location.state.filterStatus || "Pending");
 
-    // scroll ke table transfer
-    setTimeout(() => {
-      const el = document.getElementById("table-transfer-barang");
-      if (el) el.scrollIntoView({ behavior: "smooth" });
-    }, 300);
-  }
-}, [location.state]);
-
+      // scroll ke table transfer
+      setTimeout(() => {
+        const el = document.getElementById("table-transfer-barang");
+        if (el) el.scrollIntoView({ behavior: "smooth" });
+      }, 300);
+    }
+  }, [location.state]);
 
   /* ================= MASTER DATA ================= */
   useEffect(() => {
@@ -167,26 +166,9 @@ useEffect(() => {
   }, [masterToko]);
 
   // ================= BRAND OPTIONS (DARI STOK TOKO) =================
+  // ================= BRAND OPTIONS (REAL STOK) =================
   const brandOptions = useMemo(() => {
-    if (!form.tokoPengirim) return [];
-
-    return [
-      ...new Set(
-        inventory
-          .filter(
-            (i) =>
-              i.status === "AVAILABLE" &&
-              i.toko.toUpperCase() === form.tokoPengirim.toUpperCase()
-          )
-          .map((i) => i.namaBrand)
-          .filter(Boolean)
-      ),
-    ];
-  }, [inventory, form.tokoPengirim]);
-
-  // ================= BARANG OPTIONS (DARI STOK TOKO) =================
-  const barangOptions = useMemo(() => {
-    if (!form.brand || !form.tokoPengirim) return [];
+    if (!form.tokoPengirim || !form.kategori) return [];
 
     return [
       ...new Set(
@@ -195,13 +177,33 @@ useEffect(() => {
             (i) =>
               i.status === "AVAILABLE" &&
               i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
+              i.kategori.toUpperCase() === form.kategori.toUpperCase()
+          )
+          .map((i) => i.namaBrand)
+          .filter(Boolean)
+      ),
+    ];
+  }, [inventory, form.tokoPengirim, form.kategori]);
+
+  // ================= BARANG OPTIONS (DARI STOK TOKO) =================
+  const barangOptions = useMemo(() => {
+    if (!form.tokoPengirim || !form.kategori || !form.brand) return [];
+
+    return [
+      ...new Set(
+        inventory
+          .filter(
+            (i) =>
+              i.status === "AVAILABLE" &&
+              i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
+              i.kategori.toUpperCase() === form.kategori.toUpperCase() &&
               i.namaBrand.toUpperCase() === form.brand.toUpperCase()
           )
           .map((i) => i.namaBarang)
           .filter(Boolean)
       ),
     ];
-  }, [inventory, form.tokoPengirim, form.brand]);
+  }, [inventory, form.tokoPengirim, form.kategori, form.brand]);
 
   // ================= CEK FORM SUDAH LENGKAP =================
   const isFormComplete =
@@ -265,6 +267,7 @@ useEffect(() => {
 
     setImeiInput("");
   };
+  
 
   // ================= EDIT TRANSFER (DRAFT) =================
   const handleEdit = (row) => {
@@ -351,50 +354,49 @@ useEffect(() => {
   // ================= SUBMIT TRANSFER (FINAL, TANPA ERROR) =================
   // ================= SUBMIT TRANSFER (FINAL, REALTIME) =================
   // ================= SUBMIT TRANSFER (FINAL) =================
-// ================= SUBMIT TRANSFER (FINAL 100%) =================
-const submitTransfer = async () => {
-  try {
-    // VALIDASI
-    if (
-      !form.tokoPengirim ||
-      !form.ke ||
-      !form.barang ||
-      !Array.isArray(form.imeis) ||
-      form.imeis.length === 0
-    ) {
-      alert("❌ Data transfer belum lengkap");
-      return;
+  // ================= SUBMIT TRANSFER (FINAL 100%) =================
+  const submitTransfer = async () => {
+    try {
+      // VALIDASI
+      if (
+        !form.tokoPengirim ||
+        !form.ke ||
+        !form.barang ||
+        !Array.isArray(form.imeis) ||
+        form.imeis.length === 0
+      ) {
+        alert("❌ Data transfer belum lengkap");
+        return;
+      }
+
+      const payload = {
+        tanggal: form.tanggal,
+        noDo: form.noDo,
+        noSuratJalan: form.noSuratJalan,
+        pengirim: form.pengirim || "SYSTEM",
+
+        tokoPengirim: form.tokoPengirim,
+        dari: form.tokoPengirim,
+        ke: form.ke,
+
+        brand: form.brand,
+        barang: form.barang,
+        imeis: form.imeis,
+        qty: form.imeis.length,
+
+        // 🔒 KUNCI STATUS
+        status: "Pending",
+        createdAt: Date.now(),
+      };
+
+      await FirebaseService.createTransferRequest(payload);
+
+      alert("✅ Transfer berhasil (Menunggu Approved Superadmin)");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Gagal submit transfer");
     }
-
-    const payload = {
-      tanggal: form.tanggal,
-      noDo: form.noDo,
-      noSuratJalan: form.noSuratJalan,
-      pengirim: form.pengirim || "SYSTEM",
-
-      tokoPengirim: form.tokoPengirim,
-      dari: form.tokoPengirim,
-      ke: form.ke,
-
-      brand: form.brand,
-      barang: form.barang,
-      imeis: form.imeis,
-      qty: form.imeis.length,
-
-      // 🔒 KUNCI STATUS
-      status: "Pending",
-      createdAt: Date.now(),
-    };
-
-    await FirebaseService.createTransferRequest(payload);
-
-    alert("✅ Transfer berhasil (Menunggu Approved Superadmin)");
-  } catch (err) {
-    console.error(err);
-    alert("❌ Gagal submit transfer");
-  }
-};
-
+  };
 
   /* ================= RENDER ================= */
   return (
@@ -641,7 +643,7 @@ const submitTransfer = async () => {
             placeholder="Qty"
           />
         )}
-      
+
         <button
           onClick={submitTransfer}
           disabled={loading}
