@@ -5,8 +5,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ref, get, set, update, remove } from "firebase/database";
+import { ref, get, set, runTransaction, remove } from "firebase/database";
 import { db } from "../../../firebase/FirebaseInit";
+import { hitungStokBarang } from "../../../utils/stockUtils";
 
 import FormUserSection from "./FormUserSection";
 import FormItemSection from "./FormItemSection";
@@ -22,9 +23,46 @@ import {
   addTransaksi,
   updateStockAtomic,
   lockImeiPenjualan,
+  lockImei,
+  unlockImei,
+  markImeiSold,
+  addPenjualan ,
+  kurangiStokToko,
 } from "../../../services/FirebaseService";
 
 import CetakInvoicePenjualan from "../../Print/CetakInvoicePenjualan";
+
+const reduceStockSmart = async (toko, skuKey, qty) => {
+  const baseRef = ref(db, `stock/${toko}/${skuKey}`);
+  const snap = await get(baseRef);
+
+  if (!snap.exists()) {
+    throw new Error(`Stok ${toko} tidak ditemukan`);
+  }
+
+  const data = snap.val();
+
+  // CASE 1️⃣: langsung qty
+  if (typeof data.qty === "number") {
+    if (data.qty < qty) throw new Error(`Stok ${toko} tidak mencukupi`);
+    await runTransaction(
+      ref(db, `stock/${toko}/${skuKey}/qty`),
+      (c) => (c || 0) - qty
+    );
+    return;
+  }
+
+  // CASE 2️⃣: varian (HANDPHONE dll)
+  const varianKey = Object.keys(data)[0]; // ambil varian pertama
+  const current = data[varianKey]?.qty || 0;
+
+  if (current < qty) throw new Error(`Stok ${toko} tidak mencukupi`);
+
+  await runTransaction(
+    ref(db, `stock/${toko}/${skuKey}/${varianKey}/qty`),
+    (c) => (c || 0) - qty
+  );
+};
 
 /* ================= UTIL ================= */
 const formatRupiah = (n) =>
@@ -62,8 +100,10 @@ export default function CardPenjualanToko() {
   const [items, setItems] = useState([]);
   const [loadingQuick, setLoadingQuick] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const allImeis = items.flatMap((it) => it.imeiList || []);
 
   const [payment, setPayment] = useState({});
+  
 
   const [userForm, setUserForm] = useState({
     tanggal: todayISO,
@@ -89,17 +129,15 @@ export default function CardPenjualanToko() {
     );
   }, [userForm]);
 
-  const [paymentForm, setPaymentForm] = useState({
-    metode: "",
-    status: "LUNAS",
-    kategoriBayar: "",
-  });
 
   const [users, setUsers] = useState([]);
   const [masterToko, setMasterToko] = useState([]);
   const [penjualanList, setPenjualanList] = useState([]);
   const [printData, setPrintData] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+  const tokoLogin = userForm.namaToko;
+
+  const user = JSON.parse(localStorage.getItem("user")) || null;
 
   /* ================= VALIDASI TAHAP ================= */
 
@@ -180,6 +218,10 @@ export default function CardPenjualanToko() {
       (t) => String(t.id) === String(userLogin.tokoId)
     );
 
+    if (!userForm.namaToko) {
+      throw new Error("Nama toko belum dipilih (Tahap 1)");
+    }
+
     if (toko && userForm.namaToko !== toko.namaToko) {
       setUserForm((p) => ({ ...p, namaToko: toko.namaToko }));
     }
@@ -221,7 +263,7 @@ export default function CardPenjualanToko() {
     return { totalItems: safeItems.length, totalAmount: total };
   }, [safeItems]);
 
-  const tahap3Complete = Boolean(paymentForm.kategoriBayar);
+
 
   /* ================= PENJUALAN CEPAT IMEI ================= */
   const handleQuickImei = async () => {
@@ -298,12 +340,14 @@ export default function CardPenjualanToko() {
         );
       }
 
+      
+
       await addTransaksi({
         invoice: userForm.noFaktur,
         toko: userForm.namaToko,
         user: userForm,
         items: safeItems,
-        payment: paymentForm,
+        payment: payment,
         STATUS: "APPROVED",
         totalBarang: totals.totalAmount,
         createdAt: Date.now(),
@@ -321,8 +365,8 @@ export default function CardPenjualanToko() {
     setPrintData({
       form,
       items: sanitizeItemsForFirebase(items),
-      payment: paymentForm,
-      total: paymentForm.grandTotal,
+      payment: setPayment,
+      total: setPayment.grandTotal,
     });
     setShowPreview(true);
   };
@@ -330,20 +374,24 @@ export default function CardPenjualanToko() {
   const canSubmit = useMemo(() => {
     if (!tahap1Complete) return false;
     if (!tahap2Complete) return false;
-
-    if (paymentForm.status === "LUNAS") return true;
-
-    if (paymentForm.status === "PIUTANG") {
+  
+    // ✅ CASH / LUNAS
+    if (payment.status === "LUNAS") return true;
+  
+    // ✅ PIUTANG / KREDIT
+    if (payment.status === "PIUTANG") {
       return (
-        paymentForm.paymentMethod === "KREDIT" &&
-        !!paymentForm.namaMdr &&
-        Number(paymentForm.persenMdr) > 0 &&
-        !!paymentForm.tenor &&
-        Number(paymentForm.dpUser) > 0
+        payment.paymentMethod === "KREDIT" &&
+        !!payment.namaMdr &&
+        Number(payment.persenMdr) > 0 &&
+        !!payment.tenor &&
+        Number(payment.dpUser) > 0
       );
     }
+  
     return false;
-  }, [tahap1Complete, tahap2Complete, paymentForm]);
+  }, [tahap1Complete, tahap2Complete, payment]);
+  
 
   const form = useMemo(
     () => ({
@@ -386,83 +434,175 @@ export default function CardPenjualanToko() {
       isImei: Boolean(it.isImei),
     }));
   };
-
+  
   const handleSubmitPenjualan = async () => {
-    if (submitting || !canSubmit) return;
-
+    if (submitting) return;
+  
     try {
       setSubmitting(true);
-
-      const invoice = form.noFaktur;
-      const sanitizedItems = sanitizeItemsForFirebase(items);
-
-      // 1️⃣ LOCK IMEI
-      for (const it of sanitizedItems) {
-        if (it.isImei) {
-          for (const imei of it.imeiList) {
-            await lockImeiPenjualan(imei, {
-              invoice,
-              toko: form.namaToko,
-              status: "LOCKED",
-            });
-          }
-        }
+  
+      /* =====================================================
+         1️⃣ VALIDASI AWAL (HARD STOP)
+      ===================================================== */
+      if (!items || !items.length) {
+        throw new Error("Barang belum diisi");
       }
-
-      // 2️⃣ UPDATE STOK
-      for (const it of sanitizedItems) {
-        await updateStockAtomic(
-          form.namaToko,
-          `${it.namaBrand}_${it.namaBarang}`,
-          -Number(it.qty)
-        );
+  
+      if (!tokoLogin) {
+        throw new Error("Toko login tidak ditemukan");
       }
-
-      // 3️⃣ SIMPAN PENJUALAN
-      const payload = {
-        invoice,
-        tanggal: form.tanggal,
-        toko: form.namaToko,
-        pelanggan: {
-          nama: form.namaPelanggan,
-          id: form.idPelanggan,
-          noTlp: form.noTlpPelanggan,
-        },
-        sales: form.namaSales,
-        items: sanitizedItems,
-        payment: paymentForm,
-        totalPenjualan: totalItemsAmount,
-        grandTotal: paymentForm.grandTotal,
-        statusPembayaran: paymentForm.status,
-        createdAt: Date.now(),
-        createdBy: userLogin?.username || "SYSTEM",
+  
+      const invoice = form.noFaktur || `INV-${Date.now()}`;
+  
+      // HITUNG TOTAL PENJUALAN (FINAL)
+      const totalPenjualan = items.reduce(
+        (sum, it) => sum + Number(it.qty || 0) * Number(it.hargaUnit || 0),
+        0
+      );
+  
+      if (totalPenjualan <= 0) {
+        throw new Error("Total penjualan tidak valid");
+      }
+  
+      // PAYMENT FINAL (AMAN UNTUK CASH & KREDIT)
+      const paymentFinal = {
+        ...payment,
+        nominalMdr:
+          payment.paymentMethod === "KREDIT"
+            ? Number(payment.nominalMdr || 0)
+            : 0,
+        cicilan:
+          payment.paymentMethod === "KREDIT"
+            ? Number(payment.cicilan || 0)
+            : 0,
+        tenor:
+          payment.paymentMethod === "KREDIT" ? payment.tenor || "" : "",
+        grandTotal: Number(payment.grandTotal || totalPenjualan),
       };
-
-      await set(ref(db, `penjualan/${invoice}`), payload);
-
-      // 4️⃣ FINAL SOLD IMEI
-      for (const it of sanitizedItems) {
-        if (it.isImei) {
-          for (const imei of it.imeiList) {
-            await set(ref(db, `penjualan_imei/${imei}`), {
+  
+      /* =====================================================
+         2️⃣ LOCK IMEI + KURANGI STOK (ATOMIC STEP)
+      ===================================================== */
+      const lockedImeis = [];
+  
+      for (const item of items) {
+        if (!item.sku) {
+          throw new Error(`SKU tidak ditemukan (${item.namaBarang})`);
+        }
+  
+        // 🔒 LOCK IMEI (JIKA ADA)
+        if (item.isImei) {
+          for (const imei of item.imeiList || []) {
+            await lockImei({
+              imei,
+              toko: tokoLogin,
               invoice,
-              toko: form.namaToko,
-              status: "SOLD",
-              soldAt: Date.now(),
             });
+            lockedImeis.push(imei);
           }
         }
+  
+        // 📉 KURANGI STOK TOKO
+        await kurangiStokToko({
+          toko: tokoLogin,
+          sku: item.sku,
+          qty: Number(item.qty || 0),
+          imeiList: item.isImei ? item.imeiList : [],
+        });
       }
 
+      
+  
+      /* =====================================================
+         3️⃣ SIMPAN PENJUALAN (LAST STEP)
+      ===================================================== */
+      await addPenjualan({
+        invoice,
+        toko: userForm.namaToko,
+        tanggal: userForm.tanggal,
+        pelanggan: {
+          nama: userForm.namaPelanggan,
+          telp: userForm.noTlpPelanggan,
+        },
+        sales: userForm.namaSales,
+      
+        items: sanitizeItemsForFirebase(items),
+      
+        payment: {
+          status: payment.status,
+          paymentMethod: payment.paymentMethod,
+          namaMdr: payment.namaMdr || "",
+          nominalMdr: payment.nominalMdr || 0,
+          tenor: payment.tenor || "",
+          cicilan: payment.cicilan || 0,
+          grandTotal: payment.grandTotal,
+        },
+      
+        STATUS: "APPROVED",
+        createdAt: Date.now(),
+      });
+  
+      /* =====================================================
+         4️⃣ COMMIT IMEI → SOLD
+      ===================================================== */
+      for (const imei of lockedImeis) {
+        await markImeiSold({
+          imei,
+          toko: tokoLogin,
+          invoice,
+        });
+      }
+  
       alert("✅ Penjualan berhasil");
-      navigate(`/print/cetak-invoice-penjualan/${invoice}`);
+  
     } catch (err) {
-      console.error(err);
-      alert(`❌ Gagal simpan: ${err.message}`);
+      console.error("❌ PENJUALAN ERROR:", err);
+  
+      /* =====================================================
+         5️⃣ ROLLBACK (ANTI DATA RUSAK)
+      ===================================================== */
+      try {
+        for (const it of items) {
+          if (it.isImei) {
+            for (const imei of it.imeiList || []) {
+              await unlockImei(imei);
+            }
+          }
+        }
+      } catch (rollbackErr) {
+        console.error("⚠️ ROLLBACK IMEI GAGAL:", rollbackErr);
+      }
+  
+      alert(err.message || "❌ Penjualan gagal");
     } finally {
       setSubmitting(false);
     }
   };
+  
+
+  const totalQty = useMemo(
+    () => items.reduce((s, it) => s + Number(it.qty || 0), 0),
+    [items]
+  );
+  
+  
+  const totalPenjualan = useMemo(() => {
+    return items.reduce(
+      (sum, it) =>
+        sum +
+        Number(it.hargaUnit || 0) * Number(it.qty || 0) +
+        Number(it.hargaBundling || 0) * Number(it.qtyBundling || 0),
+      0
+    );
+  }, [items]);
+  
+  
+
+  const totalBarang = items.reduce(
+    (sum, it) => sum + Number(it.qty || 0),
+    0
+  );
+  
 
   const totalItemsAmount = useMemo(() => {
     return items.reduce((sum, it) => {
@@ -509,10 +649,6 @@ export default function CardPenjualanToko() {
         </p>
       </div>
 
-      <div className="flex justify-end">
-        <ExportExcelButton transaksi={penjualanList} />
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* TAHAP 1 */}
         <div className="bg-white rounded-2xl shadow-lg p-5">
@@ -551,10 +687,10 @@ export default function CardPenjualanToko() {
         >
           <h2 className="font-bold mb-2">💳 PEMBAYARAN — TAHAP 3</h2>
           <FormPaymentSection
-            value={payment}
-            onChange={setPayment}
-            totalBarang={totals.totalAmount}
-            disabled={!tahap2Complete}
+           value={payment}
+           onChange={setPayment}
+           totalBarang={totalPenjualan}   // ⬅️ WAJIB INI
+           disabled={!tahap2Complete}
           />
 
           <div className="flex justify-between items-center mt-4 gap-3">
@@ -578,7 +714,7 @@ export default function CardPenjualanToko() {
                       toko: form.namaToko,
                       user: userForm,
                       items: sanitizeItemsForFirebase(items),
-                      payment: paymentForm,
+                      payment: payment,
                       totalBarang: totalItemsAmount,
                     },
                   },

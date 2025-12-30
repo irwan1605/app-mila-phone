@@ -1,14 +1,11 @@
 // ======================================================================
-// INVENTORY REPORT — PRO MAX FINAL VERSION
+// INVENTORY REPORT — PRO MAX FINAL (FIX 100%)
 // ======================================================================
-import React, { useEffect, useMemo, useState, useRef } from "react";
-
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   listenAllTransaksi,
   listenMasterBarang,
   updateTransaksi,
-  listenTransferRequests,
-  listenPenjualan ,
 } from "../../services/FirebaseService";
 import {
   FaSearch,
@@ -19,43 +16,10 @@ import {
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
-// ===================================================
-// 🔑 FINAL HELPER — REALTIME INVENTORY IMEI (NO HOOK)
-// ===================================================
-import { get, ref } from "firebase/database";
-import { db } from "../../firebase/FirebaseInit";
-
-export const getAvailableImeisFromInventoryReport = async (
-  toko,
-  namaBarang
-) => {
-  if (!toko || !namaBarang) return [];
-
-  const snap = await get(ref(db, "inventory"));
-  if (!snap.exists()) return [];
-
-  const result = [];
-
-  snap.forEach((child) => {
-    const row = child.val();
-
-    if (
-      String(row.toko || row.NAMA_TOKO).toUpperCase() ===
-        String(toko).toUpperCase() &&
-      String(row.namaBarang || row.NAMA_BARANG) === String(namaBarang) &&
-      String(row.status || row.STATUS) === "AVAILABLE" &&
-      row.imei
-    ) {
-      result.push(String(row.imei));
-    }
-  });
-
-  return result;
-};
-
+import { hitungSemuaStok } from "../../utils/stockUtils";
 
 // =======================
-// LIST TOKO
+// CONST
 // =======================
 const TOKO_LIST = [
   "CILANGKAP PUSAT",
@@ -82,362 +46,190 @@ const CARD_COLORS = [
   "from-yellow-500 to-orange-500",
 ];
 
-// =======================
-// RUPIAH
-// =======================
 const rupiah = (n) =>
   Number(n || 0).toLocaleString("id-ID", {
     style: "currency",
     currency: "IDR",
     minimumFractionDigits: 0,
   });
-  
+
+const normalize = (v) =>
+  String(v || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
 
 // ======================================================================
-// COMPONENT UTAMA
+// COMPONENT
 // ======================================================================
 export default function InventoryReport() {
   const navigate = useNavigate();
+  const tableRef = useRef(null);
 
-  // ==========================
-  // STATE
-  // ==========================
-  const [stockData, setStockData] = useState({});
   const [transaksi, setTransaksi] = useState([]);
+  const [masterBarangMap, setMasterBarangMap] = useState({});
   const [selectedToko, setSelectedToko] = useState(null);
   const [search, setSearch] = useState("");
-  const tableRef = useRef(null);
-  const [transferData, setTransferData] = useState([]);
-  const [masterBarangMap, setMasterBarangMap] = useState({});
-  const [penjualan, setPenjualan] = useState([]);
-
-  // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 25;
 
+  // ======================
+  // LISTENER
+  // ======================
   useEffect(() => {
-    const unsub = listenPenjualan((rows) => {
-      setPenjualan(Array.isArray(rows) ? rows : []);
-    });
-    return () => unsub && unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsub = listenTransferRequests((list) => {
-      setTransferData(list || []);
-    });
-    return () => unsub && unsub();
-  }, []);
-  useEffect(() => {
-    const unsub = listenMasterBarang((rows) => {
+    const unsubTrx = listenAllTransaksi(setTransaksi);
+    const unsubBarang = listenMasterBarang((rows) => {
       const map = {};
-
-      (rows || []).forEach((b) => {
-        const brand = String(b.namaBrand || b.NAMA_BRAND || "")
-          .trim()
-          .replace(/\s+/g, " ")
-          .toUpperCase();
-
-        const barang = String(b.namaBarang || b.NAMA_BARANG || "")
-          .trim()
-          .replace(/\s+/g, " ")
-          .toUpperCase();
-
-        if (!brand || !barang) return;
-
-        const key = `${brand}|${barang}`;
-
+      rows?.forEach((b) => {
+        const key = `${normalize(b.NAMA_BRAND)}|${normalize(b.NAMA_BARANG)}`;
         map[key] = {
-          // ===== HARGA =====
-          hargaSRP: Number(b.hargaSRP ?? b.HARGA_SRP ?? 0),
-          hargaGrosir: Number(b.hargaGrosir ?? b.HARGA_GROSIR ?? 0),
-          hargaReseller: Number(b.hargaReseller ?? b.HARGA_RESELLER ?? 0),
-
-          // ===== BUNDLING =====
+          hargaSRP: Number(b.HARGA_SRP || 0),
+          hargaGrosir: Number(b.HARGA_GROSIR || 0),
+          hargaReseller: Number(b.HARGA_RESELLER || 0),
           band1: b.NAMA_BANDLING_1 || "",
           hband1: Number(b.HARGA_BANDLING_1 || 0),
-
           band2: b.NAMA_BANDLING_2 || "",
           hband2: Number(b.HARGA_BANDLING_2 || 0),
-
           band3: b.NAMA_BANDLING_3 || "",
           hband3: Number(b.HARGA_BANDLING_3 || 0),
         };
-      });
-
-      setMasterBarangMap(map);
-    });
-
-    return () => unsub && unsub();
-  }, []);
-
-  // ==========================
-  // AUTO SCROLL SAAT CARD DI KLIK
-  // ==========================
-  useEffect(() => {
-    if (selectedToko && tableRef.current) {
-      tableRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }
-  }, [selectedToko]);
-
-  /* ================= LISTENER ================= */
-  useEffect(() => {
-    const u1 = listenAllTransaksi(setTransaksi);
-    const u2 = listenTransferRequests(setTransferData);
-    const u3 = listenMasterBarang((rows) => {
-      const map = {};
-      (rows || []).forEach((b) => {
-        const key = `${b.NAMA_BRAND}|${b.NAMA_BARANG}`;
-        map[key] = b;
       });
       setMasterBarangMap(map);
     });
 
     return () => {
-      u1 && u1();
-      u2 && u2();
-      u3 && u3();
+      unsubTrx && unsubTrx();
+      unsubBarang && unsubBarang();
     };
   }, []);
 
-  useEffect(() => {
-    if (selectedToko === "CILANGKAP PUSAT") {
-      // logic di sini
-    }
-  }, [selectedToko]);
-
-
-  
-  // ==========================
-  // STOCK BY TOKO (SINGLE SOURCE OF TRUTH)
-  // ==========================
-  const stokByToko = useMemo(() => {
+  // ======================
+  // MAP TRANSAKSI
+  // ======================
+  const transaksiToko = useMemo(() => {
     const map = {};
-
-    penjualan.forEach((p) => {
-      if (!p.items || p.statusPembayaran !== "LUNAS") return;
-    
-      const toko = p.toko;
-      if (!map[toko]) return;
-    
-      p.items.forEach((it) => {
-        const kat = it.kategoriBarang || "LAINNYA";
-        const qty = Number(it.qty || 0);
-    
-        map[toko].kategori[kat] =
-          (map[toko].kategori[kat] || 0) - qty;
-      });
-    });
-
-
-    TOKO_LIST.forEach((toko) => {
-      map[toko] = { kategori: {}, items: [] };
-    });
-
-    // PUSAT → dari stockData
-    Object.values(stockData["CILANGKAP PUSAT"] || {}).forEach((s) => {
-      const kat = s.kategoriBrand || "LAINNYA";
-      map["CILANGKAP PUSAT"].kategori[kat] =
-        (map["CILANGKAP PUSAT"].kategori[kat] || 0) + Number(s.qty || 0);
-
-      map["CILANGKAP PUSAT"].items.push(s);
-    });
-
-    // TOKO → dari transaksi pembelian
-    transaksi.forEach((t) => {
-      if (t.STATUS !== "Approved" || t.PAYMENT_METODE !== "PEMBELIAN") return;
-
-      const toko = t.NAMA_TOKO;
-      if (!map[toko]) return;
-
-      const kat = t.KATEGORI_BRAND || "LAINNYA";
-      const qty = t.IMEI ? 1 : Number(t.QTY || 0);
-
-      map[toko].kategori[kat] = (map[toko].kategori[kat] || 0) + qty;
-
-      map[toko].items.push(t);
-    });
-
+    transaksi.forEach((t) => t?.id && (map[t.id] = t));
     return map;
-  }, [transaksi, stockData]);
-
-  
-
-  // ==========================
-  // TOTAL SEMUA TOKO
-  // ==========================
-  const totalStockSemuaToko = useMemo(() => {
-    return Object.values(stokByToko).reduce((sum, t) => {
-      return sum + Object.values(t.kategori).reduce((s, v) => s + v, 0);
-    }, 0);
-  }, [stokByToko]);
-
-  // ==========================
-  // STOCK PUSAT (FIX)
-  // ==========================
-  // const stockPembelianPusat = useMemo(() => {
-  //   const pusat = stockData["CILANGKAP PUSAT"] || {};
-  //   return Object.values(pusat).reduce((s, i) => s + Number(i.qty || 0), 0);
-  // }, [stockData]);
-
-  // ==========================
-  // MASTER DATA PEMBELIAN (SINGLE SOURCE OF TRUTH)
-  // ==========================
-  const pembelianApproved = useMemo(() => {
-    return transaksi.filter(
-      (t) => t.STATUS === "Approved" && t.PAYMENT_METODE === "PEMBELIAN"
-    );
   }, [transaksi]);
 
-  // const transferMap = useMemo(() => {
-  //   const map = {};
+  // ======================
+  // STOK GLOBAL
+  // ======================
+  const stokMap = useMemo(
+    () => hitungSemuaStok(transaksiToko),
+    [transaksiToko]
+  );
 
-  //   transferData.forEach((t) => {
-  //     if (t.status !== "Approved") return;
-
-  //     const qty = Array.isArray(t.imeis) ? t.imeis.length : Number(t.qty || 0);
-  //     const key = `${t.brand}|${t.barang}`;
-
-  //     // OUT
-  //     if (!map[t.dari]) map[t.dari] = {};
-  //     map[t.dari][key] = (map[t.dari][key] || 0) - qty;
-
-  //     // IN
-  //     if (!map[t.ke]) map[t.ke] = {};
-  //     map[t.ke][key] = (map[t.ke][key] || 0) + qty;
-  //   });
-
-  //   return map;
-  // }, [transferData]);
-
-  // ==========================
+  // ======================
   // DETAIL TABLE
-  // ==========================
-  // ==========================
-  // DETAIL TABLE = MASTER PEMBELIAN
-  // ==========================
-  // ==========================
-  // DETAIL TABLE (NORMALIZED DARI MASTER PEMBELIAN)
-  // ==========================
+  // ======================
+  const detailTable = useMemo(() => {
+    if (!selectedToko) return [];
 
-  const normalize = (v) =>
-    String(v || "")
-      .trim()
-      .replace(/\s+/g, " ")
-      .toUpperCase();
-  
-      const detailTable = useMemo(() => {
-        if (!selectedToko) return [];
-      
-        return pembelianApproved
-          .filter((t) => t.NAMA_TOKO === selectedToko)
-          .map((t) => {
-            const qty = t.IMEI ? 1 : Number(t.QTY || 0);
-      
-            const brand = normalize(t.NAMA_BRAND || t.namaBrand);
-            const barang = normalize(t.NAMA_BARANG || t.namaBarang);
-            const key = `${brand}|${barang}`;
-      
-            const master = masterBarangMap[key] || {};
-      
-            const hargaSRP =
-              Number(master.hargaSRP) ||
-              Number(t.HARGA_SRP) ||
-              0;
-      
-            const hargaGrosir =
-              Number(master.hargaGrosir) ||
-              Number(t.HARGA_GROSIR) ||
-              0;
-      
-            const hargaReseller =
-              Number(master.hargaReseller) ||
-              Number(t.HARGA_RESELLER) ||
-              0;
-      
-            return {
-              id: t.id,
-              tokoId: t.tokoId,
-      
-              tanggal: t.TANGGAL_TRANSAKSI || "-",
-              noDo: t.NO_INVOICE || "-",
-              supplier: t.NAMA_SUPPLIER || "-",
-      
-              brand,
-              barang,
-              imei: t.IMEI || "-",
-              qty,
-      
-              hargaSRP,
-              totalSRP: hargaSRP * qty,
-      
-              hargaGrosir,
-              totalGrosir: hargaGrosir * qty,
-      
-              hargaReseller,
-              totalReseller: hargaReseller * qty,
-      
-              band1: master.band1 || t.NAMA_BANDLING_1 || "-",
-              hband1: Number(master.hband1 || t.HARGA_BANDLING_1 || 0),
-              totalBand1:
-                qty * Number(master.hband1 || t.HARGA_BANDLING_1 || 0),
-      
-              band2: master.band2 || t.NAMA_BANDLING_2 || "-",
-              hband2: Number(master.hband2 || t.HARGA_BANDLING_2 || 0),
-              totalBand2:
-                qty * Number(master.hband2 || t.HARGA_BANDLING_2 || 0),
-      
-              band3: master.band3 || t.NAMA_BANDLING_3 || "-",
-              hband3: Number(master.hband3 || t.HARGA_BANDLING_3 || 0),
-              totalBand3:
-                qty * Number(master.hband3 || t.HARGA_BANDLING_3 || 0),
-      
-              transferIn: 0,
-              transferOut: 0,
-            };
-          });
-      }, [selectedToko, pembelianApproved, masterBarangMap]);
-      
-  
+    return transaksi
+      .filter(
+        (t) =>
+          t.STATUS === "Approved" &&
+          t.PAYMENT_METODE === "PEMBELIAN" &&
+          t.NAMA_TOKO === selectedToko &&
+          `${t.NAMA_BRAND} ${t.NAMA_BARANG} ${t.IMEI}`
+            .toLowerCase()
+            .includes(search.toLowerCase())
+      )
+      .map((t) => {
+        const key = `${normalize(t.NAMA_BRAND)}|${normalize(t.NAMA_BARANG)}`;
+        const m = masterBarangMap[key] || {};
+        const qty = t.IMEI ? 1 : Number(t.QTY || 0);
 
-  // ======================================================================
+        return {
+          id: t.id,
+          tokoId: t.tokoId,
+          tanggal: t.TANGGAL_TRANSAKSI,
+          noDo: t.NO_INVOICE,
+          supplier: t.NAMA_SUPPLIER,
+          brand: normalize(t.NAMA_BRAND),
+          barang: normalize(t.NAMA_BARANG),
+          imei: t.IMEI || "-",
+          qty,
+          hargaSRP: m.hargaSRP || 0,
+          totalSRP: qty * (m.hargaSRP || 0),
+          hargaGrosir: m.hargaGrosir || 0,
+          totalGrosir: qty * (m.hargaGrosir || 0),
+          hargaReseller: m.hargaReseller || 0,
+          totalReseller: qty * (m.hargaReseller || 0),
+          band1: m.band1,
+          hband1: m.hband1,
+          totalBand1: qty * (m.hband1 || 0),
+          band2: m.band2,
+          hband2: m.hband2,
+          totalBand2: qty * (m.hband2 || 0),
+          band3: m.band3,
+          hband3: m.hband3,
+          totalBand3: qty * (m.hband3 || 0),
+          transferIn: 0,
+          transferOut: 0,
+        };
+      });
+  }, [transaksi, selectedToko, search, masterBarangMap]);
+
+  // ======================
   // PAGINATION
-  // ======================================================================
+  // ======================
   const pageCount = Math.ceil(detailTable.length / pageSize);
   const data = detailTable.slice((page - 1) * pageSize, page * pageSize);
 
   // ==========================
-  // CARD KECIL PER TOKO + KATEGORI
+  // CARD KECIL PER TOKO + PER KATEGORI (FIX)
   // ==========================
   const cardStockPerToko = useMemo(() => {
     return TOKO_LIST.map((toko) => {
       const kategori = {};
 
-      pembelianApproved.forEach((t) => {
+      transaksi.forEach((t) => {
+        if (t.STATUS !== "Approved") return;
         if (t.NAMA_TOKO !== toko) return;
 
-        const k = t.KATEGORI_BRAND || "LAINNYA";
+        const kat = t.KATEGORI_BRAND || "LAINNYA";
         const qty = t.IMEI ? 1 : Number(t.QTY || 0);
-        kategori[k] = (kategori[k] || 0) + qty;
+
+        // STOK MASUK
+        if (["PEMBELIAN", "TRANSFER_MASUK"].includes(t.PAYMENT_METODE)) {
+          kategori[kat] = (kategori[kat] || 0) + qty;
+        }
+
+        // STOK KELUAR
+        if (["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)) {
+          kategori[kat] = (kategori[kat] || 0) - qty;
+        }
       });
 
       return { toko, kategori };
     });
-  }, [pembelianApproved]);
+  }, [transaksi]);
 
   // ==========================
-  // EXPORT
+  // TOTAL STOCK SEMUA TOKO (DARI CARD KECIL)
   // ==========================
+  const totalStockSemuaToko = useMemo(() => {
+    return cardStockPerToko.reduce((grandTotal, toko) => {
+      const totalPerToko = Object.values(toko.kategori || {}).reduce(
+        (sum, qty) => sum + Number(qty || 0),
+        0
+      );
+
+      return grandTotal + totalPerToko;
+    }, 0);
+  }, [cardStockPerToko]);
+
+  // ======================
+  // EXPORT
+  // ======================
   const exportToExcel = () => {
     const sheet = XLSX.utils.json_to_sheet(detailTable);
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, sheet, "Inventory");
     XLSX.writeFile(book, "Inventory_Report.xlsx");
   };
-
   // ======================================================================
   // RENDER
   // ======================================================================
@@ -451,11 +243,11 @@ export default function InventoryReport() {
         {/* ================================================================== */}
         {/* CARD BESAR PUSAT */}
         <div
-       onClick={() =>
-        navigate("/table/detail-stock-all-toko", {
-          state: { mode: "ALL_TOKO" },
-        })
-      }
+          onClick={() =>
+            navigate("/table/detail-stock-all-toko", {
+              state: { mode: "ALL_TOKO" },
+            })
+          }
           className="cursor-pointer rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-500 p-6 mb-6 shadow-2xl"
         >
           <div className="flex gap-4 items-center">

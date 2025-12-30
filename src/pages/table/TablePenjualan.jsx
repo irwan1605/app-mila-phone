@@ -1,14 +1,21 @@
 // =======================================================
-// TablePenjualan.jsx — FINAL 100%
-// Laporan Penjualan | Edit & VOID Superadmin
+// TablePenjualan.jsx — FINAL VERSION 100%
+// Detail Penjualan Lengkap + Edit & VOID (Superadmin)
 // =======================================================
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
   listenPenjualan,
-  updateTransaksi,
   voidTransaksiPenjualan,
 } from "../../services/FirebaseService";
+
+/* ================= UTIL ================= */
+const rupiah = (n) =>
+  Number(n || 0).toLocaleString("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  });
 
 export default function TablePenjualan() {
   const [rows, setRows] = useState([]);
@@ -33,10 +40,54 @@ export default function TablePenjualan() {
     return () => unsub && unsub();
   }, []);
 
-  /* ================= HANDLER ================= */
+  /* ================= FLATTEN DATA ================= */
+  const tableRows = useMemo(() => {
+    const result = [];
+
+    rows.forEach((trx) => {
+      (trx.items || []).forEach((item) => {
+        result.push({
+          id: trx.id,
+          tanggal: trx.tanggal || trx.createdAt,
+          invoice: trx.invoice,
+          toko: trx.toko,
+
+          pelanggan: trx.user?.namaPelanggan || "-",
+          telp: trx.user?.noTlpPelanggan || "-",
+          sales: trx.user?.namaSales || "-",
+
+          kategoriBarang: item.kategoriBarang,
+          namaBrand: item.namaBrand,
+          namaBarang: item.namaBarang,
+
+          bundling:
+            item.bundlingItems?.map((b) => b.namaBarang).join(", ") || "-",
+
+          imei: Array.isArray(item.imeiList)
+            ? item.imeiList.join(", ")
+            : "-",
+
+          qty: item.qty,
+
+          statusBayar: trx.payment?.status,
+          namaMdr: trx.payment?.namaMdr || "-",
+          nominalMdr: trx.payment?.nominalMdr || 0,
+          tenor: trx.payment?.tenor || "-",
+          cicilan: trx.payment?.cicilan || 0,
+          grandTotal: trx.payment?.grandTotal || 0,
+
+          STATUS: trx.STATUS,
+        });
+      });
+    });
+
+    return result;
+  }, [rows]);
+
+  /* ================= ACTION ================= */
   const handleVoid = async (row) => {
     if (!isSuperAdmin) return;
-    if (!window.confirm(`VOID transaksi ${row.invoice}?`)) return;
+    if (!window.confirm(`VOID Invoice ${row.invoice}?`)) return;
 
     await voidTransaksiPenjualan(row.id);
     alert("✅ Transaksi berhasil di VOID");
@@ -44,88 +95,79 @@ export default function TablePenjualan() {
 
   const handleEdit = (row) => {
     if (!isSuperAdmin) return;
-    alert(`EDIT invoice ${row.invoice} (siap disambung ke form)`);
+    alert(`EDIT Invoice ${row.invoice} (siap diarahkan ke form edit)`);
   };
 
-  /* ================= FORMAT ================= */
-  const rupiah = (n) =>
-    Number(n || 0).toLocaleString("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      maximumFractionDigits: 0,
-    });
-
+  /* ================= RENDER ================= */
   return (
-    <div className="p-6 bg-white rounded-xl shadow">
-      <h2 className="text-lg font-bold mb-4">📊 LAPORAN PENJUALAN</h2>
+    <div className="bg-white rounded-2xl shadow-lg p-5">
+      <h2 className="text-lg font-bold mb-4">📊 TABEL PENJUALAN</h2>
 
       <div className="overflow-x-auto">
-        <table className="min-w-full border text-sm">
+        <table className="min-w-[2600px] border text-xs">
           <thead className="bg-gray-100">
             <tr>
-              <th className="border px-2 py-1">Tanggal</th>
-              <th className="border px-2 py-1">Invoice</th>
-              <th className="border px-2 py-1">Toko</th>
-              <th className="border px-2 py-1">Pelanggan</th>
-              <th className="border px-2 py-1">No Tlp</th>
-              <th className="border px-2 py-1">Sales</th>
-              <th className="border px-2 py-1">Total Barang</th>
+              <th>No</th>
+              <th>Tanggal</th>
+              <th>No Invoice</th>
+              <th>Nama Toko</th>
+              <th>Nama Pelanggan</th>
+              <th>No TLP</th>
+              <th>Nama Sales</th>
 
-              {/* PAYMENT */}
-              <th className="border px-2 py-1">Status Bayar</th>
-              <th className="border px-2 py-1">Metode</th>
-              <th className="border px-2 py-1">MDR</th>
-              <th className="border px-2 py-1">Tenor</th>
-              <th className="border px-2 py-1">Grand Total</th>
+              <th>Kategori</th>
+              <th>Brand</th>
+              <th>Nama Barang</th>
+              <th>Barang Bundling</th>
+              <th>No IMEI</th>
+              <th>QTY</th>
 
-              <th className="border px-2 py-1">Status</th>
-              <th className="border px-2 py-1">Aksi</th>
+              <th>Status Bayar</th>
+              <th>Nama MDR</th>
+              <th>Nominal MDR</th>
+              <th>Tenor</th>
+              <th>Nilai Cicilan</th>
+              <th>Grand Total</th>
+
+              <th>Status</th>
+              <th>Aksi</th>
             </tr>
           </thead>
 
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
-                <td className="border px-2 py-1">
-                  {new Date(r.createdAt).toLocaleDateString("id-ID")}
+            {tableRows.map((r, i) => (
+              <tr key={i} className="border-t hover:bg-gray-50">
+                <td>{i + 1}</td>
+                <td>
+                  {new Date(r.tanggal).toLocaleDateString("id-ID")}
                 </td>
-                <td className="border px-2 py-1 font-semibold">
-                  {r.invoice}
+                <td className="font-semibold">{r.invoice}</td>
+                <td>{r.toko}</td>
+                <td>{r.pelanggan}</td>
+                <td>{r.telp}</td>
+                <td>{r.sales}</td>
+
+                <td>{r.kategoriBarang}</td>
+                <td>{r.namaBrand}</td>
+                <td>{r.namaBarang}</td>
+                <td>{r.bundling}</td>
+                <td className="max-w-[200px] break-all">{r.imei}</td>
+                <td className="text-center">{r.qty}</td>
+
+                <td className="text-center">{r.statusBayar}</td>
+                <td>{r.namaMdr}</td>
+                <td className="text-right">
+                  {rupiah(r.nominalMdr)}
                 </td>
-                <td className="border px-2 py-1">{r.toko}</td>
-                <td className="border px-2 py-1">
-                  {r.user?.namaPelanggan}
+                <td className="text-center">{r.tenor}</td>
+                <td className="text-right">
+                  {rupiah(r.cicilan)}
                 </td>
-                <td className="border px-2 py-1">
-                  {r.user?.noTlpPelanggan}
-                </td>
-                <td className="border px-2 py-1">
-                  {r.user?.namaSales}
-                </td>
-                <td className="border px-2 py-1 text-right">
-                  {rupiah(r.totalBarang)}
+                <td className="text-right font-bold">
+                  {rupiah(r.grandTotal)}
                 </td>
 
-                {/* PAYMENT */}
-                <td className="border px-2 py-1 text-center">
-                  {r.payment?.status}
-                </td>
-                <td className="border px-2 py-1 text-center">
-                  {r.payment?.paymentMethod}
-                </td>
-                <td className="border px-2 py-1 text-center">
-                  {r.payment?.namaMdr
-                    ? `${r.payment.namaMdr} (${r.payment.persenMdr}%)`
-                    : "-"}
-                </td>
-                <td className="border px-2 py-1 text-center">
-                  {r.payment?.tenor || "-"}
-                </td>
-                <td className="border px-2 py-1 text-right font-bold">
-                  {rupiah(r.payment?.grandTotal)}
-                </td>
-
-                <td className="border px-2 py-1 text-center">
+                <td className="text-center">
                   <span
                     className={`px-2 py-1 rounded text-xs font-semibold ${
                       r.STATUS === "VOID"
@@ -137,8 +179,8 @@ export default function TablePenjualan() {
                   </span>
                 </td>
 
-                <td className="border px-2 py-1 text-center space-x-2">
-                  {isSuperAdmin && (
+                <td className="text-center space-x-2">
+                  {isSuperAdmin ? (
                     <>
                       <button
                         onClick={() => handleEdit(r)}
@@ -153,18 +195,16 @@ export default function TablePenjualan() {
                         VOID
                       </button>
                     </>
+                  ) : (
+                    "-"
                   )}
-                  {!isSuperAdmin && <span>-</span>}
                 </td>
               </tr>
             ))}
 
-            {!rows.length && (
+            {!tableRows.length && (
               <tr>
-                <td
-                  colSpan={14}
-                  className="text-center py-6 text-gray-500"
-                >
+                <td colSpan={21} className="text-center py-6 text-gray-500">
                   Belum ada data penjualan
                 </td>
               </tr>

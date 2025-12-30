@@ -7,6 +7,7 @@ import {
   listenMasterKategoriBarang,
   listenMasterBarang,
 } from "../services/FirebaseService";
+import { hitungStokBarang } from "../utils/stockUtils";
 
 import FirebaseService from "../services/FirebaseService";
 import { ref, onValue, update, push } from "firebase/database";
@@ -350,14 +351,24 @@ export default function TransferBarang() {
     );
   }, [history, filterStatus]);
 
-  /* ================= SUBMIT ================= */
-  // ================= SUBMIT TRANSFER (FINAL, TANPA ERROR) =================
-  // ================= SUBMIT TRANSFER (FINAL, REALTIME) =================
-  // ================= SUBMIT TRANSFER (FINAL) =================
+// ================= HITUNG STOK TOKO (REALTIME) =================
+const stokPengirim = useMemo(() => {
+  if (!form.tokoPengirim || !form.barang) return 0;
+
+  return inventory.filter(
+    (i) =>
+      i.status === "AVAILABLE" &&
+      i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
+      i.namaBarang.toUpperCase() === form.barang.toUpperCase()
+  ).length;
+}, [inventory, form.tokoPengirim, form.barang]);
+
   // ================= SUBMIT TRANSFER (FINAL 100%) =================
   const submitTransfer = async () => {
     try {
-      // VALIDASI
+      setLoading(true);
+  
+      // ================= VALIDASI =================
       if (
         !form.tokoPengirim ||
         !form.ke ||
@@ -368,35 +379,58 @@ export default function TransferBarang() {
         alert("❌ Data transfer belum lengkap");
         return;
       }
-
+  
+      // ================= VALIDASI STOK REALTIME =================
+      if (stokPengirim < form.imeis.length) {
+        alert(
+          `❌ Stok ${form.tokoPengirim} tidak mencukupi.\n\n` +
+            `Stok tersedia: ${stokPengirim}\n` +
+            `Diminta: ${form.imeis.length}`
+        );
+        return;
+      }
+  
+      // ================= PAYLOAD =================
       const payload = {
         tanggal: form.tanggal,
         noDo: form.noDo,
         noSuratJalan: form.noSuratJalan,
         pengirim: form.pengirim || "SYSTEM",
-
+  
         tokoPengirim: form.tokoPengirim,
         dari: form.tokoPengirim,
         ke: form.ke,
-
+  
+        kategori: form.kategori,
         brand: form.brand,
         barang: form.barang,
         imeis: form.imeis,
         qty: form.imeis.length,
-
-        // 🔒 KUNCI STATUS
+  
         status: "Pending",
         createdAt: Date.now(),
       };
-
+  
       await FirebaseService.createTransferRequest(payload);
-
+  
       alert("✅ Transfer berhasil (Menunggu Approved Superadmin)");
+  
+      // ================= RESET FORM =================
+      setForm((f) => ({
+        ...f,
+        brand: "",
+        barang: "",
+        imeis: [],
+        qty: 0,
+      }));
     } catch (err) {
       console.error(err);
       alert("❌ Gagal submit transfer");
+    } finally {
+      setLoading(false);
     }
   };
+  
 
   /* ================= RENDER ================= */
   return (

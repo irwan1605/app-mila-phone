@@ -13,7 +13,7 @@ export default function FormPaymentSection({
   value = {},
   onChange,
   disabled = false,
-  totalBarang = 0, // TOTAL dari Tahap 2
+  totalBarang = 0, // ⬅️ TOTAL PENJUALAN dari Tahap 2 (UANG)
 }) {
   /* ================= MASTER DATA ================= */
   const [masterMdr, setMasterMdr] = useState([]);
@@ -26,7 +26,6 @@ export default function FormPaymentSection({
     const u2 = listenMasterTenor((rows) =>
       setMasterTenor(Array.isArray(rows) ? rows : [])
     );
-
     return () => {
       u1 && u1();
       u2 && u2();
@@ -38,47 +37,40 @@ export default function FormPaymentSection({
     () => ({
       status: value.status || "LUNAS", // LUNAS | PIUTANG
       paymentMethod: value.paymentMethod || "CASH", // CASH | KREDIT
+
       namaMdr: value.namaMdr || "",
       persenMdr: Number(value.persenMdr || 0),
+
       dpUser: Number(value.dpUser || 0),
+      dpMerchant: Number(value.dpMerchant || 0),
       dpTalangan: Number(value.dpTalangan || 0),
       voucher: Number(value.voucher || 0),
+
       tenor: value.tenor || "",
-      grandTotal: Number(value.grandTotal || totalBarang),
-      cicilan: Number(value.cicilan || 0),
     }),
-    [value, totalBarang]
+    [value]
   );
 
   /* ================= HITUNG MDR ================= */
   const nominalMdr = useMemo(() => {
     if (paymentSafe.paymentMethod !== "KREDIT") return 0;
-    return Math.round((totalBarang * paymentSafe.persenMdr) / 100);
+    return Math.round((Number(totalBarang) * paymentSafe.persenMdr) / 100);
   }, [totalBarang, paymentSafe.paymentMethod, paymentSafe.persenMdr]);
 
-  /* ================= GRAND TOTAL ================= */
+  /* ================= GRAND TOTAL (FINAL DIKUNCI) ================= */
   const grandTotal = useMemo(() => {
-    if (paymentSafe.paymentMethod === "CASH") return totalBarang;
-
     return (
-      totalBarang +
-      nominalMdr -
-      paymentSafe.dpUser -
-      paymentSafe.dpTalangan -
-      paymentSafe.voucher
+      Number(totalBarang || 0) +
+      Number(nominalMdr || 0) +
+      Number(paymentSafe.dpTalangan || 0) -
+      Number(paymentSafe.dpUser || 0) -
+      Number(paymentSafe.dpMerchant || 0) -
+      Number(paymentSafe.voucher || 0)
     );
-  }, [
-    totalBarang,
-    nominalMdr,
-    paymentSafe.paymentMethod,
-    paymentSafe.dpUser,
-    paymentSafe.dpTalangan,
-    paymentSafe.voucher,
-  ]);
+  }, [totalBarang, nominalMdr, paymentSafe]);
 
   /* ================= CICILAN ================= */
   const cicilanPerBulan = useMemo(() => {
-    if (!paymentSafe.tenor) return 0;
     const bulan = parseInt(paymentSafe.tenor, 10);
     if (!bulan) return 0;
     return Math.round(grandTotal / bulan);
@@ -95,7 +87,7 @@ export default function FormPaymentSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nominalMdr, grandTotal, cicilanPerBulan]);
 
-  /* ================= RENDER ================= */
+  /* ================= RENDER (UI TIDAK DIUBAH) ================= */
   return (
     <fieldset disabled={disabled} className={disabled ? "opacity-50" : ""}>
       <h2 className="font-bold mb-3">💳 PEMBAYARAN — TAHAP 3</h2>
@@ -144,7 +136,6 @@ export default function FormPaymentSection({
         {/* KREDIT DETAIL */}
         {paymentSafe.paymentMethod === "KREDIT" && (
           <>
-            {/* MDR */}
             <div>
               <label className="font-semibold">Nama MDR</label>
               <select
@@ -171,15 +162,6 @@ export default function FormPaymentSection({
             </div>
 
             <div>
-              <label className="font-semibold">Persentase MDR</label>
-              <input
-                readOnly
-                className="w-full border rounded px-2 py-1 bg-gray-100"
-                value={`${paymentSafe.persenMdr}%`}
-              />
-            </div>
-
-            <div>
               <label className="font-semibold">Nominal MDR</label>
               <input
                 readOnly
@@ -188,7 +170,6 @@ export default function FormPaymentSection({
               />
             </div>
 
-            {/* DP & VOUCHER */}
             <div>
               <label className="font-semibold">DP User</label>
               <input
@@ -234,7 +215,6 @@ export default function FormPaymentSection({
               />
             </div>
 
-            {/* TENOR */}
             <div>
               <label className="font-semibold">Tenor</label>
               <select

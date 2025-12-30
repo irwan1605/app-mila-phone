@@ -1,11 +1,30 @@
-// src/services/FirebaseService.js
-// FirebaseService.js — PRO MAX edition
-// Improvements:
-// - normalize transaksi to always include `id`, tokoId, TOKO
-// - ensure addTransaksi writes data with the firebase key as id
-// - listenAllTransaksi sorts by TANGGAL_TRANSAKSI and normalizes missing fields
-// - forceDeleteTransaksi to remove legacy rows without id based on matcher
-// - robust helper functions and safer get/set/remove usage
+/**
+ * =========================================================
+ * 🔥 SINGLE SOURCE OF TRUTH — STOCK SYSTEM
+ * =========================================================
+ * ❌ JANGAN gunakan fungsi berikut untuk stok:
+ * - addStock
+ * - reduceStock
+ * - updateStockAtomic
+ * - adjustInventoryStock
+ * - transferStock
+ *
+ * ❌ JANGAN membaca stok dari:
+ * - /stock
+ * - /inventory
+ *
+ * ✅ STOK HANYA DIHITUNG DARI:
+ *    /toko/{tokoId}/transaksi
+ *
+ * ✅ Perhitungan stok:
+ *    src/utils/stockUtils.js
+ *
+ * FirebaseService hanya:
+ * - menulis transaksi
+ * - lock IMEI
+ * - CRUD data
+ */
+
 
 // src/services/FirebaseService.js
 import { db } from "./FirebaseInit";
@@ -30,8 +49,52 @@ import {
    HELPERS
 ============================================================ */
 
+
+/* =====================================================
+   🔒 LOCK IMEI (ANTI DOUBLE JUAL)
+===================================================== */
+export const lockImei = async (imei, userId) => {
+  const r = ref(db, `inventory_imei/${imei}`);
+
+  const res = await runTransaction(r, (current) => {
+    if (!current) return current;
+
+    // ❌ tidak boleh di-lock kalau bukan AVAILABLE
+    if (current.status !== "AVAILABLE") {
+      return; // abort
+    }
+
+    return {
+      ...current,
+      status: "LOCKED",
+      lockedBy: userId,
+      lockedAt: Date.now(),
+    };
+  });
+
+  return res;
+};
+
+/* =====================================================
+   ✅ FINAL SOLD
+===================================================== */
+export const markImeiSold = async (imei, invoice) => {
+  return update(ref(db, `inventory_imei/${imei}`), {
+    status: "SOLD",
+    soldAt: Date.now(),
+    invoice,
+    lockedBy: null,
+    lockedAt: null,
+  });
+};
+
+
 export const unlockImei = async (imei) => {
-  await set(ref(db, `imeiLocks/${imei}`), null);
+  return update(ref(db, `inventory_imei/${imei}`), {
+    status: "AVAILABLE",
+    lockedBy: null,
+    lockedAt: null,
+  });
 };
 
 export const rollbackStock = async (toko, sku, qty) => {
@@ -1220,36 +1283,26 @@ export const updateTransaksi = async (tokoId, id, data) => {
  * Returns the generated key.
  */
 export const addTransaksi = async (tokoId, data) => {
+  if (!tokoId) throw new Error("TOKO LOGIN WAJIB");
+
   const r = push(ref(db, `toko/${tokoId}/transaksi`));
+
   const payload = {
     ...data,
-    // if caller didn't include TANGGAL_TRANSAKSI, try to keep consistent timestamp
+    id: r.key,
+    tokoId,
+    STATUS: data.STATUS || "Approved",
     TANGGAL_TRANSAKSI:
-      data.TANGGAL_TRANSAKSI || data.TANGGAL || new Date().toISOString(),
+      data.TANGGAL_TRANSAKSI ||
+      data.TANGGAL ||
+      new Date().toISOString().slice(0, 10),
+    createdAt: Date.now(),
   };
+
   await set(r, payload);
-  // Optionally set id inside object for easier migration/read (not strictly necessary)
-  try {
-    await update(ref(db, `toko/${tokoId}/transaksi/${r.key}`), { id: r.key });
-  } catch (e) {
-    // ignore update error (best-effort)
-
-    if (!tokoId) throw new Error("TOKO LOGIN WAJIB");
-
-    const safePayload = {
-      ...data,
-      tokoId, // ⬅️ FORCE
-      TOKO: tokoId, // ⬅️ FORCE
-      createdAt: new Date().toISOString(),
-    };
-
-    const r = push(ref(db, `toko/${tokoId}/transaksi`));
-    await set(r, safePayload);
-
-    console.warn("Could not set id field on new transaksi:", e);
-  }
   return r.key;
 };
+
 
 // =======================
 // RETURN / BALIK STOK (AMAN)
@@ -1340,14 +1393,7 @@ export const checkImeiAvailable = async (imei) => {
   return !snap.exists();
 };
 
-// 🔒 LOCK IMEI (SETELAH TRANSAKSI BERHASIL)
-export const lockImei = async (imei, data) => {
-  await set(ref(db, `imeiLocks/${imei}`), {
-    status: "SOLD",
-    ...data,
-    lockedAt: Date.now(),
-  });
-};
+
 
 // =======================
 // MASTER BARANG (BY KATEGORI)
@@ -1364,15 +1410,55 @@ export const listenMasterBarangByKategori = (kategori, callback) => {
   });
 };
 
-// ===================================================
-// APPROVE TRANSFER — SAFE (NO QUERY, NO INDEX)
-// ===================================================
-// ===================================================
-// APPROVE TRANSFER — FINAL SAFE (NO QUERY, NO INDEX)
-// ===================================================
-// ===================================================
-// APPROVE TRANSFER — FINAL (SESUI STRUKTUR INVENTORY)
-// ===================================================
+export const kurangiStokToko = async ({
+  toko,
+  namaBarang,
+  qty,
+  imeiList = [],
+}) => {
+  if (!toko || !namaBarang) {
+    throw new Error("Parameter stok tidak lengkap");
+  }
+
+  // === AMBIL INVENTORY TOKO ===
+  const stokRef = ref(db, `inventory/${toko}`);
+  const snap = await get(stokRef);
+
+  if (!snap.exists()) {
+    throw new Error(`Stok toko ${toko} tidak ditemukan`);
+  }
+
+  const updates = {};
+
+  snap.forEach((child) => {
+    const row = child.val();
+
+    // === MODE IMEI ===
+    if (imeiList.length > 0) {
+      if (imeiList.includes(String(row.imei))) {
+        updates[`inventory/${toko}/${child.key}`] = {
+          ...row,
+          STATUS: "SOLD",
+          status: "SOLD",
+          soldAt: Date.now(),
+        };
+      }
+    }
+
+    // === MODE NON IMEI ===
+    else if (row.namaBarang === namaBarang) {
+      const sisa = Number(row.qty || 0) - Number(qty || 0);
+      if (sisa < 0) {
+        throw new Error(`Stok ${namaBarang} di ${toko} tidak mencukupi`);
+      }
+
+      updates[`inventory/${toko}/${child.key}/qty`] = sisa;
+    }
+  });
+
+  // === EXECUTE UPDATE (REALTIME) ===
+  await update(ref(db), updates);
+};
 // ===================================================
 // APPROVE TRANSFER — FINAL (SESUAI INVENTORY ROOT)
 // ===================================================
@@ -1777,9 +1863,11 @@ export const isImeiSudahTerjual = async (imei) => {
 export const lockImeiPenjualan = async (imei, payload) => {
   await set(ref(db, `penjualan_imei/${imei}`), {
     ...payload,
+    status: "LOCKED",
     soldAt: Date.now(),
   });
 };
+
 
 export const approveTransferRequest = async (transfer) => {
   const { tokoPengirim, ke, imeis = [], qty, barang } = transfer;
@@ -2152,6 +2240,40 @@ export const listenMasterPembelian = (callback) => {
   );
   return () => unsub && unsub();
 };
+
+export const transferBarangFinal = async ({
+  tokoAsal,
+  tokoTujuan,
+  namaBarang,
+  qty,
+  payloadBase = {},
+}) => {
+  if (!tokoAsal || !tokoTujuan || !namaBarang || !qty) {
+    throw new Error("Parameter transfer tidak lengkap");
+  }
+
+  // KELUAR
+  await addTransaksi(tokoAsal, {
+    ...payloadBase,
+    PAYMENT_METODE: "TRANSFER_KELUAR",
+    NAMA_BARANG: namaBarang,
+    QTY: qty,
+    STATUS: "Approved",
+  });
+
+  // MASUK
+  await addTransaksi(tokoTujuan, {
+    ...payloadBase,
+    PAYMENT_METODE: "TRANSFER_MASUK",
+    NAMA_BARANG: namaBarang,
+    QTY: qty,
+    STATUS: "Approved",
+  });
+};
+
+
+
+
 
 /* ============================================================
    DEFAULT EXPORT
