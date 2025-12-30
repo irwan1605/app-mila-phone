@@ -399,8 +399,8 @@ export default function CardPenjualanToko() {
           <FormPaymentSection
             value={payment}
             onChange={setPayment}
-            grandTotal={items.reduce((a, b) => a + (b.total || 0), 0)}
-            disabled={!items.length}
+            totalBarang={totals.totalAmount}
+            disabled={!tahap2Complete}
           />
         </div>
         <p className="text-xs text-red-500">

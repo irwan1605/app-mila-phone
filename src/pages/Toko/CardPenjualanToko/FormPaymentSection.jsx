@@ -1,6 +1,6 @@
 // =======================================================
-// FormPaymentSection.jsx — FINAL FIX (NO WARNING)
-// Tahap 3 | CASH & KREDIT | MDR + GRAND TOTAL
+// FormPaymentSection.jsx — FINAL (STABIL + ESLINT BERSIH)
+// Tahap 3 | PAYMENT | CASH & KREDIT | MDR + GRAND TOTAL
 // =======================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -10,12 +10,11 @@ export default function FormPaymentSection({
   value,
   onChange,
   disabled = false,
-  grandTotal = 0,      // dari parent (CardPenjualanToko)
+  totalBarang = 0, // ⬅️ total dari Tahap 2
 }) {
   const [masterPayment, setMasterPayment] = useState([]);
 
-  /* ================= LISTENER ================= */
-
+  /* ================= FIREBASE ================= */
   useEffect(() => {
     const unsub = listenMasterPaymentMetode((rows) => {
       setMasterPayment(Array.isArray(rows) ? rows : []);
@@ -24,7 +23,6 @@ export default function FormPaymentSection({
   }, []);
 
   /* ================= SAFE VALUE ================= */
-
   const payment = useMemo(
     () => ({
       status: value?.status || "LUNAS",
@@ -36,28 +34,26 @@ export default function FormPaymentSection({
       dpMerchant: Number(value?.dpMerchant || 0),
       voucher: Number(value?.voucher || 0),
       nominalMdr: Number(value?.nominalMdr || 0),
-      grandTotal: Number(value?.grandTotal || grandTotal),
+      grandTotal: Number(value?.grandTotal || totalBarang),
     }),
-    [value, grandTotal]
+    [value, totalBarang]
   );
 
   /* ================= HITUNG MDR ================= */
-
   const nominalMdr = useMemo(() => {
     if (payment.status !== "PIUTANG") return 0;
     if (payment.paymentMethod !== "KREDIT") return 0;
-    return Math.round((grandTotal * payment.mdr) / 100);
-  }, [grandTotal, payment.status, payment.paymentMethod, payment.mdr]);
+    return Math.round((totalBarang * payment.mdr) / 100);
+  }, [totalBarang, payment.status, payment.paymentMethod, payment.mdr]);
 
   /* ================= HITUNG GRAND TOTAL ================= */
-
   const finalGrandTotal = useMemo(() => {
     if (payment.status === "LUNAS" || payment.paymentMethod === "CASH") {
-      return grandTotal;
+      return totalBarang;
     }
 
     return (
-      grandTotal +
+      totalBarang +
       nominalMdr +
       payment.dpTalangan -
       payment.dpUser -
@@ -65,7 +61,7 @@ export default function FormPaymentSection({
       payment.voucher
     );
   }, [
-    grandTotal,
+    totalBarang,
     nominalMdr,
     payment.status,
     payment.paymentMethod,
@@ -76,17 +72,15 @@ export default function FormPaymentSection({
   ]);
 
   /* ================= SYNC KE PARENT ================= */
-
   useEffect(() => {
     onChange({
       ...payment,
       nominalMdr,
       grandTotal: finalGrandTotal,
     });
-  }, [nominalMdr, finalGrandTotal]); // ✅ aman & stabil
+  }, [nominalMdr, finalGrandTotal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ================= RENDER ================= */
-
   return (
     <fieldset disabled={disabled} className={disabled ? "opacity-50" : ""}>
       <div className="relative">
@@ -98,12 +92,10 @@ export default function FormPaymentSection({
           )}
         </div>
 
-        <h2 className="text-sm font-bold mb-3">
-          💳 PEMBAYARAN — TAHAP 3
-        </h2>
+        <h2 className="text-sm font-bold mb-3">💳 PEMBAYARAN — TAHAP 3</h2>
 
         <div className="space-y-3 text-sm">
-          {/* ================= STATUS ================= */}
+          {/* STATUS */}
           <div>
             <label className="font-semibold">Status Pembayaran</label>
             <select
@@ -123,7 +115,7 @@ export default function FormPaymentSection({
             </select>
           </div>
 
-          {/* ================= KATEGORI BAYAR ================= */}
+          {/* KATEGORI BAYAR */}
           <div>
             <label className="font-semibold">Kategori Bayar</label>
             <select
@@ -142,7 +134,7 @@ export default function FormPaymentSection({
             </select>
           </div>
 
-          {/* ================= PAYMENT METHOD ================= */}
+          {/* PAYMENT METHOD */}
           {payment.status === "PIUTANG" && (
             <div>
               <label className="font-semibold">Payment Metode</label>
@@ -162,7 +154,7 @@ export default function FormPaymentSection({
             </div>
           )}
 
-          {/* ================= DETAIL KREDIT ================= */}
+          {/* DETAIL KREDIT */}
           {payment.status === "PIUTANG" &&
             payment.paymentMethod === "KREDIT" && (
               <>
@@ -252,14 +244,12 @@ export default function FormPaymentSection({
               </>
             )}
 
-          {/* ================= GRAND TOTAL ================= */}
+          {/* GRAND TOTAL */}
           <div>
             <label className="font-bold">GRAND TOTAL</label>
-            <input
-              readOnly
-              className="w-full border rounded-lg px-2 py-2 bg-indigo-50 font-bold text-indigo-700"
-              value={finalGrandTotal.toLocaleString("id-ID")}
-            />
+            <div className="text-right text-xl font-bold text-indigo-700">
+              Rp {finalGrandTotal.toLocaleString("id-ID")}
+            </div>
           </div>
         </div>
       </div>
