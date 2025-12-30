@@ -437,35 +437,35 @@ export const deletePenjualan = (id) => {
   return remove(ref(db, `penjualan/${id}`));
 };
 
-export const listenPenjualan = (callback) => {
-  const r = ref(db, "penjualan");
+// export const listenPenjualan = (callback) => {
+//   const r = ref(db, "penjualan");
 
-  const unsub = onValue(
-    r,
-    (snap) => {
-      const raw = snap.val() || {};
-      const list = Object.entries(raw).map(([id, item]) => ({
-        id,
-        ...item,
-      }));
+//   const unsub = onValue(
+//     r,
+//     (snap) => {
+//       const raw = snap.val() || {};
+//       const list = Object.entries(raw).map(([id, item]) => ({
+//         id,
+//         ...item,
+//       }));
 
-      list.sort(
-        (a, b) =>
-          new Date(b.TANGGAL_TRANSAKSI || 0) -
-          new Date(a.TANGGAL_TRANSAKSI || 0)
-      );
+//       list.sort(
+//         (a, b) =>
+//           new Date(b.TANGGAL_TRANSAKSI || 0) -
+//           new Date(a.TANGGAL_TRANSAKSI || 0)
+//       );
 
-      callback(list);
-    },
-    (err) => {
-      console.error("listenPenjualan error:", err);
-      callback([]);
-    }
-  );
+//       callback(list);
+//     },
+//     (err) => {
+//       console.error("listenPenjualan error:", err);
+//       callback([]);
+//     }
+//   );
 
-  // ✅ SATU-SATUNYA RETURN (TIDAK UNREACHABLE)
-  return () => unsub && unsub();
-};
+//   // ✅ SATU-SATUNYA RETURN (TIDAK UNREACHABLE)
+//   return () => unsub && unsub();
+// };
 
 /**
  * Listen penjualan versi hemat kuota
@@ -1914,6 +1914,27 @@ export const getImeiListByToko = async (namaToko, keyword = "") => {
   // Hilangkan duplikat
   return [...new Set(list)].slice(0, 20);
 };
+
+export const listenPenjualan = (cb) => {
+  const r = ref(db, "penjualan");
+  return onValue(r, (snap) => {
+    const data = snap.val() || {};
+    cb(
+      Object.entries(data).map(([id, v]) => ({
+        id,
+        ...v,
+      }))
+    );
+  });
+};
+
+export const voidTransaksiPenjualan = async (id) => {
+  await update(ref(db, `penjualan/${id}`), {
+    STATUS: "VOID",
+    voidAt: Date.now(),
+  });
+};
+
 
 
 /* =========================

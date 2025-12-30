@@ -8,6 +8,7 @@ import {
   listenMasterBarang,
   updateTransaksi,
   listenTransferRequests,
+  listenPenjualan ,
 } from "../../services/FirebaseService";
 import {
   FaSearch,
@@ -108,10 +109,18 @@ export default function InventoryReport() {
   const tableRef = useRef(null);
   const [transferData, setTransferData] = useState([]);
   const [masterBarangMap, setMasterBarangMap] = useState({});
+  const [penjualan, setPenjualan] = useState([]);
 
   // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 25;
+
+  useEffect(() => {
+    const unsub = listenPenjualan((rows) => {
+      setPenjualan(Array.isArray(rows) ? rows : []);
+    });
+    return () => unsub && unsub();
+  }, []);
 
   useEffect(() => {
     const unsub = listenTransferRequests((list) => {
@@ -207,6 +216,21 @@ export default function InventoryReport() {
   // ==========================
   const stokByToko = useMemo(() => {
     const map = {};
+
+    penjualan.forEach((p) => {
+      if (!p.items || p.statusPembayaran !== "LUNAS") return;
+    
+      const toko = p.toko;
+      if (!map[toko]) return;
+    
+      p.items.forEach((it) => {
+        const kat = it.kategoriBarang || "LAINNYA";
+        const qty = Number(it.qty || 0);
+    
+        map[toko].kategori[kat] =
+          (map[toko].kategori[kat] || 0) - qty;
+      });
+    });
 
 
     TOKO_LIST.forEach((toko) => {

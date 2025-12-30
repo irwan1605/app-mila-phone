@@ -1,5 +1,5 @@
 // =======================================================
-// FormPaymentSection.jsx — FINAL FIX 100%
+// FormPaymentSection.jsx — FINAL FIX 100% (NO DUPLICATE)
 // Tahap 3 | PAYMENT | CASH & KREDIT | MDR + TENOR
 // =======================================================
 
@@ -13,7 +13,7 @@ export default function FormPaymentSection({
   value = {},
   onChange,
   disabled = false,
-  totalBarang = 0, // ⬅️ TOTAL dari Tahap 2
+  totalBarang = 0, // TOTAL dari Tahap 2
 }) {
   /* ================= MASTER DATA ================= */
   const [masterMdr, setMasterMdr] = useState([]);
@@ -33,8 +33,8 @@ export default function FormPaymentSection({
     };
   }, []);
 
-  /* ================= SAFE VALUE ================= */
-  const payment = useMemo(
+  /* ================= SAFE PAYMENT ================= */
+  const paymentSafe = useMemo(
     () => ({
       status: value.status || "LUNAS", // LUNAS | PIUTANG
       paymentMethod: value.paymentMethod || "CASH", // CASH | KREDIT
@@ -52,47 +52,48 @@ export default function FormPaymentSection({
 
   /* ================= HITUNG MDR ================= */
   const nominalMdr = useMemo(() => {
-    if (payment.paymentMethod !== "KREDIT") return 0;
-    return Math.round((totalBarang * payment.persenMdr) / 100);
-  }, [totalBarang, payment.paymentMethod, payment.persenMdr]);
+    if (paymentSafe.paymentMethod !== "KREDIT") return 0;
+    return Math.round((totalBarang * paymentSafe.persenMdr) / 100);
+  }, [totalBarang, paymentSafe.paymentMethod, paymentSafe.persenMdr]);
 
   /* ================= GRAND TOTAL ================= */
   const grandTotal = useMemo(() => {
-    if (payment.paymentMethod === "CASH") return totalBarang;
+    if (paymentSafe.paymentMethod === "CASH") return totalBarang;
 
     return (
       totalBarang +
       nominalMdr -
-      payment.dpUser -
-      payment.dpTalangan -
-      payment.voucher
+      paymentSafe.dpUser -
+      paymentSafe.dpTalangan -
+      paymentSafe.voucher
     );
   }, [
     totalBarang,
     nominalMdr,
-    payment.paymentMethod,
-    payment.dpUser,
-    payment.dpTalangan,
-    payment.voucher,
+    paymentSafe.paymentMethod,
+    paymentSafe.dpUser,
+    paymentSafe.dpTalangan,
+    paymentSafe.voucher,
   ]);
 
   /* ================= CICILAN ================= */
   const cicilanPerBulan = useMemo(() => {
-    if (!payment.tenor) return 0;
-    const bulan = parseInt(payment.tenor, 10);
+    if (!paymentSafe.tenor) return 0;
+    const bulan = parseInt(paymentSafe.tenor, 10);
     if (!bulan) return 0;
     return Math.round(grandTotal / bulan);
-  }, [payment.tenor, grandTotal]);
+  }, [paymentSafe.tenor, grandTotal]);
 
   /* ================= SYNC KE PARENT ================= */
   useEffect(() => {
     onChange({
-      ...payment,
+      ...paymentSafe,
       nominalMdr,
       grandTotal,
       cicilan: cicilanPerBulan,
     });
-  }, [nominalMdr, grandTotal, cicilanPerBulan]); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nominalMdr, grandTotal, cicilanPerBulan]);
 
   /* ================= RENDER ================= */
   return (
@@ -105,10 +106,10 @@ export default function FormPaymentSection({
           <label className="font-semibold">Status Pembayaran</label>
           <select
             className="w-full border rounded px-2 py-1"
-            value={payment.status}
+            value={paymentSafe.status}
             onChange={(e) =>
               onChange({
-                ...payment,
+                ...paymentSafe,
                 status: e.target.value,
                 paymentMethod:
                   e.target.value === "LUNAS" ? "CASH" : "KREDIT",
@@ -121,14 +122,17 @@ export default function FormPaymentSection({
         </div>
 
         {/* PAYMENT METHOD */}
-        {payment.status === "PIUTANG" && (
+        {paymentSafe.status === "PIUTANG" && (
           <div>
             <label className="font-semibold">Payment Method</label>
             <select
               className="w-full border rounded px-2 py-1"
-              value={payment.paymentMethod}
+              value={paymentSafe.paymentMethod}
               onChange={(e) =>
-                onChange({ ...payment, paymentMethod: e.target.value })
+                onChange({
+                  ...paymentSafe,
+                  paymentMethod: e.target.value,
+                })
               }
             >
               <option value="KREDIT">KREDIT</option>
@@ -137,20 +141,21 @@ export default function FormPaymentSection({
           </div>
         )}
 
-        {/* MDR */}
-        {payment.paymentMethod === "KREDIT" && (
+        {/* KREDIT DETAIL */}
+        {paymentSafe.paymentMethod === "KREDIT" && (
           <>
+            {/* MDR */}
             <div>
               <label className="font-semibold">Nama MDR</label>
               <select
                 className="w-full border rounded px-2 py-1"
-                value={payment.namaMdr}
+                value={paymentSafe.namaMdr}
                 onChange={(e) => {
                   const m = masterMdr.find(
                     (x) => x.nama === e.target.value
                   );
                   onChange({
-                    ...payment,
+                    ...paymentSafe,
                     namaMdr: m?.nama || "",
                     persenMdr: Number(m?.persen || 0),
                   });
@@ -170,7 +175,7 @@ export default function FormPaymentSection({
               <input
                 readOnly
                 className="w-full border rounded px-2 py-1 bg-gray-100"
-                value={`${payment.persenMdr}%`}
+                value={`${paymentSafe.persenMdr}%`}
               />
             </div>
 
@@ -183,15 +188,16 @@ export default function FormPaymentSection({
               />
             </div>
 
+            {/* DP & VOUCHER */}
             <div>
               <label className="font-semibold">DP User</label>
               <input
                 type="number"
                 className="w-full border rounded px-2 py-1"
-                value={payment.dpUser}
+                value={paymentSafe.dpUser}
                 onChange={(e) =>
                   onChange({
-                    ...payment,
+                    ...paymentSafe,
                     dpUser: Number(e.target.value || 0),
                   })
                 }
@@ -203,10 +209,10 @@ export default function FormPaymentSection({
               <input
                 type="number"
                 className="w-full border rounded px-2 py-1"
-                value={payment.dpTalangan}
+                value={paymentSafe.dpTalangan}
                 onChange={(e) =>
                   onChange({
-                    ...payment,
+                    ...paymentSafe,
                     dpTalangan: Number(e.target.value || 0),
                   })
                 }
@@ -218,10 +224,10 @@ export default function FormPaymentSection({
               <input
                 type="number"
                 className="w-full border rounded px-2 py-1"
-                value={payment.voucher}
+                value={paymentSafe.voucher}
                 onChange={(e) =>
                   onChange({
-                    ...payment,
+                    ...paymentSafe,
                     voucher: Number(e.target.value || 0),
                   })
                 }
@@ -233,9 +239,12 @@ export default function FormPaymentSection({
               <label className="font-semibold">Tenor</label>
               <select
                 className="w-full border rounded px-2 py-1"
-                value={payment.tenor}
+                value={paymentSafe.tenor}
                 onChange={(e) =>
-                  onChange({ ...payment, tenor: e.target.value })
+                  onChange({
+                    ...paymentSafe,
+                    tenor: e.target.value,
+                  })
                 }
               >
                 <option value="">-- Pilih Tenor --</option>
@@ -247,7 +256,7 @@ export default function FormPaymentSection({
               </select>
             </div>
 
-            {payment.tenor && (
+            {paymentSafe.tenor && (
               <div className="text-sm">
                 <b>Cicilan / Bulan:</b>{" "}
                 Rp {cicilanPerBulan.toLocaleString("id-ID")}

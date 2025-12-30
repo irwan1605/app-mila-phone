@@ -12,6 +12,9 @@ import FormUserSection from "./FormUserSection";
 import FormItemSection from "./FormItemSection";
 import FormPaymentSection from "./FormPaymentSection";
 
+import TablePenjualan from "../../table/TablePenjualan";
+import ExportExcelButton from "../../../components/ExportExcelButton";
+
 import {
   listenUsers,
   listenMasterToko,
@@ -21,8 +24,7 @@ import {
   lockImeiPenjualan,
 } from "../../../services/FirebaseService";
 
-import ExportExcelButton from "../../../components/ExportExcelButton";
-import logoUrl from "../../../assets/logoMMT.png";
+import CetakInvoicePenjualan from "../../Print/CetakInvoicePenjualan";
 
 /* ================= UTIL ================= */
 const formatRupiah = (n) =>
@@ -59,12 +61,9 @@ export default function CardPenjualanToko() {
   const [imeiQuick, setImeiQuick] = useState("");
   const [items, setItems] = useState([]);
   const [loadingQuick, setLoadingQuick] = useState(false);
-
-
+  const [submitting, setSubmitting] = useState(false);
 
   const [payment, setPayment] = useState({});
-
-  
 
   const [userForm, setUserForm] = useState({
     tanggal: todayISO,
@@ -80,17 +79,15 @@ export default function CardPenjualanToko() {
   const tahap1Complete = useMemo(() => {
     return Boolean(
       userForm.tanggal &&
-      userForm.noFaktur &&
-      userForm.namaPelanggan &&
-      userForm.idPelanggan &&
-      userForm.noTlpPelanggan &&
-      userForm.namaToko &&
-      userForm.namaSales &&
-      userForm.salesTitipan
+        userForm.noFaktur &&
+        userForm.namaPelanggan &&
+        userForm.idPelanggan &&
+        userForm.noTlpPelanggan &&
+        userForm.namaToko &&
+        userForm.namaSales &&
+        userForm.salesTitipan
     );
   }, [userForm]);
-  
-  
 
   const [paymentForm, setPaymentForm] = useState({
     metode: "",
@@ -101,9 +98,10 @@ export default function CardPenjualanToko() {
   const [users, setUsers] = useState([]);
   const [masterToko, setMasterToko] = useState([]);
   const [penjualanList, setPenjualanList] = useState([]);
+  const [printData, setPrintData] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   /* ================= VALIDASI TAHAP ================= */
-
 
   /* ================= MASTER DATA ================= */
   useEffect(() => {
@@ -319,6 +317,162 @@ export default function CardPenjualanToko() {
     }
   };
 
+  const handlePreviewInvoice = () => {
+    setPrintData({
+      form,
+      items: sanitizeItemsForFirebase(items),
+      payment: paymentForm,
+      total: paymentForm.grandTotal,
+    });
+    setShowPreview(true);
+  };
+  // ================= VALIDASI SUBMIT (HANYA TAHAP 3) =================
+  const canSubmit = useMemo(() => {
+    if (!tahap1Complete) return false;
+    if (!tahap2Complete) return false;
+
+    if (paymentForm.status === "LUNAS") return true;
+
+    if (paymentForm.status === "PIUTANG") {
+      return (
+        paymentForm.paymentMethod === "KREDIT" &&
+        !!paymentForm.namaMdr &&
+        Number(paymentForm.persenMdr) > 0 &&
+        !!paymentForm.tenor &&
+        Number(paymentForm.dpUser) > 0
+      );
+    }
+    return false;
+  }, [tahap1Complete, tahap2Complete, paymentForm]);
+
+  const form = useMemo(
+    () => ({
+      tanggal: userForm?.tanggal || "",
+      noFaktur: userForm?.noFaktur || "",
+      namaPelanggan: userForm?.namaPelanggan || "",
+      idPelanggan: userForm?.idPelanggan || "",
+      noTlpPelanggan: userForm?.noTlpPelanggan || "",
+      namaToko: userForm?.namaToko || "",
+      namaSales: userForm?.namaSales || "",
+      salesTitipan: userForm?.salesTitipan || "",
+    }),
+    [userForm]
+  );
+
+  const sanitizeItemsForFirebase = (items = []) => {
+    return items.map((it, idx) => ({
+      id: it.id || Date.now() + idx,
+
+      kategoriBarang: it.kategoriBarang || "",
+      namaBrand: it.namaBrand || "",
+      namaBarang: it.namaBarang || "",
+
+      // 🔴 FIX UTAMA (TIDAK BOLEH UNDEFINED)
+      sku: it.sku ? String(it.sku) : "",
+
+      imeiList: Array.isArray(it.imeiList) ? it.imeiList : [],
+
+      qty: Number(it.qty || 0),
+      skemaHarga: it.skemaHarga || "SRP",
+
+      hargaUnit: Number(it.hargaUnit || 0),
+      hargaBundling: Number(it.hargaBundling || 0),
+      qtyBundling: Number(it.qtyBundling || 0),
+
+      subtotal:
+        Number(it.hargaUnit || 0) * Number(it.qty || 0) +
+        Number(it.hargaBundling || 0) * Number(it.qtyBundling || 0),
+
+      isImei: Boolean(it.isImei),
+    }));
+  };
+
+  const handleSubmitPenjualan = async () => {
+    if (submitting || !canSubmit) return;
+
+    try {
+      setSubmitting(true);
+
+      const invoice = form.noFaktur;
+      const sanitizedItems = sanitizeItemsForFirebase(items);
+
+      // 1️⃣ LOCK IMEI
+      for (const it of sanitizedItems) {
+        if (it.isImei) {
+          for (const imei of it.imeiList) {
+            await lockImeiPenjualan(imei, {
+              invoice,
+              toko: form.namaToko,
+              status: "LOCKED",
+            });
+          }
+        }
+      }
+
+      // 2️⃣ UPDATE STOK
+      for (const it of sanitizedItems) {
+        await updateStockAtomic(
+          form.namaToko,
+          `${it.namaBrand}_${it.namaBarang}`,
+          -Number(it.qty)
+        );
+      }
+
+      // 3️⃣ SIMPAN PENJUALAN
+      const payload = {
+        invoice,
+        tanggal: form.tanggal,
+        toko: form.namaToko,
+        pelanggan: {
+          nama: form.namaPelanggan,
+          id: form.idPelanggan,
+          noTlp: form.noTlpPelanggan,
+        },
+        sales: form.namaSales,
+        items: sanitizedItems,
+        payment: paymentForm,
+        totalPenjualan: totalItemsAmount,
+        grandTotal: paymentForm.grandTotal,
+        statusPembayaran: paymentForm.status,
+        createdAt: Date.now(),
+        createdBy: userLogin?.username || "SYSTEM",
+      };
+
+      await set(ref(db, `penjualan/${invoice}`), payload);
+
+      // 4️⃣ FINAL SOLD IMEI
+      for (const it of sanitizedItems) {
+        if (it.isImei) {
+          for (const imei of it.imeiList) {
+            await set(ref(db, `penjualan_imei/${imei}`), {
+              invoice,
+              toko: form.namaToko,
+              status: "SOLD",
+              soldAt: Date.now(),
+            });
+          }
+        }
+      }
+
+      alert("✅ Penjualan berhasil");
+      navigate(`/print/cetak-invoice-penjualan/${invoice}`);
+    } catch (err) {
+      console.error(err);
+      alert(`❌ Gagal simpan: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const totalItemsAmount = useMemo(() => {
+    return items.reduce((sum, it) => {
+      const itemTotal =
+        Number(it.hargaUnit || 0) * Number(it.qty || 0) +
+        Number(it.hargaBundling || 0) * Number(it.qtyBundling || 0);
+      return sum + itemTotal;
+    }, 0);
+  }, [items]);
+
   /* ================= RENDER ================= */
   return (
     <div className="p-6 space-y-4">
@@ -402,73 +556,74 @@ export default function CardPenjualanToko() {
             totalBarang={totals.totalAmount}
             disabled={!tahap2Complete}
           />
+
+          <div className="flex justify-between items-center mt-4 gap-3">
+            {/* PREVIEW INVOICE */}
+            <button
+              type="button"
+              onClick={handlePreviewInvoice}
+              className="px-4 py-2 rounded bg-blue-600 text-white"
+            >
+              👁️ Preview Invoice
+            </button>
+
+            <button
+              type="button"
+              disabled={!items.length}
+              onClick={() =>
+                navigate("/print/cetak-invoice-penjualan", {
+                  state: {
+                    transaksi: {
+                      invoice: form.noFaktur,
+                      toko: form.namaToko,
+                      user: userForm,
+                      items: sanitizeItemsForFirebase(items),
+                      payment: paymentForm,
+                      totalBarang: totalItemsAmount,
+                    },
+                  },
+                })
+              }
+              className="px-4 py-2 rounded bg-purple-600 text-white"
+            >
+              🖨️ Cetak Invoice
+            </button>
+
+            {/* SUBMIT */}
+            <button
+              type="button"
+              disabled={!canSubmit || submitting}
+              onClick={handleSubmitPenjualan}
+              className={`px-4 py-2 rounded text-white ${
+                canSubmit ? "bg-green-600" : "bg-gray-400"
+              }`}
+            >
+              {submitting ? "Menyimpan..." : "SUBMIT PENJUALAN"}
+            </button>
+          </div>
+
+          <div className=" p-2">
+            {showPreview && printData && (
+              <CetakInvoicePenjualan transaksi={printData} />
+            )}
+          </div>
         </div>
+
         <p className="text-xs text-red-500">
           allowManual (tahap1Complete): {String(tahap1Complete)}
         </p>
       </div>
 
-      <div className="flex justify-between items-center">
-        <strong>{formatRupiah(totals.totalAmount)}</strong>
-        <button
-          disabled={!tahap3Complete}
-          onClick={handleSave}
-          className="bg-green-600 text-white px-4 py-2 rounded"
-        >
-          SIMPAN
-        </button>
-      </div>
+      {/* ================= TABLE PENJUALAN ================= */}
+      <div className="bg-white rounded-2xl shadow-lg p-5 mb-6">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-lg font-bold">📊 TABEL PENJUALAN</h2>
 
-      {/* PREVIEW */}
-      <div ref={previewRef} className="border p-4 mt-6 bg-white">
-        <img src={logoUrl} alt="logo" className="h-10 mb-2" />
-        <p>No Invoice: {userForm.noFaktur}</p>
-        <p>Nama Pelanggan: {userForm.namaPelanggan}</p>
-        <p>Sales: {userForm.namaSales}</p>
-
-        <table className="w-full mt-3 border text-sm">
-          <thead>
-            <tr>
-              <th>Barang</th>
-              <th>IMEI</th>
-              <th>Qty</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {safeItems.map((i, idx) => (
-              <tr key={idx}>
-                <td>{i.namaBarang}</td>
-                <td>{(i.imeiList || []).join(", ")}</td>
-                <td>{i.qty}</td>
-                <td>{formatRupiah(i.hargaUnit * i.qty)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="mt-4 text-right font-bold">
-          {formatRupiah(totals.totalAmount)}
+          {/* TOMBOL EXPORT EXCEL */}
+          <ExportExcelButton transaksiType="penjualan" />
         </div>
 
-        <p className="mt-6 text-center text-sm">
-          Terima kasih telah berbelanja di tempat kami
-        </p>
-
-        <div className="flex justify-between mt-8 text-sm">
-          <div>
-            Pelanggan
-            <br />
-            <br />
-            {userForm.namaPelanggan}
-          </div>
-          <div>
-            Hormat Kami
-            <br />
-            <br />
-            {userForm.namaSales}
-          </div>
-        </div>
+        <TablePenjualan />
       </div>
     </div>
   );

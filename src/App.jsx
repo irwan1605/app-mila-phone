@@ -67,6 +67,7 @@ import CardStockOpnameToko from "./pages/Toko/CardStockOpnameToko";
 import CardTransferGudangToko from "./pages/Toko/CardTransferGudangToko";
 import DetailStockAllToko from "./pages/table/DetailStockAllToko";
 import DetailStockToko from "./pages/table/DetailStockToko";
+import CetakInvoicePenjualan from "./pages/Print/CetakInvoicePenjualan";
 
 /* ===========================
     Utility role → toko
@@ -196,6 +197,10 @@ export default function App() {
                   <Route
                     path="/toko/:tokoId/penjualan"
                     element={<CardPenjualanToko />}
+                  />
+                  <Route
+                    path="/print/cetak-invoice-penjualan"
+                    element={<CetakInvoicePenjualan />}
                   />
                   <Route
                     path="/toko/:tokoId/stock-opname"
