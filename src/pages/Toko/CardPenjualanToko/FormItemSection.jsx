@@ -28,12 +28,12 @@ export default function FormItemSection({
   const items = Array.isArray(value) ? value : [];
   const safeOnChange = typeof onChange === "function" ? onChange : () => {};
 
-
   const removeItem = (idx) => {
     safeOnChange(items.filter((_, i) => i !== idx));
   };
 
   /* ================= MASTER DATA ================= */
+
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterKategori, setMasterKategori] = useState([]);
 
@@ -75,10 +75,9 @@ export default function FormItemSection({
     masterBarang.filter(
       (b) => b.kategoriBarang === kategori && (b.namaBrand || b.brand) === brand
     );
-    
-;
-   /* ================= IMEI AUTOCOMPLETE ================= */
-   useEffect(() => {
+
+  /* ================= IMEI AUTOCOMPLETE ================= */
+  useEffect(() => {
     if (!imeiQuick || !tokoLogin) {
       setImeiSuggest([]);
       return;
@@ -92,94 +91,16 @@ export default function FormItemSection({
     return () => (active = false);
   }, [imeiQuick, tokoLogin]);
 
-  /* ================= HANDLE QUICK IMEI ================= */
-  const handleCariImei = async () => {
-    if (!imeiQuick || !tokoLogin) return;
-
-    setLoadingImei(true);
-    try {
-      const data = await getImeiDetailByToko(tokoLogin, imeiQuick.trim());
-
-      if (!data) {
-        alert("❌ Nomor IMEI ini tidak ada di Toko Anda");
-        return;
-      }
-
-      safeOnChange([
-        {
-          id: Date.now(),
-          kategoriBarang: data.kategoriBarang,
-          namaBrand: data.namaBrand,
-          namaBarang: data.namaBarang,
-          sku: data.sku,
-          imeiList: [data.imei],
-          qty: 1,
-          hargaUnit: data.harga?.srp || 0,
-          skemaHarga: "SRP",
-          isImei: true,
-        },
-      ]);
-
-      setImeiQuick("");
-      setImeiSuggest([]);
-    } finally {
-      setLoadingImei(false);
-    }
-  };
-
-  
-
-  const hitungSubtotal = (item) =>
-    Number(item.hargaUnit || 0) * Number(item.qty || 0) +
-    Number(item.hargaBundling || 0) * Number(item.qtyBundling || 0);
+  const subtotalAll = useMemo(() => {
+    return items.reduce(
+      (sum, it) => sum + Number(it.hargaUnit || 0) * Number(it.qty || 0),
+      0
+    );
+  }, [items]);
 
   /* ================= RENDER ================= */
   return (
     <div className={!allowManual ? "opacity-50 pointer-events-none" : ""}>
-      {/* ================= QUICK IMEI ================= */}
-      <div className="border rounded-xl p-3 mb-4 bg-indigo-50">
-        <label className="text-xs font-bold text-indigo-700">
-          🔎 Penjualan Cepat (Scan / Ketik IMEI)
-        </label>
-
-        <div className="flex gap-2 mt-2">
-        <input
-          className="w-full border rounded-lg px-3 py-2 mt-2 text-sm"
-          placeholder="Scan / ketik IMEI lalu Enter"
-          value={imeiQuick}
-          onChange={(e) => setImeiQuick(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleCariImei()}
-        />
-
-        {/* AUTOCOMPLETE IMEI */}
-        {imeiSuggest.length > 0 && (
-          <div className="border mt-1 rounded bg-white max-h-40 overflow-auto">
-            {imeiSuggest.map((im) => (
-              <div
-                key={im}
-                onClick={() => {
-                  setImeiQuick(im);
-                  setImeiSuggest([]);
-                }}
-                className="px-3 py-1 hover:bg-indigo-100 cursor-pointer text-sm"
-              >
-                {im}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={handleCariImei}
-          disabled={loadingImei}
-          className="mt-2 w-full bg-indigo-600 text-white py-2 rounded-lg"
-        >
-          {loadingImei ? "⏳" : "CARI IMEI"}
-        </button>
-        </div>
-      </div>
-
       {/* ================= ITEM LIST ================= */}
       {items.map((item, idx) => (
         <div
@@ -190,7 +111,7 @@ export default function FormItemSection({
           <select
             className="w-full border rounded-lg p-2"
             value={item.kategoriBarang}
-           onChange={(e) =>
+            onChange={(e) =>
               updateItem(idx, {
                 kategoriBarang: e.target.value,
                 namaBrand: "",
@@ -298,28 +219,38 @@ export default function FormItemSection({
             </select>
           </div>
 
-         {/* IMEI MANUAL + SUGGEST */}
-         {item.isImei && (
+          {/* IMEI MANUAL + SUGGEST */}
+          {item.isImei && (
             <>
               <textarea
                 rows={3}
                 className="w-full border rounded-lg p-2"
                 placeholder="1 IMEI per baris"
                 value={(item.imeiList || []).join("\n")}
-                onChange={(e) => {
-                  const list = e.target.value
+                onChange={async (e) => {
+                  const imeiList = e.target.value
                     .split("\n")
                     .map((x) => x.trim())
                     .filter(Boolean);
-                  updateItem(idx, { imeiList: list, qty: list.length });
+
+                  // 🔐 VALIDASI IMEI HARUS MILIK TOKO
+                  for (const im of imeiList) {
+                    const data = await getImeiDetailByToko(tokoLogin, im);
+
+                    if (!data) {
+                      alert(`❌ IMEI ${im} bukan milik toko Anda`);
+                      return;
+                    }
+                  }
+
+                  updateItem(idx, {
+                    imeiList,
+                    qty: imeiList.length,
+                  });
                 }}
                 onFocus={async () => {
-                  if (!item.sku || !tokoLogin) return;
-                  const imeis = await getAvailableImeisFromInventory(
-                    tokoLogin,
-                    item.sku
-                  );
-                  updateItem(idx, { imeiAvailable: imeis || [] });
+                  const imeis = await getImeiListByToko(tokoLogin, "");
+                  updateItem(idx, { imeiAvailable: imeis });
                 }}
                 list={`imei-${idx}`}
               />
@@ -333,21 +264,27 @@ export default function FormItemSection({
           )}
 
           {/* QTY MANUAL */}
-          {!item.isImei && (
+          {item.isImei ? (
+            <input
+              readOnly
+              value={item.imeiList.length}
+              className="w-full border rounded-lg px-2 py-1 bg-gray-100 text-sm"
+            />
+          ) : (
             <input
               type="number"
               min={1}
-              className="w-full border rounded-lg p-2"
               value={item.qty || 1}
               onChange={(e) =>
                 updateItem(idx, { qty: Number(e.target.value || 1) })
               }
+              className="w-full border rounded-lg px-2 py-1 text-sm"
             />
           )}
 
           {/* SUBTOTAL */}
-          <div className="text-right font-bold text-indigo-700">
-            Total: Rp {hitungSubtotal(item).toLocaleString("id-ID")}
+          <div className="text-right font-bold text-lg text-green-700">
+            TOTAL PENJUALAN: Rp {subtotalAll.toLocaleString("id-ID")}
           </div>
 
           {items.length > 1 && (

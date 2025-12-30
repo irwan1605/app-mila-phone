@@ -1846,34 +1846,33 @@ export const findImeiForPenjualan = async (imei, toko) => {
 };
 
 
-export const getImeiDetailByToko = async (namaToko, imei) => {
-  if (!namaToko || !imei) return null;
+export const getImeiDetailByToko = async (toko, imei) => {
+  if (!toko || !imei) return null;
 
+  // 🔥 BACA TRANSAKSI TOKO (SUMBER KEBENARAN)
   const snap = await get(ref(db, "toko"));
   if (!snap.exists()) return null;
 
   let found = null;
 
   snap.forEach((tokoSnap) => {
-    const transaksiSnap = tokoSnap.child("transaksi");
-    transaksiSnap.forEach((trx) => {
-      const v = trx.val();
+    tokoSnap.child("transaksi").forEach((trxSnap) => {
+      const trx = trxSnap.val();
 
       if (
-        v?.IMEI === imei &&
-        v?.STATUS === "Approved" &&
-        v?.NAMA_TOKO === namaToko
+        trx?.STATUS === "Approved" &&
+        trx?.IMEI === imei &&
+        trx?.NAMA_TOKO === toko
       ) {
         found = {
-          imei: v.IMEI,
-          kategoriBarang: v.KATEGORI_BRAND,
-          namaBrand: v.NAMA_BRAND,
-          namaBarang: v.NAMA_BARANG,
-          sku: v.SKU || "",
+          kategoriBarang: trx.KATEGORI_BRAND,
+          namaBrand: trx.NAMA_BRAND,
+          namaBarang: trx.NAMA_BARANG,
+          sku: `${trx.NAMA_BRAND}_${trx.NAMA_BARANG}`,
           harga: {
-            srp: Number(v.HARGA_UNIT || 0),
-            grosir: Number(v.HARGA_UNIT || 0),
-            reseller: Number(v.HARGA_UNIT || 0),
+            srp: trx.HARGA_UNIT,
+            grosir: trx.HARGA_UNIT,
+            reseller: trx.HARGA_UNIT,
           },
         };
       }
@@ -1882,6 +1881,8 @@ export const getImeiDetailByToko = async (namaToko, imei) => {
 
   return found;
 };
+
+
 
 /* =========================================================
    LIST IMEI TOKO (AUTOCOMPLETE SAAT KETIK)
