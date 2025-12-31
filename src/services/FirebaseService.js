@@ -53,38 +53,33 @@ import {
 /* =====================================================
    🔒 LOCK IMEI (ANTI DOUBLE JUAL)
 ===================================================== */
-export const lockImei = async (imei, userId) => {
-  const r = ref(db, `inventory_imei/${imei}`);
+export const lockImei = async ({ imei, toko, invoice }) => {
+  if (typeof imei !== "string" || !imei) {
+    throw new Error("IMEI tidak valid saat lock");
+  }
 
-  const res = await runTransaction(r, (current) => {
-    if (!current) return current;
-
-    // ❌ tidak boleh di-lock kalau bukan AVAILABLE
-    if (current.status !== "AVAILABLE") {
-      return; // abort
-    }
-
-    return {
-      ...current,
-      status: "LOCKED",
-      lockedBy: userId,
-      lockedAt: Date.now(),
-    };
+  return set(ref(db, `inventory_imei/${imei}`), {
+    status: "LOCKED",
+    toko: toko || "",
+    invoice: invoice || "",
+    lockedAt: Date.now(),
+    lockedBy: "SYSTEM",
   });
-
-  return res;
 };
+
 
 /* =====================================================
    ✅ FINAL SOLD
 ===================================================== */
-export const markImeiSold = async (imei, invoice) => {
-  return update(ref(db, `inventory_imei/${imei}`), {
+export const markImeiSold = async ({ imei, invoice }) => {
+  if (typeof imei !== "string" || !imei) {
+    throw new Error("IMEI tidak valid saat SOLD");
+  }
+
+  return set(ref(db, `inventory_imei/${imei}`), {
     status: "SOLD",
-    soldAt: Date.now(),
     invoice,
-    lockedBy: null,
-    lockedAt: null,
+    soldAt: Date.now(),
   });
 };
 
@@ -2016,11 +2011,59 @@ export const listenPenjualan = (cb) => {
   });
 };
 
-export const voidTransaksiPenjualan = async (id) => {
-  await update(ref(db, `penjualan/${id}`), {
-    STATUS: "VOID",
-    voidAt: Date.now(),
+export const voidTransaksiPenjualan = async (penjualanId) => {
+  const trxRef = ref(db, `penjualan/${penjualanId}`);
+  const snap = await get(trxRef);
+
+  if (!snap.exists()) {
+    throw new Error("Data penjualan tidak ditemukan");
+  }
+
+  const trx = snap.val();
+  const toko = trx.toko;
+  const items = trx.items || [];
+
+  /* ================= ROLLBACK ITEM ================= */
+  for (const item of items) {
+    const qty = Number(item.qty || 0);
+    const sku = item.sku;
+
+    /* 1️⃣ UNLOCK IMEI */
+    if (Array.isArray(item.imeiList)) {
+      for (const imei of item.imeiList) {
+        if (!imei) continue;
+
+        await update(ref(db, `inventory_imei/${imei}`), {
+          status: "AVAILABLE",
+          unlockedAt: Date.now(),
+          unlockedBy: "VOID",
+        });
+      }
+    }
+
+    /* 2️⃣ ROLLBACK STOK TOKO */
+    if (sku) {
+      const stokRef = ref(db, `stock/${toko}/${sku}`);
+      const stokSnap = await get(stokRef);
+      const currentQty = stokSnap.exists()
+        ? Number(stokSnap.val().qty || 0)
+        : 0;
+
+      await set(stokRef, {
+        qty: currentQty + qty,
+        updatedAt: Date.now(),
+      });
+    }
+  }
+
+  /* 3️⃣ UPDATE STATUS PENJUALAN */
+  await update(trxRef, {
+    statusPembayaran: "VOID",
+    VOID_AT: Date.now(),
+    VOID_BY: "SUPERADMIN",
   });
+
+  return true;
 };
 
 

@@ -70,6 +70,7 @@ export default function FormItemSection({
       ),
     [items]
   );
+  
 
   const totalPenjualan = useMemo(() => {
     return items.reduce(
@@ -135,37 +136,39 @@ export default function FormItemSection({
             disabled={!item.namaBrand}
             value={item.namaBarang || ""}
             onChange={(e) => {
-              const b = barangList(item.kategoriBarang, item.namaBrand).find(
-                (x) => x.namaBarang === e.target.value
-              );
+              const b = barangList(item.kategoriBarang, item.namaBrand)
+                .find(x => x.namaBarang === e.target.value);
+            
               if (!b) return;
-
+            
               updateItem(idx, {
                 namaBarang: b.namaBarang,
                 kategoriBarang: b.kategoriBarang,
+                sku: b.sku || "",   // 🔴 INI FIX UTAMA SKU
                 isImei: isImeiKategori(b.kategoriBarang),
-
+            
                 hargaMap: {
-                  srp: Number(b.harga?.srp ?? b.HARGA_SRP ?? 0),
-                  grosir: Number(b.harga?.grosir ?? b.HARGA_GROSIR ?? 0),
-                  reseller: Number(b.harga?.reseller ?? b.HARGA_RESELLER ?? 0),
+                  srp: Number(b.harga?.srp || 0),
+                  grosir: Number(b.harga?.grosir || 0),
+                  reseller: Number(b.harga?.reseller || 0),
                 },
+            
                 skemaHarga: "srp",
-                hargaUnit: Number(b.HARGA_SRP || 0),
+                hargaUnit: Number(b.harga?.srp || 0),
                 qty: isImeiKategori(b.kategoriBarang) ? 0 : 1,
-
+            
                 isBundling:
-                  ["MOTOR LISTRIK", "SEPEDA LISTRIK"].includes(
-                    b.kategoriBarang
-                  ) && b.IS_BUNDLING,
+                  ["MOTOR LISTRIK", "SEPEDA LISTRIK"].includes(b.kategoriBarang) &&
+                  b.IS_BUNDLING,
+            
                 bundlingItems:
-                  ["MOTOR LISTRIK", "SEPEDA LISTRIK"].includes(
-                    b.kategoriBarang
-                  ) && b.IS_BUNDLING
+                  ["MOTOR LISTRIK", "SEPEDA LISTRIK"].includes(b.kategoriBarang) &&
+                  b.IS_BUNDLING
                     ? b.BUNDLING_ITEMS || []
                     : [],
               });
             }}
+            
           >
             <option value="">-- Pilih Barang --</option>
             {barangList(item.kategoriBarang, item.namaBrand).map((b) => (

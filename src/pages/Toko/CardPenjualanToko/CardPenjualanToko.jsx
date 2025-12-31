@@ -320,46 +320,7 @@ export default function CardPenjualanToko() {
     }
   };
 
-  /* ================= SAVE FINAL ================= */
-  const handleSave = async () => {
-    try {
-      for (const it of safeItems) {
-        if (it.isImei) {
-          for (const im of it.imeiList) {
-            await lockImeiPenjualan(im, {
-              toko: userForm.namaToko,
-              invoice: userForm.noFaktur,
-            });
-          }
-        }
 
-        await updateStockAtomic(
-          userForm.namaToko,
-          `${it.namaBrand}_${it.namaBarang}`,
-          -Number(it.qty)
-        );
-      }
-
-      
-
-      await addTransaksi({
-        invoice: userForm.noFaktur,
-        toko: userForm.namaToko,
-        user: userForm,
-        items: safeItems,
-        payment: payment,
-        STATUS: "APPROVED",
-        totalBarang: totals.totalAmount,
-        createdAt: Date.now(),
-      });
-
-      alert("✅ Penjualan berhasil");
-      navigate(-1);
-    } catch (e) {
-      console.error(e);
-      alert("❌ Gagal simpan transaksi");
-    }
-  };
 
   const handlePreviewInvoice = () => {
     setPrintData({
@@ -434,150 +395,130 @@ export default function CardPenjualanToko() {
       isImei: Boolean(it.isImei),
     }));
   };
+
+  const getStockKey = (item) => {
+    const kategori = String(item.kategoriBarang || "").toUpperCase();
+  
+    // ACCESSORIES WAJIB SKU
+    if (kategori === "ACCESSORIES") {
+      if (!item.sku) {
+        throw new Error(`SKU tidak ditemukan (${item.namaBarang})`);
+      }
+      return item.sku;
+    }
+  
+    // MOTOR / SEPEDA / HP → pakai nama
+    return `${item.namaBrand}_${item.namaBarang}`;
+  };
+  
   
   const handleSubmitPenjualan = async () => {
-    if (submitting) return;
-  
     try {
       setSubmitting(true);
   
-      /* =====================================================
-         1️⃣ VALIDASI AWAL (HARD STOP)
-      ===================================================== */
-      if (!items || !items.length) {
-        throw new Error("Barang belum diisi");
-      }
+      /* ================= VALIDASI DASAR ================= */
+      if (!items.length) throw new Error("Barang kosong");
+      if (!payment?.status) throw new Error("Pembayaran belum lengkap");
   
-      if (!tokoLogin) {
+      /* ================= USER & TOKO ================= */
+      const userLogin =
+        JSON.parse(localStorage.getItem("userLogin")) || {};
+      const masterToko =
+        JSON.parse(localStorage.getItem("masterTokoCache")) || [];
+  
+      const tokoObj = masterToko.find(
+        (t) => String(t.id) === String(userLogin.toko)
+      );
+  
+      if (!tokoObj?.nama)
         throw new Error("Toko login tidak ditemukan");
-      }
   
-      const invoice = form.noFaktur || `INV-${Date.now()}`;
+      const toko = tokoObj.nama;
+      const invoice = `INV-${Date.now()}`;
   
-      // HITUNG TOTAL PENJUALAN (FINAL)
-      const totalPenjualan = items.reduce(
-        (sum, it) => sum + Number(it.qty || 0) * Number(it.hargaUnit || 0),
+      /* ================= NORMALISASI ITEM ================= */
+      const fixedItems = items.map((it, idx) => {
+        const hargaUnit = Number(it.hargaUnit || 0);
+  
+        if (hargaUnit <= 0) {
+          throw new Error(
+            `Harga kosong: ${it.namaBarang}`
+          );
+        }
+  
+        return {
+          ...it,
+          id: it.id || Date.now() + idx,
+          qty: Number(it.qty || 0),
+          hargaUnit,
+          imeiList: Array.isArray(it.imeiList)
+            ? it.imeiList.filter(
+                (x) => typeof x === "string" && x.length > 5
+              )
+            : [],
+        };
+      });
+  
+      /* ================= HITUNG TOTAL ================= */
+      const totalBarang = fixedItems.reduce(
+        (s, i) => s + i.qty * i.hargaUnit,
         0
       );
   
-      if (totalPenjualan <= 0) {
-        throw new Error("Total penjualan tidak valid");
-      }
-  
-      // PAYMENT FINAL (AMAN UNTUK CASH & KREDIT)
       const paymentFinal = {
         ...payment,
-        nominalMdr:
-          payment.paymentMethod === "KREDIT"
-            ? Number(payment.nominalMdr || 0)
-            : 0,
-        cicilan:
-          payment.paymentMethod === "KREDIT"
-            ? Number(payment.cicilan || 0)
-            : 0,
-        tenor:
-          payment.paymentMethod === "KREDIT" ? payment.tenor || "" : "",
-        grandTotal: Number(payment.grandTotal || totalPenjualan),
+        grandTotal:
+          Number(payment.grandTotal || totalBarang),
       };
   
-      /* =====================================================
-         2️⃣ LOCK IMEI + KURANGI STOK (ATOMIC STEP)
-      ===================================================== */
-      const lockedImeis = [];
-  
-      for (const item of items) {
-        if (!item.sku) {
-          throw new Error(`SKU tidak ditemukan (${item.namaBarang})`);
-        }
-  
-        // 🔒 LOCK IMEI (JIKA ADA)
-        if (item.isImei) {
-          for (const imei of item.imeiList || []) {
-            await lockImei({
-              imei,
-              toko: tokoLogin,
-              invoice,
-            });
-            lockedImeis.push(imei);
-          }
-        }
-  
-        // 📉 KURANGI STOK TOKO
-        await kurangiStokToko({
-          toko: tokoLogin,
-          sku: item.sku,
-          qty: Number(item.qty || 0),
-          imeiList: item.isImei ? item.imeiList : [],
-        });
-      }
-
-      
-  
-      /* =====================================================
-         3️⃣ SIMPAN PENJUALAN (LAST STEP)
-      ===================================================== */
-      await addPenjualan({
+      /* ================= 1️⃣ SIMPAN PENJUALAN ================= */
+      const penjualanId = await addPenjualan({
         invoice,
-        toko: userForm.namaToko,
-        tanggal: userForm.tanggal,
-        pelanggan: {
-          nama: userForm.namaPelanggan,
-          telp: userForm.noTlpPelanggan,
-        },
-        sales: userForm.namaSales,
-      
-        items: sanitizeItemsForFirebase(items),
-      
-        payment: {
-          status: payment.status,
-          paymentMethod: payment.paymentMethod,
-          namaMdr: payment.namaMdr || "",
-          nominalMdr: payment.nominalMdr || 0,
-          tenor: payment.tenor || "",
-          cicilan: payment.cicilan || 0,
-          grandTotal: payment.grandTotal,
-        },
-      
-        STATUS: "APPROVED",
+        toko,
+        user: userLogin,
+        items: fixedItems,
+        totalBarang,
+        payment: paymentFinal,
+        statusPembayaran: paymentFinal.status,
         createdAt: Date.now(),
+        STATUS: "OK",
       });
   
-      /* =====================================================
-         4️⃣ COMMIT IMEI → SOLD
-      ===================================================== */
-      for (const imei of lockedImeis) {
-        await markImeiSold({
-          imei,
-          toko: tokoLogin,
-          invoice,
+      /* ================= 2️⃣ LOCK IMEI ================= */
+      for (const item of fixedItems) {
+        if (!item.isImei) continue;
+  
+        for (const imei of item.imeiList) {
+          await lockImei({
+            imei: String(imei),
+            toko,
+            invoice,
+          });
+        }
+      }
+  
+      /* ================= 3️⃣ KURANGI STOK ================= */
+      for (const item of fixedItems) {
+        await kurangiStokToko({
+          toko,
+          barang: item.namaBarang,
+          qty: item.qty,
+          imeiList: item.isImei ? item.imeiList : [],
         });
       }
   
       alert("✅ Penjualan berhasil");
-  
+      navigate(0);
     } catch (err) {
       console.error("❌ PENJUALAN ERROR:", err);
-  
-      /* =====================================================
-         5️⃣ ROLLBACK (ANTI DATA RUSAK)
-      ===================================================== */
-      try {
-        for (const it of items) {
-          if (it.isImei) {
-            for (const imei of it.imeiList || []) {
-              await unlockImei(imei);
-            }
-          }
-        }
-      } catch (rollbackErr) {
-        console.error("⚠️ ROLLBACK IMEI GAGAL:", rollbackErr);
-      }
-  
-      alert(err.message || "❌ Penjualan gagal");
+      alert(`❌ Penjualan gagal\n${err.message}`);
     } finally {
       setSubmitting(false);
     }
   };
+  
+  
+  
   
 
   const totalQty = useMemo(

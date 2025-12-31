@@ -406,6 +406,16 @@
       }
     }
   },
+  "inventory_imei": {
+    "872417471818100GA3": {
+      "lockedAt": 1767120373304,
+      "lockedBy": "SYSTEM",
+      "status": "LOCKED"
+    },
+    "872417471818100GA4": {
+      "status": "AVAILABLE"
+    }
+  },
   "karyawan": {
     "-Ogisu6QbsATjJuj09d2": {
       "GAJI": 1,
@@ -553,22 +563,133 @@
       "nama": "SAWANGAN"
     }
   },
+  "penjualan": {
+    "-OhksqHWkRBcAQPCsliA": {
+      "createdAt": 1767125508034,
+      "invoice": "INV-1767125508033",
+      "items": [
+        {
+          "hargaBundling": 0,
+          "hargaUnit": 0,
+          "id": 1767125490948,
+          "imeiList": [
+            "872417471818100GA5"
+          ],
+          "isImei": true,
+          "kategoriBarang": "MOTOR LISTRIK",
+          "namaBarang": "OFERO STAREER MOTOR",
+          "namaBrand": "OFERO",
+          "qty": 1,
+          "qtyBundling": 0,
+          "skemaHarga": "srp",
+          "sku": "",
+          "subtotal": 0
+        }
+      ],
+      "payment": {
+        "cicilan": 0,
+        "dpTalangan": 0,
+        "dpUser": 0,
+        "grandTotal": 0,
+        "namaMdr": "",
+        "nominalMdr": 0,
+        "paymentMethod": "CASH",
+        "persenMdr": 0,
+        "status": "LUNAS",
+        "tenor": "",
+        "voucher": 0
+      },
+      "statusPembayaran": "LUNAS",
+      "totalBarang": 0,
+      "user": {
+        "name": "INEL",
+        "role": "superadmin",
+        "username": "INEL"
+      }
+    },
+    "-Ohkt5Q28x83RuerV04-": {
+      "createdAt": 1767125574116,
+      "invoice": "INV-1767125574116",
+      "items": [
+        {
+          "hargaBundling": 0,
+          "hargaUnit": 0,
+          "id": 1767125490948,
+          "imeiList": [
+            "872417471818100GA5"
+          ],
+          "isImei": true,
+          "kategoriBarang": "MOTOR LISTRIK",
+          "namaBarang": "OFERO STAREER MOTOR",
+          "namaBrand": "OFERO",
+          "qty": 1,
+          "qtyBundling": 0,
+          "skemaHarga": "srp",
+          "sku": "",
+          "subtotal": 0
+        }
+      ],
+      "payment": {
+        "cicilan": 0,
+        "dpTalangan": 0,
+        "dpUser": 0,
+        "grandTotal": 0,
+        "namaMdr": "",
+        "nominalMdr": 0,
+        "paymentMethod": "CASH",
+        "persenMdr": 0,
+        "status": "LUNAS",
+        "tenor": "",
+        "voucher": 0
+      },
+      "statusPembayaran": "LUNAS",
+      "totalBarang": 0,
+      "user": {
+        "name": "INEL",
+        "role": "superadmin",
+        "username": "INEL"
+      }
+    },
+    "-OhkuzEvuGozY3gixgJU": {
+      "createdAt": 1767126069020,
+      "invoice": "INV-1767126069020",
+      "items": [
+        {
+          "hargaBundling": 0,
+          "hargaUnit": 0,
+          "id": 1767126027122,
+          "imeiList": [
+            "872417471818100GA4"
+          ],
+          "isImei": true,
+          "kategoriBarang": "MOTOR LISTRIK",
+          "namaBarang": "OFERO STAREER MOTOR",
+          "namaBrand": "OFERO",
+          "qty": 1,
+          "qtyBundling": 0,
+          "skemaHarga": "srp",
+          "sku": "",
+          "subtotal": 0
+        }
+      ],
+      "payment": {
+        "grandTotal": 0,
+        "paymentMethod": "CASH",
+        "status": "LUNAS"
+      },
+      "statusPembayaran": "LUNAS",
+      "totalBarang": 0,
+      "user": {
+        "name": "INEL",
+        "role": "superadmin",
+        "username": "INEL"
+      }
+    }
+  },
   "penjualan_imei": {
     "3224141515hfQ21": {
       "invoice": "251230131",
       "soldAt": 1767105997836,
-      "status": "LOCKED",
-      "toko": "CILANGKAP PUSAT"
-    },
-    "872417471818100GA1": {
-      "invoice": "251230139",
-      "soldAt": 1767109211581,
-      "status": "LOCKED",
-      "toko": "CILANGKAP PUSAT"
-    },
-    "872417471818100GA5": {
-      "invoice": "251230131",
-      "soldAt": 1767105997810,
       "status": "LOCKED",
       "toko": "CILANGKAP PUSAT"
     }
