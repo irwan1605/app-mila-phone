@@ -90,7 +90,6 @@ export default function FormPaymentSection({
   /* ================= RENDER (UI TIDAK DIUBAH) ================= */
   return (
     <fieldset disabled={disabled} className={disabled ? "opacity-50" : ""}>
-      <h2 className="font-bold mb-3">💳 PEMBAYARAN — TAHAP 3</h2>
 
       <div className="space-y-3 text-sm">
         {/* STATUS */}

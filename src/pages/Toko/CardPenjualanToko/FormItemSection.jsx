@@ -1,18 +1,24 @@
 // ===================================================
-// FormItemSection.jsx — FINAL FIX 100%
-// Tahap 2 | INPUT BARANG | Manual + IMEI + Bundling
+// FormItemSection.jsx — FINAL FIX 100% (STABIL)
+// Tahap 2 | INPUT BARANG | IMEI MANUAL + DROPDOWN + NON IMEI + BUNDLING
 // ===================================================
+
 import React, { useEffect, useMemo, useState } from "react";
 import {
   listenMasterBarang,
   listenMasterKategoriBarang,
-  getImeiDetailByToko,
+  lockImeiRealtime,
+  unlockImeiRealtime,
 } from "../../../services/FirebaseService";
+import { ref, get } from "firebase/database";
+import { db } from "../../../firebase/FirebaseInit";
 
 /* ================= KONSTANTA ================= */
 const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
 const isImeiKategori = (kat) =>
   KATEGORI_IMEI.includes((kat || "").toUpperCase());
+
+const normalize = (s = "") => String(s).trim().toUpperCase();
 
 export default function FormItemSection({
   value = [],
@@ -25,8 +31,9 @@ export default function FormItemSection({
 
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterKategori, setMasterKategori] = useState([]);
+  const [allTransaksi, setAllTransaksi] = useState([]);
 
-  /* ================= FIREBASE ================= */
+  /* ================= LOAD MASTER ================= */
   useEffect(() => {
     const u1 = listenMasterBarang(setMasterBarang);
     const u2 = listenMasterKategoriBarang(setMasterKategori);
@@ -36,6 +43,66 @@ export default function FormItemSection({
     };
   }, []);
 
+  /* ================= LOAD HISTORI TRANSAKSI ================= */
+  useEffect(() => {
+    const load = async () => {
+      const snap = await get(ref(db, "toko"));
+      const rows = [];
+      snap.forEach((t) =>
+        t.child("transaksi").forEach((x) => rows.push(x.val()))
+      );
+      setAllTransaksi(rows);
+    };
+    load();
+  }, []);
+
+  /* ================= UNLOCK IMEI ON UNMOUNT ================= */
+  useEffect(() => {
+    return () => {
+      items.forEach((it) => {
+        if (it.isImei) {
+          it.imeiList?.forEach((im) => unlockImeiRealtime(im));
+        }
+      });
+    };
+    // eslint-disable-next-line
+  }, []);
+
+  /* ================= HITUNG STOK IMEI MILIK TOKO ================= */
+  const imeiValidList = useMemo(() => {
+    if (!tokoLogin) return [];
+
+    const stok = {};
+    const toko = normalize(tokoLogin);
+
+    allTransaksi.forEach((t) => {
+      if (t.STATUS !== "Approved") return;
+      if (!t.IMEI) return;
+      if (normalize(t.NAMA_TOKO) !== toko) return;
+
+      const imei = String(t.IMEI).trim();
+      stok[imei] = stok[imei] || 0;
+
+      if (["PEMBELIAN", "TRANSFER_MASUK"].includes(t.PAYMENT_METODE)) {
+        stok[imei]++;
+      }
+
+      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)) {
+        stok[imei]--;
+      }
+    });
+
+    return Object.keys(stok).filter((i) => stok[i] > 0);
+  }, [allTransaksi, tokoLogin]);
+
+  /* ================= FILTER IMEI (ANTI DUPLIKAT) ================= */
+  const imeiOptions = useMemo(() => {
+    return imeiValidList.filter(
+      (i) => !items.some((it) => it.imeiList?.includes(i))
+    );
+  }, [imeiValidList, items]);
+
+  /* ================= UPDATE ITEM ================= */
   const updateItem = (idx, patch) => {
     const next = [...items];
     next[idx] = { ...next[idx], ...patch };
@@ -62,24 +129,14 @@ export default function FormItemSection({
       (b) => b.kategoriBarang === kategori && (b.namaBrand || b.brand) === brand
     );
 
-  const subtotalAll = useMemo(
-    () =>
-      items.reduce(
-        (s, i) => s + Number(i.hargaUnit || 0) * Number(i.qty || 0),
-        0
-      ),
-    [items]
-  );
-  
-
   const totalPenjualan = useMemo(() => {
     return items.reduce(
-      (sum, item) =>
-        sum + Number(item.qty || 0) * Number(item.hargaUnit || 0),
+      (sum, item) => sum + Number(item.qty || 0) * Number(item.hargaUnit || 0),
       0
     );
   }, [items]);
 
+  /* ================= RENDER ================= */
   return (
     <div className={!allowManual ? "opacity-50 pointer-events-none" : ""}>
       {items.map((item, idx) => (
@@ -119,8 +176,8 @@ export default function FormItemSection({
               updateItem(idx, {
                 namaBrand: e.target.value,
                 namaBarang: "",
-                isBundling: false,
-                bundlingItems: [],
+                imeiList: [],
+                qty: 0,
               })
             }
           >
@@ -136,39 +193,38 @@ export default function FormItemSection({
             disabled={!item.namaBrand}
             value={item.namaBarang || ""}
             onChange={(e) => {
-              const b = barangList(item.kategoriBarang, item.namaBrand)
-                .find(x => x.namaBarang === e.target.value);
-            
+              const b = barangList(item.kategoriBarang, item.namaBrand).find(
+                (x) => x.namaBarang === e.target.value
+              );
               if (!b) return;
-            
+
+              const isBundlingBarang =
+                ["MOTOR LISTRIK", "SEPEDA LISTRIK"].includes(
+                  b.kategoriBarang
+                ) && (b.IS_BUNDLING === true || b.isBundling === true);
+
               updateItem(idx, {
                 namaBarang: b.namaBarang,
                 kategoriBarang: b.kategoriBarang,
-                sku: b.sku || "",   // 🔴 INI FIX UTAMA SKU
+                sku: b.sku || "",
                 isImei: isImeiKategori(b.kategoriBarang),
-            
+
                 hargaMap: {
                   srp: Number(b.harga?.srp || 0),
                   grosir: Number(b.harga?.grosir || 0),
                   reseller: Number(b.harga?.reseller || 0),
                 },
-            
+
                 skemaHarga: "srp",
                 hargaUnit: Number(b.harga?.srp || 0),
                 qty: isImeiKategori(b.kategoriBarang) ? 0 : 1,
-            
-                isBundling:
-                  ["MOTOR LISTRIK", "SEPEDA LISTRIK"].includes(b.kategoriBarang) &&
-                  b.IS_BUNDLING,
-            
-                bundlingItems:
-                  ["MOTOR LISTRIK", "SEPEDA LISTRIK"].includes(b.kategoriBarang) &&
-                  b.IS_BUNDLING
-                    ? b.BUNDLING_ITEMS || []
-                    : [],
+
+                isBundling: isBundlingBarang,
+                bundlingItems: isBundlingBarang
+                  ? b.BUNDLING_ITEMS || []
+                  : [],
               });
             }}
-            
           >
             <option value="">-- Pilih Barang --</option>
             {barangList(item.kategoriBarang, item.namaBrand).map((b) => (
@@ -188,55 +244,65 @@ export default function FormItemSection({
             </div>
           )}
 
-          {/* KATEGORI HARGA */}
-          <select
-            className="w-full border rounded-lg p-2 text-sm"
-            value={item.skemaHarga || "srp"}
-            onChange={(e) =>
-              updateItem(idx, {
-                skemaHarga: e.target.value,
-                hargaUnit: item.hargaMap?.[e.target.value] || 0,
-              })
-            }
-          >
-            <option value="srp">
-              SRP — Rp {item.hargaMap?.srp?.toLocaleString("id-ID")}
-            </option>
-            <option value="grosir">
-              Grosir — Rp {item.hargaMap?.grosir?.toLocaleString("id-ID")}
-            </option>
-            <option value="reseller">
-              Reseller — Rp {item.hargaMap?.reseller?.toLocaleString("id-ID")}
-            </option>
-          </select>
-
-          {/* IMEI */}
+          {/* ===== IMEI MANUAL ===== */}
           {item.isImei && (
-            <textarea
-              rows={3}
-              className="w-full border rounded-lg p-2"
-              placeholder="1 IMEI per baris"
-              value={(item.imeiList || []).join("\n")}
-              onChange={async (e) => {
-                const imeiList = e.target.value
-                  .split("\n")
-                  .map((x) => x.trim())
-                  .filter(Boolean);
+            <>
+              <textarea
+                rows={2}
+                className="w-full border rounded-lg p-2 text-sm"
+                placeholder="Ketik IMEI manual (1 IMEI per baris)"
+                value={(item.imeiList || []).join("\n")}
+                onChange={async (e) => {
+                  const list = e.target.value
+                    .split("\n")
+                    .map((x) => x.trim())
+                    .filter(Boolean);
 
-                for (const im of imeiList) {
-                  const ok = await getImeiDetailByToko(tokoLogin, im);
-                  if (!ok) {
-                    alert(`❌ IMEI ${im} bukan milik toko Anda`);
-                    return;
+                  for (const im of list) {
+                    if (!imeiValidList.includes(im)) {
+                      alert(`❌ IMEI ${im} bukan stok toko ${tokoLogin}`);
+                      return;
+                    }
+                    await lockImeiRealtime(im, tokoLogin, "SYSTEM");
                   }
-                }
 
-                updateItem(idx, { imeiList, qty: imeiList.length });
-              }}
-            />
+                  updateItem(idx, {
+                    imeiList: list,
+                    qty: list.length,
+                  });
+                }}
+              />
+
+              {/* ===== IMEI DROPDOWN ===== */}
+              <select
+                multiple
+                className="w-full border rounded-lg p-2 text-sm"
+                value={item.imeiList || []}
+                onChange={async (e) => {
+                  const selected = Array.from(
+                    e.target.selectedOptions
+                  ).map((o) => o.value);
+
+                  for (const im of selected) {
+                    await lockImeiRealtime(im, tokoLogin, "SYSTEM");
+                  }
+
+                  updateItem(idx, {
+                    imeiList: selected,
+                    qty: selected.length,
+                  });
+                }}
+              >
+                {imeiOptions.map((im) => (
+                  <option key={im} value={im}>
+                    {im}
+                  </option>
+                ))}
+              </select>
+            </>
           )}
 
-          {/* QTY */}
+          {/* QTY NON IMEI */}
           {!item.isImei && (
             <input
               type="number"

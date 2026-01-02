@@ -50,22 +50,57 @@ import {
 ============================================================ */
 
 
+export function getAvailableIMEIByToko(allTransaksi, tokoLogin) {
+  const map = {};
+
+  allTransaksi.forEach(t => {
+    if (t.STATUS !== "Approved") return;
+    if (!t.IMEI) return;
+
+    const qty = 1;
+    const key = t.IMEI;
+
+    if (!map[key]) {
+      map[key] = { imei: key, qty: 0, toko: t.NAMA_TOKO };
+    }
+
+    if (["PEMBELIAN", "TRANSFER_MASUK"].includes(t.PAYMENT_METODE)) {
+      map[key].qty += qty;
+    }
+
+    if (["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)) {
+      map[key].qty -= qty;
+    }
+  });
+
+  return Object.values(map).filter(
+    i => i.qty > 0 && i.toko === tokoLogin
+  );
+}
+
+
+
 /* =====================================================
    🔒 LOCK IMEI (ANTI DOUBLE JUAL)
 ===================================================== */
 export const lockImei = async ({ imei, toko, invoice }) => {
-  if (typeof imei !== "string" || !imei) {
-    throw new Error("IMEI tidak valid saat lock");
+  if (!imei || typeof imei !== "string") {
+    throw new Error("IMEI tidak valid (harus string)");
   }
 
-  return set(ref(db, `inventory_imei/${imei}`), {
+  const imeiKey = imei.trim();
+
+  const imeiRef = ref(db, `penjualan_imei/${imeiKey}`);
+
+  await set(imeiRef, {
+    imei: imeiKey,
+    toko,
+    invoice,
     status: "LOCKED",
-    toko: toko || "",
-    invoice: invoice || "",
     lockedAt: Date.now(),
-    lockedBy: "SYSTEM",
   });
 };
+
 
 
 /* =====================================================
@@ -1929,41 +1964,46 @@ export const findImeiForPenjualan = async (imei, toko) => {
 };
 
 
-export const getImeiDetailByToko = async (toko, imei) => {
-  if (!toko || !imei) return null;
+export const getImeiDetailByToko = async (namaToko, imei) => {
+  if (!namaToko || !imei) return false;
 
-  // 🔥 BACA TRANSAKSI TOKO (SUMBER KEBENARAN)
-  const snap = await get(ref(db, "toko"));
-  if (!snap.exists()) return null;
+  // 1️⃣ cek inventory_imei
+  const snap = await get(ref(db, `inventory_imei/${imei}`));
+  if (!snap.exists()) return false;
 
-  let found = null;
+  const data = snap.val();
 
-  snap.forEach((tokoSnap) => {
-    tokoSnap.child("transaksi").forEach((trxSnap) => {
-      const trx = trxSnap.val();
+  // AVAILABLE → bebas dipakai
+  if (data.status === "AVAILABLE") return true;
 
-      if (
-        trx?.STATUS === "Approved" &&
-        trx?.IMEI === imei &&
-        trx?.NAMA_TOKO === toko
-      ) {
-        found = {
-          kategoriBarang: trx.KATEGORI_BRAND,
-          namaBrand: trx.NAMA_BRAND,
-          namaBarang: trx.NAMA_BARANG,
-          sku: `${trx.NAMA_BRAND}_${trx.NAMA_BARANG}`,
-          harga: {
-            srp: trx.HARGA_UNIT,
-            grosir: trx.HARGA_UNIT,
-            reseller: trx.HARGA_UNIT,
-          },
-        };
-      }
-    });
-  });
+  // LOCKED / SOLD → HARUS MILIK TOKO YANG SAMA
+  if (data.toko === namaToko) return true;
 
-  return found;
+  return false;
 };
+
+
+export const lockImeiRealtime = async (imei, toko, user = {}) => {
+  const r = ref(db, `imei_locks/${imei}`);
+  const snap = await get(r);
+
+  if (snap.exists()) {
+    throw new Error("IMEI sedang dipakai user lain");
+  }
+
+  await set(r, {
+    toko,
+    by: user?.email || "SYSTEM",
+    at: Date.now(),
+  });
+};
+
+
+export const unlockImeiRealtime = async (imei) => {
+  await remove(ref(db, `imei_locks/${imei}`));
+};
+
+
 
 
 

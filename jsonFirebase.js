@@ -107,19 +107,21 @@
         },
         "id": "-Oh4H00bOrr65xZNv8X1",
         "kategoriBarang": "MOTOR LISTRIK",
-        "namaBarang": "OFERO STAREER MOTOR"
+        "namaBarang": "OFERO STAREER MOTOR MERAH",
+        "updatedAt": "2026-01-02T07:37:16.473Z"
       },
       "-Oh4J9OHrG7aMrWsJWMf": {
         "brand": "UWINFLY",
         "createdAt": "2025-12-22T09:07:51.952Z",
         "harga": {
-          "grosir": 5200000,
-          "reseller": 5300000,
-          "srp": 5699000
+          "grosir": 5300000,
+          "reseller": 5000000,
+          "srp": 5599000
         },
         "id": "-Oh4J9OHrG7aMrWsJWMf",
         "kategoriBarang": "SEPEDA LISTRIK",
-        "namaBarang": "UWINFLY T65 Lithium"
+        "namaBarang": "UWINFLY T65 LITHIUM HIJAU ARMY",
+        "updatedAt": "2026-01-02T07:50:58.786Z"
       },
       "-Oh4JSCiyu1leZzF454D": {
         "brand": "OPPO",
@@ -173,7 +175,13 @@
           }
         ],
         "CREATED_AT": 1766920600944,
+        "HARGA_BANDLING_1": 0,
+        "HARGA_BANDLING_2": 0,
+        "HARGA_BANDLING_3": 0,
         "IS_BUNDLING": true,
+        "NAMA_BANDLING_1": "",
+        "NAMA_BANDLING_2": "",
+        "NAMA_BANDLING_3": "",
         "brand": "OFERO",
         "createdAt": "2025-12-28T11:16:40.945Z",
         "harga": {
@@ -183,8 +191,9 @@
         },
         "id": "-OhZfAvQ1rWNS8rjdlUK",
         "kategoriBarang": "MOTOR LISTRIK",
-        "namaBarang": "OFERO STAREER MOTOR",
-        "tanggal": "2025-12-28"
+        "namaBarang": "OFERO STAREER MOTOR HITAM",
+        "tanggal": "2025-12-28",
+        "updatedAt": "2026-01-02T06:38:28.535Z"
       },
       "-OhZfLTVzLpiC9IxKe9z": {
         "BUNDLING_ITEMS": [
@@ -206,14 +215,15 @@
         "brand": "UWINFLY",
         "createdAt": "2025-12-28T11:17:23.793Z",
         "harga": {
-          "grosir": 5200000,
-          "reseller": 5300000,
-          "srp": 5699000
+          "grosir": 5300000,
+          "reseller": 5000000,
+          "srp": 5599000
         },
         "id": "-OhZfLTVzLpiC9IxKe9z",
         "kategoriBarang": "SEPEDA LISTRIK",
-        "namaBarang": "UWINFLY T65 Lithium",
-        "tanggal": "2025-12-28"
+        "namaBarang": "UWINFLY T65 LITHIUM BIRU MUDA",
+        "tanggal": "2025-12-28",
+        "updatedAt": "2026-01-02T07:49:07.739Z"
       },
       "-OhZfSMEHo9PrJLgH4Z7": {
         "CREATED_AT": 1766920671938,
@@ -244,6 +254,176 @@
         "kategoriBarang": "ACCESSORIES",
         "namaBarang": "OLIKE Powerbank P1 10000mAH",
         "tanggal": "2025-12-28"
+      },
+      "-OhxesavjYHcYZGjOWWa": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T07:45:49.012Z",
+        "harga": {
+          "grosir": 3500000,
+          "reseller": 3300000,
+          "srp": 3799000
+        },
+        "id": "-OhxesavjYHcYZGjOWWa",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO LEDO 2 PINK"
+      },
+      "-OhxfH7JUO4CTMZ_Jfzt": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T07:47:33.548Z",
+        "harga": {
+          "grosir": 3500000,
+          "reseller": 3300000,
+          "srp": 3799000
+        },
+        "id": "-OhxfH7JUO4CTMZ_Jfzt",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO LEDO 2 HITAM"
+      },
+      "-OhxgGkm5AKJC6lT9cD9": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T07:51:54.186Z",
+        "harga": {
+          "grosir": 3500000,
+          "reseller": 3300000,
+          "srp": 3799000
+        },
+        "id": "-OhxgGkm5AKJC6lT9cD9",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO LEDO 2 PUTIH"
+      },
+      "-OhxgWBsC3EH6DIivnFA": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T07:52:57.424Z",
+        "harga": {
+          "grosir": 4100000,
+          "reseller": 3800000,
+          "srp": 4399000
+        },
+        "id": "-OhxgWBsC3EH6DIivnFA",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO GALAXY 3 LITHIUM HIJAU"
+      },
+      "-Ohxgghs6VoaDXHlk866": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T07:53:44.592Z",
+        "harga": {
+          "grosir": 4100000,
+          "reseller": 3800000,
+          "srp": 4399000
+        },
+        "id": "-Ohxgghs6VoaDXHlk866",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO LEDO 3 LITHIUM HITAM"
+      },
+      "-OhxgqWrI1lR7qFlHdgJ": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T07:54:24.783Z",
+        "harga": {
+          "grosir": 4100000,
+          "reseller": 3800000,
+          "srp": 4399000
+        },
+        "id": "-OhxgqWrI1lR7qFlHdgJ",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO LEDO 3 LITHIUM HIJAU"
+      },
+      "-Ohxh-kE9J55Qj83kemo": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T07:55:06.663Z",
+        "harga": {
+          "grosir": 4100000,
+          "reseller": 3800000,
+          "srp": 4399000
+        },
+        "id": "-Ohxh-kE9J55Qj83kemo",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO LEDO 3 LITHIUM PINK"
+      },
+      "-OhxhLGSSt9KekGZd8Pp": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T07:56:34.805Z",
+        "harga": {
+          "grosir": 5800000,
+          "reseller": 5600000,
+          "srp": 6099000
+        },
+        "id": "-OhxhLGSSt9KekGZd8Pp",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO GALAXY 5 LITHIUM MERAH"
+      },
+      "-OhxherKehQ9_spmxm_t": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T07:57:59.149Z",
+        "harga": {
+          "grosir": 5800000,
+          "reseller": 5600000,
+          "srp": 6099000
+        },
+        "id": "-OhxherKehQ9_spmxm_t",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO GALAXY 5 LITHIUM UNGU"
+      },
+      "-Ohxhm2qByuAqzdIPH3H": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T07:58:28.622Z",
+        "harga": {
+          "grosir": 5800000,
+          "reseller": 5600000,
+          "srp": 6099000
+        },
+        "id": "-Ohxhm2qByuAqzdIPH3H",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO GALAXY 5 LITHIUM HITAM",
+        "updatedAt": "2026-01-02T07:58:43.525Z"
+      },
+      "-Ohxi-CpSX5804RSq7Sh": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T07:59:26.605Z",
+        "harga": {
+          "grosir": 5800000,
+          "reseller": 5600000,
+          "srp": 6099000
+        },
+        "id": "-Ohxi-CpSX5804RSq7Sh",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO GALAXY 5 LITHIUM PUTIH"
+      },
+      "-OhxiJE2x4b_ocO-F0mC": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T08:00:48.603Z",
+        "harga": {
+          "grosir": 7100000,
+          "reseller": 6800000,
+          "srp": 7499000
+        },
+        "id": "-OhxiJE2x4b_ocO-F0mC",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO MEGICAL 3 LITHIUM HITAM"
+      },
+      "-OhxiTqoGkRzAOcmSf5_": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T08:01:32.108Z",
+        "harga": {
+          "grosir": 7100000,
+          "reseller": 6800000,
+          "srp": 7499000
+        },
+        "id": "-OhxiTqoGkRzAOcmSf5_",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO MEGICAL 3 LITHIUM ABU",
+        "updatedAt": "2026-01-02T08:01:43.190Z"
+      },
+      "-OhxifAWVtn1Jq7y9cQO": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T08:02:22.585Z",
+        "harga": {
+          "grosir": 7100000,
+          "reseller": 6800000,
+          "srp": 7499000
+        },
+        "id": "-OhxifAWVtn1Jq7y9cQO",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO MEGICAL 3 LITHIUM HIJAU"
       }
     },
     "masterBarangBundling": {
@@ -408,9 +588,11 @@
   },
   "inventory_imei": {
     "872417471818100GA3": {
-      "lockedAt": 1767120373304,
+      "invoice": "251231093",
+      "lockedAt": 1767147399059,
       "lockedBy": "SYSTEM",
-      "status": "LOCKED"
+      "status": "LOCKED",
+      "toko": "CILANGKAP PUSAT"
     },
     "872417471818100GA4": {
       "status": "AVAILABLE"
@@ -561,137 +743,6 @@
       "alamat": "DEPOK - JAWA BARAT",
       "createdAt": "2025-12-27T21:08:27.472Z",
       "nama": "SAWANGAN"
-    }
-  },
-  "penjualan": {
-    "-OhksqHWkRBcAQPCsliA": {
-      "createdAt": 1767125508034,
-      "invoice": "INV-1767125508033",
-      "items": [
-        {
-          "hargaBundling": 0,
-          "hargaUnit": 0,
-          "id": 1767125490948,
-          "imeiList": [
-            "872417471818100GA5"
-          ],
-          "isImei": true,
-          "kategoriBarang": "MOTOR LISTRIK",
-          "namaBarang": "OFERO STAREER MOTOR",
-          "namaBrand": "OFERO",
-          "qty": 1,
-          "qtyBundling": 0,
-          "skemaHarga": "srp",
-          "sku": "",
-          "subtotal": 0
-        }
-      ],
-      "payment": {
-        "cicilan": 0,
-        "dpTalangan": 0,
-        "dpUser": 0,
-        "grandTotal": 0,
-        "namaMdr": "",
-        "nominalMdr": 0,
-        "paymentMethod": "CASH",
-        "persenMdr": 0,
-        "status": "LUNAS",
-        "tenor": "",
-        "voucher": 0
-      },
-      "statusPembayaran": "LUNAS",
-      "totalBarang": 0,
-      "user": {
-        "name": "INEL",
-        "role": "superadmin",
-        "username": "INEL"
-      }
-    },
-    "-Ohkt5Q28x83RuerV04-": {
-      "createdAt": 1767125574116,
-      "invoice": "INV-1767125574116",
-      "items": [
-        {
-          "hargaBundling": 0,
-          "hargaUnit": 0,
-          "id": 1767125490948,
-          "imeiList": [
-            "872417471818100GA5"
-          ],
-          "isImei": true,
-          "kategoriBarang": "MOTOR LISTRIK",
-          "namaBarang": "OFERO STAREER MOTOR",
-          "namaBrand": "OFERO",
-          "qty": 1,
-          "qtyBundling": 0,
-          "skemaHarga": "srp",
-          "sku": "",
-          "subtotal": 0
-        }
-      ],
-      "payment": {
-        "cicilan": 0,
-        "dpTalangan": 0,
-        "dpUser": 0,
-        "grandTotal": 0,
-        "namaMdr": "",
-        "nominalMdr": 0,
-        "paymentMethod": "CASH",
-        "persenMdr": 0,
-        "status": "LUNAS",
-        "tenor": "",
-        "voucher": 0
-      },
-      "statusPembayaran": "LUNAS",
-      "totalBarang": 0,
-      "user": {
-        "name": "INEL",
-        "role": "superadmin",
-        "username": "INEL"
-      }
-    },
-    "-OhkuzEvuGozY3gixgJU": {
-      "createdAt": 1767126069020,
-      "invoice": "INV-1767126069020",
-      "items": [
-        {
-          "hargaBundling": 0,
-          "hargaUnit": 0,
-          "id": 1767126027122,
-          "imeiList": [
-            "872417471818100GA4"
-          ],
-          "isImei": true,
-          "kategoriBarang": "MOTOR LISTRIK",
-          "namaBarang": "OFERO STAREER MOTOR",
-          "namaBrand": "OFERO",
-          "qty": 1,
-          "qtyBundling": 0,
-          "skemaHarga": "srp",
-          "sku": "",
-          "subtotal": 0
-        }
-      ],
-      "payment": {
-        "grandTotal": 0,
-        "paymentMethod": "CASH",
-        "status": "LUNAS"
-      },
-      "statusPembayaran": "LUNAS",
-      "totalBarang": 0,
-      "user": {
-        "name": "INEL",
-        "role": "superadmin",
-        "username": "INEL"
-      }
-    }
-  },
-  "penjualan_imei": {
-    "3224141515hfQ21": {
-      "invoice": "251230131",
-      "soldAt": 1767105997836,
-      "status": "LOCKED",
-      "toko": "CILANGKAP PUSAT"
     }
   },
   "toko": {
@@ -1682,29 +1733,22 @@
     "ALSYA": {
       "name": "ALSYA RISMADANI",
       "password": "123123",
-      "role": "pic_toko4",
-      "toko": "4",
+      "role": "pic_toko3",
+      "toko": "3",
       "username": "ALSYA"
     },
     "ANDRI": {
       "name": "ANDRIAN TARUMA SELEJ",
       "password": "123123",
-      "role": "pic_toko10",
-      "toko": "10",
-      "username": "ANDRI"
-    },
-    "DIKA": {
-      "name": "ANDIKA",
-      "password": "123123",
       "role": "pic_toko5",
       "toko": "5",
-      "username": "DIKA"
+      "username": "ANDRI"
     },
     "EZA": {
       "name": "KHEIZA KURNIAWAN",
       "password": "123123",
-      "role": "pic_toko3",
-      "toko": "3",
+      "role": "pic_toko7",
+      "toko": "7",
       "username": "EZA"
     },
     "FAIQ": {
@@ -1727,13 +1771,6 @@
       "role": "pic_toko2",
       "toko": "2",
       "username": "IKI"
-    },
-    "IKMAL": {
-      "name": "IKMAL AKBAR",
-      "password": "123123",
-      "role": "pic_toko8",
-      "toko": "8",
-      "username": "IKMAL"
     },
     "INEL": {
       "createdAt": "2025-12-19T08:05:14.099Z",

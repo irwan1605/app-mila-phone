@@ -6,10 +6,11 @@ import {
   deleteMasterBarangMasing,
 } from "../../services/FirebaseService";
 import { db } from "../../firebase/FirebaseInit";
+import { exportToExcel } from "../../utils/exportToExcel";
 
 export default function MasterBarangKategoriCard({ kategori }) {
   // ===============================
-  // STATE FORM (SATU SUMBER DATA)
+  // STATE FORM
   // ===============================
   const [barang, setBarang] = useState({
     brand: "",
@@ -30,7 +31,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
   // ===============================
   useEffect(() => {
     const barangRef = ref(db, "dataManagement/masterBarang");
-  
+
     onValue(barangRef, (snap) => {
       const data = snap.val() || {};
       const filtered = Object.entries(data)
@@ -38,14 +39,36 @@ export default function MasterBarangKategoriCard({ kategori }) {
         .filter(
           (b) => b.kategoriBarang === kategori.trim().toUpperCase()
         );
-  
+
       setListBarang(filtered);
     });
-  
+
     return () => off(barangRef);
   }, [kategori]);
-  
-  
+
+  // ===============================
+  // EXPORT EXCEL (SESUAI TABLE)
+  // ===============================
+  const handleExport = () => {
+    if (!listBarang || listBarang.length === 0) {
+      alert("❌ Data kosong, tidak bisa export");
+      return;
+    }
+
+    const formattedData = listBarang.map((b) => ({
+      Brand: b.brand || "",
+      "Nama Barang": b.namaBarang || "",
+      "Harga SRP": Number(b.harga?.srp || 0),
+      "Harga Grosir": Number(b.harga?.grosir || 0),
+      "Harga Reseller": Number(b.harga?.reseller || 0),
+    }));
+
+    exportToExcel({
+      data: formattedData,
+      fileName: `MASTER_BARANG_${kategori.replace(/\s+/g, "_")}`,
+      sheetName: kategori,
+    });
+  };
 
   // ===============================
   // RESET FORM
@@ -60,7 +83,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
   };
 
   // ===============================
-  // SUBMIT (ADD / UPDATE)
+  // SUBMIT
   // ===============================
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -88,7 +111,6 @@ export default function MasterBarangKategoriCard({ kategori }) {
         reseller: Number(barang.harga.reseller),
       },
     };
-    
 
     try {
       if (editId) {
@@ -106,7 +128,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
   };
 
   // ===============================
-  // EDIT
+  // EDIT & DELETE
   // ===============================
   const handleEdit = (item) => {
     setEditId(item.id);
@@ -121,9 +143,6 @@ export default function MasterBarangKategoriCard({ kategori }) {
     });
   };
 
-  // ===============================
-  // DELETE
-  // ===============================
   const handleDelete = async (id) => {
     if (!window.confirm("Yakin hapus data ini?")) return;
     await deleteMasterBarangMasing(id);
@@ -135,13 +154,23 @@ export default function MasterBarangKategoriCard({ kategori }) {
   return (
     <div className="space-y-6">
       {/* HEADER */}
-      <div>
-        <h2 className="text-lg font-bold text-slate-800">
-          MASTER BARANG — {kategori}
-        </h2>
-        <p className="text-sm text-slate-500">
-          Simpan, Edit, Delete langsung realtime ke Firebase
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">
+            MASTER BARANG — {kategori}
+          </h2>
+          <p className="text-sm text-slate-500">
+            Simpan, Edit, Delete langsung realtime ke Firebase
+          </p>
+        </div>
+
+        <button
+          onClick={handleExport}
+          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700
+                   text-white text-sm font-semibold shadow"
+        >
+          Export Excel
+        </button>
       </div>
 
       {/* FORM */}
@@ -150,14 +179,14 @@ export default function MasterBarangKategoriCard({ kategori }) {
         className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border"
       >
         <input
-          className="input border p-2 rounded"
+          className="border p-2 rounded"
           placeholder="Nama Brand"
           value={barang.brand}
           onChange={(e) => setBarang({ ...barang, brand: e.target.value })}
         />
 
         <input
-          className="input border p-2 rounded"
+          className="border p-2 rounded"
           placeholder="Nama Barang"
           value={barang.namaBarang}
           onChange={(e) =>
@@ -167,7 +196,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
 
         <input
           type="number"
-          className="input border p-2 rounded"
+          className="border p-2 rounded"
           placeholder="Harga SRP"
           value={barang.harga.srp}
           onChange={(e) =>
@@ -180,7 +209,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
 
         <input
           type="number"
-          className="input border p-2 rounded"
+          className="border p-2 rounded"
           placeholder="Harga Grosir"
           value={barang.harga.grosir}
           onChange={(e) =>
@@ -193,7 +222,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
 
         <input
           type="number"
-          className="input border p-2 rounded"
+          className="border p-2 rounded"
           placeholder="Harga Reseller"
           value={barang.harga.reseller}
           onChange={(e) =>
@@ -242,13 +271,13 @@ export default function MasterBarangKategoriCard({ kategori }) {
                 <td className="border px-3 py-2">{b.brand}</td>
                 <td className="border px-3 py-2">{b.namaBarang}</td>
                 <td className="border px-3 py-2">
-                  {b.harga?.srp?.toLocaleString()}
+                  {Number(b.harga?.srp || 0).toLocaleString("id-ID")}
                 </td>
                 <td className="border px-3 py-2">
-                  {b.harga?.grosir?.toLocaleString()}
+                  {Number(b.harga?.grosir || 0).toLocaleString("id-ID")}
                 </td>
                 <td className="border px-3 py-2">
-                  {b.harga?.reseller?.toLocaleString()}
+                  {Number(b.harga?.reseller || 0).toLocaleString("id-ID")}
                 </td>
                 <td className="border px-3 py-2 space-x-2">
                   <button

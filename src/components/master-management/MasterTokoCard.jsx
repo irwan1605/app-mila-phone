@@ -14,6 +14,7 @@ import {
   FaTimes,
   FaPlus,
 } from "react-icons/fa";
+import { exportToExcel } from "../../utils/exportToExcel";
 
 export default function MasterTokoCard() {
   const [tokoList, setTokoList] = useState([]);

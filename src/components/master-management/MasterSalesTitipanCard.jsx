@@ -1,6 +1,7 @@
 // src/components/master-management/MasterSalesTitipanCard.jsx
 import React from "react";
 import MasterCrudCard from "./MasterCrudCard";
+import { exportToExcel } from "../../utils/exportToExcel";
 
 export default function MasterSalesTitipanCard() {
   const fields = [

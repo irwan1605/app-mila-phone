@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ref, onValue, push, set, update, remove } from "firebase/database";
 import { db } from "../../FirebaseInit";
 import { FaPlus, FaEdit, FaTrash } from "react-icons/fa";
+import { exportToExcel } from "../../utils/exportToExcel";
 
 const basePath = "dataManagement/masterMDR";
 
@@ -11,6 +12,9 @@ export default function MasterMDRCard() {
   const [persen, setPersen] = useState("");
   const [editId, setEditId] = useState(null);
 
+  // ===============================
+  // LISTENER FIREBASE
+  // ===============================
   useEffect(() => {
     return onValue(ref(db, basePath), (snap) => {
       const val = snap.val() || {};
@@ -18,8 +22,35 @@ export default function MasterMDRCard() {
     });
   }, []);
 
+  // ===============================
+  // EXPORT EXCEL (SESUAI TABLE)
+  // ===============================
+  const handleExport = () => {
+    if (!rows || rows.length === 0) {
+      alert("❌ Data kosong, tidak bisa export");
+      return;
+    }
+
+    const formattedData = rows.map((r) => ({
+      "Nama Payment": r.nama || "",
+      "MDR (%)": Number(r.persen || 0),
+    }));
+
+    exportToExcel({
+      data: formattedData,
+      fileName: "MASTER_MDR",
+      sheetName: "MDR",
+    });
+  };
+
+  // ===============================
+  // SAVE
+  // ===============================
   const save = async () => {
-    if (!nama || persen === "") return alert("Nama & MDR wajib diisi");
+    if (!nama || persen === "") {
+      alert("Nama & MDR wajib diisi");
+      return;
+    }
 
     const payload = { nama, persen: Number(persen) };
 
@@ -37,8 +68,20 @@ export default function MasterMDRCard() {
 
   return (
     <div>
-      <h2 className="font-bold mb-3">MASTER MDR (%)</h2>
+      {/* ================= HEADER ================= */}
+      <div className="flex justify-between items-center mb-3">
+        <h2 className="font-bold text-lg">MASTER MDR (%) & NAMA LEASING</h2>
 
+        <button
+          onClick={handleExport}
+          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700
+                   text-white text-sm font-semibold shadow"
+        >
+          Export Excel
+        </button>
+      </div>
+
+      {/* ================= FORM ================= */}
       <div className="flex gap-2 mb-4">
         <input
           value={nama}
@@ -53,16 +96,20 @@ export default function MasterMDRCard() {
           placeholder="MDR %"
           className="border px-3 py-2 rounded w-32"
         />
-        <button onClick={save} className="bg-indigo-600 text-white px-4 rounded">
+        <button
+          onClick={save}
+          className="bg-indigo-600 text-white px-4 rounded flex items-center"
+        >
           <FaPlus />
         </button>
       </div>
 
+      {/* ================= TABLE ================= */}
       <table className="w-full text-sm border">
         <thead className="bg-indigo-600 text-white">
           <tr>
             <th className="p-2">NO</th>
-            <th className="p-2">NAMA</th>
+            <th className="p-2">NAMA LEASING</th>
             <th className="p-2">MDR %</th>
             <th className="p-2">AKSI</th>
           </tr>
@@ -74,15 +121,33 @@ export default function MasterMDRCard() {
               <td className="p-2">{r.nama}</td>
               <td className="p-2 text-center">{r.persen}%</td>
               <td className="p-2 flex justify-center gap-2">
-                <button onClick={() => { setEditId(r.id); setNama(r.nama); setPersen(r.persen); }}>
+                <button
+                  onClick={() => {
+                    setEditId(r.id);
+                    setNama(r.nama);
+                    setPersen(r.persen);
+                  }}
+                >
                   <FaEdit />
                 </button>
-                <button onClick={() => remove(ref(db, `${basePath}/${r.id}`))}>
+                <button
+                  onClick={() =>
+                    remove(ref(db, `${basePath}/${r.id}`))
+                  }
+                >
                   <FaTrash />
                 </button>
               </td>
             </tr>
           ))}
+
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={4} className="text-center py-4 text-slate-400">
+                Belum ada data
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

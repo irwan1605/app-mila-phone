@@ -10,7 +10,7 @@ import {
   listenMasterSales,
 } from "../../../services/FirebaseService";
 
-export default function FormUserSection({ value, onChange }) {
+export default function FormUserSection({ value = {}, onChange }) {
   /* ================= STATE ================= */
 
   const [masterToko, setMasterToko] = useState([]);
@@ -32,16 +32,21 @@ export default function FormUserSection({ value, onChange }) {
       unsubSales && unsubSales();
     };
   }, []);
-
-  /* ================= SAFE FORM ================= */
+  // =================================================
+  // SAFE FORM
+  // =================================================
   const form = useMemo(
     () => ({
       tanggal: value?.tanggal || "",
       noFaktur: value?.noFaktur || "",
       namaPelanggan: value?.namaPelanggan || "",
       idPelanggan: value?.idPelanggan || "",
-      noTlpPelanggan : value?.noTlpPelanggan || "",
+      noTlpPelanggan: value?.noTlpPelanggan || "",
+
+      // 🔥 PENTING
+      namaTokoId: value?.namaTokoId || "",
       namaToko: value?.namaToko || "",
+
       namaSales: value?.namaSales || "",
       salesTitipan: value?.salesTitipan || "",
     }),
@@ -52,12 +57,14 @@ export default function FormUserSection({ value, onChange }) {
     onChange({ ...form, ...patch });
   };
 
-  /* ================= FILTER SALES BY TOKO ================= */
 
+ // =================================================
+  // FILTER SALES (OPSIONAL – TIDAK MEMBLOKIR)
+  // =================================================
   const salesList = useMemo(() => {
     if (!form.namaToko) return [];
     return masterSales.filter(
-      (s) => s?.toko === form.namaToko && s?.jenis === "SALES"
+      (s) => s?.toko === form.namaToko || !s?.toko
     );
   }, [masterSales, form.namaToko]);
 
@@ -133,23 +140,27 @@ export default function FormUserSection({ value, onChange }) {
         />
       </div>
 
-      {/* NAMA TOKO */}
-      <div>
+     {/* ================= TOKO (FIX UTAMA) ================= */}
+     <div>
         <label className="text-xs font-semibold">Nama Toko</label>
         <select
-          className="w-full border rounded px-2 py-1 text-black"
-          value={form.namaToko}
-          onChange={(e) =>
+          className="w-full border rounded px-2 py-1"
+          value={form.namaTokoId}
+          onChange={(e) => {
+            const tokoId = e.target.value;
+            const toko = masterToko.find((t) => t.id === tokoId);
+
             update({
-              namaToko: e.target.value,
+              namaTokoId: tokoId,         // 🔥 DIPAKAI FIREBASE
+              namaToko: toko?.nama || "", // 🔥 UNTUK DISPLAY
               namaSales: "",
               salesTitipan: "",
-            })
-          }
+            });
+          }}
         >
           <option value="">-- Pilih Toko --</option>
           {masterToko.map((t) => (
-            <option key={t.id} value={t.nama}>
+            <option key={t.id} value={t.id}>
               {t.nama}
             </option>
           ))}

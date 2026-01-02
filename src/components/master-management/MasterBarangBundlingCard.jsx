@@ -7,6 +7,7 @@ import {
   listenMasterBarang,
 } from "../../services/FirebaseService";
 import { FaPlus, FaEdit, FaTrash } from "react-icons/fa";
+import { exportToExcel } from "../../utils/exportToExcel";
 
 const KATEGORI_INDUK = [
   "MOTOR LISTRIK",
@@ -30,7 +31,9 @@ export default function MasterBarangBundlingCard() {
   // LISTENER FIREBASE
   // ===============================
   useEffect(() => {
-    const unsubBundling = listenMasterBarangBundling(setRows);
+    const unsubBundling = listenMasterBarangBundling((data) => {
+      setRows(data || []);
+    });
     const unsubBarang = listenMasterBarang(setMasterBarang);
 
     return () => {
@@ -40,10 +43,9 @@ export default function MasterBarangBundlingCard() {
   }, []);
 
   // ===============================
-  // RULE HARGA BUNDLING (FINAL)
+  // RULE HARGA BUNDLING
   // ===============================
   useEffect(() => {
-    // MOTOR & SEPEDA → harga bundling WAJIB 0
     if (
       form.kategoriBarang === "MOTOR LISTRIK" ||
       form.kategoriBarang === "SEPEDA LISTRIK"
@@ -52,7 +54,6 @@ export default function MasterBarangBundlingCard() {
       return;
     }
 
-    // ACCESSORIES → harga dari master barang accessories
     if (form.kategoriBarang === "ACCESSORIES" && form.namaBarang) {
       const found = masterBarang.find(
         (b) =>
@@ -63,20 +64,40 @@ export default function MasterBarangBundlingCard() {
       if (found) {
         setForm((f) => ({
           ...f,
-          hargaBundling: Number(
-            found.harga || found.hargaUnit || 0
-          ),
+          hargaBundling: Number(found.harga || found.hargaUnit || 0),
         }));
       }
     }
   }, [form.kategoriBarang, form.namaBarang, masterBarang]);
 
   // ===============================
-  // BARANG BUNDLING → SELALU ACCESSORIES
+  // OPTIONS BARANG (ACCESSORIES)
   // ===============================
   const barangOptions = masterBarang.filter(
     (b) => b.kategoriBarang === "ACCESSORIES"
   );
+
+  // ===============================
+  // EXPORT EXCEL (SESUAI TABLE)
+  // ===============================
+  const handleExport = () => {
+    if (!rows || rows.length === 0) {
+      alert("❌ Data kosong, tidak bisa export");
+      return;
+    }
+
+    const formattedData = rows.map((r) => ({
+      "Kategori Induk": r.kategoriBarang || "",
+      "Barang Bundling": r.namaBarang || "",
+      "Harga Bundling": Number(r.hargaBundling || 0),
+    }));
+
+    exportToExcel({
+      data: formattedData,
+      fileName: "MASTER_BARANG_BUNDLING",
+      sheetName: "Barang Bundling",
+    });
+  };
 
   // ===============================
   // SAVE
@@ -88,8 +109,8 @@ export default function MasterBarangBundlingCard() {
     }
 
     const payload = {
-      kategoriBarang: form.kategoriBarang, // kategori induk
-      namaBarang: form.namaBarang,         // selalu accessories
+      kategoriBarang: form.kategoriBarang,
+      namaBarang: form.namaBarang,
       hargaBundling: Number(form.hargaBundling || 0),
     };
 
@@ -109,11 +130,21 @@ export default function MasterBarangBundlingCard() {
 
   return (
     <div>
-      <h2 className="font-bold mb-4">MASTER BARANG BUNDLING</h2>
+      {/* ================= HEADER ================= */}
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="font-bold text-lg">MASTER BARANG BUNDLING</h2>
+
+        <button
+          onClick={handleExport}
+          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700
+                   text-white text-sm font-semibold shadow"
+        >
+          Export Excel
+        </button>
+      </div>
 
       {/* ================= FORM ================= */}
       <div className="grid md:grid-cols-3 gap-3 mb-3">
-        {/* KATEGORI INDUK */}
         <select
           value={form.kategoriBarang}
           onChange={(e) =>
@@ -128,7 +159,6 @@ export default function MasterBarangBundlingCard() {
           ))}
         </select>
 
-        {/* BARANG BUNDLING (ACCESSORIES) */}
         <select
           value={form.namaBarang}
           onChange={(e) =>
@@ -146,7 +176,6 @@ export default function MasterBarangBundlingCard() {
           ))}
         </select>
 
-        {/* HARGA BUNDLING (AUTO) */}
         <input
           type="number"
           value={form.hargaBundling}
@@ -158,7 +187,7 @@ export default function MasterBarangBundlingCard() {
 
       <button
         onClick={save}
-        className="bg-indigo-600 text-white px-4 py-2 rounded mb-4"
+        className="bg-indigo-600 text-white px-4 py-2 rounded mb-4 flex items-center gap-2"
       >
         <FaPlus /> Simpan
       </button>
@@ -181,8 +210,7 @@ export default function MasterBarangBundlingCard() {
               <td className="p-2">{r.kategoriBarang}</td>
               <td className="p-2">{r.namaBarang}</td>
               <td className="p-2">
-                Rp{" "}
-                {Number(r.hargaBundling || 0).toLocaleString("id-ID")}
+                Rp {Number(r.hargaBundling || 0).toLocaleString("id-ID")}
               </td>
               <td className="p-2 flex justify-center gap-2">
                 <button
@@ -205,6 +233,14 @@ export default function MasterBarangBundlingCard() {
               </td>
             </tr>
           ))}
+
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={5} className="text-center py-4 text-slate-400">
+                Belum ada data
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

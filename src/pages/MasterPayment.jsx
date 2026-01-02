@@ -8,7 +8,6 @@ import {
 } from "react-icons/fa";
 
 import MasterPaymentMetodeCard from "../components/master-management/MasterPaymentMetodeCard";
-import MasterLeasingCard from "../components/master-management/MasterLeasingCard ";
 import MasterTenorCard from "../components/master-management/MasterTenorCard ";
 import MasterVoucherCard from "../components/master-management/MasterVoucherCard ";
 import MasterMDRCard from "../components/master-management/MasterMDRCard ";
@@ -21,13 +20,6 @@ const cardsConfig = [
     desc: "Kelola metode pembayaran",
     icon: FaCreditCard,
     gradient: "from-indigo-500 via-indigo-400 to-blue-400",
-  },
-  {
-    key: "leasing",
-    title: "MASTER LEASING",
-    desc: "Kelola partner leasing",
-    icon: FaHandshake,
-    gradient: "from-emerald-500 via-emerald-400 to-green-400",
   },
   {
     key: "mdr",
@@ -59,8 +51,6 @@ export default function MasterPayment() {
     switch (activeKey) {
       case "paymentMetode":
         return <MasterPaymentMetodeCard />;
-      case "leasing":
-        return <MasterLeasingCard />;
       case "mdr":
         return <MasterMDRCard />; 
       case "tenor":

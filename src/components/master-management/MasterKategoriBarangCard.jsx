@@ -1,227 +1,143 @@
 import React, { useEffect, useState } from "react";
 import {
-  addMasterKategoriBarang,
   listenMasterKategoriBarang,
+  addMasterKategoriBarang,
   updateMasterKategoriBarang,
   deleteMasterKategoriBarang,
 } from "../../services/FirebaseService";
-
-import {
-  FaPlus,
-  FaEdit,
-  FaTrash,
-  FaSave,
-  FaTimes,
-} from "react-icons/fa";
+import { FaPlus, FaEdit, FaTrash } from "react-icons/fa";
+import { exportToExcel } from "../../utils/exportToExcel";
 
 export default function MasterKategoriBarangCard() {
-  const [list, setList] = useState([]);
-  const [form, setForm] = useState({
-    namaKategori: "",
-    deskripsi: "",
-  });
+  const [rows, setRows] = useState([]);
+  const [namaKategori, setNamaKategori] = useState("");
+  const [keterangan, setKeterangan] = useState("");
   const [editId, setEditId] = useState(null);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
 
   // ===============================
-  // 🔄 LISTEN REALTIME KATEGORI
+  // LISTENER FIREBASE
   // ===============================
   useEffect(() => {
-    const unsub = listenMasterKategoriBarang((data) => {
-      setList(Array.isArray(data) ? data : []);
+    const unsubscribe = listenMasterKategoriBarang((data) => {
+      setRows(data || []);
     });
-    return () => {
-      if (unsub) unsub();
-    };
+
+    return () => unsubscribe && unsubscribe();
   }, []);
 
   // ===============================
-  // 🔁 RESET FORM
+  // EXPORT EXCEL (SESUAI TABEL)
   // ===============================
-  const resetForm = () => {
-    setForm({ namaKategori: "", deskripsi: "" });
-    setEditId(null);
-  };
-
-  // ===============================
-  // 💾 TAMBAH / UPDATE DATA
-  // ===============================
-  const handleSubmit = async () => {
-    if (!form.namaKategori.trim()) {
-      alert("❌ Nama kategori wajib diisi");
+  const handleExport = () => {
+    if (!rows || rows.length === 0) {
+      alert("❌ Data kosong, tidak bisa export");
       return;
     }
 
-    try {
-      setLoading(true);
+    // 🔥 FORMAT SESUAI KOLOM TABLE
+    const formattedData = rows.map((r) => ({
+      "Kategori Barang": r.namaKategori || "",
+      Keterangan: r.keterangan || "",
+    }));
 
-      // 🔒 CEK DUPLIKAT
-      const exists = list.some(
-        (i) =>
-          i.namaKategori?.toLowerCase() ===
-            form.namaKategori.toLowerCase() &&
-          i.id !== editId
-      );
-
-      if (exists) {
-        alert("⚠️ Kategori sudah ada");
-        return;
-      }
-
-      if (editId) {
-        await updateMasterKategoriBarang(editId, {
-          ...form,
-          updatedAt: Date.now(),
-        });
-      } else {
-        await addMasterKategoriBarang({
-          ...form,
-          createdAt: Date.now(),
-        });
-      }
-
-      resetForm();
-    } catch (err) {
-      console.error("❌ ERROR SIMPAN KATEGORI:", err);
-
-      if (String(err?.message).includes("PERMISSION_DENIED")) {
-        alert("❌ Firebase permission denied. Cek Rules Database!");
-      } else {
-        alert("❌ Terjadi kesalahan saat menyimpan data");
-      }
-    } finally {
-      setLoading(false);
-    }
+    exportToExcel({
+      data: formattedData,
+      fileName: "MASTER_KATEGORI_BARANG",
+      sheetName: "Kategori Barang",
+    });
   };
 
   // ===============================
-  // 🔍 FILTER SEARCH
+  // SIMPAN
   // ===============================
-  const filtered = list.filter((i) =>
-    i.namaKategori
-      ?.toLowerCase()
-      .includes(search.toLowerCase())
-  );
+  const save = async () => {
+    if (!namaKategori) {
+      alert("Nama kategori wajib diisi");
+      return;
+    }
+
+    const payload = {
+      namaKategori,
+      keterangan,
+    };
+
+    if (editId) {
+      await updateMasterKategoriBarang(editId, payload);
+    } else {
+      await addMasterKategoriBarang(payload);
+    }
+
+    setNamaKategori("");
+    setKeterangan("");
+    setEditId(null);
+  };
 
   return (
-    <div className="bg-white rounded-xl shadow p-5">
-      {/* HEADER */}
+    <div>
+      {/* ================= HEADER ================= */}
       <div className="flex justify-between items-center mb-4">
-        <h2 className="font-bold text-lg">
-          MASTER KATEGORI BARANG
-        </h2>
+        <h2 className="font-bold text-lg">MASTER KATEGORI BARANG</h2>
+
+        <button
+          onClick={handleExport}
+          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700
+                   text-white text-sm font-semibold shadow"
+        >
+          Export Excel
+        </button>
+      </div>
+
+      {/* ================= FORM ================= */}
+      <div className="grid md:grid-cols-2 gap-3 mb-3">
         <input
-          placeholder="Cari kategori..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border px-3 py-1 rounded"
+          value={namaKategori}
+          onChange={(e) => setNamaKategori(e.target.value)}
+          placeholder="Nama Kategori Barang"
+          className="border p-2 rounded"
+        />
+        <input
+          value={keterangan}
+          onChange={(e) => setKeterangan(e.target.value)}
+          placeholder="Keterangan"
+          className="border p-2 rounded"
         />
       </div>
 
-      {/* FORM */}
-      <div className="bg-slate-50 p-3 rounded mb-4">
-        <input
-          placeholder="Nama Kategori"
-          value={form.namaKategori}
-          onChange={(e) =>
-            setForm({ ...form, namaKategori: e.target.value })
-          }
-          className="border p-2 rounded w-full mb-2"
-        />
+      <button
+        onClick={save}
+        className="bg-indigo-600 text-white px-4 py-2 rounded mb-4 flex items-center gap-2"
+      >
+        <FaPlus /> Simpan
+      </button>
 
-        <input
-          placeholder="Deskripsi"
-          value={form.deskripsi}
-          onChange={(e) =>
-            setForm({ ...form, deskripsi: e.target.value })
-          }
-          className="border p-2 rounded w-full"
-        />
-
-        <div className="mt-3 flex gap-2">
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className={`px-4 py-2 rounded flex items-center gap-1 text-white ${
-              loading
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-emerald-600"
-            }`}
-          >
-            {editId ? <FaSave /> : <FaPlus />}
-            {loading
-              ? "Menyimpan..."
-              : editId
-              ? "Simpan"
-              : "Tambah"}
-          </button>
-
-          {editId && (
-            <button
-              onClick={resetForm}
-              className="bg-slate-500 text-white px-4 py-2 rounded flex items-center gap-1"
-            >
-              <FaTimes /> Batal
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* TABLE */}
+      {/* ================= TABLE ================= */}
       <table className="w-full text-sm border">
         <thead className="bg-slate-200">
           <tr>
-            <th className="p-2 w-12">No</th>
-            <th className="p-2">Nama</th>
-            <th className="p-2">Deskripsi</th>
-            <th className="p-2 w-24">Aksi</th>
+            <th className="p-2 text-center">No</th>
+            <th className="p-2">Kategori Barang</th>
+            <th className="p-2">Keterangan</th>
+            <th className="p-2 text-center">Aksi</th>
           </tr>
         </thead>
         <tbody>
-          {filtered.length === 0 && (
-            <tr>
-              <td
-                colSpan="4"
-                className="p-4 text-center text-gray-400"
-              >
-                Tidak ada data
-              </td>
-            </tr>
-          )}
-
-          {filtered.map((item, i) => (
-            <tr key={item.id} className="border-t">
+          {rows.map((r, i) => (
+            <tr key={r.id} className="border-t">
               <td className="p-2 text-center">{i + 1}</td>
-              <td className="p-2">{item.namaKategori}</td>
-              <td className="p-2">
-                {item.deskripsi || "-"}
-              </td>
-              <td className="p-2 space-x-2 text-center">
+              <td className="p-2">{r.namaKategori}</td>
+              <td className="p-2">{r.keterangan}</td>
+              <td className="p-2 flex justify-center gap-3">
                 <button
                   onClick={() => {
-                    setEditId(item.id);
-                    setForm({
-                      namaKategori: item.namaKategori,
-                      deskripsi: item.deskripsi || "",
-                    });
+                    setEditId(r.id);
+                    setNamaKategori(r.namaKategori);
+                    setKeterangan(r.keterangan || "");
                   }}
-                  className="text-blue-600"
                 >
                   <FaEdit />
                 </button>
-
                 <button
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        `Hapus kategori "${item.namaKategori}"?\n\nPastikan tidak dipakai di Master Barang`
-                      )
-                    ) {
-                      deleteMasterKategoriBarang(item.id);
-                    }
-                  }}
-                  className="text-red-600"
+                  onClick={() => deleteMasterKategoriBarang(r.id)}
                 >
                   <FaTrash />
                 </button>

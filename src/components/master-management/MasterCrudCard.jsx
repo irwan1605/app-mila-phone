@@ -9,6 +9,7 @@ import {
   FaTimes,
 } from "react-icons/fa";
 
+
 export default function MasterCrudCard({
   title,
   subtitle,
@@ -20,6 +21,7 @@ export default function MasterCrudCard({
   updateFnName,
   deleteFnName,
   submitLabel,
+  onDataChange,
   disableCreate = false,
 }) {
   const listenFn = FirebaseService[listenFnName];
@@ -31,6 +33,19 @@ export default function MasterCrudCard({
   const [form, setForm] = useState({});
   const [editId, setEditId] = useState(null);
   const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = FirebaseService[listenFnName]((data) => {
+      setRows(data); // state internal table
+  
+      if (onDataChange) {
+        onDataChange(data); // 🔥 KIRIM KE PARENT
+      }
+    });
+  
+    return () => unsubscribe && unsubscribe();
+  }, [listenFnName]);
+  
 
   // ===============================
   // LISTENER REALTIME
