@@ -10,6 +10,7 @@ export default function TableTransferBarang({ currentRole }) {
   const [rows, setRows] = useState([]);
   const navigate = useNavigate();
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [preview, setPreview] = useState(null);
 
   useEffect(() => {
     return onValue(ref(db, "transfer_barang"), (snap) => {
@@ -93,6 +94,30 @@ export default function TableTransferBarang({ currentRole }) {
                   {r.status}
                 </td>
 
+                {preview && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl p-6 w-[500px]">
+                      <h3 className="font-bold mb-3">Preview Transfer</h3>
+
+                      <p>📦 Dari: {preview.tokoAsal}</p>
+                      <p>🏬 Ke: {preview.tokoTujuan}</p>
+
+                      <ul className="mt-3 max-h-40 overflow-auto">
+                        {preview.imeis.map((i) => (
+                          <li key={i}>• {i}</li>
+                        ))}
+                      </ul>
+
+                      <button
+                        onClick={() => setPreview(null)}
+                        className="mt-4 bg-slate-700 text-white px-4 py-2 rounded"
+                      >
+                        Tutup
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <td className="border px-3 py-2">
                   {isSuperAdmin && r.status === "Pending" ? (
                     <div className="flex gap-2">
@@ -112,7 +137,10 @@ export default function TableTransferBarang({ currentRole }) {
                       <button
                         className="px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-red-500 to-rose-600 hover:scale-105 transition"
                         onClick={async () => {
-                          await FirebaseService.rejectTransferFINAL(r);
+                          await FirebaseService.rejectTransferFINAL({
+                            transfer: r,
+                          });
+                          alert("Transfer ditolak & IMEI dikembalikan");
                         }}
                       >
                         ✖ REJECT

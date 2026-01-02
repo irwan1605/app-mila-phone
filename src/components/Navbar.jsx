@@ -61,6 +61,10 @@ const Navbar = ({ user, onLogout }) => {
     return () => unsub && unsub();
   }, []);
 
+  
+
+  
+
   // ✅ SINKRONKAN NAMA DARI USER MANAGEMENT
   const finalUser = useMemo(() => {
     if (!activeUser?.username) return activeUser;

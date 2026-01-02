@@ -138,6 +138,36 @@ export default function MasterBarang() {
   }, []);
 
   useEffect(() => {
+    setForm((f) => ({
+      ...f,
+      isBundling: false,
+      bundlingItems: [],
+    }));
+
+    // ===============================
+    // MOTOR & SEPEDA LISTRIK
+    // ===============================
+    if (
+      form.kategori === "MOTOR LISTRIK" ||
+      form.kategori === "SEPEDA LISTRIK"
+    ) {
+      const autoBundling = masterBundling
+        .filter((b) => b.kategoriBarang === form.kategori)
+        .map((b) => ({
+          namaBarang: b.namaBarang,
+          harga: Number(b.hargaBundling || 0),
+          source: "AUTO",
+        }));
+
+      setForm((f) => ({
+        ...f,
+        isBundling: autoBundling.length > 0,
+        bundlingItems: autoBundling,
+      }));
+    }
+  }, [form.kategori, masterBundling]);
+
+  useEffect(() => {
     const unsub = listenMasterKategoriBarang((rows) => {
       setKategoriList(rows || []);
     });
@@ -171,21 +201,21 @@ export default function MasterBarang() {
       .filter((b) => b.CREATED_AT) // hanya master barang asli
       .map((b) => {
         const harga = b.harga || {};
-  
+
         return {
           id: b.id,
           key: b.id,
-  
+
           tanggal: b.tanggal || "-",
           kategori: b.kategoriBarang || "-",
           brand: b.brand || "-",
           barang: b.namaBarang || "-",
-  
+
           // 🔥 SEMUA HARGA (PASTI ADA)
           hargaSRP: Number(harga.srp ?? b.hargaSRP ?? 0),
           hargaGrosir: Number(harga.grosir ?? b.hargaGrosir ?? 0),
           hargaReseller: Number(harga.reseller ?? b.hargaReseller ?? 0),
-  
+
           // 🔥 BUNDLING (AMAN)
           IS_BUNDLING: Boolean(b.IS_BUNDLING),
           BUNDLING_ITEMS: Array.isArray(b.BUNDLING_ITEMS)
@@ -194,7 +224,6 @@ export default function MasterBarang() {
         };
       });
   }, [masterBarang]);
-  
 
   const filtered = useMemo(() => {
     if (!search) return rekapMasterBarang;
@@ -308,7 +337,15 @@ export default function MasterBarang() {
       };
 
       // ⬇️ SIMPAN KE MASTER BARANG
-      await addMasterBarang(payload);
+      const newId = await addMasterBarang(payload);
+
+      setMasterBarang((prev) => [
+        ...prev,
+        {
+          id: newId || `TEMP-${Date.now()}`,
+          ...payload,
+        },
+      ]);
 
       // ✅ RESET FORM
       setForm({
@@ -416,6 +453,17 @@ export default function MasterBarang() {
       alert("Gagal memperbarui Master Barang");
     }
   };
+
+  // ===============================
+// SPAREPART / ACCESSORIES OPTIONS (UNTUK BUNDLING)
+// ===============================
+const sparepartOptions = useMemo(() => {
+  return masterBarang.filter(
+    (b) =>
+      b.kategoriBarang === "ACCESSORIES" ||
+      b.kategoriBarang === "SPAREPART"
+  );
+}, [masterBarang]);
 
   // ================== UI ==================
   return (
@@ -726,23 +774,91 @@ export default function MasterBarang() {
             </div>
             {form.isBundling && (
               <div className="mt-4">
-                <label className="text-xs font-semibold">
-                  Barang Bundling (otomatis dari Master Bundling)
-                </label>
+                <label className="text-xs font-semibold">Barang Bundling</label>
 
-                <div className="mt-2 space-y-2">
+                <div className="space-y-2 mt-2">
                   {form.bundlingItems.map((b, i) => (
                     <div
                       key={i}
-                      className="flex justify-between items-center bg-slate-100 px-3 py-2 rounded"
+                      className="grid grid-cols-3 gap-2 items-center"
                     >
-                      <span className="text-sm">{b.namaBarang}</span>
-                      <span className="text-sm font-semibold">
-                        Rp {Number(b.harga).toLocaleString("id-ID")}
-                      </span>
+                      <input
+                        list="sparepart-list"
+                        className="input"
+                        value={b.namaBarang}
+                        placeholder="Nama Sparepart"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setForm((prev) => {
+                            const items = [...prev.bundlingItems];
+                            items[i] = {
+                              ...items[i],
+                              namaBarang: v,
+                              source: "MANUAL",
+                            };
+                            return { ...prev, bundlingItems: items };
+                          });
+                        }}
+                      />
+
+                      <input
+                        type="number"
+                        className="input"
+                        value={b.harga}
+                        placeholder="Harga"
+                        onChange={(e) => {
+                          const v = Number(e.target.value || 0);
+                          setForm((prev) => {
+                            const items = [...prev.bundlingItems];
+                            items[i] = {
+                              ...items[i],
+                              harga: v,
+                              source: "MANUAL",
+                            };
+                            return { ...prev, bundlingItems: items };
+                          });
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            bundlingItems: prev.bundlingItems.filter(
+                              (_, idx) => idx !== i
+                            ),
+                          }))
+                        }
+                        className="bg-rose-500 text-white rounded px-2"
+                      >
+                        Hapus
+                      </button>
                     </div>
                   ))}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      bundlingItems: [
+                        ...(prev.bundlingItems || []),
+                        { namaBarang: "", harga: 0, source: "MANUAL" },
+                      ],
+                    }))
+                  }
+                  className="text-xs text-indigo-600 mt-2"
+                >
+                  + Tambah Barang Bundling Manual
+                </button>
+
+                <datalist id="sparepart-list">
+                  {sparepartOptions.map((s) => (
+                    <option key={s.id} value={s.namaBarang} />
+                  ))}
+                </datalist>
               </div>
             )}
 

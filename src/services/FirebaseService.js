@@ -49,6 +49,41 @@ import {
    HELPERS
 ============================================================ */
 
+export const addTransferBarang = async (data) => {
+  const newRef = push(ref(db, "transfer_barang"));
+  await set(newRef, data);
+  return newRef.key; // 🔥 INI KUNCINYA
+};
+
+
+
+/* ===============================
+   LOCK IMEI
+=============================== */
+export const lockImeiTransfer = async ({
+  imei,
+  transferId,
+  tokoAsal,
+}) => {
+  const lockRef = ref(db, `imei_lock/${imei}`);
+  const snap = await get(lockRef);
+
+  if (snap.exists()) {
+    throw new Error(`IMEI ${imei} sedang digunakan / terkunci`);
+  }
+
+  await set(lockRef, {
+    status: "LOCKED",
+    transferId,
+    tokoAsal,
+    createdAt: Date.now(),
+  });
+};
+
+export const unlockImeiTransfer = async (imei) => {
+  await remove(ref(db, `imei_lock/${imei}`));
+};
+
 
 export function getAvailableIMEIByToko(allTransaksi, tokoLogin) {
   const map = {};
@@ -1592,47 +1627,83 @@ export const approveTransferAndMoveStock = async ({
 // ================= APPROVE TRANSFER (FINAL & REALTIME) =================
 // ================= APPROVE + SURAT JALAN =================
 export const approveTransferFINAL = async ({ transfer }) => {
-  try {
-    for (const im of transfer.imeis || []) {
-      const snap = await get(
-        ref(db, `toko/${transfer.tokoPengirim}/transaksi`)
-      );
+  const {
+    tokoPengirim,
+    ke,
+    imeis = [],
+    brand,
+    barang,
+    kategori,
+    noDo,
+    noSuratJalan,
+    tanggal,
+    id,
+  } = transfer;
 
-      let trxKey = null;
-      let trxData = null;
+  const approvedAt = Date.now();
 
-      snap.forEach((c) => {
-        if (String(c.val().IMEI) === String(im)) {
-          trxKey = c.key;
-          trxData = c.val();
-        }
-      });
+  // ===============================
+  // 1. UPDATE STATUS TRANSFER
+  // ===============================
+  await update(ref(db, `transfer_barang/${id}`), {
+    status: "Approved",
+    approvedAt,
+  });
 
-      if (!trxKey || !trxData) continue;
+  // ===============================
+  // 2. TRANSAKSI STOK
+  // ===============================
+  for (const imei of imeis) {
+    // 🔻 STOK KELUAR (PENGIRIM)
+    await push(
+      ref(db, `toko/${tokoPengirim}/transaksi`),
+      {
+        TANGGAL_TRANSAKSI: tanggal,
+        NO_INVOICE: noDo,
+        NO_SURAT_JALAN: noSuratJalan,
+        NAMA_TOKO: tokoPengirim,
 
-      // 1️⃣ Hapus dari toko pengirim
-      await remove(
-        ref(db, `toko/${transfer.tokoPengirim}/transaksi/${trxKey}`)
-      );
+        NAMA_BRAND: brand,
+        NAMA_BARANG: barang,
+        KATEGORI_BRAND: kategori,
 
-      // 2️⃣ Tambah ke toko tujuan
-      await push(ref(db, `toko/${transfer.ke}/transaksi`), {
-        ...trxData,
-        NAMA_TOKO: transfer.ke,
-        UPDATED_AT: Date.now(),
-      });
-    }
+        IMEI: imei,
+        QTY: 1,
 
-    // 3️⃣ UPDATE STATUS (PENTING: JANGAN REMOVE)
-    await update(ref(db, `transfer_barang/${transfer.id}`), {
-      status: "Approved",
-      approvedAt: Date.now(),
-    });
-  } catch (err) {
-    console.error("approveTransferFINAL ERROR:", err);
-    throw err;
+        PAYMENT_METODE: "TRANSFER_KELUAR",
+        SYSTEM_PAYMENT: "SYSTEM",
+        STATUS: "Approved",
+        CREATED_AT: approvedAt,
+      }
+    );
+
+    // 🔺 STOK MASUK (TUJUAN)
+    await push(
+      ref(db, `toko/${ke}/transaksi`),
+      {
+        TANGGAL_TRANSAKSI: tanggal,
+        NO_INVOICE: noDo,
+        NO_SURAT_JALAN: noSuratJalan,
+        NAMA_TOKO: ke,
+
+        NAMA_BRAND: brand,
+        NAMA_BARANG: barang,
+        KATEGORI_BRAND: kategori,
+
+        IMEI: imei,
+        QTY: 1,
+
+        PAYMENT_METODE: "TRANSFER_MASUK",
+        SYSTEM_PAYMENT: "SYSTEM",
+        STATUS: "Approved",
+        CREATED_AT: approvedAt,
+      }
+    );
   }
+
+  return noSuratJalan;
 };
+
 
 
 
@@ -1645,12 +1716,20 @@ export const editTransferFINAL = async (id, data) => {
 
 
 // ================= REJECT TRANSFER =================
-export const rejectTransferFINAL = async (transfer) => {
-  await update(ref(db, `transfer_barang/${transfer.id}`), {
+export const rejectTransferFINAL = async ({ transfer }) => {
+  const { id, imeis = [] } = transfer;
+
+  await update(ref(db, `transfer_barang/${id}`), {
     status: "Rejected",
     rejectedAt: Date.now(),
   });
+
+  // 🔓 UNLOCK SEMUA IMEI
+  for (const imei of imeis) {
+    await remove(ref(db, `imei_lock/${imei}`));
+  }
 };
+
 
 
 // ===================================================

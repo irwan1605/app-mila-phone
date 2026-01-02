@@ -6,6 +6,8 @@ import {
   listenMasterToko,
   listenMasterKategoriBarang,
   listenMasterBarang,
+  lockImeiTransfer,
+  addTransferBarang ,
 } from "../services/FirebaseService";
 import { hitungStokBarang } from "../utils/stockUtils";
 
@@ -14,6 +16,24 @@ import { ref, onValue, update, push } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
 import TableTransferBarang from "./table/TableTransferBarang";
 import PrintSuratJalan from "./Print/PrintSuratJalan";
+
+
+const initialForm = {
+  tanggal: new Date().toISOString().slice(0, 10),
+  noDo: "",
+  noSuratJalan: "",
+  dari: "",
+  ke: "",
+  tokoPengirim: "",
+  pengirim: "",
+  kategori: "",
+  brand: "",
+  barang: "",
+  imeis: [],
+  qty: 0,
+  status: "Pending",
+};
+
 
 /* ================= KONFIG ================= */
 const KATEGORI_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
@@ -104,6 +124,14 @@ export default function TransferBarang() {
           // HANYA STOK YANG VALID
           if (!v.IMEI) return;
 
+          const metode = String(v.PAYMENT_METODE || "").toUpperCase();
+
+          let status = "AVAILABLE";
+          
+          if (metode === "TRANSFER_KELUAR") status = "OUT";
+          if (metode === "TRANSFER_MASUK") status = "AVAILABLE";
+          if (metode === "PENJUALAN") status = "OUT";
+          
           rows.push({
             id: trx.key,
             imei: String(v.IMEI).trim(),
@@ -111,9 +139,7 @@ export default function TransferBarang() {
             namaBrand: String(v.NAMA_BRAND || "").trim(),
             namaBarang: String(v.NAMA_BARANG || "").trim(),
             kategori: String(v.KATEGORI_BRAND || "").trim(),
-
-            // STATUS STOK
-            status: "AVAILABLE", // ⬅️ PENTING
+            status,
           });
         });
       });
@@ -268,7 +294,6 @@ export default function TransferBarang() {
 
     setImeiInput("");
   };
-  
 
   // ================= EDIT TRANSFER (DRAFT) =================
   const handleEdit = (row) => {
@@ -315,7 +340,7 @@ export default function TransferBarang() {
     setForm((f) => ({ ...f, imeis: next, qty: next.length }));
   };
 
-  const handleSearchImei = () => {
+  const handleAddImeiAuto = () => {
     const im = imeiSearch.trim();
     if (!im) return;
 
@@ -328,16 +353,20 @@ export default function TransferBarang() {
       return;
     }
 
-    setForm((f) => ({
-      ...f,
-      tokoPengirim: found.toko,
-      dari: found.toko,
-      brand: found.namaBrand,
-      barang: found.namaBarang,
-      kategori: found.kategori,
-      imeis: f.imeis.includes(found.imei) ? f.imeis : [...f.imeis, found.imei],
-      qty: f.imeis.length + 1,
-    }));
+    setForm((f) => {
+      if (f.imeis.includes(found.imei)) return f;
+
+      return {
+        ...f,
+        tokoPengirim: found.toko,
+        dari: found.toko,
+        brand: found.namaBrand,
+        barang: found.namaBarang,
+        kategori: found.kategori,
+        imeis: [...f.imeis, found.imei],
+        qty: f.imeis.length + 1,
+      };
+    });
 
     setImeiSearch("");
   };
@@ -351,83 +380,49 @@ export default function TransferBarang() {
     );
   }, [history, filterStatus]);
 
-// ================= HITUNG STOK TOKO (REALTIME) =================
-const stokPengirim = useMemo(() => {
-  if (!form.tokoPengirim || !form.barang) return 0;
+  // ================= HITUNG STOK TOKO (REALTIME) =================
+  const stokPengirim = useMemo(() => {
+    if (!form.tokoPengirim || !form.barang) return 0;
 
-  return inventory.filter(
-    (i) =>
-      i.status === "AVAILABLE" &&
-      i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
-      i.namaBarang.toUpperCase() === form.barang.toUpperCase()
-  ).length;
-}, [inventory, form.tokoPengirim, form.barang]);
+    return inventory.filter(
+      (i) =>
+        i.status === "AVAILABLE" &&
+        i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
+        i.namaBarang.toUpperCase() === form.barang.toUpperCase()
+    ).length;
+  }, [inventory, form.tokoPengirim, form.barang]);
 
   // ================= SUBMIT TRANSFER (FINAL 100%) =================
   const submitTransfer = async () => {
     try {
-      setLoading(true);
-  
-      // ================= VALIDASI =================
-      if (
-        !form.tokoPengirim ||
-        !form.ke ||
-        !form.barang ||
-        !Array.isArray(form.imeis) ||
-        form.imeis.length === 0
-      ) {
-        alert("❌ Data transfer belum lengkap");
-        return;
-      }
-  
-      // ================= VALIDASI STOK REALTIME =================
-      if (stokPengirim < form.imeis.length) {
-        alert(
-          `❌ Stok ${form.tokoPengirim} tidak mencukupi.\n\n` +
-            `Stok tersedia: ${stokPengirim}\n` +
-            `Diminta: ${form.imeis.length}`
-        );
-        return;
-      }
-  
-      // ================= PAYLOAD =================
       const payload = {
-        tanggal: form.tanggal,
-        noDo: form.noDo,
-        noSuratJalan: form.noSuratJalan,
-        pengirim: form.pengirim || "SYSTEM",
-  
-        tokoPengirim: form.tokoPengirim,
-        dari: form.tokoPengirim,
-        ke: form.ke,
-  
-        kategori: form.kategori,
-        brand: form.brand,
-        barang: form.barang,
-        imeis: form.imeis,
-        qty: form.imeis.length,
-  
+        ...form,
         status: "Pending",
         createdAt: Date.now(),
       };
   
-      await FirebaseService.createTransferRequest(payload);
+      // 1️⃣ SIMPAN TRANSFER → DAPAT ID
+      const newTransferId = await addTransferBarang(payload);
   
-      alert("✅ Transfer berhasil (Menunggu Approved Superadmin)");
+      if (!newTransferId) {
+        throw new Error("Gagal mendapatkan ID transfer");
+      }
   
-      // ================= RESET FORM =================
-      setForm((f) => ({
-        ...f,
-        brand: "",
-        barang: "",
-        imeis: [],
-        qty: 0,
-      }));
+      // 2️⃣ LOCK SEMUA IMEI
+      for (const imei of form.imeis) {
+        await lockImeiTransfer({
+          imei,
+          transferId: newTransferId,
+          tokoAsal: form.dari,
+        });
+      }
+  
+      alert("✅ Transfer berhasil dibuat & IMEI terkunci");
+  
+      setForm(initialForm);
     } catch (err) {
-      console.error(err);
-      alert("❌ Gagal submit transfer");
-    } finally {
-      setLoading(false);
+      console.error("submitTransfer error:", err);
+      alert(err.message || "❌ Gagal membuat transfer");
     }
   };
   
@@ -641,14 +636,14 @@ const stokPengirim = useMemo(() => {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    handleSearchImei();
+                    handleAddImeiAuto(); // 🔥 AUTO MASUK TABLE
                   }
                 }}
                 className="input"
                 placeholder="Scan / ketik IMEI lalu Enter"
               />
 
-              <button onClick={addImei} className="btn-indigo">
+              <button onClick={handleAddImeiAuto} className="btn-indigo">
                 <FaPlus />
               </button>
             </div>
@@ -686,7 +681,9 @@ const stokPengirim = useMemo(() => {
           {loading ? "Processing..." : "SUBMIT TRANSFER"}
         </button>
 
-        {isFormComplete && <TableTransferBarang currentRole={currentRole} />}
+        <div id="table-transfer-barang">
+          <TableTransferBarang currentRole={currentRole} />
+        </div>
       </div>
 
       {selectedSJ && showPreview && (
