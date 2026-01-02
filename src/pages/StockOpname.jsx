@@ -15,6 +15,7 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { useLocation } from "react-router-dom";
 import { deriveStockFromTransaksi } from "../utils/stockDerived";
+import { useNavigate } from "react-router-dom";
 
 import {
   FaEdit,
@@ -25,6 +26,20 @@ import {
   FaSave,
   FaTimes,
 } from "react-icons/fa";
+import TableStockOpname from "./table/TableStockOpname";
+
+const TOKO_ID_MAP = {
+  1: "CILANGKAP PUSAT",
+  2: "CIBINONG",
+  3: "GAS ALAM",
+  4: "CITEUREUP",
+  5: "CIRACAS",
+  6: "METLAND 1",
+  7: "METLAND 2",
+  8: "PITARA",
+  9: "KOTA WISATA",
+  10: "SAWANGAN",
+};
 
 /* ======================================================
    KONSTANTA
@@ -51,18 +66,23 @@ const FORM_STORAGE_KEY = "stockOpnameFormDraft";
 export default function StockOpname() {
   /* ================== STATE ================== */
   const [allTransaksi, setAllTransaksi] = useState([]);
+  const [filterToko, setFilterToko] = useState("semua");
+  const [opnameMap, setOpnameMap] = useState({});
+  const navigate = useNavigate();
+
   const [form, setForm] = useState({});
   const [editId, setEditId] = useState(null);
-  const [opnameMap, setOpnameMap] = useState({});
 
-  const [filterToko, setFilterToko] = useState("semua");
   const [filterStatus, setFilterStatus] = useState("semua");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageDefault);
+  const [filterSupplier, setFilterSupplier] = useState("");
+  const [filterImei, setFilterImei] = useState("");
 
   const [masterHargaMap, setMasterHargaMap] = useState({});
   const tableRef = useRef(null);
+  const [viewMode, setViewMode] = useState("SKU"); // SKU | IMEI
 
   /* ================== USER ================== */
   const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
@@ -72,13 +92,16 @@ export default function StockOpname() {
   const location = useLocation();
   const lockedTokoFromNav = location?.state?.lockedToko || null;
 
-  const tokoLogin =
+  const rawTokoLogin =
     lockedTokoFromNav ||
     loggedUser?.toko ||
     localStorage.getItem("TOKO_LOGIN") ||
     null;
 
-  const myTokoId = loggedUser?.toko;
+  const tokoLogin =
+    typeof rawTokoLogin === "number"
+      ? TOKO_ID_MAP[rawTokoLogin]
+      : TOKO_ID_MAP[Number(rawTokoLogin)] || rawTokoLogin;
 
   /* ======================================================
      LOAD MASTER HARGA
@@ -130,6 +153,107 @@ export default function StockOpname() {
     [allTransaksi]
   );
 
+  const detailStockLookup = useMemo(() => {
+    const map = {};
+
+    allTransaksi
+      .filter((t) => t && t.STATUS === "Approved")
+      .forEach((t) => {
+        const key =
+          t.IMEI || t.NOMOR_UNIK || `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+        if (!key) return;
+
+        if (!map[key]) {
+          map[key] = {
+            tanggal: t.TANGGAL_TRANSAKSI || "-",
+            supplier: t.NAMA_SUPPLIER || "-",
+            imei: t.IMEI || t.NOMOR_UNIK || "",
+          };
+        }
+      });
+
+    return map;
+  }, [allTransaksi]);
+
+  const aggregated = useMemo(() => {
+    let rows = [];
+
+    // 🔒 PIC TOKO → PAKSA 1 TOKO
+    const tokoAktif = isSuperAdmin ? filterToko : tokoLogin;
+
+    if (tokoAktif === "semua" && isSuperAdmin) {
+      Object.values(stockMap).forEach((perToko) => {
+        rows.push(...Object.values(perToko));
+      });
+    } else if (stockMap[tokoAktif]) {
+      rows = Object.values(stockMap[tokoAktif]);
+    }
+
+    return rows.map((r) => {
+      const detail = detailStockLookup[r.key] || {};
+      return {
+        ...r,
+        tanggal: detail.tanggal || "-",
+        supplier: detail.supplier || "-",
+        imei: detail.imei || "",
+      };
+    });
+  }, [stockMap, filterToko, tokoLogin, isSuperAdmin, detailStockLookup]);
+
+  const tableData = aggregated;
+
+  // PASTIKAN INI DI BAWAH deklarasi aggregated
+  useEffect(() => {
+    if (aggregated.length) {
+      console.log("STOCK OPNAME SAMPLE:", aggregated[0]);
+    }
+  }, [aggregated]);
+
+  const filteredTableData = useMemo(() => {
+    return tableData.filter((r) => {
+      if (
+        search &&
+        !(
+          r.barang?.toLowerCase().includes(search.toLowerCase()) ||
+          r.brand?.toLowerCase().includes(search.toLowerCase()) ||
+          r.toko?.toLowerCase().includes(search.toLowerCase()) ||
+          r.imei?.toLowerCase().includes(search.toLowerCase()) ||
+          r.supplier?.toLowerCase().includes(search.toLowerCase())
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        filterSupplier &&
+        !r.supplier?.toLowerCase().includes(filterSupplier.toLowerCase())
+      ) {
+        return false;
+      }
+
+      if (
+        filterImei &&
+        !r.imei?.toLowerCase().includes(filterImei.toLowerCase())
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [tableData, search, filterSupplier, filterImei]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredTableData.length / rowsPerPage)
+  );
+
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    const end = start + rowsPerPage;
+    return filteredTableData.slice(start, end);
+  }, [filteredTableData, currentPage, rowsPerPage]);
+
   /* ======================================================
      TOKO OPTIONS
   ====================================================== */
@@ -148,67 +272,35 @@ export default function StockOpname() {
     );
   }, [isSuperAdmin, tokoLogin, allTransaksi]);
 
-  /* ======================================================
-     AGGREGATED STOCK (UNTUK OPNAME CEPAT)
-  ====================================================== */
-  const aggregated = useMemo(() => {
-    let rows = [];
-
-    // ===============================
-    // 1. MODE SEMUA TOKO
-    // ===============================
-    if (filterToko === "semua" && isSuperAdmin) {
-      Object.values(stockMap).forEach((perToko) => {
-        rows.push(...Object.values(perToko));
-      });
-    }
-    // ===============================
-    // 2. MODE TOKO TERTENTU
-    // ===============================
-    else {
-      const tokoAktif = filterToko || tokoLogin;
-      if (tokoAktif && stockMap[tokoAktif]) {
-        rows = Object.values(stockMap[tokoAktif]);
-      }
-    }
-
-    // ===============================
-    // 3. SEARCH MULTI FIELD
-    // ===============================
-    if (search.trim()) {
-      const q = search.toLowerCase();
-
-      rows = rows.filter((r) =>
-        [
-          r.key, // IMEI / SKU
-          r.toko, // Nama Toko
-          r.barang, // Nama Barang
-          r.brand, // Nama Brand
-          r.kategori, // Kategori (jika ada)
-        ]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q))
-      );
-    }
-
-    return rows;
-  }, [stockMap, filterToko, tokoLogin, isSuperAdmin, search]);
-
-  /* ======================================================
-     HELPER
-  ====================================================== */
   function normalizeRecord(r = {}) {
     return {
       id: r.id || r.key || Date.now().toString(),
+
       TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || "",
       NO_INVOICE: r.NO_INVOICE || "",
-      NAMA_TOKO: r.NAMA_TOKO || "CILANGKAP PUSAT",
+
+      NAMA_TOKO:
+        TOKO_ID_MAP[r.NAMA_TOKO] ||
+        TOKO_ID_MAP[Number(r.NAMA_TOKO)] ||
+        r.NAMA_TOKO ||
+        "CILANGKAP PUSAT",
+
+      // 🔥 WAJIB ADA
+      NAMA_SUPPLIER: r.NAMA_SUPPLIER || r.SUPPLIER || r.namaSupplier || "",
+
       NAMA_BRAND: r.NAMA_BRAND || "",
       NAMA_BARANG: r.NAMA_BARANG || "",
+
       QTY: Number(r.QTY || 0),
-      NOMOR_UNIK: r.NOMOR_UNIK || "",
+
+      // 🔥 WAJIB ADA
+      IMEI: r.IMEI || r.NO_IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
+
+      NOMOR_UNIK: r.NOMOR_UNIK || r.IMEI || r.NO_IMEI || "",
+
       HARGA_SUPLAYER: Number(r.HARGA_SUPLAYER || 0),
       hargaSRP: Number(r.hargaSRP || r.HARGA || 0),
+
       PAYMENT_METODE: r.PAYMENT_METODE || "",
       STATUS: r.STATUS || "Pending",
       KETERANGAN: r.KETERANGAN || "",
@@ -236,13 +328,14 @@ export default function StockOpname() {
   const fmt = (v) => Number(v || 0).toLocaleString("id-ID");
 
   const exportStockOpnameExcel = () => {
-    const rows = aggregated.map((r, idx) => ({
+    const rows = tableData.map((r, idx) => ({
       NO: idx + 1,
+      TANGGAL: r.tanggal,
       TOKO: r.toko,
-      SKU_IMEI: r.key,
+      SUPPLIER: r.supplier,
       BRAND: r.brand,
       BARANG: r.barang,
-      KATEGORI: r.kategori || "",
+      IMEI: r.imei || "NON-IMEI",
       STOK_SISTEM: r.qty,
       STOK_FISIK: opnameMap[r.key] ?? "",
       SELISIH:
@@ -253,11 +346,11 @@ export default function StockOpname() {
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Stok_Opname");
+    XLSX.utils.book_append_sheet(wb, ws, "Detail_Stock");
 
     XLSX.writeFile(
       wb,
-      `Stock_Opname_${filterToko || "SEMUA_TOKO"}_${new Date()
+      `Detail_Stock_${viewMode}_${filterToko}_${new Date()
         .toISOString()
         .slice(0, 10)}.xlsx`
     );
@@ -268,50 +361,130 @@ export default function StockOpname() {
   ====================================================== */
   const saveOpnameFor = async (record) => {
     const key = record.key;
-    const fisik = Number(opnameMap[key] ?? "");
-    const sistemQty = Number(record.qty || 0);
+    const fisik = Number(opnameMap[key]);
+    const sistem = Number(record.qty || 0);
 
     if (Number.isNaN(fisik)) {
       alert("Stok fisik tidak valid");
       return;
     }
 
-    const selisih = fisik - sistemQty;
-    if (selisih === 0) {
-      alert("Tidak ada selisih");
+    if (fisik === sistem) {
+      alert("Stok fisik sama dengan sistem");
       return;
     }
 
-    const srp = masterHargaMap[key]?.hargaSRP || 0;
+    // 🔥 RESET LOGIC
+    const koreksi = fisik - sistem;
 
     const payload = {
       TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
       NO_INVOICE: `OPN-${Date.now()}`,
-      NAMA_TOKO: "CILANGKAP PUSAT",
+      NAMA_TOKO: record.toko,
       NAMA_BRAND: record.brand,
       NAMA_BARANG: record.barang,
-      QTY: Math.abs(selisih),
       NOMOR_UNIK: key,
-      hargaSRP: srp,
-      TOTAL: Math.abs(selisih) * srp,
+      QTY: Math.abs(koreksi),
       PAYMENT_METODE: "STOK OPNAME",
+      SYSTEM_PAYMENT: "SYSTEM",
       STATUS: "Approved",
+      KETERANGAN: `RESET OPNAME → sistem:${sistem}, fisik:${fisik}`,
+      _RESET_TO: fisik, // ⬅️ PENTING (jejak audit)
     };
 
-    const tokoId =
-      fallbackTokoNames.findIndex((n) => n === "CILANGKAP PUSAT") + 1;
+    const tokoId = fallbackTokoNames.findIndex((n) => n === record.toko) + 1;
 
     await addTransaksi(tokoId, payload);
+
     setAllTransaksi((d) => [...d, normalizeRecord(payload)]);
     setOpnameMap((m) => ({ ...m, [key]: "" }));
-    alert("Opname berhasil disimpan");
+
+    alert("Opname berhasil. Stok sistem = stok fisik.");
   };
+
+  const handleVoidOpname = async (record) => {
+    if (!isSuperAdmin) return;
+
+    if (!window.confirm("Batalkan opname & kembalikan stok sebelum opname?"))
+      return;
+
+    const opnameTrx = allTransaksi.find(
+      (t) =>
+        t.PAYMENT_METODE === "STOK OPNAME" &&
+        t.STATUS === "Approved" &&
+        t.NOMOR_UNIK === record.key
+    );
+
+    if (!opnameTrx) {
+      alert("Transaksi opname tidak ditemukan");
+      return;
+    }
+
+    const tokoId =
+      fallbackTokoNames.findIndex((n) => n === opnameTrx.NAMA_TOKO) + 1;
+
+    // 🔥 BALIK ARAH
+    const reversePayload = {
+      ...opnameTrx,
+      id: undefined,
+      NO_INVOICE: `VOID-${Date.now()}`,
+      QTY: opnameTrx.QTY,
+      PAYMENT_METODE: "VOID OPNAME",
+      STATUS: "Approved",
+      KETERANGAN: "Pembatalan opname (rollback stok)",
+    };
+
+    await addTransaksi(tokoId, reversePayload);
+
+    await updateTransaksi(tokoId, opnameTrx.id, {
+      ...opnameTrx,
+      STATUS: "VOID",
+    });
+
+    setAllTransaksi((d) => [
+      ...d,
+      normalizeRecord(reversePayload),
+      ...d.map((x) => (x.id === opnameTrx.id ? { ...x, STATUS: "VOID" } : x)),
+    ]);
+
+    alert("Opname berhasil dibatalkan & stok dipulihkan.");
+  };
+
+  const detailLookup = useMemo(() => {
+    const map = {};
+    allTransaksi
+      .filter((t) => t.STATUS === "Approved")
+      .forEach((t) => {
+        const key =
+          t.IMEI || t.NOMOR_UNIK || `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+        if (!map[key]) {
+          map[key] = {
+            tanggal: t.TANGGAL_TRANSAKSI || "-",
+            supplier: t.NAMA_SUPPLIER || "-",
+            imei: t.IMEI || "",
+          };
+        }
+      });
+    return map;
+  }, [allTransaksi]);
 
   /* ======================================================
      RENDER
   ====================================================== */
   return (
     <div className="p-4 bg-white rounded-xl shadow">
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          onClick={() => navigate(-1)}
+          className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+        >
+          ← Kembali
+        </button>
+
+        <span className="text-sm text-gray-500">Inventory / Stock Opname</span>
+      </div>
+
       <h2 className="text-xl font-bold mb-4 text-blue-700">
         Stok Opname & Inventory Management
       </h2>
@@ -334,16 +507,19 @@ export default function StockOpname() {
           </div>
 
           {/* FILTER TOKO */}
+
           <div className="min-w-[180px]">
             <select
               value={filterToko}
               onChange={(e) => setFilterToko(e.target.value)}
               disabled={!isSuperAdmin}
-              className={`p-2 border rounded w-full focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+              className={`p-2 border rounded w-full ${
                 !isSuperAdmin ? "bg-gray-100 cursor-not-allowed" : ""
               }`}
             >
-              {isSuperAdmin && <option value="semua">SEMUA TOKO</option>}
+              {isSuperAdmin && tokoLogin && (
+                <option value="semua">SEMUA TOKO</option>
+              )}
               {tokoOptions.map((toko) => (
                 <option key={toko} value={toko}>
                   {toko}
@@ -366,71 +542,39 @@ export default function StockOpname() {
 
       {/* OPNAME CEPAT */}
       <div className="overflow-x-auto p-2" ref={tableRef}>
-        <table className="w-full text-sm border">
-          <thead className="bg-gray-200">
-            <tr>
-              <th className="p-2 border">No</th>
-              <th className="p-2 border">Toko</th>
-              <th className="p-2 border">SKU</th>
-              <th className="p-2 border">Brand</th>
-              <th className="p-2 border">Barang</th>
-              <th className="p-2 border">Stok Sistem</th>
-              <th className="p-2 border">Stok Fisik</th>
-              <th className="p-2 border">Selisih</th>
-              <th className="p-2 border">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {aggregated.map((r, i) => {
-              const fisik = Number(opnameMap[r.key] ?? "");
-              const selisih = Number.isNaN(fisik) ? "" : fisik - r.qty;
+        {/* OPNAME CEPAT */}
+        <TableStockOpname
+          data={paginatedData}
+          opnameMap={opnameMap}
+          setOpnameMap={setOpnameMap}
+          isSuperAdmin={isSuperAdmin}
+          onSaveOpname={saveOpnameFor}
+          onVoidOpname={handleVoidOpname}
+          tableRef={tableRef}
+        />
+        <div className="flex justify-between items-center mt-4">
+          <div className="text-sm text-gray-600">
+            Halaman {currentPage} dari {totalPages}
+          </div>
 
-              return (
-                <tr key={r.key}>
-                  <td className="p-2 border text-center">{i + 1}</td>
-                  <td className="p-2 border">{r.toko}</td>
-                  <td className="p-2 border font-mono">{r.key}</td>
-                  <td className="p-2 border">{r.brand}</td>
-                  <td className="p-2 border">{r.barang}</td>
-                  <td className="p-2 border text-center">{r.qty}</td>
-                  <td className="p-2 border">
-                    <input
-                      className="border p-1 w-20"
-                      value={opnameMap[r.key] ?? ""}
-                      onChange={(e) =>
-                        setOpnameMap((m) => ({
-                          ...m,
-                          [r.key]: e.target.value,
-                        }))
-                      }
-                    />
-                  </td>
-                  <td
-                    className={`p-2 border text-center ${
-                      selisih < 0
-                        ? "text-red-600"
-                        : selisih > 0
-                        ? "text-green-600"
-                        : ""
-                    }`}
-                  >
-                    {selisih === "" ? "-" : selisih}
-                  </td>
-                  <td className="p-2 border text-center">
-                    {isSuperAdmin && (
-                      <button
-                        onClick={() => saveOpnameFor(r)}
-                        className="bg-green-600 text-white px-2 py-1 rounded"
-                      >
-                        <FaSave />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+          <div className="flex gap-2">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1 border rounded disabled:opacity-50"
+            >
+              ◀
+            </button>
+
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-1 border rounded disabled:opacity-50"
+            >
+              ▶
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
