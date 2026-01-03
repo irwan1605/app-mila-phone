@@ -48,11 +48,15 @@ import {
 /* ============================================================
    HELPERS
 ============================================================ */
-
 export const addTransferBarang = async (data) => {
-  const newRef = push(ref(db, "transfer_barang"));
-  await set(newRef, data);
-  return newRef.key; // 🔥 INI KUNCINYA
+  const transferRef = push(ref(db, "transfer_barang"));
+  await update(transferRef, {
+    ...data,
+    id: transferRef.key,
+    status: "Pending",
+    createdAt: Date.now(),
+  });
+  return transferRef.key;
 };
 
 

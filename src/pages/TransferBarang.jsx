@@ -401,28 +401,29 @@ export default function TransferBarang() {
         createdAt: Date.now(),
       };
   
-      // 1️⃣ SIMPAN TRANSFER → DAPAT ID
-      const newTransferId = await addTransferBarang(payload);
+      // 🔥 SIMPAN KE NODE YANG DIBACA TABLE
+      const transferRef = push(ref(db, "transfer_barang"));
+      const newTransferId = transferRef.key;
   
-      if (!newTransferId) {
-        throw new Error("Gagal mendapatkan ID transfer");
-      }
+      await update(transferRef, {
+        ...payload,
+        id: newTransferId,
+      });
   
-      // 2️⃣ LOCK SEMUA IMEI
+      // 🔒 LOCK IMEI
       for (const imei of form.imeis) {
         await lockImeiTransfer({
           imei,
           transferId: newTransferId,
-          tokoAsal: form.dari,
+          tokoAsal: form.dari || form.tokoPengirim,
         });
       }
   
-      alert("✅ Transfer berhasil dibuat & IMEI terkunci");
-  
+      alert("✅ Transfer masuk tabel & siap di-approve");
       setForm(initialForm);
     } catch (err) {
-      console.error("submitTransfer error:", err);
-      alert(err.message || "❌ Gagal membuat transfer");
+      console.error(err);
+      alert("❌ Gagal membuat transfer");
     }
   };
   

@@ -3,12 +3,15 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Navbar.css";
 import { LogOut, UserCircle } from "lucide-react";
-
-import {
-  listenUsers,
-  listenTransferRequests,
-} from "../services/FirebaseService";
 import { FaBell } from "react-icons/fa";
+
+import { ref, onValue } from "firebase/database";
+import { db } from "../firebase/FirebaseInit";
+
+// import {
+//   listenUsers,
+//   listenTransferRequests,
+// } from "../services/FirebaseService";
 import FirebaseService from "../services/FirebaseService";
 
 const Navbar = ({ user, onLogout }) => {
@@ -28,6 +31,8 @@ const Navbar = ({ user, onLogout }) => {
     }
   }, [user]);
 
+  
+
   useEffect(() => {
     return FirebaseService.listenTransferRequests((rows) => {
       const pending = (rows || []).filter(
@@ -44,22 +49,45 @@ const Navbar = ({ user, onLogout }) => {
   }, [notifTransfer]);
 
   useEffect(() => {
-    const unsub = listenTransferRequests((list) => {
-      const pending = (list || []).filter((t) => t.status === "Pending");
-      setNotifTransfer(pending);
+    return onValue(ref(db, "transfer_barang"), (snap) => {
+      const pending = [];
+      snap.forEach((c) => {
+        if (c.val().status === "Pending") pending.push(c.val());
+      });
+      setPendingTransfer(pending);
     });
-
-    return () => unsub && unsub();
   }, []);
 
-  // ✅ AMBIL DATA USER DARI FIREBASE
-  useEffect(() => {
-    const unsub = listenUsers((list) => {
-      setFirebaseUsers(Array.isArray(list) ? list : []);
-    });
+  const bellAudio = useRef(null);
 
-    return () => unsub && unsub();
-  }, []);
+useEffect(() => {
+  bellAudio.current = new Audio("/bell.mp3");
+}, []);
+
+useEffect(() => {
+  if (pendingTransfer.length > 0) {
+    bellAudio.current?.play().catch(() => {});
+  }
+}, [pendingTransfer.length]);
+  
+
+  // useEffect(() => {
+  //   const unsub = listenTransferRequests((list) => {
+  //     const pending = (list || []).filter((t) => t.status === "Pending");
+  //     setNotifTransfer(pending);
+  //   });
+
+  //   return () => unsub && unsub();
+  // }, []);
+
+  // // ✅ AMBIL DATA USER DARI FIREBASE
+  // useEffect(() => {
+  //   const unsub = listenUsers((list) => {
+  //     setFirebaseUsers(Array.isArray(list) ? list : []);
+  //   });
+
+  //   return () => unsub && unsub();
+  // }, []);
 
   
 
