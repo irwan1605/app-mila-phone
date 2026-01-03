@@ -68,6 +68,7 @@ import CardTransferGudangToko from "./pages/Toko/CardTransferGudangToko";
 import DetailStockAllToko from "./pages/table/DetailStockAllToko";
 import DetailStockToko from "./pages/table/DetailStockToko";
 import CetakInvoicePenjualan from "./pages/Print/CetakInvoicePenjualan";
+import PrintSuratJalan from "./pages/Print/PrintSuratJalan";
 
 /* ===========================
     Utility role → toko
@@ -296,6 +297,8 @@ export default function App() {
 
                   {/* ✨ Fitur Baru — Transfer Barang */}
                   <Route path="/transfer-barang" element={<TransferBarang />} />
+                  <Route path="/surat-jalan/:id" element={<PrintSuratJalan />} />
+
 
                   {/* Stok */}
                   <Route

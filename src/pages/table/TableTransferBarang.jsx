@@ -4,6 +4,7 @@ import { ref, onValue } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase/FirebaseInit";
 import FirebaseService from "../../services/FirebaseService";
+import { FaPrint } from "react-icons/fa";
 
 export default function TableTransferBarang({ currentRole }) {
   const isSuperAdmin = currentRole === "superadmin";
@@ -106,11 +107,14 @@ export default function TableTransferBarang({ currentRole }) {
                   <td className="border px-3 py-2">{r.brand || "-"}</td>
                   <td className="border px-3 py-2">{r.barang || "-"}</td>
                   <td className="border px-3 py-2 text-xs">
-                  {Array.isArray(r.imeis) ? r.imeis.join(", ") : "-"}</td>
+                    {Array.isArray(r.imeis) ? r.imeis.join(", ") : "-"}
+                  </td>
                   <td className="border px-3 py-2 text-center font-semibold">
-                  {r.qty || 0}</td>
+                    {r.qty || 0}
+                  </td>
                   <td className="border px-3 py-2 font-semibold text-indigo-600">
-                  {r.status || "Pending"}</td>
+                    {r.status || "Pending"}
+                  </td>
 
                   {preview && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -136,11 +140,13 @@ export default function TableTransferBarang({ currentRole }) {
                     </div>
                   )}
 
-                  <td className="border px-3 py-2">
-                    {isSuperAdmin && r.status === "Pending" ? (
+                  <td className="border px-3 py-2 space-y-1">
+                    {/* APPROVE / REJECT */}
+                    {isSuperAdmin && r.status === "Pending" && (
                       <div className="flex gap-2">
                         <button
-                          className="px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-green-500 to-emerald-600 hover:scale-105 transition"
+                          className="px-3 py-2 rounded-xl text-xs font-bold text-white
+                   bg-gradient-to-r from-green-500 to-emerald-600"
                           onClick={async () => {
                             const sjId =
                               await FirebaseService.approveTransferFINAL({
@@ -149,11 +155,12 @@ export default function TableTransferBarang({ currentRole }) {
                             navigate(`/surat-jalan/${sjId}`);
                           }}
                         >
-                          ✔ APPROVE & CETAK
+                          ✔ APPROVE
                         </button>
 
                         <button
-                          className="px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-red-500 to-rose-600 hover:scale-105 transition"
+                          className="px-3 py-2 rounded-xl text-xs font-bold text-white
+                   bg-gradient-to-r from-red-500 to-rose-600"
                           onClick={async () => {
                             await FirebaseService.rejectTransferFINAL({
                               transfer: r,
@@ -164,8 +171,29 @@ export default function TableTransferBarang({ currentRole }) {
                           ✖ REJECT
                         </button>
                       </div>
-                    ) : (
-                      <span>-</span>
+                    )}
+
+                    {isSuperAdmin && (
+                      <button
+                        onClick={() => {
+                          // PRIORITAS:
+                          // 1. Jika sudah Approved → pakai suratJalanId
+                          // 2. Jika belum Approved → pakai transfer.id (antisipasi cetak ulang)
+                          const sjId = r.suratJalanId || r.id;
+
+                          navigate(`/surat-jalan/${sjId}`);
+                        }}
+                        className="
+        w-full flex items-center justify-center gap-2
+        px-3 py-2 rounded-xl
+        text-xs font-bold text-white
+        bg-gradient-to-r from-indigo-500 to-purple-600
+        hover:scale-105 transition
+      "
+                        title="Cetak ulang Surat Jalan (Superadmin)"
+                      >
+                        <FaPrint /> PRINT SURAT JALAN
+                      </button>
                     )}
                   </td>
                 </tr>

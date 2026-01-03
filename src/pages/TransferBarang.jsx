@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaExchangeAlt, FaSearch, FaPlus } from "react-icons/fa";
+import { FaExchangeAlt, FaSearch, FaPlus, FaPrint } from "react-icons/fa";
 
 import {
   listenMasterToko,
   listenMasterKategoriBarang,
   listenMasterBarang,
   lockImeiTransfer,
-  addTransferBarang ,
+  addTransferBarang,
 } from "../services/FirebaseService";
 import { hitungStokBarang } from "../utils/stockUtils";
 
@@ -16,7 +16,6 @@ import { ref, onValue, update, push } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
 import TableTransferBarang from "./table/TableTransferBarang";
 import PrintSuratJalan from "./Print/PrintSuratJalan";
-
 
 const initialForm = {
   tanggal: new Date().toISOString().slice(0, 10),
@@ -33,7 +32,6 @@ const initialForm = {
   qty: 0,
   status: "Pending",
 };
-
 
 /* ================= KONFIG ================= */
 const KATEGORI_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
@@ -127,11 +125,11 @@ export default function TransferBarang() {
           const metode = String(v.PAYMENT_METODE || "").toUpperCase();
 
           let status = "AVAILABLE";
-          
+
           if (metode === "TRANSFER_KELUAR") status = "OUT";
           if (metode === "TRANSFER_MASUK") status = "AVAILABLE";
           if (metode === "PENJUALAN") status = "OUT";
-          
+
           rows.push({
             id: trx.key,
             imei: String(v.IMEI).trim(),
@@ -400,16 +398,16 @@ export default function TransferBarang() {
         status: "Pending",
         createdAt: Date.now(),
       };
-  
+
       // 🔥 SIMPAN KE NODE YANG DIBACA TABLE
       const transferRef = push(ref(db, "transfer_barang"));
       const newTransferId = transferRef.key;
-  
+
       await update(transferRef, {
         ...payload,
         id: newTransferId,
       });
-  
+
       // 🔒 LOCK IMEI
       for (const imei of form.imeis) {
         await lockImeiTransfer({
@@ -418,7 +416,17 @@ export default function TransferBarang() {
           tokoAsal: form.dari || form.tokoPengirim,
         });
       }
-  
+
+      // 🔥 KURANGI STOK TOKO PENGIRIM (LANGSUNG HILANG)
+      for (const imei of form.imeis) {
+        // tandai IMEI keluar dari toko pengirim
+        await update(ref(db, `inventory/${form.tokoPengirim}/${imei}`), {
+          STATUS: "OUT",
+          TRANSFER_ID: newTransferId,
+          UPDATED_AT: Date.now(),
+        });
+      }
+
       alert("✅ Transfer masuk tabel & siap di-approve");
       setForm(initialForm);
     } catch (err) {
@@ -426,7 +434,6 @@ export default function TransferBarang() {
       alert("❌ Gagal membuat transfer");
     }
   };
-  
 
   /* ================= RENDER ================= */
   return (
@@ -674,52 +681,67 @@ export default function TransferBarang() {
           />
         )}
 
-        <button
-          onClick={submitTransfer}
-          disabled={loading}
-          className="btn-submit"
-        >
-          {loading ? "Processing..." : "SUBMIT TRANSFER"}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={submitTransfer}
+            disabled={loading}
+            className="btn-submit"
+          >
+            {loading ? "Processing..." : "SUBMIT TRANSFER"}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              alert(
+                "Surat Jalan dicetak melalui tabel setelah transfer di-Approve"
+              )
+            }
+            className="btn-indigo"
+          >
+            🖨️ PRINT SURAT JALAN
+          </button>
+
+          {showPreview && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-start overflow-auto p-6">
+              <div className="bg-white rounded-2xl shadow-2xl p-4">
+                <PrintSuratJalan
+                  data={{
+                    noSuratJalan: form.noSuratJalan,
+                    tanggal: form.tanggal,
+                    tokoPengirim: form.tokoPengirim,
+                    ke: form.ke,
+                    pengirim: form.pengirim,
+                    items: [
+                      {
+                        barang: form.barang,
+                        qty: form.qty,
+                        imeis: form.imeis,
+                      },
+                    ],
+                  }}
+                />
+
+                <div className="flex gap-3 justify-end mt-4">
+                  <button onClick={() => window.print()} className="btn-indigo">
+                    🖨️ Cetak
+                  </button>
+
+                  <button
+                    onClick={() => setShowPreview(false)}
+                    className="btn-red"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div id="table-transfer-barang">
           <TableTransferBarang currentRole={currentRole} />
         </div>
       </div>
-
-      {selectedSJ && showPreview && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex justify-center items-start overflow-auto p-6">
-          <div className="bg-white rounded-2xl shadow-2xl p-4">
-            <PrintSuratJalan
-              ref={suratJalanRef}
-              data={{
-                noSuratJalan: selectedSJ.noSuratJalan,
-                tanggal: selectedSJ.tanggal,
-                tokoPengirim: selectedSJ.tokoPengirim,
-                ke: selectedSJ.ke,
-                pengirim: selectedSJ.pengirim,
-                items: [
-                  {
-                    barang: selectedSJ.barang,
-                    qty: selectedSJ.qty,
-                    imeis: selectedSJ.imeis || [],
-                  },
-                ],
-              }}
-            />
-
-            <div className="flex gap-3 justify-end mt-4">
-              <button onClick={() => window.print()} className="btn-indigo">
-                🖨️ Print
-              </button>
-
-              <button onClick={() => setShowPreview(false)} className="btn-red">
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

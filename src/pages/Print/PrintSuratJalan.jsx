@@ -11,15 +11,52 @@ export default function PrintSuratJalan() {
   const printRef = useRef(null);
 
   useEffect(() => {
-    get(ref(db, `surat_jalan/${id}`)).then((snap) => {
-      if (snap.exists()) setData(snap.val());
-    });
+    // Sembunyikan navbar aplikasi
+    const navbar = document.querySelector("nav");
+    const header = document.querySelector("header");
+
+    if (navbar) navbar.style.display = "none";
+    if (header) header.style.display = "none";
+
+    return () => {
+      // Kembalikan saat keluar halaman print
+      if (navbar) navbar.style.display = "";
+      if (header) header.style.display = "";
+    };
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      // 1️⃣ Coba dari surat_jalan
+      const sjSnap = await get(ref(db, `surat_jalan/${id}`));
+      if (sjSnap.exists()) {
+        setData(sjSnap.val());
+        return;
+      }
+
+      // 2️⃣ Fallback: ambil dari transfer_barang (PENDING / ANTISIPASI)
+      const trSnap = await get(ref(db, `transfer_barang/${id}`));
+      if (trSnap.exists()) {
+        const t = trSnap.val();
+
+        setData({
+          noSuratJalan: t.noSuratJalan,
+          tanggal: t.tanggal,
+          tokoPengirim: t.tokoPengirim,
+          tokoTujuan: t.ke,
+          pengirim: t.pengirim,
+          barang: t.barang,
+          qty: t.qty,
+          imeis: t.imeis || [],
+        });
+      }
+    };
+
+    load();
   }, [id]);
 
-  if (!data) return null;
-
   return (
-    <div className="p-6">
+    <div className="print-only  p-6">
       <div ref={printRef} className="bg-white p-6 w-[210mm] mx-auto">
         <div className="text-center mb-4">
           <img src={Logo} alt="Logo" className="logo" />
@@ -31,7 +68,7 @@ export default function PrintSuratJalan() {
 
           <div className="doc-title">
             <h2>SURAT JALAN</h2>
-            <p>No: {data.noSuratJalan}</p>
+            <p>No: {data?.noSuratJalan}</p>
           </div>
         </div>
 
@@ -39,19 +76,19 @@ export default function PrintSuratJalan() {
           <tbody>
             <tr>
               <td>Tanggal</td>
-              <td>{data.tanggal}</td>
+              <td>{data?.tanggal}</td>
             </tr>
             <tr>
               <td>Dari</td>
-              <td>{data.tokoPengirim}</td>
+              <td>{data?.tokoPengirim}</td>
             </tr>
             <tr>
               <td>Ke</td>
-              <td>{data.tokoTujuan}</td>
+              <td>{data?.tokoTujuan}</td>
             </tr>
             <tr>
               <td>Pengirim</td>
-              <td>{data.pengirim}</td>
+              <td>{data?.pengirim}</td>
             </tr>
           </tbody>
         </table>
@@ -68,10 +105,10 @@ export default function PrintSuratJalan() {
           <tbody>
             <tr>
               <td className="border px-2 text-center">1</td>
-              <td className="border px-2">{data.barang}</td>
-              <td className="border px-2 text-center">{data.qty}</td>
+              <td className="border px-2">{data?.barang}</td>
+              <td className="border px-2 text-center">{data?.qty}</td>
               <td className="border px-2 text-xs">
-                {(data.imeis || []).join(", ")}
+                {(data?.imeis || []).join(", ")}
               </td>
             </tr>
           </tbody>
@@ -90,7 +127,7 @@ export default function PrintSuratJalan() {
           <div>
             <tr>
               <td className="border px-2">Pengirim</td>
-              <td className="border px-2">{data.pengirim}</td>
+              <td className="border px-2">{data?.pengirim}</td>
             </tr>
           </div>
 
@@ -110,128 +147,33 @@ export default function PrintSuratJalan() {
 
       {/* ================= STYLE ================= */}
       <style>{`
-        @page {
-          size: A4;
-          margin: 15mm;
-        }
+      @media print {
+  /* SEMBUNYIKAN SEMUA KECUALI SURAT JALAN */
+  body * {
+    visibility: hidden;
+  }
 
-        .print-wrapper {
-          background: #fff;
-        }
+  /* TAMPILKAN HANYA AREA PRINT */
+  .print-only,
+  .print-only * {
+    visibility: visible;
+  }
 
-        .a4-page {
-          width: 210mm;
-          min-height: 297mm;
-          padding: 15mm;
-          font-family: Arial, Helvetica, sans-serif;
-          color: #000;
-        }
+  .print-only {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
 
-        /* HEADER */
-        .header {
-          display: grid;
-          grid-template-columns: 80px 1fr auto;
-          align-items: center;
-          gap: 12px;
-          border-bottom: 2px solid #000;
-          padding-bottom: 10px;
-          margin-bottom: 14px;
-        }
+  /* HILANGKAN MARGIN BROWSER */
+  body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+}
 
-        .logo {
-          height: 70px;
-          object-fit: contain;
-        }
-
-        .company h1 {
-          margin: 0;
-          font-size: 18px;
-          font-weight: 700;
-        }
-
-        .company p {
-          margin: 0;
-          font-size: 12px;
-        }
-
-        .doc-title {
-          text-align: right;
-        }
-
-        .doc-title h2 {
-          margin: 0;
-          font-size: 20px;
-          font-weight: 700;
-        }
-
-        .doc-title p {
-          margin: 0;
-          font-size: 12px;
-        }
-
-        /* INFO */
-        .info-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 12px;
-          font-size: 12px;
-        }
-
-        .info-table td {
-          padding: 4px 6px;
-          vertical-align: top;
-        }
-
-        /* ITEMS */
-        .item-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 12px;
-        }
-
-        .item-table th,
-        .item-table td {
-          border: 1px solid #000;
-          padding: 6px;
-          vertical-align: top;
-        }
-
-        .item-table th {
-          background: #f2f2f2;
-          text-align: center;
-        }
-
-        /* NOTE */
-        .note {
-          margin-top: 14px;
-          font-size: 12px;
-        }
-
-        /* SIGNATURE */
-        .signature {
-          margin-top: 30px;
-          display: flex;
-          justify-content: space-between;
-          text-align: center;
-          font-size: 12px;
-        }
-
-        .sign-box {
-          margin: 40px auto 8px;
-          width: 160px;
-          border-bottom: 1px solid #000;
-        }
-
-        .name {
-          font-weight: bold;
-        }
-
-        /* PRINT ONLY */
-        @media print {
-          body {
-            background: #fff;
-          }
-        }
       `}</style>
     </div>
   );

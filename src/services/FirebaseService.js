@@ -1631,6 +1631,19 @@ export const approveTransferAndMoveStock = async ({
 // ================= APPROVE TRANSFER (FINAL & REALTIME) =================
 // ================= APPROVE + SURAT JALAN =================
 export const approveTransferFINAL = async ({ transfer }) => {
+  const sjRef = push(ref(db, "surat_jalan"));
+
+  await update(sjRef, {
+    noSuratJalan: transfer.noSuratJalan,
+    tanggal: transfer.tanggal,
+    tokoPengirim: transfer.tokoPengirim,
+    tokoTujuan: transfer.ke,
+    pengirim: transfer.pengirim,
+    barang: transfer.barang,
+    qty: transfer.qty,
+    imeis: transfer.imeis,
+  });
+
   const {
     tokoPengirim,
     ke,
@@ -1651,6 +1664,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
   // ===============================
   await update(ref(db, `transfer_barang/${id}`), {
     status: "Approved",
+    suratJalanId: sjRef.key,
     approvedAt,
   });
 
@@ -1721,17 +1735,26 @@ export const editTransferFINAL = async (id, data) => {
 
 // ================= REJECT TRANSFER =================
 export const rejectTransferFINAL = async ({ transfer }) => {
-  const { id, imeis = [] } = transfer;
+  if (!transfer?.id) {
+    throw new Error("Transfer ID tidak valid");
+  }
 
-  await update(ref(db, `transfer_barang/${id}`), {
+  // 🔁 KEMBALIKAN IMEI KE TOKO ASAL
+  for (const imei of transfer.imeis || []) {
+    await update(ref(db, `inventory/${transfer.tokoPengirim}/${imei}`), {
+      STATUS: "AVAILABLE",
+      TRANSFER_ID: null,
+      UPDATED_AT: Date.now(),
+    });
+  }
+
+  // 🔄 UPDATE STATUS TRANSFER
+  await update(ref(db, `transfer_barang/${transfer.id}`), {
     status: "Rejected",
     rejectedAt: Date.now(),
   });
 
-  // 🔓 UNLOCK SEMUA IMEI
-  for (const imei of imeis) {
-    await remove(ref(db, `imei_lock/${imei}`));
-  }
+  return true;
 };
 
 
@@ -2521,6 +2544,7 @@ const FirebaseService = {
   approveTransferAndMoveStock,
   approveTransferSafe,
   approveTransferFINAL,
+  rejectTransferFINAL,
   approveTransferABSOLUTE,
   approveTransferAndMoveInventory,
   reserveImeis,
