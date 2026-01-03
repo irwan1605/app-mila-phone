@@ -236,7 +236,7 @@ export default function InventoryReport() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">INVENTORY REPORT — PRO MAX</h1>
+        <h1 className="text-3xl font-bold mb-6">INVENTORY REPORT — MILA PHONE</h1>
 
         {/* ================================================================== */}
         {/* CARD BESAR CILANGKAP PUSAT */}

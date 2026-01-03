@@ -29,7 +29,7 @@ export default function TableTransferBarang({ currentRole }) {
         📦 TABEL TRANSFER BARANG
       </h3>
 
-      <div>
+      <div className="hover:bg-indigo-50 transition-colors p-2" >
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
@@ -43,9 +43,9 @@ export default function TableTransferBarang({ currentRole }) {
         </select>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-300">
-        <table className="w-full min-w-[1200px] text-sm border-collapse">
-          <thead className="bg-gradient-to-r from-indigo-100 to-purple-100">
+      <div className="overflow-x-auto rounded-xl border border-slate-300 p-2">
+        <table className="w-full min-w-[1200px] text-sm border-collapse p-2">
+          <thead className="bg-gradient-to-r from-indigo-100 to-purple-100 p-2">
             <tr>
               {[
                 "No",
@@ -74,7 +74,7 @@ export default function TableTransferBarang({ currentRole }) {
 
           <tbody>
             {rows.map((r, i) => (
-              <tr key={r.id} className="hover:bg-indigo-50 transition-colors">
+              <tr key={r.id} className="hover:bg-indigo-50 transition-colors p-2">
                 <td className="border px-3 py-2">{i + 1}</td>
                 <td className="border px-3 py-2">{r.tanggal}</td>
                 <td className="border px-3 py-2">{r.noDo}</td>
