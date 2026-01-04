@@ -107,6 +107,7 @@ const pageCount = Math.ceil(tableRows.length / pageSize);
   alert("✅ Transaksi berhasil di VOID");
 };
 
+
 const handleEdit = (row) => {
   if (!isSuperAdmin) return;
   alert(`EDIT Invoice ${row.invoice} (siap diarahkan ke form edit)`);

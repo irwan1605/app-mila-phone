@@ -153,6 +153,7 @@ export default function StockOpname() {
     [allTransaksi]
   );
 
+
   const detailStockLookup = useMemo(() => {
     const map = {};
 
@@ -356,118 +357,96 @@ export default function StockOpname() {
     );
   };
 
-  /* ======================================================
-     SIMPAN OPNAME PER SKU
-  ====================================================== */
-  const saveOpnameFor = async (record) => {
-    const key = record.key;
-    const fisik = Number(opnameMap[key]);
-    const sistem = Number(record.qty || 0);
-
-    if (Number.isNaN(fisik)) {
-      alert("Stok fisik tidak valid");
-      return;
-    }
-
-    if (fisik === sistem) {
-      alert("Stok fisik sama dengan sistem");
-      return;
-    }
-
-    // 🔥 RESET LOGIC
-    const koreksi = fisik - sistem;
-
-    const payload = {
-      TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
-      NO_INVOICE: `OPN-${Date.now()}`,
-      NAMA_TOKO: record.toko,
-      NAMA_BRAND: record.brand,
-      NAMA_BARANG: record.barang,
-      NOMOR_UNIK: key,
-      QTY: Math.abs(koreksi),
-      PAYMENT_METODE: "STOK OPNAME",
-      SYSTEM_PAYMENT: "SYSTEM",
-      STATUS: "Approved",
-      KETERANGAN: `RESET OPNAME → sistem:${sistem}, fisik:${fisik}`,
-      _RESET_TO: fisik, // ⬅️ PENTING (jejak audit)
-    };
-
-    const tokoId = fallbackTokoNames.findIndex((n) => n === record.toko) + 1;
-
-    await addTransaksi(tokoId, payload);
-
-    setAllTransaksi((d) => [...d, normalizeRecord(payload)]);
-    setOpnameMap((m) => ({ ...m, [key]: "" }));
-
-    alert("Opname berhasil. Stok sistem = stok fisik.");
-  };
-
   const handleVoidOpname = async (record) => {
     if (!isSuperAdmin) return;
-
-    if (!window.confirm("Batalkan opname & kembalikan stok sebelum opname?"))
-      return;
-
+  
+    if (!window.confirm("Batalkan opname & kembalikan stok?")) return;
+  
     const opnameTrx = allTransaksi.find(
       (t) =>
         t.PAYMENT_METODE === "STOK OPNAME" &&
         t.STATUS === "Approved" &&
         t.NOMOR_UNIK === record.key
     );
-
+  
     if (!opnameTrx) {
       alert("Transaksi opname tidak ditemukan");
       return;
     }
-
+  
     const tokoId =
       fallbackTokoNames.findIndex((n) => n === opnameTrx.NAMA_TOKO) + 1;
-
-    // 🔥 BALIK ARAH
+  
     const reversePayload = {
       ...opnameTrx,
       id: undefined,
       NO_INVOICE: `VOID-${Date.now()}`,
-      QTY: opnameTrx.QTY,
+      QTY: -opnameTrx.QTY, // 🔥 BALIK ARAH
       PAYMENT_METODE: "VOID OPNAME",
       STATUS: "Approved",
-      KETERANGAN: "Pembatalan opname (rollback stok)",
+      KETERANGAN: "Rollback opname",
     };
-
+  
     await addTransaksi(tokoId, reversePayload);
-
+  
     await updateTransaksi(tokoId, opnameTrx.id, {
       ...opnameTrx,
       STATUS: "VOID",
     });
-
+  
     setAllTransaksi((d) => [
-      ...d,
-      normalizeRecord(reversePayload),
       ...d.map((x) => (x.id === opnameTrx.id ? { ...x, STATUS: "VOID" } : x)),
+      normalizeRecord(reversePayload),
     ]);
-
-    alert("Opname berhasil dibatalkan & stok dipulihkan.");
+  
+    alert("✅ Opname berhasil dibatalkan");
   };
+  
 
-  const detailLookup = useMemo(() => {
-    const map = {};
-    allTransaksi
-      .filter((t) => t.STATUS === "Approved")
-      .forEach((t) => {
-        const key =
-          t.IMEI || t.NOMOR_UNIK || `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-
-        if (!map[key]) {
-          map[key] = {
-            tanggal: t.TANGGAL_TRANSAKSI || "-",
-            supplier: t.NAMA_SUPPLIER || "-",
-            imei: t.IMEI || "",
-          };
-        }
-      });
-    return map;
-  }, [allTransaksi]);
+  /* ======================================================
+     SIMPAN OPNAME PER SKU
+  ====================================================== */
+  const saveOpnameFor = async (record) => {
+    const key = record.key;
+    const stokFisik = Number(opnameMap[key]);
+    const stokSistem = Number(record.qty || 0);
+  
+    if (Number.isNaN(stokFisik)) {
+      alert("Stok fisik tidak valid");
+      return;
+    }
+  
+    if (stokFisik === stokSistem) {
+      alert("Stok fisik sama dengan sistem");
+      return;
+    }
+  
+    const koreksi = stokFisik - stokSistem;
+  
+    const payload = {
+      TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+      NO_INVOICE: `OPN-${Date.now()}`,
+      NAMA_TOKO: record.toko,
+      NAMA_BRAND: record.brand,
+      NAMA_BARANG: record.barang,
+      NOMOR_UNIK: record.key,
+      QTY: koreksi, // 🔥 BOLEH + / -
+      PAYMENT_METODE: "STOK OPNAME",
+      STATUS: "Approved",
+      KETERANGAN: `RESET OPNAME: sistem=${stokSistem}, fisik=${stokFisik}`,
+    };
+  
+    const tokoId =
+      fallbackTokoNames.findIndex((n) => n === record.toko) + 1;
+  
+    await addTransaksi(tokoId, payload);
+  
+    setAllTransaksi((d) => [...d, normalizeRecord(payload)]);
+    setOpnameMap((m) => ({ ...m, [key]: "" }));
+  
+    alert("✅ Opname berhasil. Stok sistem = stok fisik.");
+  };
+  
 
   /* ======================================================
      RENDER

@@ -32,6 +32,22 @@ export default function FormUserSection({ value = {}, onChange }) {
       unsubSales && unsubSales();
     };
   }, []);
+
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("userLogin") || "{}");
+  
+    if (user?.role === "pic_toko" && user?.tokoId) {
+      const toko = masterToko.find(t => t.id === user.tokoId);
+      if (toko) {
+        onChange({
+          ...value,
+          namaTokoId: toko.id,
+          namaToko: toko.nama,
+        });
+      }
+    }
+  }, [masterToko]);
+  
   // =================================================
   // SAFE FORM
   // =================================================
