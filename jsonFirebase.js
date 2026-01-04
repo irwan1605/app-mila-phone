@@ -1,4 +1,7 @@
 {
+  "counters": {
+    "masterPelanggan": 1
+  },
   "dataManagement": {
     "masterBarang": {
       "-Ogi8XiD7O4xwSysz8Gs": {
@@ -96,19 +99,6 @@
         "namaBrand": "UWINFLY",
         "sku": "098098",
         "updatedAt": "2025-12-22T09:13:56.275Z"
-      },
-      "-Oh4H00bOrr65xZNv8X1": {
-        "brand": "OFERO",
-        "createdAt": "2025-12-22T08:58:29.281Z",
-        "harga": {
-          "grosir": 12000000,
-          "reseller": 12300000,
-          "srp": 12799000
-        },
-        "id": "-Oh4H00bOrr65xZNv8X1",
-        "kategoriBarang": "MOTOR LISTRIK",
-        "namaBarang": "OFERO STAREER MOTOR MERAH",
-        "updatedAt": "2026-01-02T07:37:16.473Z"
       },
       "-Oh4J9OHrG7aMrWsJWMf": {
         "brand": "UWINFLY",
@@ -424,6 +414,164 @@
         "id": "-OhxifAWVtn1Jq7y9cQO",
         "kategoriBarang": "SEPEDA LISTRIK",
         "namaBarang": "OFERO MEGICAL 3 LITHIUM HIJAU"
+      },
+      "-OhxipE09yPLHHvMJYZ5": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T08:03:03.769Z",
+        "harga": {
+          "grosir": 7100000,
+          "reseller": 6800000,
+          "srp": 7499000
+        },
+        "id": "-OhxipE09yPLHHvMJYZ5",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO MEGICAL 3 LITHIUM CREAM"
+      },
+      "-OhxivWcEdFE5s3ywW7g": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T08:03:29.536Z",
+        "harga": {
+          "grosir": 7100000,
+          "reseller": 6800000,
+          "srp": 7499000
+        },
+        "id": "-OhxivWcEdFE5s3ywW7g",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO MEGICAL 3 LITHIUM PINK"
+      },
+      "-OhxjFZ6XCUzQDX5jXmF": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T08:04:55.711Z",
+        "harga": {
+          "grosir": 9000000,
+          "reseller": 8700000,
+          "srp": 9499000
+        },
+        "id": "-OhxjFZ6XCUzQDX5jXmF",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO STAREER 3 LITHIUM HITAM"
+      },
+      "-OhxjNhk8BY23BLXU0hc": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T08:05:29.096Z",
+        "harga": {
+          "grosir": 9000000,
+          "reseller": 8700000,
+          "srp": 9499000
+        },
+        "id": "-OhxjNhk8BY23BLXU0hc",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO STAREER 3 LITHIUM SILVER"
+      },
+      "-OhxjX2rpSjHBvkEl2Cs": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T08:06:07.375Z",
+        "harga": {
+          "grosir": 9000000,
+          "reseller": 8700000,
+          "srp": 9499000
+        },
+        "id": "-OhxjX2rpSjHBvkEl2Cs",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO STAREER 3 LITHIUM ORANGE"
+      },
+      "-OhxjfxFb6hAYoGwJIdY": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T08:06:47.912Z",
+        "harga": {
+          "grosir": 9000000,
+          "reseller": 8700000,
+          "srp": 9499000
+        },
+        "id": "-OhxjfxFb6hAYoGwJIdY",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "OFERO STAREER 3 LITHIUM MERAH"
+      },
+      "-Ohxn39-Qyd4xYTpoUpX": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T08:21:33.291Z",
+        "harga": {
+          "grosir": 2000000,
+          "reseller": 1900000,
+          "srp": 2200000
+        },
+        "id": "-Ohxn39-Qyd4xYTpoUpX",
+        "kategoriBarang": "ACCESSORIES",
+        "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+      },
+      "-OhxnFccoBbZq3xJCzBq": {
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T08:22:24.403Z",
+        "harga": {
+          "grosir": 400000,
+          "reseller": 350000,
+          "srp": 500000
+        },
+        "id": "-OhxnFccoBbZq3xJCzBq",
+        "kategoriBarang": "ACCESSORIES",
+        "namaBarang": "CHARGER LITHIUM 48V"
+      },
+      "-OhyXhLhdBhMcVpRGzYs": {
+        "BUNDLING_ITEMS": [
+          {
+            "harga": 0,
+            "namaBarang": "BATERAI SLA 20A",
+            "source": "AUTO"
+          },
+          {
+            "harga": 0,
+            "namaBarang": "SPION OFERO",
+            "source": "AUTO"
+          },
+          {
+            "harga": 0,
+            "namaBarang": "BATERAI LITH 60V 24A PYLION ",
+            "source": "AUTO"
+          }
+        ],
+        "CREATED_AT": 1767354586040,
+        "IS_BUNDLING": true,
+        "brand": "OFERO",
+        "createdAt": "2026-01-02T11:49:46.041Z",
+        "harga": {
+          "grosir": 12000000,
+          "reseller": 12300000,
+          "srp": 12799000
+        },
+        "id": "-OhyXhLhdBhMcVpRGzYs",
+        "kategoriBarang": "MOTOR LISTRIK",
+        "namaBarang": "OFERO STAREER MOTOR MERAH",
+        "tanggal": "2026-01-02"
+      },
+      "-OhyYwDo-wrfOLnPetHH": {
+        "CREATED_AT": 1767354909107,
+        "IS_BUNDLING": false,
+        "brand": "REALME",
+        "createdAt": "2026-01-02T11:55:09.108Z",
+        "harga": {
+          "grosir": 1300000,
+          "reseller": 1325000,
+          "srp": 1350000
+        },
+        "id": "-OhyYwDo-wrfOLnPetHH",
+        "kategoriBarang": "HANDPHONE",
+        "namaBarang": "REALME NOTE 60x 4/128GB HITAM",
+        "tanggal": "2026-01-02"
+      },
+      "-OhyZANjWgUtOz63o5qt": {
+        "CREATED_AT": 1767354971186,
+        "IS_BUNDLING": false,
+        "brand": "OPPO",
+        "createdAt": "2026-01-02T11:56:11.186Z",
+        "harga": {
+          "grosir": 2920000,
+          "reseller": 2980000,
+          "srp": 3099000
+        },
+        "id": "-OhyZANjWgUtOz63o5qt",
+        "kategoriBarang": "HANDPHONE",
+        "namaBarang": "OPPO A5 Pro 4G 8/128GB",
+        "tanggal": "2026-01-02"
       }
     },
     "masterBarangBundling": {
@@ -468,6 +616,20 @@
         "id": "-OgvkOEyQArCNtyPbs9-",
         "kategoriBarang": "SEPEDA LISTRIK",
         "namaBarang": "CHARGER 48V 12A"
+      },
+      "-OhxnOjMByUrbKozbVMh": {
+        "createdAt": "2026-01-02T08:23:01.698Z",
+        "hargaBundling": 0,
+        "id": "-OhxnOjMByUrbKozbVMh",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+      },
+      "-OhxnSBqNlzP9E8Gi7XK": {
+        "createdAt": "2026-01-02T08:23:15.873Z",
+        "hargaBundling": 0,
+        "id": "-OhxnSBqNlzP9E8Gi7XK",
+        "kategoriBarang": "SEPEDA LISTRIK",
+        "namaBarang": "CHARGER LITHIUM 48V"
       }
     },
     "masterLeasing": {
@@ -524,6 +686,17 @@
         "createdAt": "2025-12-17T14:22:45.064Z",
         "id": "-OgggHM73RvNgs2kp1E_",
         "nama": "KREDIT"
+      }
+    },
+    "masterPelanggan": {
+      "-Ohy9IcgayGneSiASYa4": {
+        "alamat": "DEPOK - JAWA BARAT",
+        "createdAt": "2026-01-02T10:03:09.267Z",
+        "id": "-Ohy9IcgayGneSiASYa4",
+        "idPelanggan": "PLG-001",
+        "namaPelanggan": "ARDI",
+        "nik": "6331665746264",
+        "noTelpon": "08177893843"
       }
     },
     "masterSales": {
@@ -586,6 +759,86 @@
       }
     }
   },
+  "imei_lock": {
+    "041047013701811": {
+      "createdAt": 1767389924688,
+      "status": "LOCKED",
+      "tokoAsal": "CILANGKAP PUSAT",
+      "transferId": "-Oi-dVmNTV7APm5nFg40"
+    },
+    "374918781749111": {
+      "createdAt": 1767436537509,
+      "status": "LOCKED",
+      "tokoAsal": "CILANGKAP PUSAT",
+      "transferId": "-Oi2QJyGE_ioA7qC5qnx"
+    },
+    "374918781749112": {
+      "createdAt": 1767472134957,
+      "status": "LOCKED",
+      "tokoAsal": "CILANGKAP PUSAT",
+      "transferId": "-Oi4Y6gngbtCJNbPiHdL"
+    },
+    "374918781749113": {
+      "createdAt": 1767389924782,
+      "status": "LOCKED",
+      "tokoAsal": "CILANGKAP PUSAT",
+      "transferId": "-Oi-dVmNTV7APm5nFg40"
+    },
+    "374918781749114": {
+      "createdAt": 1767475455504,
+      "status": "LOCKED",
+      "tokoAsal": "CILANGKAP PUSAT",
+      "transferId": "-Oi4jmNDTwoqogxHjHWB"
+    },
+    "7436347489564570": {
+      "createdAt": 1767360453137,
+      "status": "LOCKED",
+      "tokoAsal": "CILANGKAP PUSAT",
+      "transferId": "-Ohyt4hrCIF7DfrdrFYU"
+    },
+    "9874283703740302": {
+      "createdAt": 1767404350038,
+      "status": "LOCKED",
+      "tokoAsal": "CILANGKAP PUSAT",
+      "transferId": "-Oi0VXe8896_c25w1T5q"
+    },
+    "9874283703740303": {
+      "createdAt": 1767389924735,
+      "status": "LOCKED",
+      "tokoAsal": "CILANGKAP PUSAT",
+      "transferId": "-Oi-dVmNTV7APm5nFg40"
+    }
+  },
+  "imei_locks": {
+    "374918781749111": {
+      "at": 1767495628078,
+      "by": "SYSTEM",
+      "toko": "CILANGKAP PUSAT"
+    },
+    "872417471818100GA1": {
+      "at": 1767346797117,
+      "by": "SYSTEM",
+      "toko": "CILANGKAP PUSAT"
+    },
+    "918471375015918651": {
+      "at": 1767510536331,
+      "by": "SYSTEM",
+      "toko": "CILANGKAP PUSAT"
+    }
+  },
+  "inventory": {
+    "CILANGKAP PUSAT": {
+      "374918781749112": {
+        "STATUS": "AVAILABLE",
+        "UPDATED_AT": 1767473556079
+      },
+      "374918781749114": {
+        "STATUS": "OUT",
+        "TRANSFER_ID": "-Oi4jmNDTwoqogxHjHWB",
+        "UPDATED_AT": 1767475455529
+      }
+    }
+  },
   "inventory_imei": {
     "872417471818100GA3": {
       "invoice": "251231093",
@@ -639,20 +892,6 @@
       "TOKO_BERTUGAS": "CILANGKAP PUSAT",
       "createdAt": "2025-12-19T07:58:15.048Z",
       "id": "-OgpbSOMCDmaiZAnuLE7"
-    }
-  },
-  "logPembelian": {
-    "-Oh_K6gVlA48cPs7B4IV": {
-      "action": "EDIT_PEMBELIAN",
-      "barang": "OFERO STAREER MOTOR",
-      "brand": "OFERO",
-      "createdAt": 1766931593359,
-      "diffQty": 0,
-      "newQty": 2,
-      "newToko": "PITARA",
-      "oldToko": "PITARA",
-      "originalQty": 2,
-      "user": "SYSTEM"
     }
   },
   "masterKategoriBarang": {
@@ -746,9 +985,9 @@
     }
   },
   "toko": {
-    "1": {
+    "-OhWaja6WX9umkosbDVq": {
       "transaksi": {
-        "-OhZgQ6Zzznfnu3SylH6": {
+        "-Oi6pNHlKruUFaPyGaF-": {
           "BUNDLING_ITEMS": [
             {
               "harga": 0,
@@ -773,28 +1012,38 @@
             {
               "harga": 0,
               "namaBarang": "CHARGER 48V 12A"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "CHARGER LITHIUM 48V"
             }
           ],
-          "CREATED_AT": 1766920924957,
-          "HARGA_SUPLAYER": 10000000,
-          "HARGA_UNIT": 10000000,
-          "IMEI": "872417471818100GA1",
+          "CREATED_AT": 1767510475829,
+          "HARGA_SUPLAYER": 11000000,
+          "HARGA_UNIT": 11000000,
+          "IMEI": "918471375015918651",
           "IS_BUNDLING": true,
           "KATEGORI_BRAND": "MOTOR LISTRIK",
-          "NAMA_BARANG": "OFERO STAREER MOTOR",
+          "NAMA_BARANG": "OFERO STAREER MOTOR MERAH",
           "NAMA_BRAND": "OFERO",
           "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
           "NAMA_TOKO": "CILANGKAP PUSAT",
           "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
+          "NO_INVOICE": "INV-20260104-0001",
           "PAYMENT_METODE": "PEMBELIAN",
           "QTY": 1,
           "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 10000000,
-          "id": "-OhZgQ6Zzznfnu3SylH6"
+          "TANGGAL_TRANSAKSI": "2026-01-04",
+          "TOTAL": 11000000,
+          "createdAt": 1767510475830,
+          "id": "-Oi6pNHlKruUFaPyGaF-",
+          "tokoId": "-OhWaja6WX9umkosbDVq"
         },
-        "-OhZgR4YwY6t3gi7zzGD": {
+        "-Oi6pNIHOg3DLAxgYhP2": {
           "BUNDLING_ITEMS": [
             {
               "harga": 0,
@@ -819,28 +1068,38 @@
             {
               "harga": 0,
               "namaBarang": "CHARGER 48V 12A"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "CHARGER LITHIUM 48V"
             }
           ],
-          "CREATED_AT": 1766920928925,
-          "HARGA_SUPLAYER": 10000000,
-          "HARGA_UNIT": 10000000,
-          "IMEI": "872417471818100GA2",
+          "CREATED_AT": 1767510475862,
+          "HARGA_SUPLAYER": 11000000,
+          "HARGA_UNIT": 11000000,
+          "IMEI": "918471375015918652",
           "IS_BUNDLING": true,
           "KATEGORI_BRAND": "MOTOR LISTRIK",
-          "NAMA_BARANG": "OFERO STAREER MOTOR",
+          "NAMA_BARANG": "OFERO STAREER MOTOR MERAH",
           "NAMA_BRAND": "OFERO",
           "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
           "NAMA_TOKO": "CILANGKAP PUSAT",
           "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
+          "NO_INVOICE": "INV-20260104-0001",
           "PAYMENT_METODE": "PEMBELIAN",
           "QTY": 1,
           "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 10000000,
-          "id": "-OhZgR4YwY6t3gi7zzGD"
+          "TANGGAL_TRANSAKSI": "2026-01-04",
+          "TOTAL": 11000000,
+          "createdAt": 1767510475862,
+          "id": "-Oi6pNIHOg3DLAxgYhP2",
+          "tokoId": "-OhWaja6WX9umkosbDVq"
         },
-        "-OhZgRcCmPDDd0F7YaFl": {
+        "-Oi6pNJdz_aLIdjZ1Bhn": {
           "BUNDLING_ITEMS": [
             {
               "harga": 0,
@@ -865,28 +1124,38 @@
             {
               "harga": 0,
               "namaBarang": "CHARGER 48V 12A"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "CHARGER LITHIUM 48V"
             }
           ],
-          "CREATED_AT": 1766920931142,
-          "HARGA_SUPLAYER": 10000000,
-          "HARGA_UNIT": 10000000,
-          "IMEI": "872417471818100GA3",
+          "CREATED_AT": 1767510475949,
+          "HARGA_SUPLAYER": 11000000,
+          "HARGA_UNIT": 11000000,
+          "IMEI": "918471375015918653",
           "IS_BUNDLING": true,
           "KATEGORI_BRAND": "MOTOR LISTRIK",
-          "NAMA_BARANG": "OFERO STAREER MOTOR",
+          "NAMA_BARANG": "OFERO STAREER MOTOR MERAH",
           "NAMA_BRAND": "OFERO",
           "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
           "NAMA_TOKO": "CILANGKAP PUSAT",
           "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
+          "NO_INVOICE": "INV-20260104-0001",
           "PAYMENT_METODE": "PEMBELIAN",
           "QTY": 1,
           "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 10000000,
-          "id": "-OhZgRcCmPDDd0F7YaFl"
+          "TANGGAL_TRANSAKSI": "2026-01-04",
+          "TOTAL": 11000000,
+          "createdAt": 1767510475950,
+          "id": "-Oi6pNJdz_aLIdjZ1Bhn",
+          "tokoId": "-OhWaja6WX9umkosbDVq"
         },
-        "-OhZgS5TjSaSujephvD8": {
+        "-Oi6pNKJq-D9GeFCrxyM": {
           "BUNDLING_ITEMS": [
             {
               "harga": 0,
@@ -911,28 +1180,38 @@
             {
               "harga": 0,
               "namaBarang": "CHARGER 48V 12A"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "CHARGER LITHIUM 48V"
             }
           ],
-          "CREATED_AT": 1766920933080,
-          "HARGA_SUPLAYER": 10000000,
-          "HARGA_UNIT": 10000000,
-          "IMEI": "872417471818100GA4",
+          "CREATED_AT": 1767510475991,
+          "HARGA_SUPLAYER": 11000000,
+          "HARGA_UNIT": 11000000,
+          "IMEI": "918471375015918654",
           "IS_BUNDLING": true,
           "KATEGORI_BRAND": "MOTOR LISTRIK",
-          "NAMA_BARANG": "OFERO STAREER MOTOR",
+          "NAMA_BARANG": "OFERO STAREER MOTOR MERAH",
           "NAMA_BRAND": "OFERO",
           "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
           "NAMA_TOKO": "CILANGKAP PUSAT",
           "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
+          "NO_INVOICE": "INV-20260104-0001",
           "PAYMENT_METODE": "PEMBELIAN",
           "QTY": 1,
           "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 10000000,
-          "id": "-OhZgS5TjSaSujephvD8"
+          "TANGGAL_TRANSAKSI": "2026-01-04",
+          "TOTAL": 11000000,
+          "createdAt": 1767510475992,
+          "id": "-Oi6pNKJq-D9GeFCrxyM",
+          "tokoId": "-OhWaja6WX9umkosbDVq"
         },
-        "-OhZgSgIOvE553OkeMSH": {
+        "-Oi6pNKj0zdxQ7gtOT8B": {
           "BUNDLING_ITEMS": [
             {
               "harga": 0,
@@ -957,28 +1236,38 @@
             {
               "harga": 0,
               "namaBarang": "CHARGER 48V 12A"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "CHARGER LITHIUM 48V"
             }
           ],
-          "CREATED_AT": 1766920935501,
-          "HARGA_SUPLAYER": 10000000,
-          "HARGA_UNIT": 10000000,
-          "IMEI": "872417471818100GA5",
+          "CREATED_AT": 1767510476019,
+          "HARGA_SUPLAYER": 11000000,
+          "HARGA_UNIT": 11000000,
+          "IMEI": "918471375015918655",
           "IS_BUNDLING": true,
           "KATEGORI_BRAND": "MOTOR LISTRIK",
-          "NAMA_BARANG": "OFERO STAREER MOTOR",
+          "NAMA_BARANG": "OFERO STAREER MOTOR MERAH",
           "NAMA_BRAND": "OFERO",
           "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
           "NAMA_TOKO": "CILANGKAP PUSAT",
           "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
+          "NO_INVOICE": "INV-20260104-0001",
           "PAYMENT_METODE": "PEMBELIAN",
           "QTY": 1,
           "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 10000000,
-          "id": "-OhZgSgIOvE553OkeMSH"
+          "TANGGAL_TRANSAKSI": "2026-01-04",
+          "TOTAL": 11000000,
+          "createdAt": 1767510476019,
+          "id": "-Oi6pNKj0zdxQ7gtOT8B",
+          "tokoId": "-OhWaja6WX9umkosbDVq"
         },
-        "-OhZgTBPHmNvuIDuk8CG": {
+        "-Oi6pNLhlI4q7YtjQhNN": {
           "BUNDLING_ITEMS": [
             {
               "harga": 0,
@@ -1003,28 +1292,38 @@
             {
               "harga": 0,
               "namaBarang": "CHARGER 48V 12A"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "CHARGER LITHIUM 48V"
             }
           ],
-          "CREATED_AT": 1766920937556,
-          "HARGA_SUPLAYER": 1500000,
-          "HARGA_UNIT": 1500000,
-          "IMEI": "7462637562221",
+          "CREATED_AT": 1767510476081,
+          "HARGA_SUPLAYER": 2000000,
+          "HARGA_UNIT": 2000000,
+          "IMEI": "875198671498173531",
           "IS_BUNDLING": true,
           "KATEGORI_BRAND": "SEPEDA LISTRIK",
-          "NAMA_BARANG": "UWINFLY T65 Lithium",
+          "NAMA_BARANG": "UWINFLY T65 LITHIUM HIJAU ARMY",
           "NAMA_BRAND": "UWINFLY",
           "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
           "NAMA_TOKO": "CILANGKAP PUSAT",
           "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
+          "NO_INVOICE": "INV-20260104-0001",
           "PAYMENT_METODE": "PEMBELIAN",
           "QTY": 1,
           "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 1500000,
-          "id": "-OhZgTBPHmNvuIDuk8CG"
+          "TANGGAL_TRANSAKSI": "2026-01-04",
+          "TOTAL": 2000000,
+          "createdAt": 1767510476081,
+          "id": "-Oi6pNLhlI4q7YtjQhNN",
+          "tokoId": "-OhWaja6WX9umkosbDVq"
         },
-        "-OhZgTz_dvLAf82r_eO8": {
+        "-Oi6pNMJNzJz6pmIKo8M": {
           "BUNDLING_ITEMS": [
             {
               "harga": 0,
@@ -1049,28 +1348,38 @@
             {
               "harga": 0,
               "namaBarang": "CHARGER 48V 12A"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "CHARGER LITHIUM 48V"
             }
           ],
-          "CREATED_AT": 1766920940831,
-          "HARGA_SUPLAYER": 1500000,
-          "HARGA_UNIT": 1500000,
-          "IMEI": "7462637562222",
+          "CREATED_AT": 1767510476120,
+          "HARGA_SUPLAYER": 2000000,
+          "HARGA_UNIT": 2000000,
+          "IMEI": "875198671498173532",
           "IS_BUNDLING": true,
           "KATEGORI_BRAND": "SEPEDA LISTRIK",
-          "NAMA_BARANG": "UWINFLY T65 Lithium",
+          "NAMA_BARANG": "UWINFLY T65 LITHIUM HIJAU ARMY",
           "NAMA_BRAND": "UWINFLY",
           "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
           "NAMA_TOKO": "CILANGKAP PUSAT",
           "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
+          "NO_INVOICE": "INV-20260104-0001",
           "PAYMENT_METODE": "PEMBELIAN",
           "QTY": 1,
           "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 1500000,
-          "id": "-OhZgTz_dvLAf82r_eO8"
+          "TANGGAL_TRANSAKSI": "2026-01-04",
+          "TOTAL": 2000000,
+          "createdAt": 1767510476120,
+          "id": "-Oi6pNMJNzJz6pmIKo8M",
+          "tokoId": "-OhWaja6WX9umkosbDVq"
         },
-        "-OhZgUMSawaTXWdKaYS7": {
+        "-Oi6pNMrbjlxkwmOI-YG": {
           "BUNDLING_ITEMS": [
             {
               "harga": 0,
@@ -1095,28 +1404,38 @@
             {
               "harga": 0,
               "namaBarang": "CHARGER 48V 12A"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "CHARGER LITHIUM 48V"
             }
           ],
-          "CREATED_AT": 1766920942359,
-          "HARGA_SUPLAYER": 1500000,
-          "HARGA_UNIT": 1500000,
-          "IMEI": "7462637562223",
+          "CREATED_AT": 1767510476155,
+          "HARGA_SUPLAYER": 2000000,
+          "HARGA_UNIT": 2000000,
+          "IMEI": "875198671498173533",
           "IS_BUNDLING": true,
           "KATEGORI_BRAND": "SEPEDA LISTRIK",
-          "NAMA_BARANG": "UWINFLY T65 Lithium",
+          "NAMA_BARANG": "UWINFLY T65 LITHIUM HIJAU ARMY",
           "NAMA_BRAND": "UWINFLY",
           "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
           "NAMA_TOKO": "CILANGKAP PUSAT",
           "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
+          "NO_INVOICE": "INV-20260104-0001",
           "PAYMENT_METODE": "PEMBELIAN",
           "QTY": 1,
           "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 1500000,
-          "id": "-OhZgUMSawaTXWdKaYS7"
+          "TANGGAL_TRANSAKSI": "2026-01-04",
+          "TOTAL": 2000000,
+          "createdAt": 1767510476155,
+          "id": "-Oi6pNMrbjlxkwmOI-YG",
+          "tokoId": "-OhWaja6WX9umkosbDVq"
         },
-        "-OhZgUi2YvIAGq1o5Ipf": {
+        "-Oi6pNOPQwgxl8nMPB6I": {
           "BUNDLING_ITEMS": [
             {
               "harga": 0,
@@ -1141,28 +1460,38 @@
             {
               "harga": 0,
               "namaBarang": "CHARGER 48V 12A"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "CHARGER LITHIUM 48V"
             }
           ],
-          "CREATED_AT": 1766920943805,
-          "HARGA_SUPLAYER": 1500000,
-          "HARGA_UNIT": 1500000,
-          "IMEI": "7462637562224",
+          "CREATED_AT": 1767510476254,
+          "HARGA_SUPLAYER": 2000000,
+          "HARGA_UNIT": 2000000,
+          "IMEI": "875198671498173534",
           "IS_BUNDLING": true,
           "KATEGORI_BRAND": "SEPEDA LISTRIK",
-          "NAMA_BARANG": "UWINFLY T65 Lithium",
+          "NAMA_BARANG": "UWINFLY T65 LITHIUM HIJAU ARMY",
           "NAMA_BRAND": "UWINFLY",
           "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
           "NAMA_TOKO": "CILANGKAP PUSAT",
           "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
+          "NO_INVOICE": "INV-20260104-0001",
           "PAYMENT_METODE": "PEMBELIAN",
           "QTY": 1,
           "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 1500000,
-          "id": "-OhZgUi2YvIAGq1o5Ipf"
+          "TANGGAL_TRANSAKSI": "2026-01-04",
+          "TOTAL": 2000000,
+          "createdAt": 1767510476254,
+          "id": "-Oi6pNOPQwgxl8nMPB6I",
+          "tokoId": "-OhWaja6WX9umkosbDVq"
         },
-        "-OhZgVAy071Oo3H99EUc": {
+        "-Oi6pNPn7bxuYD5DlS99": {
           "BUNDLING_ITEMS": [
             {
               "harga": 0,
@@ -1187,544 +1516,36 @@
             {
               "harga": 0,
               "namaBarang": "CHARGER 48V 12A"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "BATERAI LITH 48V 12A PHYLION"
+            },
+            {
+              "harga": 0,
+              "namaBarang": "CHARGER LITHIUM 48V"
             }
           ],
-          "CREATED_AT": 1766920945720,
-          "HARGA_SUPLAYER": 1500000,
-          "HARGA_UNIT": 1500000,
-          "IMEI": "7462637562225",
+          "CREATED_AT": 1767510476343,
+          "HARGA_SUPLAYER": 2000000,
+          "HARGA_UNIT": 2000000,
+          "IMEI": "875198671498173535",
           "IS_BUNDLING": true,
           "KATEGORI_BRAND": "SEPEDA LISTRIK",
-          "NAMA_BARANG": "UWINFLY T65 Lithium",
+          "NAMA_BARANG": "UWINFLY T65 LITHIUM HIJAU ARMY",
           "NAMA_BRAND": "UWINFLY",
           "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
           "NAMA_TOKO": "CILANGKAP PUSAT",
           "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
+          "NO_INVOICE": "INV-20260104-0001",
           "PAYMENT_METODE": "PEMBELIAN",
           "QTY": 1,
           "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 1500000,
-          "id": "-OhZgVAy071Oo3H99EUc"
-        },
-        "-OhZgVO2gKBPZfl3SlHT": {
-          "CREATED_AT": 1766920946557,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "3224141515hfQ21",
-          "IS_BUNDLING": false,
-          "KATEGORI_BRAND": "HANDPHONE",
-          "NAMA_BARANG": "OPPO A5 Pro 4G 8/128GB",
-          "NAMA_BRAND": "OPPO",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "CILANGKAP PUSAT",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-OhZgVO2gKBPZfl3SlHT"
-        },
-        "-OhZgVgQI21mKUUGM5Pj": {
-          "CREATED_AT": 1766920947797,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "3224141515hfQ22",
-          "IS_BUNDLING": false,
-          "KATEGORI_BRAND": "HANDPHONE",
-          "NAMA_BARANG": "OPPO A5 Pro 4G 8/128GB",
-          "NAMA_BRAND": "OPPO",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "CILANGKAP PUSAT",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-OhZgVgQI21mKUUGM5Pj"
-        },
-        "-OhZgVynrBMM3tkB144z": {
-          "CREATED_AT": 1766920948973,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "3224141515hfQ23",
-          "IS_BUNDLING": false,
-          "KATEGORI_BRAND": "HANDPHONE",
-          "NAMA_BARANG": "OPPO A5 Pro 4G 8/128GB",
-          "NAMA_BRAND": "OPPO",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "CILANGKAP PUSAT",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-OhZgVynrBMM3tkB144z"
-        },
-        "-OhZgW9eNdM-iR9WYuNZ": {
-          "CREATED_AT": 1766920949732,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "3224141515hfQ24",
-          "IS_BUNDLING": false,
-          "KATEGORI_BRAND": "HANDPHONE",
-          "NAMA_BARANG": "OPPO A5 Pro 4G 8/128GB",
-          "NAMA_BRAND": "OPPO",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "CILANGKAP PUSAT",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-OhZgW9eNdM-iR9WYuNZ"
-        },
-        "-OhZgWXeb0J0i_YTZnEw": {
-          "CREATED_AT": 1766920951268,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "3224141515hfQ25",
-          "IS_BUNDLING": false,
-          "KATEGORI_BRAND": "HANDPHONE",
-          "NAMA_BARANG": "OPPO A5 Pro 4G 8/128GB",
-          "NAMA_BRAND": "OPPO",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "CILANGKAP PUSAT",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0001",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-OhZgWXeb0J0i_YTZnEw"
-        }
-      }
-    },
-    "8": {
-      "transaksi": {
-        "-Oh_Itb68IL4PQWliY6_": {
-          "BUNDLING_ITEMS": [
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 20A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION OFERO"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI LITH 60V 24A PYLION "
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 12A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "CHARGER 48V 12A"
-            }
-          ],
-          "CREATED_AT": 1766931273555,
-          "HARGA_SUPLAYER": 10000000,
-          "HARGA_UNIT": 10000000,
-          "IMEI": "6538483824828821",
-          "IS_BUNDLING": true,
-          "KATEGORI_BRAND": "MOTOR LISTRIK",
-          "NAMA_BARANG": "OFERO STAREER MOTOR",
-          "NAMA_BRAND": "OFERO",
-          "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
-          "NAMA_TOKO": "PITARA",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0003",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 10000000,
-          "id": "-Oh_Itb68IL4PQWliY6_",
-          "updatedAt": "2025-12-28T14:19:53.169Z"
-        },
-        "-Oh_Itd5PfLKI9GzMJne": {
-          "BUNDLING_ITEMS": [
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 20A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION OFERO"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI LITH 60V 24A PYLION "
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 12A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "CHARGER 48V 12A"
-            }
-          ],
-          "CREATED_AT": 1766931273683,
-          "HARGA_SUPLAYER": 10000000,
-          "HARGA_UNIT": 10000000,
-          "IMEI": "6538483824823333",
-          "IS_BUNDLING": true,
-          "KATEGORI_BRAND": "MOTOR LISTRIK",
-          "NAMA_BARANG": "OFERO STAREER MOTOR",
-          "NAMA_BRAND": "OFERO",
-          "NAMA_SUPPLIER": "PT OFERO TECHNOLOGY INDONESIA",
-          "NAMA_TOKO": "PITARA",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0003",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 10000000,
-          "id": "-Oh_Itd5PfLKI9GzMJne",
-          "updatedAt": "2025-12-28T14:19:53.277Z"
-        },
-        "-Oh_IteWNS-q39msHOjj": {
-          "CREATED_AT": 1766931273774,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "66336695t749741",
-          "IS_BUNDLING": false,
-          "KATEGORI_BRAND": "HANDPHONE",
-          "NAMA_BARANG": "OPPO A5 Pro 4G 8/128GB",
-          "NAMA_BRAND": "OPPO",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "PITARA",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0003",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-Oh_IteWNS-q39msHOjj"
-        },
-        "-Oh_ItgepGYS9MUEWYHt": {
-          "CREATED_AT": 1766931273911,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "66336695t749742",
-          "IS_BUNDLING": false,
-          "KATEGORI_BRAND": "HANDPHONE",
-          "NAMA_BARANG": "OPPO A5 Pro 4G 8/128GB",
-          "NAMA_BRAND": "OPPO",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "PITARA",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0003",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-Oh_ItgepGYS9MUEWYHt"
-        }
-      }
-    },
-    "10": {
-      "transaksi": {
-        "-OhZgtF4kCsagpzB3fy0": {
-          "BUNDLING_ITEMS": [
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 20A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION OFERO"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI LITH 60V 24A PYLION "
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 12A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "CHARGER 48V 12A"
-            }
-          ],
-          "CREATED_AT": 1766921048383,
-          "HARGA_SUPLAYER": 150000,
-          "HARGA_UNIT": 150000,
-          "IMEI": "",
-          "IS_BUNDLING": true,
-          "KATEGORI_BRAND": "ACCESSORIES",
-          "NAMA_BARANG": "OLIKE Powerbank P1 10000mAH",
-          "NAMA_BRAND": "OLIKE",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "SAWANGAN",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0002",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 5,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 750000,
-          "id": "-OhZgtF4kCsagpzB3fy0"
-        },
-        "-OhZguUS1xWGrk_s0Tt2": {
-          "BUNDLING_ITEMS": [
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 20A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION OFERO"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI LITH 60V 24A PYLION "
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 12A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "CHARGER 48V 12A"
-            }
-          ],
-          "CREATED_AT": 1766921053463,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "8342513527331",
-          "IS_BUNDLING": true,
-          "KATEGORI_BRAND": "SEPEDA LISTRIK",
-          "NAMA_BARANG": "UWINFLY T65 Lithium",
-          "NAMA_BRAND": "UWINFLY",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "SAWANGAN",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0002",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-OhZguUS1xWGrk_s0Tt2"
-        },
-        "-OhZgwUPJKi-F_ztgp3U": {
-          "BUNDLING_ITEMS": [
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 20A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION OFERO"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI LITH 60V 24A PYLION "
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 12A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "CHARGER 48V 12A"
-            }
-          ],
-          "CREATED_AT": 1766921061652,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "8342513527332",
-          "IS_BUNDLING": true,
-          "KATEGORI_BRAND": "SEPEDA LISTRIK",
-          "NAMA_BARANG": "UWINFLY T65 Lithium",
-          "NAMA_BRAND": "UWINFLY",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "SAWANGAN",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0002",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-OhZgwUPJKi-F_ztgp3U"
-        },
-        "-OhZgxJPilMLGDZCcbeB": {
-          "BUNDLING_ITEMS": [
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 20A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION OFERO"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI LITH 60V 24A PYLION "
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 12A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "CHARGER 48V 12A"
-            }
-          ],
-          "CREATED_AT": 1766921065044,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "8342513527333",
-          "IS_BUNDLING": true,
-          "KATEGORI_BRAND": "SEPEDA LISTRIK",
-          "NAMA_BARANG": "UWINFLY T65 Lithium",
-          "NAMA_BRAND": "UWINFLY",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "SAWANGAN",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0002",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-OhZgxJPilMLGDZCcbeB"
-        },
-        "-OhZgzCpSNUFQDjPns5Y": {
-          "BUNDLING_ITEMS": [
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 20A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION OFERO"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI LITH 60V 24A PYLION "
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 12A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "CHARGER 48V 12A"
-            }
-          ],
-          "CREATED_AT": 1766921072815,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "8342513527334",
-          "IS_BUNDLING": true,
-          "KATEGORI_BRAND": "SEPEDA LISTRIK",
-          "NAMA_BARANG": "UWINFLY T65 Lithium",
-          "NAMA_BRAND": "UWINFLY",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "SAWANGAN",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0002",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-OhZgzCpSNUFQDjPns5Y"
-        },
-        "-OhZgzi3pCOERhRKRd0W": {
-          "BUNDLING_ITEMS": [
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 20A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION OFERO"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI LITH 60V 24A PYLION "
-            },
-            {
-              "harga": 0,
-              "namaBarang": "BATERAI SLA 12A"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "SPION"
-            },
-            {
-              "harga": 0,
-              "namaBarang": "CHARGER 48V 12A"
-            }
-          ],
-          "CREATED_AT": 1766921074878,
-          "HARGA_SUPLAYER": 950000,
-          "HARGA_UNIT": 950000,
-          "IMEI": "8342513527335",
-          "IS_BUNDLING": true,
-          "KATEGORI_BRAND": "SEPEDA LISTRIK",
-          "NAMA_BARANG": "UWINFLY T65 Lithium",
-          "NAMA_BRAND": "UWINFLY",
-          "NAMA_SUPPLIER": "PT WORLD INOVATIVE TELECOMMUNICATION",
-          "NAMA_TOKO": "SAWANGAN",
-          "NAMA_USER": "SYSTEM",
-          "NO_INVOICE": "INV-20251228-0002",
-          "PAYMENT_METODE": "PEMBELIAN",
-          "QTY": 1,
-          "STATUS": "Approved",
-          "TANGGAL_TRANSAKSI": "2025-12-28",
-          "TOTAL": 950000,
-          "id": "-OhZgzi3pCOERhRKRd0W"
+          "TANGGAL_TRANSAKSI": "2026-01-04",
+          "TOTAL": 2000000,
+          "createdAt": 1767510476343,
+          "id": "-Oi6pNPn7bxuYD5DlS99",
+          "tokoId": "-OhWaja6WX9umkosbDVq"
         }
       }
     }

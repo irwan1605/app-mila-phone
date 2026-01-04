@@ -74,10 +74,14 @@ export default function FormItemSection({
     // eslint-disable-next-line
   }, []);
 
+  const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
+  const isImeiKategori = (kat) =>
+    KATEGORI_IMEI.includes((kat || "").toUpperCase());
+
   const imeiAvailableList = useMemo(() => {
     const result = new Set();
-  
-    // 1️⃣ PRIORITAS: inventory
+
+    // 🔥 SUMBER UTAMA: inventory toko
     const inv = stockRealtime?.inventory?.[tokoLogin];
     if (inv) {
       Object.entries(inv).forEach(([imei, v]) => {
@@ -86,26 +90,9 @@ export default function FormItemSection({
         }
       });
     }
-  
-    // 2️⃣ FALLBACK: transaksi toko (JIKA inventory kosong)
-    if (result.size === 0) {
-      Object.values(stockRealtime?.toko || {}).forEach((t) => {
-        if (t?.transaksi) {
-          Object.values(t.transaksi).forEach((trx) => {
-            if (
-              trx.NAMA_TOKO === tokoLogin &&
-              trx.IMEI
-            ) {
-              result.add(String(trx.IMEI));
-            }
-          });
-        }
-      });
-    }
-  
+
     return Array.from(result);
   }, [stockRealtime, tokoLogin]);
-  
 
   /* ================= HITUNG STOK IMEI MILIK TOKO ================= */
   /**
@@ -279,18 +266,18 @@ export default function FormItemSection({
           )}
 
           {item.isImei && (
-            <div className="space-y-2">
+            <div>
               <input
                 list={`imei-list-${idx}`}
                 className="border rounded px-2 py-1 w-full"
                 placeholder="Ketik / pilih IMEI"
                 value={item.imei || ""}
                 onChange={(e) => {
-                  const im = e.target.value.trim();
+                  const imei = e.target.value.trim();
                   updateItem(idx, {
-                    imei: im,
-                    imeiList: im ? [im] : [],
-                    qty: im ? 1 : 0,
+                    imei,
+                    imeiList: imei ? [imei] : [],
+                    qty: imei ? 1 : 0,
                   });
                 }}
               />

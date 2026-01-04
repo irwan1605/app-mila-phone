@@ -556,10 +556,22 @@ export const getAllUsersOnce = async () => {
    PENJUALAN (DataManagement)
 ============================================================ */
 
-export const addPenjualan = (data) => {
-  const r = push(ref(db, "penjualan"));
-  return set(r, data);
+export const addPenjualan = async (tokoId, data) => {
+  if (!tokoId) {
+    throw new Error("tokoId wajib");
+  }
+
+  const r = ref(db, `toko/${tokoId}/penjualan`);
+  const newRef = push(r);
+
+  await set(newRef, {
+    ...data,
+    createdAt: Date.now(),
+  });
+
+  return newRef.key;
 };
+
 
 export const updatePenjualan = (id, data) => {
   return update(ref(db, `penjualan/${id}`), data);
@@ -2144,18 +2156,36 @@ export const getImeiListByToko = async (namaToko, keyword = "") => {
   return [...new Set(list)].slice(0, 20);
 };
 
-export const listenPenjualan = (cb) => {
-  const r = ref(db, "penjualan");
-  return onValue(r, (snap) => {
-    const data = snap.val() || {};
-    cb(
-      Object.entries(data).map(([id, v]) => ({
-        id,
-        ...v,
-      }))
-    );
+// =====================================================
+// 🔥 LISTEN PENJUALAN (FINAL – AUTO TAMPIL DI TABLE)
+// =====================================================
+export const listenPenjualan = (callback) => {
+  const tokoRef = ref(db, "toko");
+
+  return onValue(tokoRef, (snapshot) => {
+    const result = [];
+
+    if (snapshot.exists()) {
+      snapshot.forEach((tokoSnap) => {
+        const tokoId = tokoSnap.key;
+        const penjualanSnap =
+          tokoSnap.child("penjualan") ||
+          tokoSnap.child("transaksi");
+
+        penjualanSnap.forEach((trxSnap) => {
+          result.push({
+            id: trxSnap.key,
+            tokoId,
+            ...trxSnap.val(),
+          });
+        });
+      });
+    }
+
+    callback(result);
   });
 };
+
 
 export const voidTransaksiPenjualan = async (penjualanId) => {
   const trxRef = ref(db, `penjualan/${penjualanId}`);
@@ -2459,6 +2489,51 @@ export const transferBarangFinal = async ({
     STATUS: "Approved",
   });
 };
+
+// ================================
+// 🔥 KURANGI STOK IMEI (FINAL)
+// ================================
+export async function kurangiStokImei({ tokoNama, imei }) {
+  if (!tokoNama || !imei) {
+    throw new Error("Parameter stok IMEI tidak lengkap");
+  }
+
+  const invRef = ref(db, `inventory/${tokoNama}/${imei}`);
+
+  const snap = await get(invRef);
+  if (!snap.exists()) {
+    throw new Error(`IMEI ${imei} tidak ditemukan di stok ${tokoNama}`);
+  }
+
+  if (snap.val()?.STATUS !== "AVAILABLE") {
+    throw new Error(`IMEI ${imei} tidak tersedia`);
+  }
+
+  await update(invRef, {
+    STATUS: "OUT",
+    UPDATED_AT: Date.now(),
+  });
+}
+
+
+export async function ensureImeiInInventory({
+  tokoNama,
+  imei,
+}) {
+  if (!tokoNama || !imei) return;
+
+  const invRef = ref(db, `inventory/${tokoNama}/${imei}`);
+  const snap = await get(invRef);
+
+  if (!snap.exists()) {
+    await set(invRef, {
+      STATUS: "AVAILABLE",
+      CREATED_AT: Date.now(),
+      SOURCE: "AUTO_FROM_TRANSAKSI",
+    });
+  }
+}
+
 
 
 

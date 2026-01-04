@@ -53,7 +53,9 @@ export default function TablePenjualan() {
   const result = [];
 
   rows.forEach((trx) => {
-    (trx.items || []).forEach((item) => {
+    const items = Array.isArray(trx.items) ? trx.items : [];
+
+    items.forEach((item) => {
       result.push({
         id: trx.id,
         tanggal: trx.tanggal || trx.createdAt,
@@ -68,8 +70,9 @@ export default function TablePenjualan() {
         namaBrand: item.namaBrand || "-",
         namaBarang: item.namaBarang || "-",
 
-        bundling:
-          item.bundlingItems?.map((b) => b.namaBarang).join(", ") || "-",
+        bundling: Array.isArray(item.bundlingItems)
+          ? item.bundlingItems.map((b) => b.namaBarang).join(", ")
+          : "-",
 
         imei: Array.isArray(item.imeiList)
           ? item.imeiList.join(", ")
@@ -91,6 +94,8 @@ export default function TablePenjualan() {
 
   return result;
 }, [rows]);
+
+
 
 /* ================= PAGINATION ================= */
 const pageCount = Math.ceil(tableRows.length / pageSize);

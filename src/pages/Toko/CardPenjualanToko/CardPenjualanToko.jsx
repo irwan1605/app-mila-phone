@@ -25,6 +25,8 @@ import {
   addPenjualan,
   kurangiStokToko,
   listenStockAll,
+  kurangiStokImei,
+  ensureImeiInInventory,
 } from "../../../services/FirebaseService";
 
 // ================= UTIL =================
@@ -127,7 +129,7 @@ export default function CardPenjualanToko() {
 
   const imeiValidList = useMemo(() => {
     if (!penjualanList || !formUser.namaToko) return [];
-  
+
     return penjualanList
       .filter(
         (trx) =>
@@ -137,96 +139,117 @@ export default function CardPenjualanToko() {
       )
       .map((trx) => String(trx.IMEI).trim());
   }, [penjualanList, formUser.namaToko]);
+
+  const handleSubmitPenjualan = useCallback(async () => {
+    if (loading || submitting) return;
+    if (!validate()) return;
   
-
-
-
-const handleSubmitPenjualan = useCallback(async () => {
-  if (loading || submitting) return;
-  if (!validate()) return;
-
-  try {
-    setSubmitting(true);
-
-    for (const item of items) {
-      const qty = Number(item.qty || 0);
-
+    try {
+      setSubmitting(true);
+  
       // ===============================
-      // ✅ AMBIL IMEI DENGAN BENAR
+      // 1️⃣ KURANGI STOK (LOOP ITEM)
       // ===============================
-      const imei = item.isImei ? item.imeiList?.[0] : null;
-
-      if (item.isImei) {
-        if (!imei) {
-          alert(`❌ IMEI belum dipilih untuk ${item.namaBarang}`);
-          return;
+      for (const item of items) {
+        const qty = Number(item.qty || 0);
+        const imei = item.isImei ? item.imeiList?.[0] : null;
+  
+        // ❌ VALIDASI IMEI
+        if (item.isImei && !imei) {
+          throw new Error("IMEI belum dipilih");
         }
-
-        if (!imeiValidList.includes(String(imei).trim())) {
-          alert(`❌ IMEI ${imei} tidak ada di stok toko ${tokoLogin}`);
-          return;
+  
+        if (item.isImei) {
+          // 🔥 PASTIKAN IMEI ADA DI INVENTORY
+          await ensureImeiInInventory({
+            tokoNama: formUser.namaToko,
+            imei,
+          });
+  
+          // 🔥 KURANGI STOK IMEI
+          await kurangiStokImei({
+            tokoNama: formUser.namaToko,
+            imei,
+          });
+        } else {
+          // 🔥 KURANGI STOK NON IMEI
+          await kurangiStokToko({
+            tokoId: tokoAktifId,
+            sku: item.sku,
+            qty,
+          });
         }
       }
-
+  
       // ===============================
-      // 🔥 KURANGI STOK TOKO
+      // 2️⃣ BENTUK TRANSAKSI (SATU KALI)
       // ===============================
-      await kurangiStokToko({
+      const transaksi = {
+        invoice: formUser.noFaktur,
+        tanggal: formUser.tanggal,
+        toko: formUser.namaToko,
         tokoId: tokoAktifId,
-        sku: item.isImei ? imei : item.sku,
-        qty,
-      });
-
+  
+        user: {
+          namaPelanggan: formUser.namaPelanggan,
+          noTlpPelanggan: formUser.noTlpPelanggan,
+          namaSales: formUser.namaSales,
+        },
+  
+        payment: {
+          ...payment,
+        },
+  
+        statusPembayaran: "OK",
+        createdAt: Date.now(),
+  
+        items: items.map((item) => ({
+          kategoriBarang: item.kategoriBarang,
+          namaBrand: item.namaBrand,
+          namaBarang: item.namaBarang,
+          bundlingItems: item.bundlingItems || [],
+          imeiList: item.isImei ? item.imeiList : [],
+          qty: Number(item.qty || 0),
+          hargaUnit: Number(item.hargaUnit || 0),
+          total:
+            Number(item.qty || 0) * Number(item.hargaUnit || 0),
+        })),
+      };
+  
       // ===============================
-      // 🔥 SIMPAN PENJUALAN
+      // 3️⃣ SIMPAN TRANSAKSI (SEKALI)
       // ===============================
-      await addPenjualan(tokoAktifId, {
-        ...formUser,
-        ...payment,
-
-        NAMA_BARANG: item.namaBarang,
-        NAMA_BRAND: item.namaBrand,
-        KATEGORI_BARANG: item.kategoriBarang,
-
-        SKU: item.isImei ? imei : item.sku,
-        IMEI: item.isImei ? imei : "",
-
-        QTY: qty,
-        HARGA_UNIT: Number(item.hargaUnit || 0),
-        TOTAL: Number(item.hargaUnit || 0) * qty,
-
-        PAYMENT_METODE: "PENJUALAN",
-        STATUS: "Approved",
-      });
+      await addPenjualan(tokoAktifId, transaksi);
+  
+      alert("✅ Penjualan berhasil");
+  
+      // ===============================
+      // 4️⃣ RESET FORM
+      // ===============================
+      setItems([]);
+      setPayment({});
+      setFormUser((p) => ({
+        ...p,
+        noFaktur: genInvoice(),
+        namaPelanggan: "",
+        idPelanggan: "",
+        noTlpPelanggan: "",
+      }));
+    } catch (e) {
+      console.error(e);
+      alert("❌ Penjualan gagal: " + e.message);
+    } finally {
+      setSubmitting(false);
     }
-
-    alert("✅ Penjualan berhasil");
-
-    setItems([]);
-    setPayment({});
-    setFormUser((p) => ({
-      ...p,
-      noFaktur: genInvoice(),
-      namaPelanggan: "",
-      idPelanggan: "",
-      noTlpPelanggan: "",
-    }));
-  } catch (e) {
-    console.error(e);
-    alert("❌ Penjualan gagal: " + e.message);
-  } finally {
-    setSubmitting(false);
-  }
-}, [
-  items,
-  formUser,
-  payment,
-  tokoAktifId,
-  loading,
-  submitting,
-  imeiValidList,
-  tokoLogin,
-]);
+  }, [
+    items,
+    formUser,
+    payment,
+    tokoAktifId,
+    loading,
+    submitting,
+  ]);
+  
 
   
 
@@ -237,7 +260,6 @@ const handleSubmitPenjualan = useCallback(async () => {
       0
     );
   }, [items]);
-
 
   return (
     <div className="p-6 space-y-4">
@@ -251,11 +273,11 @@ const handleSubmitPenjualan = useCallback(async () => {
         <div className="bg-white rounded-2xl shadow-lg p-5">
           <h2 className="font-bold mb-2">📦 INPUT BARANG</h2>
           <FormItemSection
-           value={items}
-           onChange={setItems}
-           tokoLogin={formUser.namaToko}
-           allowManual={!!formUser.namaTokoId}
-           stockRealtime={stockRealtime} 
+            value={items}
+            onChange={setItems}
+            tokoLogin={formUser.namaToko}
+            allowManual={!!formUser.namaTokoId}
+            stockRealtime={stockRealtime}
           />
         </div>
 
