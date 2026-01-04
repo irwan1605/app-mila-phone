@@ -25,13 +25,19 @@ export default function FormItemSection({
   onChange,
   tokoLogin,
   allowManual = false,
+  stockRealtime = {},
 }) {
-  const items = Array.isArray(value) ? value : [];
+  const items = useMemo(() => (Array.isArray(value) ? value : []), [value]);
+
   const safeOnChange = typeof onChange === "function" ? onChange : () => {};
 
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterKategori, setMasterKategori] = useState([]);
   const [allTransaksi, setAllTransaksi] = useState([]);
+  const [imeiInputMode, setImeiInputMode] = useState("select");
+  const [form, setForm] = useState({});
+
+  // "select" | "manual"
 
   /* ================= LOAD MASTER ================= */
   useEffect(() => {
@@ -68,39 +74,64 @@ export default function FormItemSection({
     // eslint-disable-next-line
   }, []);
 
+  const imeiAvailableList = useMemo(() => {
+    const result = new Set();
+  
+    // 1️⃣ PRIORITAS: inventory
+    const inv = stockRealtime?.inventory?.[tokoLogin];
+    if (inv) {
+      Object.entries(inv).forEach(([imei, v]) => {
+        if (v?.STATUS === "AVAILABLE") {
+          result.add(String(imei));
+        }
+      });
+    }
+  
+    // 2️⃣ FALLBACK: transaksi toko (JIKA inventory kosong)
+    if (result.size === 0) {
+      Object.values(stockRealtime?.toko || {}).forEach((t) => {
+        if (t?.transaksi) {
+          Object.values(t.transaksi).forEach((trx) => {
+            if (
+              trx.NAMA_TOKO === tokoLogin &&
+              trx.IMEI
+            ) {
+              result.add(String(trx.IMEI));
+            }
+          });
+        }
+      });
+    }
+  
+    return Array.from(result);
+  }, [stockRealtime, tokoLogin]);
+  
+
   /* ================= HITUNG STOK IMEI MILIK TOKO ================= */
+  /**
+   * IMEI VALID DIAMBIL LANGSUNG DARI DETAIL STOCK TOKO
+   * (SUMBER KEBENARAN)
+   */
   const imeiValidList = useMemo(() => {
-    if (!tokoLogin) return [];
+    if (!tokoLogin || !Array.isArray(allTransaksi)) return [];
 
-    const stok = {};
-    const toko = normalize(tokoLogin);
-
-    allTransaksi.forEach((t) => {
-      if (t.STATUS !== "Approved") return;
-      if (!t.IMEI) return;
-      if (normalize(t.NAMA_TOKO) !== toko) return;
-
-      const imei = String(t.IMEI).trim();
-      stok[imei] = stok[imei] || 0;
-
-      if (["PEMBELIAN", "TRANSFER_MASUK"].includes(t.PAYMENT_METODE)) {
-        stok[imei]++;
-      }
-
-      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)) {
-        stok[imei]--;
-      }
-    });
-
-    return Object.keys(stok).filter((i) => stok[i] > 0);
+    return allTransaksi
+      .filter(
+        (t) =>
+          t.STATUS === "Approved" &&
+          t.NAMA_TOKO === tokoLogin &&
+          t.IMEI &&
+          !["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)
+      )
+      .map((t) => String(t.IMEI).trim());
   }, [allTransaksi, tokoLogin]);
 
-  /* ================= FILTER IMEI (ANTI DUPLIKAT) ================= */
   const imeiOptions = useMemo(() => {
-    return imeiValidList.filter(
-      (i) => !items.some((it) => it.imeiList?.includes(i))
-    );
-  }, [imeiValidList, items]);
+    return imeiValidList.map((imei) => ({
+      value: imei,
+      label: imei,
+    }));
+  }, [imeiValidList]);
 
   /* ================= UPDATE ITEM ================= */
   const updateItem = (idx, patch) => {
@@ -135,6 +166,10 @@ export default function FormItemSection({
       0
     );
   }, [items]);
+
+  useEffect(() => {
+    console.log("IMEI VALID LIST:", imeiValidList);
+  }, [imeiValidList]);
 
   /* ================= RENDER ================= */
   return (
@@ -201,7 +236,8 @@ export default function FormItemSection({
               const isBundlingBarang =
                 ["MOTOR LISTRIK", "SEPEDA LISTRIK"].includes(
                   b.kategoriBarang
-                ) && (b.IS_BUNDLING === true || b.isBundling === true);
+                ) &&
+                (b.IS_BUNDLING === true || b.isBundling === true);
 
               updateItem(idx, {
                 namaBarang: b.namaBarang,
@@ -220,9 +256,7 @@ export default function FormItemSection({
                 qty: isImeiKategori(b.kategoriBarang) ? 0 : 1,
 
                 isBundling: isBundlingBarang,
-                bundlingItems: isBundlingBarang
-                  ? b.BUNDLING_ITEMS || []
-                  : [],
+                bundlingItems: isBundlingBarang ? b.BUNDLING_ITEMS || [] : [],
               });
             }}
           >
@@ -244,62 +278,29 @@ export default function FormItemSection({
             </div>
           )}
 
-          {/* ===== IMEI MANUAL ===== */}
           {item.isImei && (
-            <>
-              <textarea
-                rows={2}
-                className="w-full border rounded-lg p-2 text-sm"
-                placeholder="Ketik IMEI manual (1 IMEI per baris)"
-                value={(item.imeiList || []).join("\n")}
-                onChange={async (e) => {
-                  const list = e.target.value
-                    .split("\n")
-                    .map((x) => x.trim())
-                    .filter(Boolean);
-
-                  for (const im of list) {
-                    if (!imeiValidList.includes(im)) {
-                      alert(`❌ IMEI ${im} bukan stok toko ${tokoLogin}`);
-                      return;
-                    }
-                    await lockImeiRealtime(im, tokoLogin, "SYSTEM");
-                  }
-
+            <div className="space-y-2">
+              <input
+                list={`imei-list-${idx}`}
+                className="border rounded px-2 py-1 w-full"
+                placeholder="Ketik / pilih IMEI"
+                value={item.imei || ""}
+                onChange={(e) => {
+                  const im = e.target.value.trim();
                   updateItem(idx, {
-                    imeiList: list,
-                    qty: list.length,
+                    imei: im,
+                    imeiList: im ? [im] : [],
+                    qty: im ? 1 : 0,
                   });
                 }}
               />
 
-              {/* ===== IMEI DROPDOWN ===== */}
-              <select
-                multiple
-                className="w-full border rounded-lg p-2 text-sm"
-                value={item.imeiList || []}
-                onChange={async (e) => {
-                  const selected = Array.from(
-                    e.target.selectedOptions
-                  ).map((o) => o.value);
-
-                  for (const im of selected) {
-                    await lockImeiRealtime(im, tokoLogin, "SYSTEM");
-                  }
-
-                  updateItem(idx, {
-                    imeiList: selected,
-                    qty: selected.length,
-                  });
-                }}
-              >
-                {imeiOptions.map((im) => (
-                  <option key={im} value={im}>
-                    {im}
-                  </option>
+              <datalist id={`imei-list-${idx}`}>
+                {imeiAvailableList.map((im) => (
+                  <option key={im} value={im} />
                 ))}
-              </select>
-            </>
+              </datalist>
+            </div>
           )}
 
           {/* QTY NON IMEI */}

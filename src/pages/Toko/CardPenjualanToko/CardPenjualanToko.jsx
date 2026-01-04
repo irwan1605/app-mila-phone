@@ -24,6 +24,7 @@ import {
   listenPenjualan,
   addPenjualan,
   kurangiStokToko,
+  listenStockAll,
 } from "../../../services/FirebaseService";
 
 // ================= UTIL =================
@@ -69,6 +70,14 @@ export default function CardPenjualanToko() {
 
   const [printData, setPrintData] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [stockRealtime, setStockRealtime] = useState({});
+
+  useEffect(() => {
+    const unsub = listenStockAll((data) => {
+      setStockRealtime(data || {});
+    });
+    return () => unsub && unsub();
+  }, []);
 
   // ================= LISTEN TABLE =================
   useEffect(() => {
@@ -114,72 +123,112 @@ export default function CardPenjualanToko() {
     return true;
   };
 
-  // ================= SUBMIT =================
-  const handleSubmitPenjualan = useCallback(async () => {
-    if (loading || submitting) return;
-    if (!validate()) return;
+  const tokoLogin = formUser?.namaToko;
 
-    try {
-      setSubmitting(true);
+  const imeiValidList = useMemo(() => {
+    if (!penjualanList || !formUser.namaToko) return [];
+  
+    return penjualanList
+      .filter(
+        (trx) =>
+          trx.NAMA_TOKO === formUser.namaToko &&
+          trx.IMEI &&
+          trx.STATUS === "Approved"
+      )
+      .map((trx) => String(trx.IMEI).trim());
+  }, [penjualanList, formUser.namaToko]);
+  
 
-      for (const item of items) {
-        const qty = Number(item.qty || 0);
 
-        await kurangiStokToko({
-          tokoId: tokoAktifId,
-          sku: item.sku || `${item.namaBrand}_${item.namaBarang}`,
-          qty,
-        });
 
-        await addPenjualan(tokoAktifId, {
-          ...formUser,
-          ...payment,
+const handleSubmitPenjualan = useCallback(async () => {
+  if (loading || submitting) return;
+  if (!validate()) return;
 
-          NAMA_BARANG: item.namaBarang,
-          NAMA_BRAND: item.namaBrand,
-          KATEGORI_BRAND: item.kategoriBarang,
-          SKU: item.sku || "",
+  try {
+    setSubmitting(true);
 
-          QTY: qty,
-          HARGA_UNIT: Number(item.hargaUnit || 0),
-          TOTAL: Number(item.hargaUnit || 0) * qty,
+    for (const item of items) {
+      const qty = Number(item.qty || 0);
 
-          PAYMENT_METODE: "PENJUALAN",
-          STATUS: "Approved",
-        });
+      // ===============================
+      // ✅ AMBIL IMEI DENGAN BENAR
+      // ===============================
+      const imei = item.isImei ? item.imeiList?.[0] : null;
+
+      if (item.isImei) {
+        if (!imei) {
+          alert(`❌ IMEI belum dipilih untuk ${item.namaBarang}`);
+          return;
+        }
+
+        if (!imeiValidList.includes(String(imei).trim())) {
+          alert(`❌ IMEI ${imei} tidak ada di stok toko ${tokoLogin}`);
+          return;
+        }
       }
 
-      alert("✅ Penjualan berhasil");
-
-      navigate("/print/cetak-invoice-penjualan", {
-        state: {
-          transaksi: {
-            invoice: formUser.noFaktur,
-            toko: formUser.namaToko,
-            user: formUser,
-            items,
-            payment,
-            totalBarang: totalPenjualan,
-          },
-        },
+      // ===============================
+      // 🔥 KURANGI STOK TOKO
+      // ===============================
+      await kurangiStokToko({
+        tokoId: tokoAktifId,
+        sku: item.isImei ? imei : item.sku,
+        qty,
       });
 
-      setItems([]);
-      setPayment({});
-      setFormUser((p) => ({
-        ...p,
-        noFaktur: genInvoice(),
-        namaPelanggan: "",
-        idPelanggan: "",
-        noTlpPelanggan: "",
-      }));
-    } catch (e) {
-      console.error(e);
-      alert("❌ Penjualan gagal: " + e.message);
-    } finally {
-      setSubmitting(false);
+      // ===============================
+      // 🔥 SIMPAN PENJUALAN
+      // ===============================
+      await addPenjualan(tokoAktifId, {
+        ...formUser,
+        ...payment,
+
+        NAMA_BARANG: item.namaBarang,
+        NAMA_BRAND: item.namaBrand,
+        KATEGORI_BARANG: item.kategoriBarang,
+
+        SKU: item.isImei ? imei : item.sku,
+        IMEI: item.isImei ? imei : "",
+
+        QTY: qty,
+        HARGA_UNIT: Number(item.hargaUnit || 0),
+        TOTAL: Number(item.hargaUnit || 0) * qty,
+
+        PAYMENT_METODE: "PENJUALAN",
+        STATUS: "Approved",
+      });
     }
-  }, [items, formUser, payment, tokoAktifId, loading, submitting]);
+
+    alert("✅ Penjualan berhasil");
+
+    setItems([]);
+    setPayment({});
+    setFormUser((p) => ({
+      ...p,
+      noFaktur: genInvoice(),
+      namaPelanggan: "",
+      idPelanggan: "",
+      noTlpPelanggan: "",
+    }));
+  } catch (e) {
+    console.error(e);
+    alert("❌ Penjualan gagal: " + e.message);
+  } finally {
+    setSubmitting(false);
+  }
+}, [
+  items,
+  formUser,
+  payment,
+  tokoAktifId,
+  loading,
+  submitting,
+  imeiValidList,
+  tokoLogin,
+]);
+
+  
 
   // ================= TOTAL =================
   const totalPenjualan = useMemo(() => {
@@ -189,7 +238,7 @@ export default function CardPenjualanToko() {
     );
   }, [items]);
 
-  // ================= RENDER =================
+
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-xl font-bold">PENJUALAN</h1>
@@ -206,6 +255,7 @@ export default function CardPenjualanToko() {
            onChange={setItems}
            tokoLogin={formUser.namaToko}
            allowManual={!!formUser.namaTokoId}
+           stockRealtime={stockRealtime} 
           />
         </div>
 

@@ -35,6 +35,8 @@ export default function TablePenjualan() {
     }
   }, []);
 
+  
+
   const isSuperAdmin =
     userLogin?.role === "superadmin" || userLogin?.role === "admin";
 
