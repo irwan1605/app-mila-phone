@@ -48,6 +48,29 @@ import {
 /* ============================================================
    HELPERS
 ============================================================ */
+
+
+/**
+ * ===============================
+ * UPDATE USER ACCOUNT (USERNAME & PASSWORD)
+ * ===============================
+ * @param {string} userId
+ * @param {{username: string, password: string}} payload
+ */
+export const updateUserAccount = async (username, payload) => {
+  if (!username) throw new Error("Username tidak valid");
+
+  const userRef = ref(db, `users/${username}`);
+
+  await update(userRef, {
+    password: payload.password,
+    updatedAt: new Date().toISOString(),
+  });
+};
+
+
+
+
 export const addTransferBarang = async (data) => {
   const transferRef = push(ref(db, "transfer_barang"));
   await update(transferRef, {
@@ -519,25 +542,22 @@ export const deleteUserOnline = (username) => {
 };
 
 export const listenUsers = (callback) => {
-  const r = ref(db, "users");
-  const unsub = onValue(
-    r,
-    (snap) => {
-      const raw = snap.val() || {};
-      callback(
-        Object.entries(raw).map(([username, data]) => ({
-          username,
-          ...data,
-        }))
-      );
-    },
-    (err) => {
-      console.error("listenUsers error:", err);
-      callback([]);
-    }
-  );
-  return () => unsub && unsub();
+  const usersRef = ref(db, "users");
+
+  return onValue(usersRef, (snap) => {
+    const val = snap.val() || {};
+
+    const list = Object.entries(val).map(([key, data]) => ({
+      _key: key,        // 🔥 KEY = USERNAME
+      ...data,
+    }));
+
+    callback(list);
+  });
 };
+
+
+
 
 export const getAllUsersOnce = async () => {
   try {
@@ -2159,32 +2179,30 @@ export const getImeiListByToko = async (namaToko, keyword = "") => {
 // =====================================================
 // 🔥 LISTEN PENJUALAN (FINAL – AUTO TAMPIL DI TABLE)
 // =====================================================
+// 🔥 KHUSUS PENJUALAN
 export const listenPenjualan = (callback) => {
-  const tokoRef = ref(db, "toko");
+  const r = ref(db, "toko");
 
-  return onValue(tokoRef, (snapshot) => {
+  return onValue(r, (snap) => {
     const result = [];
 
-    if (snapshot.exists()) {
-      snapshot.forEach((tokoSnap) => {
-        const tokoId = tokoSnap.key;
-        const penjualanSnap =
-          tokoSnap.child("penjualan") ||
-          tokoSnap.child("transaksi");
+    snap.forEach((tokoSnap) => {
+      const penjualanSnap = tokoSnap.child("penjualan");
+      if (!penjualanSnap.exists()) return;
 
-        penjualanSnap.forEach((trxSnap) => {
-          result.push({
-            id: trxSnap.key,
-            tokoId,
-            ...trxSnap.val(),
-          });
+      penjualanSnap.forEach((trx) => {
+        result.push({
+          id: trx.key,
+          tokoId: tokoSnap.key,
+          ...trx.val(),
         });
       });
-    }
+    });
 
     callback(result);
   });
 };
+
 
 
 export const voidTransaksiPenjualan = async (penjualanId) => {

@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback  } from "react";
 import {
   BrowserRouter as Router,
   Route,
@@ -69,6 +69,7 @@ import DetailStockAllToko from "./pages/table/DetailStockAllToko";
 import DetailStockToko from "./pages/table/DetailStockToko";
 import CetakInvoicePenjualan from "./pages/Print/CetakInvoicePenjualan";
 import PrintSuratJalan from "./pages/Print/PrintSuratJalan";
+import useAutoLogout from "./hooks/useAutoLogout";
 
 /* ===========================
     Utility role → toko
@@ -117,8 +118,30 @@ export default function App() {
     }
   });
 
+
+  
+
   /* Realtime Firebase Users */
   const [users, setUsers] = useState(defaultUsers);
+
+  // ================= LOGOUT =================
+  const logout = useCallback(() => {
+    localStorage.removeItem("user");
+    setUser(null);
+    window.location.href = "/";
+  }, []);
+
+  // ================= AUTO LOGOUT 15 MENIT =================
+  useAutoLogout(logout);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("user");
+    if (saved) {
+      setUser(JSON.parse(saved));
+    }
+  }, []);
+  
+
 
   useEffect(() => {
     getAllUsersOnce().then((u) => {

@@ -23,6 +23,7 @@ export default function TableStockOpname({
             <th className="p-2 border">Nama Brand</th>
             <th className="p-2 border">Nama Barang</th>
             <th className="p-2 border">No IMEI / SKU</th>
+            <th className="p-2 border">Keterangan</th>
             <th className="p-2 border">Stok Sistem</th>
             <th className="p-2 border">Stok Fisik</th>
             <th className="p-2 border">Selisih</th>
@@ -50,6 +51,10 @@ export default function TableStockOpname({
 
                 <td className="p-2 border font-mono text-xs">
                   {r.imei ? r.imei : "NON-IMEI"}
+                </td>
+
+                <td className="p-2 border text-xs text-gray-600">
+                  {r.keterangan || "-"}
                 </td>
 
                 <td className="p-2 border text-center">{r.qty}</td>

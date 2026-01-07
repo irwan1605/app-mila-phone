@@ -30,10 +30,18 @@ export function deriveStockFromTransaksi(transaksi = []) {
     const toko = t.NAMA_TOKO || "CILANGKAP PUSAT";
 
     const key =
-      (t.NOMOR_UNIK && String(t.NOMOR_UNIK).trim()) ||
-      `${String(t.NAMA_BRAND || "").trim()}|${String(
-        t.NAMA_BARANG || ""
-      ).trim()}`;
+  t.IMEI && String(t.IMEI).trim()
+    ? String(t.IMEI).trim()
+    : t.NOMOR_UNIK && String(t.NOMOR_UNIK).trim()
+    ? String(t.NOMOR_UNIK).trim()
+    : `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+
+    // const key =
+    //   (t.NOMOR_UNIK && String(t.NOMOR_UNIK).trim()) ||
+    //   `${String(t.NAMA_BRAND || "").trim()}|${String(
+    //     t.NAMA_BARANG || ""
+    //   ).trim()}`;
 
     if (!key) return;
 

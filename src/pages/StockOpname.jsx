@@ -1,9 +1,9 @@
 // src/pages/StockOpname.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  listenAllTransaksi,
   addTransaksi,
   updateTransaksi,
+  listenAllTransaksi ,
   deleteTransaksi,
   addStock,
   reduceStock,
@@ -65,10 +65,9 @@ const FORM_STORAGE_KEY = "stockOpnameFormDraft";
 ====================================================== */
 export default function StockOpname() {
   /* ================== STATE ================== */
-  const [allTransaksi, setAllTransaksi] = useState([]);
-  const [filterToko, setFilterToko] = useState("semua");
   const [opnameMap, setOpnameMap] = useState({});
   const navigate = useNavigate();
+  
 
   const [form, setForm] = useState({});
   const [editId, setEditId] = useState(null);
@@ -91,6 +90,9 @@ export default function StockOpname() {
 
   const location = useLocation();
   const lockedTokoFromNav = location?.state?.lockedToko || null;
+
+  const [allTransaksi, setAllTransaksi] = useState([]);
+  const [filterToko, setFilterToko] = useState("semua");
 
   const rawTokoLogin =
     lockedTokoFromNav ||
@@ -123,84 +125,159 @@ export default function StockOpname() {
     return () => unsub && unsub();
   }, []);
 
-  /* ======================================================
-     LOAD TRANSAKSI (SINGLE SOURCE)
-  ====================================================== */
-  useEffect(() => {
-    if (typeof listenAllTransaksi === "function") {
-      const unsub = listenAllTransaksi((items = []) => {
-        const norm = items.map(normalizeRecord);
-        setAllTransaksi(norm.length ? norm : buildTransaksiFromStockBarang());
-        setCurrentPage(1);
-      });
-      return () => unsub && unsub();
-    } else {
-      setAllTransaksi(buildTransaksiFromStockBarang());
-    }
-  }, []);
-
   useEffect(() => {
     if (!isSuperAdmin && tokoLogin) {
       setFilterToko(tokoLogin); // 🔒 PIC toko dikunci ke tokonya
     }
   }, [isSuperAdmin, tokoLogin]);
 
-  /* ======================================================
-     STOCK MAP (SUMBER KEBENARAN)
-  ====================================================== */
-  const stockMap = useMemo(
-    () => deriveStockFromTransaksi(allTransaksi),
-    [allTransaksi]
-  );
+  useEffect(() => {
+    if (typeof listenAllTransaksi !== "function") return;
+  
+    const unsub = listenAllTransaksi((rows = []) => {
+      console.log("🔥 ALL TRANSAKSI (RAW):", rows);
+  
+      setAllTransaksi(
+        rows.filter(
+          (t) =>
+            t &&
+            t.STATUS === "Approved" &&
+            // 🔒 SUMBER STOK HANYA DARI MASTER PEMBELIAN & TRANSFER MASUK
+            ["PEMBELIAN", "TRANSFER_MASUK", "STOK OPNAME", "VOID OPNAME"].includes(
+              t.PAYMENT_METODE
+            )
+        )
+      );
+    });
+  
+    return () => unsub && unsub();
+  }, []);
 
+  
 
+ 
+  // ===============================
+  // 3️⃣ STOCK MAP (AGREGAT STOK)
+  // ===============================
+  const stockMap = useMemo(() => {
+    return deriveStockFromTransaksi(
+      allTransaksi.filter(
+        (t) =>
+          t &&
+          t.STATUS === "Approved" &&
+          ["PEMBELIAN", "TRANSFER_MASUK", "STOK OPNAME"].includes(
+            t.PAYMENT_METODE
+          )
+      )
+    );
+  }, [allTransaksi]);
+
+  const normalizeKey = (t = {}) => {
+    if (t.IMEI) return String(t.IMEI).trim();
+    if (t.NOMOR_UNIK) return String(t.NOMOR_UNIK).trim();
+    return `${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`.trim();
+  };
+  
+
+  // ===============================
+  // 4️⃣ DETAIL LOOKUP (WAJIB DI SINI)
+  // ===============================
   const detailStockLookup = useMemo(() => {
     const map = {};
-
-    allTransaksi
-      .filter((t) => t && t.STATUS === "Approved")
-      .forEach((t) => {
-        const key =
-          t.IMEI || t.NOMOR_UNIK || `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-
-        if (!key) return;
-
-        if (!map[key]) {
-          map[key] = {
-            tanggal: t.TANGGAL_TRANSAKSI || "-",
-            supplier: t.NAMA_SUPPLIER || "-",
-            imei: t.IMEI || t.NOMOR_UNIK || "",
-          };
-        }
-      });
-
+  
+    allTransaksi.forEach((t) => {
+      if (
+        !t ||
+        t.STATUS !== "Approved" ||
+        t.PAYMENT_METODE !== "PEMBELIAN"
+      )
+        return;
+  
+      const key = normalizeKey(t);
+      if (!key) return;
+  
+      // simpan data pembelian pertama saja
+      if (!map[key]) {
+        map[key] = {
+          tanggal:
+            t.TANGGAL_TRANSAKSI ||
+            t.tanggal ||
+            new Date(t.createdAt || Date.now())
+              .toISOString()
+              .slice(0, 10),
+  
+          supplier: t.NAMA_SUPPLIER || "-",
+  
+          imei: t.IMEI || t.NOMOR_UNIK || "",
+        };
+      }
+    });
+  
     return map;
   }, [allTransaksi]);
 
+  const masterPembelianLookup = useMemo(() => {
+    const map = {};
+  
+    allTransaksi.forEach((t) => {
+      if (!t) return;
+  
+      if (
+        t.PAYMENT_METODE === "PEMBELIAN" &&
+        t.STATUS === "Approved" &&
+        t.IMEI
+      ) {
+        const key = String(t.IMEI).trim();
+  
+        map[key] = {
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
+          supplier: t.NAMA_SUPPLIER || "-",
+          imei: key,
+        };
+      }
+    });
+  
+    console.log("MASTER PEMBELIAN LOOKUP:", map);
+    return map;
+  }, [allTransaksi]);
+  
+  
+  
+  
+  
+
+  // ===============================
+  // 5️⃣ AGGREGATED (BOLEH PAKAI detailStockLookup)
+  // ===============================
   const aggregated = useMemo(() => {
     let rows = [];
-
-    // 🔒 PIC TOKO → PAKSA 1 TOKO
-    const tokoAktif = isSuperAdmin ? filterToko : tokoLogin;
-
-    if (tokoAktif === "semua" && isSuperAdmin) {
+  
+    if (filterToko === "semua") {
       Object.values(stockMap).forEach((perToko) => {
         rows.push(...Object.values(perToko));
       });
-    } else if (stockMap[tokoAktif]) {
-      rows = Object.values(stockMap[tokoAktif]);
+    } else if (stockMap[filterToko]) {
+      rows = Object.values(stockMap[filterToko]);
     }
-
+  
     return rows.map((r) => {
-      const detail = detailStockLookup[r.key] || {};
+      const meta = masterPembelianLookup[String(r.key).trim()];
+  
       return {
         ...r,
-        tanggal: detail.tanggal || "-",
-        supplier: detail.supplier || "-",
-        imei: detail.imei || "",
+        tanggal: meta?.tanggal || "-",
+        supplier: meta?.supplier || "-",
+        imei: meta?.imei || r.key || "",
       };
     });
-  }, [stockMap, filterToko, tokoLogin, isSuperAdmin, detailStockLookup]);
+  }, [stockMap, filterToko, masterPembelianLookup]);
+  
+  
+  
+  
+  
+
+  
 
   const tableData = aggregated;
 
@@ -359,24 +436,24 @@ export default function StockOpname() {
 
   const handleVoidOpname = async (record) => {
     if (!isSuperAdmin) return;
-  
+
     if (!window.confirm("Batalkan opname & kembalikan stok?")) return;
-  
+
     const opnameTrx = allTransaksi.find(
       (t) =>
         t.PAYMENT_METODE === "STOK OPNAME" &&
         t.STATUS === "Approved" &&
         t.NOMOR_UNIK === record.key
     );
-  
+
     if (!opnameTrx) {
       alert("Transaksi opname tidak ditemukan");
       return;
     }
-  
+
     const tokoId =
       fallbackTokoNames.findIndex((n) => n === opnameTrx.NAMA_TOKO) + 1;
-  
+
     const reversePayload = {
       ...opnameTrx,
       id: undefined,
@@ -386,22 +463,21 @@ export default function StockOpname() {
       STATUS: "Approved",
       KETERANGAN: "Rollback opname",
     };
-  
+
     await addTransaksi(tokoId, reversePayload);
-  
+
     await updateTransaksi(tokoId, opnameTrx.id, {
       ...opnameTrx,
       STATUS: "VOID",
     });
-  
+
     setAllTransaksi((d) => [
       ...d.map((x) => (x.id === opnameTrx.id ? { ...x, STATUS: "VOID" } : x)),
       normalizeRecord(reversePayload),
     ]);
-  
+
     alert("✅ Opname berhasil dibatalkan");
   };
-  
 
   /* ======================================================
      SIMPAN OPNAME PER SKU
@@ -410,19 +486,19 @@ export default function StockOpname() {
     const key = record.key;
     const stokFisik = Number(opnameMap[key]);
     const stokSistem = Number(record.qty || 0);
-  
+
     if (Number.isNaN(stokFisik)) {
       alert("Stok fisik tidak valid");
       return;
     }
-  
+
     if (stokFisik === stokSistem) {
       alert("Stok fisik sama dengan sistem");
       return;
     }
-  
+
     const koreksi = stokFisik - stokSistem;
-  
+
     const payload = {
       TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
       NO_INVOICE: `OPN-${Date.now()}`,
@@ -435,18 +511,16 @@ export default function StockOpname() {
       STATUS: "Approved",
       KETERANGAN: `RESET OPNAME: sistem=${stokSistem}, fisik=${stokFisik}`,
     };
-  
-    const tokoId =
-      fallbackTokoNames.findIndex((n) => n === record.toko) + 1;
-  
+
+    const tokoId = fallbackTokoNames.findIndex((n) => n === record.toko) + 1;
+
     await addTransaksi(tokoId, payload);
-  
+
     setAllTransaksi((d) => [...d, normalizeRecord(payload)]);
     setOpnameMap((m) => ({ ...m, [key]: "" }));
-  
+
     alert("✅ Opname berhasil. Stok sistem = stok fisik.");
   };
-  
 
   /* ======================================================
      RENDER

@@ -7,6 +7,7 @@ import { FaBell } from "react-icons/fa";
 
 import { ref, onValue } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
+import { updateUserAccount } from "../services/FirebaseService";
 
 // import {
 //   listenUsers,
@@ -22,6 +23,12 @@ const Navbar = ({ user, onLogout }) => {
   const [notifTransfer, setNotifTransfer] = useState([]);
   const [pendingTransfer, setPendingTransfer] = useState([]);
 
+  // ===== EDIT ACCOUNT STATE =====
+  const [showEditAccount, setShowEditAccount] = useState(false);
+  const [editUsername, setEditUsername] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editPassword2, setEditPassword2] = useState("");
+
   // ✅ SAFE USER DARI LOCALSTORAGE
   const activeUser = useMemo(() => {
     try {
@@ -31,13 +38,9 @@ const Navbar = ({ user, onLogout }) => {
     }
   }, [user]);
 
-  
-
   useEffect(() => {
     return FirebaseService.listenTransferRequests((rows) => {
-      const pending = (rows || []).filter(
-        (t) => t.status === "Pending"
-      );
+      const pending = (rows || []).filter((t) => t.status === "Pending");
       setPendingTransfer(pending);
     });
   }, []);
@@ -60,16 +63,15 @@ const Navbar = ({ user, onLogout }) => {
 
   const bellAudio = useRef(null);
 
-useEffect(() => {
-  bellAudio.current = new Audio("/bell.mp3");
-}, []);
+  useEffect(() => {
+    bellAudio.current = new Audio("/bell.mp3");
+  }, []);
 
-useEffect(() => {
-  if (pendingTransfer.length > 0) {
-    bellAudio.current?.play().catch(() => {});
-  }
-}, [pendingTransfer.length]);
-  
+  useEffect(() => {
+    if (pendingTransfer.length > 0) {
+      bellAudio.current?.play().catch(() => {});
+    }
+  }, [pendingTransfer.length]);
 
   // useEffect(() => {
   //   const unsub = listenTransferRequests((list) => {
@@ -89,9 +91,32 @@ useEffect(() => {
   //   return () => unsub && unsub();
   // }, []);
 
-  
+  const handleUpdateAccount = async () => {
+    const session = JSON.parse(localStorage.getItem("user"));
 
-  
+    if (!session || !session.username) {
+      alert("❌ Session tidak valid, silakan login ulang");
+      return;
+    }
+
+    if (!editPassword || editPassword !== editPassword2) {
+      alert("Password tidak sama");
+      return;
+    }
+
+    try {
+      await updateUserAccount(session.username, {
+        password: editPassword,
+      });
+
+      alert("✅ Password berhasil diubah, silakan login ulang");
+      localStorage.removeItem("user");
+      window.location.href = "/";
+    } catch (err) {
+      console.error(err);
+      alert("❌ Gagal update akun");
+    }
+  };
 
   // ✅ SINKRONKAN NAMA DARI USER MANAGEMENT
   const finalUser = useMemo(() => {
@@ -148,21 +173,21 @@ useEffect(() => {
       </h1>
 
       <div
-      onClick={() =>
-        navigate("/transfer-barang", {
-          state: {
-            fromNotif: true,
-            filterStatus: "Pending",
-          },
-        })
-      }
-      className={`
+        onClick={() =>
+          navigate("/transfer-barang", {
+            state: {
+              fromNotif: true,
+              filterStatus: "Pending",
+            },
+          })
+        }
+        className={`
         relative cursor-pointer
         ${pendingTransfer.length > 0 ? "animate-pulse" : ""}
       `}
-    >
-      <FaBell
-        className={`
+      >
+        <FaBell
+          className={`
           text-2xl transition-all
           ${
             pendingTransfer.length > 0
@@ -170,20 +195,20 @@ useEffect(() => {
               : "text-gray-500"
           }
         `}
-      />
-    
-      {pendingTransfer.length > 0 && (
-        <span
-          className="
+        />
+
+        {pendingTransfer.length > 0 && (
+          <span
+            className="
             absolute -top-2 -right-2
             bg-red-600 text-white text-xs
             px-2 py-0.5 rounded-full
             animate-ping
           "
-        >
-          {pendingTransfer.length}
-        </span>
-      )}
+          >
+            {pendingTransfer.length}
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-4" ref={dropdownRef}>
@@ -224,6 +249,13 @@ useEffect(() => {
           )}
         </div>
 
+        <button
+          onClick={() => setShowEditAccount(true)}
+          className="ml-2 text-xs px-2 py-1 rounded bg-yellow-400 text-black hover:bg-yellow-500"
+        >
+          ⚙️ Update Akun
+        </button>
+
         {/* ✅ LOGOUT */}
         <button
           type="button"
@@ -234,6 +266,49 @@ useEffect(() => {
           <span>Logout</span>
         </button>
       </div>
+      {showEditAccount && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl p-6 w-96 space-y-3 text-black">
+            <h3 className="text-lg font-bold">Edit Username & Password</h3>
+
+            <input
+              className="w-full border rounded p-2"
+              placeholder="Username Baru"
+              value={editUsername}
+              onChange={(e) => setEditUsername(e.target.value)}
+            />
+
+            <input
+              type="password"
+              className="w-full border rounded p-2"
+              placeholder="Password Baru"
+              onChange={(e) => setEditPassword(e.target.value)}
+            />
+
+            <input
+              type="password"
+              className="w-full border rounded p-2"
+              placeholder="Ulangi Password"
+              onChange={(e) => setEditPassword2(e.target.value)}
+            />
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowEditAccount(false)}
+                className="px-4 py-2 rounded bg-gray-300"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleUpdateAccount}
+                className="px-4 py-2 rounded bg-indigo-600 text-white"
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
   );
 };

@@ -83,15 +83,16 @@ export default function Login({ onLogin, users: usersProp }) {
     }
 
     const logged = {
+      _key: u._key || u.username, // 🔥 FALLBACK KE USERNAME
       username: u.username,
       name: u.name || u.username,
-      role,
-      toko: tokoId,
+      role: u.role,
+      toko: u.toko,
     };
-
-    // ✅ SIMPAN SESSION
+    
     localStorage.setItem("user", JSON.stringify(logged));
-
+    
+    
     if (typeof onLogin === "function") onLogin(logged);
 
     // ✅ REDIRECT OTOMATIS BERDASARKAN ROLE

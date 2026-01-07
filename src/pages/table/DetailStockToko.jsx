@@ -67,6 +67,51 @@ export default function DetailStockToko() {
     return map;
   }, [masterBarang]);
 
+  const imeiFinalMap = useMemo(() => {
+    const map = {};
+
+    transaksi.forEach((t) => {
+      if (!t || t.STATUS !== "Approved" || !t.IMEI) return;
+
+      const imei = String(t.IMEI).trim();
+      const toko = String(t.NAMA_TOKO || "").trim();
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+      if (!map[imei]) {
+        map[imei] = {
+          imei,
+          toko: null,
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
+          noDo: t.NO_INVOICE || "-",
+          supplier: t.NAMA_SUPPLIER || "-",
+          brand: t.NAMA_BRAND || "-",
+          barang: t.NAMA_BARANG || "-",
+          keterangan: "",
+        };
+      }
+
+      if (metode === "PEMBELIAN") {
+        map[imei].toko = toko;
+      }
+
+      if (metode === "TRANSFER_KELUAR") {
+        map[imei].toko = null;
+        map[imei].keterangan = `Transfer barang dari Toko ${toko}`;
+      }
+
+      if (metode === "TRANSFER_MASUK") {
+        map[imei].toko = toko;
+        map[imei].keterangan = `Transfer masuk ke Toko ${toko}`;
+      }
+
+      if (metode === "PENJUALAN") {
+        delete map[imei];
+      }
+    });
+
+    return map;
+  }, [transaksi]);
+
   /* ======================
      BUILD ROWS
   ====================== */
@@ -74,7 +119,12 @@ export default function DetailStockToko() {
     if (!namaToko) return [];
 
     return transaksi
-      .filter((t) => t.STATUS === "Approved" && t.NAMA_TOKO === namaToko)
+      .filter(
+        (t) =>
+          t.STATUS === "Approved" &&
+          t.NAMA_TOKO === namaToko &&
+          t.PAYMENT_METODE !== "PENJUALAN"
+      )
       .map((t) => {
         const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
         const master = masterMap[key] || {};
@@ -101,7 +151,7 @@ export default function DetailStockToko() {
           bundling: master.bundling || "-",
         };
       });
-  }, [transaksi, masterMap, namaToko]);
+  }, [transaksi, imeiFinalMap, masterMap, namaToko]);
 
   /* ======================
      SEARCH FILTER
@@ -245,6 +295,9 @@ export default function DetailStockToko() {
                     Bundling
                   </th>
                   <th className="px-3 py-2 text-left whitespace-nowrap">
+                    Keterangan
+                  </th>
+                  <th className="px-3 py-2 text-left whitespace-nowrap">
                     Aksi
                   </th>
                 </tr>
@@ -295,15 +348,18 @@ export default function DetailStockToko() {
                     <td className="px-3 py-2 text-right font-mono">
                       {r.bundling}
                     </td>
+                    <td className="px-3 py-2 text-right font-mono text-xs text-gray-600">
+                      {r.keterangan || "-"}
+                    </td>
                     <td className="px-3 py-2 text-right font-mono">
                       <button
-                       onClick={() =>
-                        navigate("/transfer-barang", {
-                          state: {
-                            tokoPengirim: namaToko, // ⬅️ INI PENTING
-                          },
-                        })
-                      }
+                        onClick={() =>
+                          navigate("/transfer-barang", {
+                            state: {
+                              tokoPengirim: namaToko, // ⬅️ INI PENTING
+                            },
+                          })
+                        }
                         title="Transfer Barang"
                         className="
     group flex items-center gap-2

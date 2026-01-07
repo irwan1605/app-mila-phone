@@ -66,7 +66,8 @@ export default function DetailStockAllToko() {
   ====================== */
   const rows = useMemo(() => {
     return transaksi
-      .filter((t) => t.STATUS === "Approved")
+      .filter((t) => t.STATUS === "Approved" &&
+    t.PAYMENT_METODE !== "PENJUALAN")
       .map((t) => {
         const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
         const master = masterMap[key] || {};
@@ -167,7 +168,7 @@ export default function DetailStockAllToko() {
   scrollbar-dark
 ">
 
-        <table className="relative bg-gradient-to-br from-blue-100 to-indigo-900 p-4 rounded-2xl shadow-2xl overflow-x-auto">
+<table className="w-full text-sm min-w-[2000px]">
           <thead className="bg-blue-100 sticky top-0 z-10 text-xs uppercase tracking-wider">
             <tr
               className="
