@@ -68,7 +68,51 @@ export const updateUserAccount = async (username, payload) => {
   });
 };
 
+/**
+ * =====================================
+ * RENAME USERNAME (KEY = USERNAME)
+ * =====================================
+ */
+export const renameUsername = async (
+  oldUsername,
+  newUsername,
+  newPassword
+) => {
+  if (!oldUsername || !newUsername) {
+    throw new Error("Username tidak valid");
+  }
 
+  const oldRef = ref(db, `users/${oldUsername}`);
+  const newRef = ref(db, `users/${newUsername}`);
+
+  // 1️⃣ Ambil data lama
+  const snap = await get(oldRef);
+  if (!snap.exists()) {
+    throw new Error("User lama tidak ditemukan");
+  }
+
+  // 2️⃣ Cek username baru sudah ada atau belum
+  const checkNew = await get(newRef);
+  if (checkNew.exists()) {
+    throw new Error("Username baru sudah digunakan");
+  }
+
+  const oldData = snap.val();
+
+  // 3️⃣ Buat data baru
+  const newData = {
+    ...oldData,
+    username: newUsername,
+    password: newPassword || oldData.password,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // 4️⃣ Simpan ke key baru
+  await set(newRef, newData);
+
+  // 5️⃣ Hapus key lama
+  await remove(oldRef);
+};
 
 
 export const addTransferBarang = async (data) => {

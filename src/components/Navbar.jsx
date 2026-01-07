@@ -8,6 +8,7 @@ import { FaBell } from "react-icons/fa";
 import { ref, onValue } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
 import { updateUserAccount } from "../services/FirebaseService";
+import { renameUsername } from "../services/FirebaseService";
 
 // import {
 //   listenUsers,
@@ -24,10 +25,10 @@ const Navbar = ({ user, onLogout }) => {
   const [pendingTransfer, setPendingTransfer] = useState([]);
 
   // ===== EDIT ACCOUNT STATE =====
-  const [showEditAccount, setShowEditAccount] = useState(false);
   const [editUsername, setEditUsername] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [editPassword2, setEditPassword2] = useState("");
+  const [showEditAccount, setShowEditAccount] = useState(false);
 
   // ✅ SAFE USER DARI LOCALSTORAGE
   const activeUser = useMemo(() => {
@@ -128,6 +129,44 @@ const Navbar = ({ user, onLogout }) => {
 
     return found ? { ...activeUser, name: found.name } : activeUser;
   }, [activeUser, firebaseUsers]);
+
+  const handleRenameAccount = async () => {
+    const session = JSON.parse(localStorage.getItem("user"));
+
+    if (!session || !session.username) {
+      alert("❌ Session tidak valid, silakan login ulang");
+      return;
+    }
+
+    if (!editUsername) {
+      alert("Username baru wajib diisi");
+      return;
+    }
+
+    if (editPassword && editPassword !== editPassword2) {
+      alert("Password tidak sama");
+      return;
+    }
+
+    try {
+      await renameUsername(
+        session.username, // OLD KEY
+        editUsername, // NEW KEY
+        editPassword
+      );
+
+      alert(
+        "✅ Username berhasil diubah\nSilakan login ulang dengan username baru"
+      );
+
+      // 🔐 FORCE LOGOUT
+      localStorage.removeItem("user");
+      window.location.href = "/";
+    } catch (err) {
+      console.error(err);
+      alert("❌ " + err.message);
+    }
+  };
 
   const handleWhatsAppClick = (phoneNumber) => {
     window.open(`https://wa.me/${phoneNumber}`, "_blank");
@@ -269,19 +308,19 @@ const Navbar = ({ user, onLogout }) => {
       {showEditAccount && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
           <div className="bg-white rounded-xl p-6 w-96 space-y-3 text-black">
-            <h3 className="text-lg font-bold">Edit Username & Password</h3>
+            <h3 className="text-lg font-bold">Edit Akun</h3>
 
             <input
               className="w-full border rounded p-2"
               placeholder="Username Baru"
               value={editUsername}
-              onChange={(e) => setEditUsername(e.target.value)}
+              onChange={(e) => setEditUsername(e.target.value.toUpperCase())}
             />
 
             <input
               type="password"
               className="w-full border rounded p-2"
-              placeholder="Password Baru"
+              placeholder="Password Baru (opsional)"
               onChange={(e) => setEditPassword(e.target.value)}
             />
 
@@ -300,7 +339,7 @@ const Navbar = ({ user, onLogout }) => {
                 Batal
               </button>
               <button
-                onClick={handleUpdateAccount}
+                onClick={handleRenameAccount}
                 className="px-4 py-2 rounded bg-indigo-600 text-white"
               >
                 Simpan
