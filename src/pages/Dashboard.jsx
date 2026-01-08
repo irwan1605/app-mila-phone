@@ -35,7 +35,7 @@ import {
   listenAllTransaksi,
   listenStockAll,
   forceDeleteTransaksi,
-  listenPenjualanRealtime , // ✅ ambil stok MASTER BARANG (CILANGKAP PUSAT)
+  listenPenjualanRealtime, // ✅ ambil stok MASTER BARANG (CILANGKAP PUSAT)
 } from "../services/FirebaseService";
 
 export default function Dashboard() {
@@ -90,10 +90,9 @@ export default function Dashboard() {
     const unsub = listenPenjualanRealtime((rows) => {
       setPenjualan(Array.isArray(rows) ? rows : []);
     });
-  
+
     return () => unsub && unsub();
   }, []);
-  
 
   useEffect(() => {
     const unsub = listenStockAll((s = {}) => {
@@ -469,20 +468,6 @@ export default function Dashboard() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded shadow">
-            <div className="text-xs">Penjualan Hari Ini</div>
-            <div className="text-xl font-bold">
-              Rp {totalHariIni.toLocaleString("id-ID")}
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded shadow">
-            <div className="text-xs">Total Transaksi</div>
-            <div className="text-xl font-bold">{penjualan.length}</div>
-          </div>
-        </div>
-
         <div
           onClick={handleOpenStockOpname}
           className="cursor-pointer bg-gradient-to-br from-emerald-500 to-emerald-700 text-white p-5 rounded-2xl shadow hover:scale-[1.02] transition transform"
@@ -568,6 +553,20 @@ export default function Dashboard() {
           <span className="text-[11px] text-slate-500">
             Menunggu proses / approval.
           </span>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow p-4 flex flex-col gap-1">
+          <div className="bg-white p-4 rounded shadow">
+            <div className="text-xs">Penjualan Hari Ini</div>
+            <div className="text-xl font-bold">
+              Rp {totalHariIni.toLocaleString("id-ID")}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow p-4 flex flex-col gap-1">
+            <div className="text-xs">Total Transaksi</div>
+            <div className="text-xl font-bold">{penjualan.length}</div>
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl shadow p-4 flex flex-col gap-1">

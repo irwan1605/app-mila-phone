@@ -68,23 +68,30 @@ export default function FormItemSection({
   /* ================= IMEI AVAILABLE ================= */
   const imeiAvailableList = useMemo(() => {
     if (!tokoLogin) return [];
-
-    // semua IMEI dari transaksi pembelian Approved di toko tsb
+  
+    // 1️⃣ Ambil IMEI dari transaksi PEMBELIAN Approved
     const imeiFromPembelian = allTransaksi
       .filter(
-        (t) => t.NAMA_TOKO === tokoLogin && t.STATUS === "Approved" && t.IMEI
+        (t) =>
+          t.NAMA_TOKO === tokoLogin &&
+          t.STATUS === "Approved" &&
+          t.PAYMENT_METODE === "PEMBELIAN" &&
+          t.IMEI
       )
       .map((t) => String(t.IMEI));
-
-    // IMEI yang sedang dipakai di form (ANTI DUPLIKAT)
-    const imeiDipakaiDiForm = new Set(items.flatMap((i) => i.imeiList || []));
-
+  
+    // 2️⃣ IMEI yang sedang dipakai di form (anti duplikat)
+    const imeiDipakai = new Set(
+      items.flatMap((i) => i.imeiList || [])
+    );
+  
     return imeiFromPembelian.filter(
       (imei) =>
-        !imeiDipakaiDiForm.has(imei) && // ❌ tidak duplikat
-        !stockRealtime?.soldImei?.[imei] // ❌ belum terjual
+        !imeiDipakai.has(imei) &&                 // ❌ tidak duplikat
+        !stockRealtime?.soldImei?.[imei]           // ❌ belum terjual
     );
-  }, [allTransaksi, tokoLogin, stockRealtime, items]);
+  }, [allTransaksi, tokoLogin, items, stockRealtime]);
+  
 
   /* ================= HELPERS ================= */
   const updateItem = (idx, patch) => {
@@ -237,23 +244,48 @@ export default function FormItemSection({
             <input
               list={`imei-${idx}`}
               className="border rounded px-2 py-1 w-full"
-              placeholder="Pilih IMEI dari stok"
+              placeholder="Pilih / ketik IMEI dari stok"
               value={item.imei || ""}
+              /* =================================
+     1️⃣ SAAT MENGETIK → TIDAK VALIDASI
+     ================================= */
               onChange={(e) => {
-                const imei = e.target.value.trim();
+                updateItem(idx, {
+                  imei: e.target.value,
+                  imeiList: [],
+                  qty: 0,
+                });
+              }}
+              /* =================================
+     2️⃣ SAAT SELESAI INPUT → VALIDASI
+     ================================= */
+              onBlur={() => {
+                const imei = (item.imei || "").trim();
 
-                // ❌ IMEI tidak ada di stok
+                // ✅ belum diisi → diamkan
+                if (!imei) return;
+
+                // ✅ belum lengkap → diamkan
+                if (imei.length < 14) return;
+                // kalau IMEI fix 17 digit → ganti jadi: !== 17
+
+                // ❌ tidak ada di stok pembelian toko
                 if (!imeiAvailableList.includes(imei)) {
                   alert("❌ IMEI tidak tersedia / sudah dipakai");
+                  updateItem(idx, {
+                    imei: "",
+                    imeiList: [],
+                    qty: 0,
+                  });
                   return;
                 }
 
-                // unlock IMEI lama (jika ganti)
+                // 🔓 unlock IMEI lama
                 item.imeiList?.forEach((old) => {
                   if (old !== imei) unlockImeiRealtime(old, tokoLogin);
                 });
 
-                // lock IMEI baru
+                // 🔒 lock IMEI baru
                 lockImeiRealtime(imei, tokoLogin);
 
                 updateItem(idx, {
@@ -290,27 +322,45 @@ export default function FormItemSection({
         );
       })}
 
-      <button
-        className="btn btn-outline w-full"
-        disabled={!allowManual}
-        onClick={() =>
-          safeOnChange([
-            ...items,
-            {
-              id: Date.now(),
-              kategoriBarang: "",
-              namaBrand: "",
-              namaBarang: "",
-              imeiList: [],
-              qty: 0,
-              hargaAktif: 0,
-              isImei: false,
-            },
-          ])
-        }
-      >
-        ➕ Tambah Barang
-      </button>
+      <div className="flex gap-2">
+        <button
+          className="btn btn-outline flex-1"
+          disabled={!allowManual}
+          onClick={() =>
+            safeOnChange([
+              ...items,
+              {
+                id: Date.now(),
+                kategoriBarang: "",
+                namaBrand: "",
+                namaBarang: "",
+                imei: "",
+                imeiList: [],
+                qty: 0,
+                hargaAktif: 0,
+                isImei: false,
+              },
+            ])
+          }
+        >
+          ➕ Tambah Barang
+        </button>
+
+        <button
+          className="btn btn-outline btn-error flex-1"
+          disabled={!allowManual || items.length === 0}
+          onClick={() => {
+            const last = items[items.length - 1];
+
+            // unlock IMEI jika ada
+            last?.imeiList?.forEach((im) => unlockImeiRealtime(im, tokoLogin));
+
+            safeOnChange(items.slice(0, -1));
+          }}
+        >
+          ❌ Cancel
+        </button>
+      </div>
     </div>
   );
 }
