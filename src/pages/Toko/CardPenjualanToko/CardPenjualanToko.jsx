@@ -143,29 +143,30 @@ export default function CardPenjualanToko() {
   const handleSubmitPenjualan = useCallback(async () => {
     if (loading || submitting) return;
     if (!validate()) return;
-  
+
     try {
       setSubmitting(true);
-  
+
       // ===============================
       // 1️⃣ KURANGI STOK (LOOP ITEM)
       // ===============================
       for (const item of items) {
         const qty = Number(item.qty || 0);
         const imei = item.isImei ? item.imeiList?.[0] : null;
-  
+        
+
         // ❌ VALIDASI IMEI
         if (item.isImei && !imei) {
           throw new Error("IMEI belum dipilih");
         }
-  
+
         if (item.isImei) {
           // 🔥 PASTIKAN IMEI ADA DI INVENTORY
           await ensureImeiInInventory({
             tokoNama: formUser.namaToko,
             imei,
           });
-  
+
           // 🔥 KURANGI STOK IMEI
           await kurangiStokImei({
             tokoNama: formUser.namaToko,
@@ -180,7 +181,7 @@ export default function CardPenjualanToko() {
           });
         }
       }
-  
+
       // ===============================
       // 2️⃣ BENTUK TRANSAKSI (SATU KALI)
       // ===============================
@@ -189,20 +190,20 @@ export default function CardPenjualanToko() {
         tanggal: formUser.tanggal,
         toko: formUser.namaToko,
         tokoId: tokoAktifId,
-  
+
         user: {
           namaPelanggan: formUser.namaPelanggan,
           noTlpPelanggan: formUser.noTlpPelanggan,
           namaSales: formUser.namaSales,
         },
-  
+
         payment: {
           ...payment,
         },
-  
+
         statusPembayaran: "OK",
         createdAt: Date.now(),
-  
+
         items: items.map((item) => ({
           kategoriBarang: item.kategoriBarang,
           namaBrand: item.namaBrand,
@@ -211,18 +212,17 @@ export default function CardPenjualanToko() {
           imeiList: item.isImei ? item.imeiList : [],
           qty: Number(item.qty || 0),
           hargaUnit: Number(item.hargaUnit || 0),
-          total:
-            Number(item.qty || 0) * Number(item.hargaUnit || 0),
+          total: Number(item.qty || 0) * Number(item.hargaUnit || 0),
         })),
       };
-  
+
       // ===============================
       // 3️⃣ SIMPAN TRANSAKSI (SEKALI)
       // ===============================
       await addPenjualan(tokoAktifId, transaksi);
-  
+
       alert("✅ Penjualan berhasil");
-  
+
       // ===============================
       // 4️⃣ RESET FORM
       // ===============================
@@ -241,24 +241,24 @@ export default function CardPenjualanToko() {
     } finally {
       setSubmitting(false);
     }
-  }, [
-    items,
-    formUser,
-    payment,
-    tokoAktifId,
-    loading,
-    submitting,
-  ]);
-  
+  }, [items, formUser, payment, tokoAktifId, loading, submitting]);
 
-  
+  const isTahap2Valid = useMemo(() => {
+    if (!Array.isArray(items) || items.length === 0) return false;
+
+    return items.every((item) => {
+      if (!item.namaBarang) return false;
+      if (item.isImei && (!item.imeiList || item.imeiList.length === 0))
+        return false;
+      if (!item.qty || item.qty <= 0) return false;
+      if (!item.hargaAktif || item.hargaAktif <= 0) return false;
+      return true;
+    });
+  }, [items]);
 
   // ================= TOTAL =================
   const totalPenjualan = useMemo(() => {
-    return items.reduce(
-      (sum, it) => sum + Number(it.qty || 0) * Number(it.hargaUnit || 0),
-      0
-    );
+    return items.reduce((sum, item) => sum + item.qty * item.hargaAktif, 0);
   }, [items]);
 
   return (
@@ -271,7 +271,7 @@ export default function CardPenjualanToko() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-5">
-          <h2 className="font-bold mb-2">📦 INPUT BARANG</h2>
+          <h2 className="font-bold mb-2">TAHAP 2 - 📦 INPUT BARANG</h2>
           <FormItemSection
             value={items}
             onChange={setItems}
@@ -282,11 +282,12 @@ export default function CardPenjualanToko() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-5">
-          <h2 className="font-bold mb-2">💳 PEMBAYARAN</h2>
+          <h2 className="font-bold mb-2"> TAHAP 3 - 💳 PEMBAYARAN</h2>
           <FormPaymentSection
+            disabled={!isTahap2Valid}
+            totalBarang={totalPenjualan}
             value={payment}
             onChange={setPayment}
-            totalBarang={totalPenjualan}
           />
 
           <div className="flex gap-3 mt-4">

@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useEffect, useState, useCallback  } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   BrowserRouter as Router,
   Route,
@@ -70,6 +70,8 @@ import DetailStockToko from "./pages/table/DetailStockToko";
 import CetakInvoicePenjualan from "./pages/Print/CetakInvoicePenjualan";
 import PrintSuratJalan from "./pages/Print/PrintSuratJalan";
 import useAutoLogout from "./hooks/useAutoLogout";
+import SummaryPembelianReport from "./pages/Reports/SummaryPembelianReport ";
+import SummaryTransferReport from "./pages/Reports/SummaryTransferReport ";
 
 /* ===========================
     Utility role → toko
@@ -118,9 +120,6 @@ export default function App() {
     }
   });
 
-
-  
-
   /* Realtime Firebase Users */
   const [users, setUsers] = useState(defaultUsers);
 
@@ -140,8 +139,6 @@ export default function App() {
       setUser(JSON.parse(saved));
     }
   }, []);
-  
-
 
   useEffect(() => {
     getAllUsersOnce().then((u) => {
@@ -245,6 +242,15 @@ export default function App() {
                     element={<InventoryReport />}
                   />
                   <Route
+                    path="/laporan-summary-transfer"
+                    element={<SummaryTransferReport />}SummaryTransferReport
+                  />
+                  <Route
+                    path="/laporan-summary-pembelian"
+                    element={<SummaryPembelianReport />}
+                  />
+
+                  <Route
                     path="/table/detail-stock-all-toko"
                     element={<DetailStockAllToko />}
                   />
@@ -320,8 +326,10 @@ export default function App() {
 
                   {/* ✨ Fitur Baru — Transfer Barang */}
                   <Route path="/transfer-barang" element={<TransferBarang />} />
-                  <Route path="/surat-jalan/:id" element={<PrintSuratJalan />} />
-
+                  <Route
+                    path="/surat-jalan/:id"
+                    element={<PrintSuratJalan />}
+                  />
 
                   {/* Stok */}
                   <Route

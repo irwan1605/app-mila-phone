@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   FaCreditCard,
-  FaHandshake,
+  FaUniversity,
   FaPercentage,
   FaCalendarAlt,
   FaTicketAlt,
@@ -11,6 +11,8 @@ import MasterPaymentMetodeCard from "../components/master-management/MasterPayme
 import MasterTenorCard from "../components/master-management/MasterTenorCard ";
 import MasterVoucherCard from "../components/master-management/MasterVoucherCard ";
 import MasterMDRCard from "../components/master-management/MasterMDRCard ";
+import MasterBankCard from "../components/master-management/MasterBankCard";
+
 
 
 const cardsConfig = [
@@ -42,6 +44,13 @@ const cardsConfig = [
     icon: FaTicketAlt,
     gradient: "from-teal-500 via-teal-400 to-cyan-400",
   },
+  {
+    key: "bank",
+    title: "MASTER BANK",
+    desc: "Kelola Bank Pembayaran",
+    icon: FaUniversity,
+    gradient: "from-green-500 to-emerald-400",
+  },
 ];
 
 export default function MasterPayment() {
@@ -56,7 +65,9 @@ export default function MasterPayment() {
       case "tenor":
         return <MasterTenorCard />;
       case "voucher":
-    return <MasterVoucherCard />
+    return <MasterVoucherCard />;
+    case "bank":
+  return <MasterBankCard />;
       //   return null;
     }
   };

@@ -30,6 +30,7 @@
 import { db } from "./FirebaseInit";
 import {
   getDatabase,
+  increment ,
   ref,
   onValue,
   get,
@@ -48,6 +49,47 @@ import {
 /* ============================================================
    HELPERS
 ============================================================ */
+
+// ================= MASTER BANK =================
+export const listenMasterBank = (callback) => {
+  const bankRef = ref(db, "masterBank");
+
+  onValue(bankRef, (snap) => {
+    if (!snap.exists()) {
+      callback([]);
+      return;
+    }
+
+    const raw = snap.val();
+    const data = Object.keys(raw).map((id) => ({
+      id,
+      ...raw[id],
+    }));
+
+    // optional sort terbaru
+    data.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    callback(data);
+  });
+};
+
+export const addMasterBank = (data) => {
+  const bankRef = ref(db, "masterBank");
+  return push(bankRef, {
+    ...data,
+    status: data.status || "AKTIF",
+    createdAt: Date.now(),
+  });
+};
+
+export const updateMasterBank = async (id, data) => {
+  await update(ref(db, `masterBank/${id}`), data);
+};
+
+export const deleteMasterBank = async (id) => {
+  await remove(ref(db, `masterBank/${id}`));
+};
+
 
 
 /**
@@ -126,6 +168,22 @@ export const addTransferBarang = async (data) => {
   return transferRef.key;
 };
 
+export const refundPenjualan = async (trx) => {
+  // 1. Tandai transaksi REFUND
+  await update(ref(db, `penjualan/${trx.id}`), {
+    STATUS: "REFUND",
+    refundedAt: Date.now(),
+  });
+
+  // 2. Kembalikan stok
+  for (const item of trx.items) {
+    if (item.imeiList?.length) {
+      await restoreStockByImeiRealtime(item.imeiList[0], trx.toko);
+    } else {
+      await returnStock(trx.tokoId, item.sku, item.qty);
+    }
+  }
+};
 
 
 /* ===============================
@@ -212,12 +270,12 @@ export const lockImei = async ({ imei, toko, invoice }) => {
 /* =====================================================
    ✅ FINAL SOLD
 ===================================================== */
-export const markImeiSold = async ({ imei, invoice }) => {
+export const markImeiSold = async ({ imei, invoice, toko }) => {
   if (typeof imei !== "string" || !imei) {
     throw new Error("IMEI tidak valid saat SOLD");
   }
 
-  return set(ref(db, `inventory_imei/${imei}`), {
+  return set(ref(db, `inventory/${toko}/${imei}`), {
     status: "SOLD",
     invoice,
     soldAt: Date.now(),
@@ -225,8 +283,8 @@ export const markImeiSold = async ({ imei, invoice }) => {
 };
 
 
-export const unlockImei = async (imei) => {
-  return update(ref(db, `inventory_imei/${imei}`), {
+export const unlockImei = async (imei, toko) => {
+  return update(ref(db, `inventory/${toko}/${imei}`), {
     status: "AVAILABLE",
     lockedBy: null,
     lockedAt: null,
@@ -1533,10 +1591,28 @@ export const addLogPembelian = async (data) => {
 };
 
 // 🔒 CEK IMEI SUDAH DIJUAL ATAU BELUM
-export const checkImeiAvailable = async (imei) => {
-  const snap = await get(ref(db, `imeiLocks/${imei}`));
-  return !snap.exists();
+export const checkImeiAvailable = async (toko, imei) => {
+  const cleanImei = String(imei).trim();
+
+  const snap = await get(
+    ref(db, `inventory/${toko}/${cleanImei}`)
+  );
+
+  if (!snap.exists()) {
+    throw new Error(`IMEI ${cleanImei} tidak ditemukan di stok ${toko}`);
+  }
+
+  const data = snap.val();
+
+  if (data.STATUS !== "AVAILABLE") {
+    throw new Error(
+      `IMEI ${cleanImei} tidak tersedia (STATUS: ${data.STATUS})`
+    );
+  }
+
+  return true;
 };
+
 
 
 
@@ -2173,19 +2249,47 @@ export const lockImeiRealtime = async (imei, toko, user = {}) => {
     throw new Error("IMEI sedang dipakai user lain");
   }
 
-  await set(r, {
-    toko,
-    by: user?.email || "SYSTEM",
-    at: Date.now(),
+  if (!imei || !toko) return;
+  await update(ref(db, `inventory/${toko}/${imei}`), {
+    STATUS: "LOCKED",
+    lockedAt: Date.now(),
+
+ 
   });
 };
 
 
-export const unlockImeiRealtime = async (imei) => {
-  await remove(ref(db, `imei_locks/${imei}`));
+// UNLOCK IMEI
+export const unlockImeiRealtime = async (imei, toko) => {
+  if (!imei || !toko) return;
+  await update(ref(db, `inventory/${toko}/${imei}`), {
+    STATUS: "AVAILABLE",
+    unlockedAt: Date.now(),
+  });
 };
 
+export const refundRestorePenjualan = async (trx) => {
+  // 1. tandai refund
+  await update(ref(db, `penjualan/${trx.id}`), {
+    STATUS: "REFUND",
+    refundedAt: Date.now(),
+  });
 
+  // 2. restore item
+  for (const item of trx.items) {
+    if (item.isImei && item.imeiList?.length) {
+      const imei = item.imeiList[0];
+      await update(ref(db, `inventory/${trx.toko}/${imei}`), {
+        STATUS: "AVAILABLE",
+        restoredAt: Date.now(),
+      });
+    } else {
+      await update(ref(db, `stock/${trx.toko}/${item.sku}`), {
+        qty: increment(item.qty),
+      });
+    }
+  }
+};
 
 
 

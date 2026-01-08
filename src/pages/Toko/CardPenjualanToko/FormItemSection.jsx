@@ -1,14 +1,14 @@
 // ===================================================
 // FormItemSection.jsx — FINAL FIX 100% (STABIL)
-// Tahap 2 | INPUT BARANG | IMEI MANUAL + DROPDOWN + NON IMEI + BUNDLING
+// Tahap 2 | INPUT BARANG | IMEI + NON IMEI + BUNDLING
 // ===================================================
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
   listenMasterBarang,
   listenMasterKategoriBarang,
-  lockImeiRealtime,
   unlockImeiRealtime,
+  lockImeiRealtime,
 } from "../../../services/FirebaseService";
 import { ref, get } from "firebase/database";
 import { db } from "../../../firebase/FirebaseInit";
@@ -18,8 +18,6 @@ const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
 const isImeiKategori = (kat) =>
   KATEGORI_IMEI.includes((kat || "").toUpperCase());
 
-const normalize = (s = "") => String(s).trim().toUpperCase();
-
 export default function FormItemSection({
   value = [],
   onChange,
@@ -28,16 +26,11 @@ export default function FormItemSection({
   stockRealtime = {},
 }) {
   const items = useMemo(() => (Array.isArray(value) ? value : []), [value]);
-
   const safeOnChange = typeof onChange === "function" ? onChange : () => {};
 
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterKategori, setMasterKategori] = useState([]);
   const [allTransaksi, setAllTransaksi] = useState([]);
-  const [imeiInputMode, setImeiInputMode] = useState("select");
-  const [form, setForm] = useState({});
-
-  // "select" | "manual"
 
   /* ================= LOAD MASTER ================= */
   useEffect(() => {
@@ -49,7 +42,7 @@ export default function FormItemSection({
     };
   }, []);
 
-  /* ================= LOAD HISTORI TRANSAKSI ================= */
+  /* ================= LOAD TRANSAKSI ================= */
   useEffect(() => {
     const load = async () => {
       const snap = await get(ref(db, "toko"));
@@ -62,72 +55,35 @@ export default function FormItemSection({
     load();
   }, []);
 
-  /* ================= UNLOCK IMEI ON UNMOUNT ================= */
+  /* ================= UNLOCK IMEI ================= */
   useEffect(() => {
     return () => {
       items.forEach((it) => {
-        if (it.isImei) {
-          it.imeiList?.forEach((im) => unlockImeiRealtime(im));
-        }
+        it.imeiList?.forEach((im) => unlockImeiRealtime(im, tokoLogin));
       });
     };
     // eslint-disable-next-line
   }, []);
 
-  const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
-  const isImeiKategori = (kat) =>
-    KATEGORI_IMEI.includes((kat || "").toUpperCase());
-
+  /* ================= IMEI AVAILABLE ================= */
   const imeiAvailableList = useMemo(() => {
     const result = new Set();
-
-    // 🔥 SUMBER UTAMA: inventory toko
     const inv = stockRealtime?.inventory?.[tokoLogin];
     if (inv) {
       Object.entries(inv).forEach(([imei, v]) => {
-        if (v?.STATUS === "AVAILABLE") {
-          result.add(String(imei));
-        }
+        if (v?.STATUS === "AVAILABLE") result.add(String(imei));
       });
     }
-
     return Array.from(result);
   }, [stockRealtime, tokoLogin]);
 
-  /* ================= HITUNG STOK IMEI MILIK TOKO ================= */
-  /**
-   * IMEI VALID DIAMBIL LANGSUNG DARI DETAIL STOCK TOKO
-   * (SUMBER KEBENARAN)
-   */
-  const imeiValidList = useMemo(() => {
-    if (!tokoLogin || !Array.isArray(allTransaksi)) return [];
-
-    return allTransaksi
-      .filter(
-        (t) =>
-          t.STATUS === "Approved" &&
-          t.NAMA_TOKO === tokoLogin &&
-          t.IMEI &&
-          !["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)
-      )
-      .map((t) => String(t.IMEI).trim());
-  }, [allTransaksi, tokoLogin]);
-
-  const imeiOptions = useMemo(() => {
-    return imeiValidList.map((imei) => ({
-      value: imei,
-      label: imei,
-    }));
-  }, [imeiValidList]);
-
-  /* ================= UPDATE ITEM ================= */
+  /* ================= HELPERS ================= */
   const updateItem = (idx, patch) => {
     const next = [...items];
     next[idx] = { ...next[idx], ...patch };
     safeOnChange(next);
   };
 
-  /* ================= MEMO ================= */
   const kategoriList = useMemo(
     () => masterKategori.map((k) => k.namaKategori),
     [masterKategori]
@@ -147,167 +103,175 @@ export default function FormItemSection({
       (b) => b.kategoriBarang === kategori && (b.namaBrand || b.brand) === brand
     );
 
-  const totalPenjualan = useMemo(() => {
-    return items.reduce(
-      (sum, item) => sum + Number(item.qty || 0) * Number(item.hargaUnit || 0),
-      0
-    );
-  }, [items]);
-
-  useEffect(() => {
-    console.log("IMEI VALID LIST:", imeiValidList);
-  }, [imeiValidList]);
-
   /* ================= RENDER ================= */
   return (
     <div className={!allowManual ? "opacity-50 pointer-events-none" : ""}>
-      {items.map((item, idx) => (
-        <div
-          key={item.id}
-          className="border rounded-xl p-4 mb-4 bg-white space-y-3"
-        >
-          {/* KATEGORI */}
-          <select
-            className="w-full border rounded-lg p-2"
-            value={item.kategoriBarang}
-            onChange={(e) =>
-              updateItem(idx, {
-                kategoriBarang: e.target.value,
-                namaBrand: "",
-                namaBarang: "",
-                imeiList: [],
-                qty: 0,
-                isImei: isImeiKategori(e.target.value),
-                isBundling: false,
-                bundlingItems: [],
-              })
-            }
+      {items.map((item, idx) => {
+        const hargaAktif =
+          item.isImei && (!item.imeiList || item.imeiList.length === 0)
+            ? 0
+            : Number(item.hargaAktif || 0);
+
+        return (
+          <div
+            key={item.id}
+            className="border rounded-xl p-4 mb-4 bg-white space-y-3"
           >
-            <option value="">-- Pilih Kategori --</option>
-            {kategoriList.map((k) => (
-              <option key={k}>{k}</option>
-            ))}
-          </select>
+            {/* KATEGORI */}
+            <select
+              className="w-full border rounded-lg p-2"
+              value={item.kategoriBarang}
+              onChange={(e) =>
+                updateItem(idx, {
+                  kategoriBarang: e.target.value,
+                  namaBrand: "",
+                  namaBarang: "",
+                  imeiList: [],
+                  qty: 0,
+                  isImei: isImeiKategori(e.target.value),
+                })
+              }
+            >
+              <option value="">-- Pilih Kategori --</option>
+              {kategoriList.map((k) => (
+                <option key={k}>{k}</option>
+              ))}
+            </select>
 
-          {/* BRAND */}
-          <select
-            className="w-full border rounded-lg p-2"
-            disabled={!item.kategoriBarang}
-            value={item.namaBrand || ""}
-            onChange={(e) =>
-              updateItem(idx, {
-                namaBrand: e.target.value,
-                namaBarang: "",
-                imeiList: [],
-                qty: 0,
-              })
-            }
-          >
-            <option value="">-- Pilih Brand --</option>
-            {brandList(item.kategoriBarang).map((b) => (
-              <option key={b}>{b}</option>
-            ))}
-          </select>
+            {/* BRAND */}
+            <select
+              className="w-full border rounded-lg p-2"
+              disabled={!item.kategoriBarang}
+              value={item.namaBrand || ""}
+              onChange={(e) =>
+                updateItem(idx, {
+                  namaBrand: e.target.value,
+                  namaBarang: "",
+                  imeiList: [],
+                  qty: 0,
+                })
+              }
+            >
+              <option value="">-- Pilih Brand --</option>
+              {brandList(item.kategoriBarang).map((b) => (
+                <option key={b}>{b}</option>
+              ))}
+            </select>
 
-          {/* BARANG */}
-          <select
-            className="w-full border rounded-lg p-2"
-            disabled={!item.namaBrand}
-            value={item.namaBarang || ""}
-            onChange={(e) => {
-              const b = barangList(item.kategoriBarang, item.namaBrand).find(
-                (x) => x.namaBarang === e.target.value
-              );
-              if (!b) return;
+            {/* BARANG */}
+            <select
+              className="w-full border rounded-lg p-2"
+              disabled={!item.namaBrand}
+              value={item.namaBarang || ""}
+              onChange={(e) => {
+                const b = barangList(item.kategoriBarang, item.namaBrand).find(
+                  (x) => x.namaBarang === e.target.value
+                );
+                if (!b) return;
 
-              const isBundlingBarang =
-                ["MOTOR LISTRIK", "SEPEDA LISTRIK"].includes(
-                  b.kategoriBarang
-                ) &&
-                (b.IS_BUNDLING === true || b.isBundling === true);
+                updateItem(idx, {
+                  namaBarang: b.namaBarang,
+                  kategoriBarang: b.kategoriBarang,
+                  isImei: isImeiKategori(b.kategoriBarang),
+                  hargaMap: b.harga || {},
+                  skemaHarga: "srp",
+                  hargaAktif: Number(b.harga?.srp || 0),
+                  qty: isImeiKategori(b.kategoriBarang) ? 0 : 1,
+                });
+              }}
+            >
+              <option value="">-- Pilih Barang --</option>
+              {barangList(item.kategoriBarang, item.namaBrand).map((b) => (
+                <option key={b.id}>{b.namaBarang}</option>
+              ))}
+            </select>
 
-              updateItem(idx, {
-                namaBarang: b.namaBarang,
-                kategoriBarang: b.kategoriBarang,
-                sku: b.sku || "",
-                isImei: isImeiKategori(b.kategoriBarang),
+            {/* SKEMA HARGA */}
+            <select
+              className="w-full border rounded p-2"
+              value={item.skemaHarga}
+              onChange={(e) => {
+                const skema = e.target.value;
+                updateItem(idx, {
+                  skemaHarga: skema,
+                  hargaAktif:
+                    skema === "reseller"
+                      ? item.hargaAktif
+                      : item.hargaMap?.[skema] || 0,
+                });
+              }}
+            >
+              <option value="srp">Harga SRP</option>
+              <option value="grosir">Harga Grosir</option>
+              <option value="reseller">Harga Reseller</option>
+            </select>
 
-                hargaMap: {
-                  srp: Number(b.harga?.srp || 0),
-                  grosir: Number(b.harga?.grosir || 0),
-                  reseller: Number(b.harga?.reseller || 0),
-                },
-
-                skemaHarga: "srp",
-                hargaUnit: Number(b.harga?.srp || 0),
-                qty: isImeiKategori(b.kategoriBarang) ? 0 : 1,
-
-                isBundling: isBundlingBarang,
-                bundlingItems: isBundlingBarang ? b.BUNDLING_ITEMS || [] : [],
-              });
-            }}
-          >
-            <option value="">-- Pilih Barang --</option>
-            {barangList(item.kategoriBarang, item.namaBrand).map((b) => (
-              <option key={b.id}>{b.namaBarang}</option>
-            ))}
-          </select>
-
-          {/* INFO BUNDLING */}
-          {item.isBundling && item.bundlingItems?.length > 0 && (
-            <div className="bg-yellow-50 border rounded p-2 text-xs">
-              <b>📦 Bundling Otomatis:</b>
-              <ul className="list-disc pl-4">
-                {item.bundlingItems.map((x, i) => (
-                  <li key={i}>{x.namaBarang}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {item.isImei && (
-            <div>
+            {item.skemaHarga === "reseller" && (
               <input
-                list={`imei-list-${idx}`}
+                type="number"
+                className="w-full border rounded p-2"
+                placeholder="Input harga reseller"
+                value={item.hargaAktif}
+                onChange={(e) =>
+                  updateItem(idx, {
+                    hargaAktif: Number(e.target.value || 0),
+                  })
+                }
+              />
+            )}
+
+            {/* IMEI */}
+            {item.isImei && (
+              <input
+                list={`imei-${idx}`}
                 className="border rounded px-2 py-1 w-full"
-                placeholder="Ketik / pilih IMEI"
+                placeholder="Pilih IMEI"
                 value={item.imei || ""}
                 onChange={(e) => {
                   const imei = e.target.value.trim();
+                
+                  // unlock IMEI lama
+                  item.imeiList?.forEach((old) => {
+                    if (old !== imei) unlockImeiRealtime(old, tokoLogin);
+                  });
+                
+                  if (imei) lockImeiRealtime(imei, tokoLogin);
+                
                   updateItem(idx, {
                     imei,
                     imeiList: imei ? [imei] : [],
                     qty: imei ? 1 : 0,
                   });
                 }}
+                
               />
+            )}
 
-              <datalist id={`imei-list-${idx}`}>
-                {imeiAvailableList.map((im) => (
-                  <option key={im} value={im} />
-                ))}
-              </datalist>
+            <datalist id={`imei-${idx}`}>
+              {imeiAvailableList.map((im) => (
+                <option key={im} value={im} />
+              ))}
+            </datalist>
+
+            {!item.isImei && (
+              <input
+                type="number"
+                min={1}
+                value={item.qty || 1}
+                onChange={(e) =>
+                  updateItem(idx, { qty: Number(e.target.value || 1) })
+                }
+                className="w-full border rounded-lg px-2 py-1 text-sm"
+              />
+            )}
+
+            <div className="text-right font-bold text-green-700">
+              TOTAL PENJUALAN: Rp{" "}
+              {(item.qty * hargaAktif).toLocaleString("id-ID")}
             </div>
-          )}
-
-          {/* QTY NON IMEI */}
-          {!item.isImei && (
-            <input
-              type="number"
-              min={1}
-              value={item.qty || 1}
-              onChange={(e) =>
-                updateItem(idx, { qty: Number(e.target.value || 1) })
-              }
-              className="w-full border rounded-lg px-2 py-1 text-sm"
-            />
-          )}
-
-          <div className="text-right font-bold text-green-700">
-            TOTAL PENJUALAN: Rp {totalPenjualan.toLocaleString("id-ID")}
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       <button
         className="btn btn-outline w-full"
@@ -322,10 +286,8 @@ export default function FormItemSection({
               namaBarang: "",
               imeiList: [],
               qty: 0,
-              hargaUnit: 0,
+              hargaAktif: 0,
               isImei: false,
-              isBundling: false,
-              bundlingItems: [],
             },
           ])
         }

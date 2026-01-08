@@ -388,6 +388,23 @@ const Sidebar = ({ role, toko, onLogout }) => {
                     <span className="ml-2">Laporan Keuangan</span>
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    to="/laporan-summary-transfer"
+                    className="flex items-center p-2 hover:bg-blue-500"
+                  >
+                    📦 <span className="ml-2">Summary Transfer Barang</span>
+                  </Link>
+                </li>
+
+                <li>
+                  <Link
+                    to="/laporan-summary-pembelian"
+                    className="flex items-center p-2 hover:bg-blue-500"
+                  >
+                    🧾 <span className="ml-2">Summary Pembelian</span>
+                  </Link>
+                </li>
               </ul>
             )}
 
@@ -611,7 +628,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
             <Link
               to="/stok-opname"
-                state={{
+              state={{
                 onlyMyToko: true,
                 tokoId: picTokoId,
               }}

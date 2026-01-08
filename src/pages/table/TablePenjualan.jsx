@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   listenPenjualan,
   voidTransaksiPenjualan,
+  refundRestorePenjualan,
 } from "../../services/FirebaseService";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -35,8 +36,6 @@ export default function TablePenjualan() {
     }
   }, []);
 
-  
-
   const isSuperAdmin =
     userLogin?.role === "superadmin" || userLogin?.role === "admin";
 
@@ -48,77 +47,72 @@ export default function TablePenjualan() {
     return () => unsub && unsub();
   }, []);
 
- /* ================= FLATTEN DATA ================= */
- const tableRows = useMemo(() => {
-  const result = [];
+  /* ================= FLATTEN DATA ================= */
+  const tableRows = useMemo(() => {
+    const result = [];
 
-  rows.forEach((trx) => {
-    const items = Array.isArray(trx.items) ? trx.items : [];
+    rows.forEach((trx) => {
+      const items = Array.isArray(trx.items) ? trx.items : [];
 
-    items.forEach((item) => {
-      result.push({
-        id: trx.id,
-        tanggal: trx.tanggal || trx.createdAt,
-        invoice: trx.invoice,
-        toko: trx.toko || "-",
+      items.forEach((item) => {
+        result.push({
+          id: trx.id,
+          tanggal: trx.tanggal || trx.createdAt,
+          invoice: trx.invoice,
+          toko: trx.toko || "-",
 
-        pelanggan: trx.user?.namaPelanggan || "-",
-        telp: trx.user?.noTlpPelanggan || "-",
-        sales: trx.user?.namaSales || "-",
+          pelanggan: trx.user?.namaPelanggan || "-",
+          telp: trx.user?.noTlpPelanggan || "-",
+          sales: trx.user?.namaSales || "-",
 
-        kategoriBarang: item.kategoriBarang || "-",
-        namaBrand: item.namaBrand || "-",
-        namaBarang: item.namaBarang || "-",
+          kategoriBarang: item.kategoriBarang || "-",
+          namaBrand: item.namaBrand || "-",
+          namaBarang: item.namaBarang || "-",
 
-        bundling: Array.isArray(item.bundlingItems)
-          ? item.bundlingItems.map((b) => b.namaBarang).join(", ")
-          : "-",
+          bundling: Array.isArray(item.bundlingItems)
+            ? item.bundlingItems.map((b) => b.namaBarang).join(", ")
+            : "-",
 
-        imei: Array.isArray(item.imeiList)
-          ? item.imeiList.join(", ")
-          : "-",
+          imei: Array.isArray(item.imeiList) ? item.imeiList.join(", ") : "-",
 
-        qty: Number(item.qty || 0),
+          qty: Number(item.qty || 0),
 
-        statusBayar: trx.payment?.status || "-",
-        namaMdr: trx.payment?.namaMdr || "-",
-        nominalMdr: trx.payment?.nominalMdr || 0,
-        tenor: trx.payment?.tenor || "-",
-        cicilan: trx.payment?.cicilan || 0,
-        grandTotal: trx.payment?.grandTotal || 0,
+          statusBayar: trx.payment?.status || "-",
+          namaMdr: trx.payment?.namaMdr || "-",
+          nominalMdr: trx.payment?.nominalMdr || 0,
+          tenor: trx.payment?.tenor || "-",
+          cicilan: trx.payment?.cicilan || 0,
+          grandTotal: trx.payment?.grandTotal || 0,
 
-        status: trx.statusPembayaran || "OK",
+          status: trx.statusPembayaran || "OK",
+        });
       });
     });
-  });
 
-  return result;
-}, [rows]);
+    return result;
+  }, [rows]);
 
-
-
-/* ================= PAGINATION ================= */
-const pageCount = Math.ceil(tableRows.length / pageSize);
+  /* ================= PAGINATION ================= */
+  const pageCount = Math.ceil(tableRows.length / pageSize);
 
   const pagedData = useMemo(() => {
     const start = (page - 1) * pageSize;
     return tableRows.slice(start, start + pageSize);
   }, [tableRows, page]);
 
- /* ================= ACTION ================= */
- const handleVoid = async (row) => {
-  if (!isSuperAdmin) return;
-  if (!window.confirm(`VOID Invoice ${row.invoice}?`)) return;
+  /* ================= ACTION ================= */
+  const handleVoid = async (row) => {
+    if (!isSuperAdmin) return;
+    if (!window.confirm(`VOID Invoice ${row.invoice}?`)) return;
 
-  await voidTransaksiPenjualan(row.id);
-  alert("✅ Transaksi berhasil di VOID");
-};
+    await voidTransaksiPenjualan(row.id);
+    alert("✅ Transaksi berhasil di VOID");
+  };
 
-
-const handleEdit = (row) => {
-  if (!isSuperAdmin) return;
-  alert(`EDIT Invoice ${row.invoice} (siap diarahkan ke form edit)`);
-};
+  const handleEdit = (row) => {
+    if (!isSuperAdmin) return;
+    alert(`EDIT Invoice ${row.invoice} (siap diarahkan ke form edit)`);
+  };
 
   const exportPDF = () => {
     const doc = new jsPDF("l", "mm", "a4");
@@ -157,8 +151,22 @@ const handleEdit = (row) => {
     doc.save(`Laporan_Penjualan_${Date.now()}.pdf`);
   };
 
-   /* ================= EXPORT EXCEL ================= */
-   const exportExcel = () => {
+  const handleRefund = async (row) => {
+    if (!isSuperAdmin) return;
+  
+    if (!window.confirm(`Refund transaksi ${row.invoice}?`)) return;
+  
+    try {
+      await refundRestorePenjualan(row);
+      alert("✅ Refund berhasil & stok dikembalikan");
+    } catch (e) {
+      alert("❌ Gagal refund");
+    }
+  };
+  
+
+  /* ================= EXPORT EXCEL ================= */
+  const exportExcel = () => {
     const data = tableRows.map((r, i) => ({
       No: i + 1,
       Tanggal: new Date(r.tanggal).toLocaleDateString("id-ID"),
@@ -191,12 +199,8 @@ const handleEdit = (row) => {
       type: "array",
     });
 
-    saveAs(
-      new Blob([excelBuffer]),
-      `Laporan_Penjualan_${Date.now()}.xlsx`
-    );
+    saveAs(new Blob([excelBuffer]), `Laporan_Penjualan_${Date.now()}.xlsx`);
   };
-
 
   /* ================= RENDER ================= */
   return (
@@ -204,20 +208,20 @@ const handleEdit = (row) => {
       <h2 className="text-lg font-bold mb-4">📊 TABEL PENJUALAN</h2>
 
       <div className="flex gap-2">
-          <button
-            onClick={exportExcel}
-            className="px-3 py-1 bg-green-600 text-white rounded"
-          >
-            Export Excel
-          </button>
+        <button
+          onClick={exportExcel}
+          className="px-3 py-1 bg-green-600 text-white rounded"
+        >
+          Export Excel
+        </button>
 
-          <button
-            onClick={exportPDF}
-            className="px-3 py-1 bg-red-600 text-white rounded"
-          >
-            Export PDF
-          </button>
-        </div>
+        <button
+          onClick={exportPDF}
+          className="px-3 py-1 bg-red-600 text-white rounded"
+        >
+          Export PDF
+        </button>
+      </div>
 
       {/* SCROLL HORIZONTAL */}
       <div className="overflow-x-auto">
@@ -298,8 +302,14 @@ const handleEdit = (row) => {
                 </td>
 
                 <td className="text-center space-x-2">
-                  {isSuperAdmin ? (
+                {isSuperAdmin ? (
                     <>
+                      <button
+                        className="px-2 py-1 bg-red-600 text-white rounded"
+                        onClick={() => handleRefund(row)}
+                      >
+                        Refund
+                      </button>
                       <button
                         onClick={() => handleEdit(row)}
                         className="text-blue-600 hover:underline"
