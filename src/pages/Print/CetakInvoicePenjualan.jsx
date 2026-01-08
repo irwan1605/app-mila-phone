@@ -129,9 +129,7 @@ export default function CetakInvoicePenjualan({ transaksi }) {
               <tr key={idx}>
                 <td className="border p-2 text-center">{idx + 1}</td>
                 <td className="border p-2">{it.namaBarang}</td>
-                <td className="border p-2">
-                  {(it.imeiList || []).join(", ")}
-                </td>
+                <td className="border p-2">{(it.imeiList || []).join(", ")}</td>
                 <td className="border p-2 text-center">{it.qty}</td>
                 <td className="border p-2 text-right">
                   {rupiah(it.hargaUnit)}
@@ -166,6 +164,43 @@ export default function CetakInvoicePenjualan({ transaksi }) {
           <p className="text-lg font-bold mt-2">
             GRAND TOTAL : {rupiah(payment?.grandTotal)}
           </p>
+        </div>
+
+        <hr className="my-3" />
+
+        <div className="text-sm space-y-1">
+          <div className="flex justify-between">
+            <span>Grand Total</span>
+            <span>Rp {payment.grandTotal.toLocaleString("id-ID")}</span>
+          </div>
+
+          {/* SPLIT PAYMENT */}
+          {payment.splitPayment && (
+            <>
+              <div className="font-semibold mt-2">Detail Pembayaran</div>
+              {payment.splitPayment.map((p, i) => (
+                <div key={i} className="flex justify-between text-xs">
+                  <span>
+                    {p.metode}
+                    {p.bankNama ? ` - ${p.bankNama}` : ""}
+                  </span>
+                  <span>
+                    Rp {Number(p.nominal || 0).toLocaleString("id-ID")}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* KEMBALIAN */}
+          {payment.kembalian > 0 && (
+            <div className="flex justify-between font-bold text-green-700 mt-2">
+              <span>Uang Kembalian</span>
+              <span>
+                Rp {Number(payment.kembalian).toLocaleString("id-ID")}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* FOOTER */}

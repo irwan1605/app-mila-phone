@@ -34,7 +34,8 @@ import {
 import {
   listenAllTransaksi,
   listenStockAll,
-  forceDeleteTransaksi, // ✅ ambil stok MASTER BARANG (CILANGKAP PUSAT)
+  forceDeleteTransaksi,
+  listenPenjualanRealtime , // ✅ ambil stok MASTER BARANG (CILANGKAP PUSAT)
 } from "../services/FirebaseService";
 
 export default function Dashboard() {
@@ -81,8 +82,18 @@ export default function Dashboard() {
   const [searchImei, setSearchImei] = useState("");
   const [stockData, setStockData] = useState({});
   const [transaksi, setTransaksi] = useState([]);
+  const [penjualan, setPenjualan] = useState([]);
 
   const [stockAll, setStockAll] = useState({});
+
+  useEffect(() => {
+    const unsub = listenPenjualanRealtime((rows) => {
+      setPenjualan(Array.isArray(rows) ? rows : []);
+    });
+  
+    return () => unsub && unsub();
+  }, []);
+  
 
   useEffect(() => {
     const unsub = listenStockAll((s = {}) => {
@@ -181,7 +192,14 @@ export default function Dashboard() {
     return () => unsub && unsub();
   }, []);
 
-    // ==========================
+  const totalHariIni = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return penjualan
+      .filter((p) => p.tanggal === today)
+      .reduce((s, p) => s + Number(p.payment.grandTotal || 0), 0);
+  }, [penjualan]);
+
+  // ==========================
   // STOCK BY TOKO (SINGLE SOURCE OF TRUTH)
   // ==========================
   const stokByToko = useMemo(() => {
@@ -217,7 +235,6 @@ export default function Dashboard() {
 
     return map;
   }, [transaksi, stockData]);
-  
 
   // =======================================================
   // FILTERING (UNTUK CHART & INFO)
@@ -292,7 +309,6 @@ export default function Dashboard() {
       return sum + Object.values(t.kategori).reduce((s, v) => s + v, 0);
     }, 0);
   }, [stokByToko]);
-  
 
   const totalPenjualan = useMemo(() => {
     return filteredData.filter((x) => x.STATUS === "Approved").length;
@@ -451,6 +467,20 @@ export default function Dashboard() {
           <p className="text-xs opacity-90 mt-1">
             Melakukan transaksi penjualan langsung dari stok CILANGKAP PUSAT.
           </p>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white p-4 rounded shadow">
+            <div className="text-xs">Penjualan Hari Ini</div>
+            <div className="text-xl font-bold">
+              Rp {totalHariIni.toLocaleString("id-ID")}
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded shadow">
+            <div className="text-xs">Total Transaksi</div>
+            <div className="text-xl font-bold">{penjualan.length}</div>
+          </div>
         </div>
 
         <div

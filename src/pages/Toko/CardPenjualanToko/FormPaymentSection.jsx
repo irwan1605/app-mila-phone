@@ -20,8 +20,7 @@ export default function FormPaymentSection({
   const [masterMdr, setMasterMdr] = useState([]);
   const [masterTenor, setMasterTenor] = useState([]);
   const [masterBank, setMasterBank] = useState([]);
-
-  /* ================= SPLIT PAYMENT ================= */
+  
   const [paymentSplit, setPaymentSplit] = useState({
     enabled: false,
     detail: [
@@ -29,6 +28,8 @@ export default function FormPaymentSection({
       { metode: "DEBIT", bankId: "", bankNama: "", nominal: 0 },
     ],
   });
+  
+  const [uangDibayar, setUangDibayar] = useState(0);
 
   /* ================= LOAD MASTER ================= */
   useEffect(() => {
@@ -62,6 +63,8 @@ export default function FormPaymentSection({
     }),
     [value]
   );
+
+  
 
   /* ================= HITUNG MDR ================= */
   const nominalMdr = useMemo(() => {
@@ -97,35 +100,97 @@ export default function FormPaymentSection({
     return Math.ceil(grandTotal / Number(paymentSafe.tenor));
   }, [grandTotal, paymentSafe.status, paymentSafe.tenor]);
 
-  /* ================= VALIDASI SPLIT ================= */
-  const isSplitValid = useMemo(() => {
-    if (!paymentSplit.enabled) return true;
+  const kembalian = useMemo(() => {
+    if (paymentSafe.paymentMethod !== "CASH") return 0;
+    return Math.max(Number(uangDibayar) - grandTotal, 0);
+  }, [uangDibayar, grandTotal, paymentSafe.paymentMethod]);
 
-    const totalSplit = paymentSplit.detail.reduce(
-      (s, x) => s + Number(x.nominal || 0),
-      0
-    );
 
-    if (totalSplit !== grandTotal) return false;
-
-    return paymentSplit.detail.every((p) => p.metode === "CASH" || p.bankId);
-  }, [paymentSplit, grandTotal]);
 
   /* ================= SYNC KE PARENT ================= */
-  useEffect(() => {
-    onChange({
-      ...paymentSafe,
-      nominalMdr,
-      grandTotal,
-      cicilan: cicilanPerBulan,
-      splitPayment: paymentSplit.enabled ? paymentSplit.detail : null,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nominalMdr, grandTotal, cicilanPerBulan, paymentSplit]);
+ /* ================= SYNC KE PARENT ================= */
+useEffect(() => {
+  onChange({
+    ...paymentSafe,
+    nominalMdr,
+    grandTotal,
+    cicilan: cicilanPerBulan,
+    splitPayment: paymentSplit.enabled ? paymentSplit.detail : null,
+
+    // 🔥 TAMBAHAN BARU
+    uangDibayar,
+    kembalian,
+  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  nominalMdr,
+  grandTotal,
+  cicilanPerBulan,
+  paymentSplit,
+  uangDibayar,
+  kembalian,
+]);
+
+/* ================= TOTAL SPLIT ================= */
+const totalSplit = useMemo(() => {
+  if (!paymentSplit.enabled) return 0;
+  return paymentSplit.detail.reduce(
+    (s, x) => s + Number(x.nominal || 0),
+    0
+  );
+}, [paymentSplit]);
+
+const kembalianSplit = useMemo(() => {
+  if (!paymentSplit.enabled) return 0;
+  return Math.max(totalSplit - grandTotal, 0);
+}, [totalSplit, grandTotal, paymentSplit.enabled]);
+
+/* ================= VALIDASI SPLIT ================= */
+const isSplitValid = useMemo(() => {
+  if (!paymentSplit.enabled) return true;
+
+  if (totalSplit < grandTotal) return false;
+
+  return paymentSplit.detail.every(
+    (p) => p.metode === "CASH" || p.bankId
+  );
+}, [paymentSplit, totalSplit, grandTotal]);
+
+
+  /* ================= SYNC KE PARENT ================= */
+useEffect(() => {
+  onChange({
+    ...paymentSafe,
+    nominalMdr,
+    grandTotal,
+    cicilan: cicilanPerBulan,
+
+    // SPLIT PAYMENT (JIKA AKTIF)
+    splitPayment: paymentSplit.enabled ? paymentSplit.detail : null,
+
+    // CASH NORMAL
+    uangDibayar: paymentSplit.enabled ? 0 : uangDibayar,
+    kembalian: paymentSplit.enabled ? kembalianSplit : kembalian,
+  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [
+  nominalMdr,
+  grandTotal,
+  cicilanPerBulan,
+  paymentSplit,
+  uangDibayar,
+  kembalian,
+  kembalianSplit,
+]);
+
+
 
   /* ================= RENDER (UI TIDAK DIUBAH) ================= */
   return (
-    <fieldset disabled={disabled} className={disabled ? "opacity-50" : ""}>
+    <fieldset
+    disabled={disabled || !isSplitValid}
+    className={disabled || !isSplitValid ? "opacity-50" : ""}
+  >
       <div className="space-y-3 text-sm">
         {/* STATUS */}
         <div>
@@ -211,7 +276,7 @@ export default function FormPaymentSection({
 
               <input
                 type="number"
-                 className="w-full border rounded px-2 py-1"
+                className="w-full border rounded px-2 py-1"
                 value={p.nominal}
                 onChange={(e) => {
                   const next = [...paymentSplit.detail];
@@ -221,6 +286,12 @@ export default function FormPaymentSection({
               />
             </div>
           ))}
+
+        {paymentSplit.enabled && kembalianSplit > 0 && (
+          <div className="text-right font-bold text-green-700">
+            UANG KEMBALIAN: Rp {kembalianSplit.toLocaleString("id-ID")}
+          </div>
+        )}
 
         {/* KREDIT DETAIL */}
         {paymentSafe.paymentMethod === "KREDIT" && (
@@ -315,6 +386,24 @@ export default function FormPaymentSection({
               </div>
             )}
           </>
+        )}
+
+        {!paymentSplit.enabled && paymentSafe.paymentMethod === "CASH" && (
+          <div>
+            <label className="font-semibold">Uang Dibayarkan</label>
+            <input
+              type="number"
+              className="w-full border rounded px-2 py-1"
+              value={uangDibayar}
+              onChange={(e) => setUangDibayar(Number(e.target.value || 0))}
+            />
+          </div>
+        )}
+
+        {kembalian > 0 && (
+          <div className="text-right text-green-700 font-bold">
+            UANG KEMBALIAN: Rp {kembalian.toLocaleString("id-ID")}
+          </div>
         )}
 
         {/* GRAND TOTAL */}

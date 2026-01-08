@@ -2258,6 +2258,38 @@ export const lockImeiRealtime = async (imei, toko, user = {}) => {
   });
 };
 
+export const logImeiAudit = ({
+  imei,
+  aksi,
+  toko,
+  tokoId,
+  invoice,
+  user,
+}) => {
+  return push(ref(db, "imeiAuditLog"), {
+    imei,
+    aksi,
+    toko,
+    tokoId,
+    invoice: invoice || "",
+    user: user || "",
+    timestamp: Date.now(),
+  });
+};
+
+export const listenPenjualanRealtime = (callback) => {
+  return onValue(ref(db, "penjualan"), (snap) => {
+    if (!snap.exists()) return callback([]);
+    const data = [];
+    snap.forEach((toko) => {
+      toko.forEach((trx) => {
+        data.push(trx.val());
+      });
+    });
+    callback(data);
+  });
+};
+
 
 // UNLOCK IMEI
 export const unlockImeiRealtime = async (imei, toko) => {
