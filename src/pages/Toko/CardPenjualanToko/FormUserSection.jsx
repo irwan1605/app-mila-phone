@@ -8,6 +8,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   listenMasterToko,
   listenMasterSales,
+  listenKaryawan,
 } from "../../../services/FirebaseService";
 
 export default function FormUserSection({ value = {}, onChange }) {
@@ -15,8 +16,21 @@ export default function FormUserSection({ value = {}, onChange }) {
 
   const [masterToko, setMasterToko] = useState([]);
   const [masterSales, setMasterSales] = useState([]);
+  const [masterKaryawan, setMasterKaryawan] = useState([]);
 
   /* ================= LISTENER REALTIME ================= */
+
+  useEffect(() => {
+    const unsubToko = listenMasterToko(setMasterToko);
+    const unsubSales = listenMasterSales(setMasterSales);
+    const unsubKar = listenKaryawan(setMasterKaryawan);
+
+    return () => {
+      unsubToko && unsubToko();
+      unsubSales && unsubSales();
+      unsubKar && unsubKar();
+    };
+  }, []);
 
   useEffect(() => {
     const unsubToko = listenMasterToko((rows) => {
@@ -35,9 +49,9 @@ export default function FormUserSection({ value = {}, onChange }) {
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("userLogin") || "{}");
-  
+
     if (user?.role === "pic_toko" && user?.tokoId) {
-      const toko = masterToko.find(t => t.id === user.tokoId);
+      const toko = masterToko.find((t) => t.id === user.tokoId);
       if (toko) {
         onChange({
           ...value,
@@ -47,7 +61,7 @@ export default function FormUserSection({ value = {}, onChange }) {
       }
     }
   }, [masterToko]);
-  
+
   // =================================================
   // SAFE FORM
   // =================================================
@@ -58,13 +72,10 @@ export default function FormUserSection({ value = {}, onChange }) {
       namaPelanggan: value?.namaPelanggan || "",
       idPelanggan: value?.idPelanggan || "",
       noTlpPelanggan: value?.noTlpPelanggan || "",
-
-      // 🔥 PENTING
       namaTokoId: value?.namaTokoId || "",
       namaToko: value?.namaToko || "",
-
       namaSales: value?.namaSales || "",
-      salesTitipan: value?.salesTitipan || "",
+      salesHandle: value?.salesHandle || "",
     }),
     [value]
   );
@@ -73,25 +84,36 @@ export default function FormUserSection({ value = {}, onChange }) {
     onChange({ ...form, ...patch });
   };
 
+  /* ================= FORMAT TELP ================= */
 
- // =================================================
-  // FILTER SALES (OPSIONAL – TIDAK MEMBLOKIR)
-  // =================================================
-  const salesList = useMemo(() => {
+  const formatPhone = (val) => {
+    const num = val.replace(/\D/g, "").slice(0, 13);
+
+    if (num.length <= 4) return num;
+    if (num.length <= 8) return num.replace(/(\d{4})(\d+)/, "$1-$2");
+
+    return num.replace(/(\d{4})(\d{4})(\d+)/, "$1-$2-$3");
+  };
+
+  /* ================= FILTER DATA ================= */
+
+  // SALES = hanya yg bertugas di toko + jabatan sales / leader
+  const salesByToko = useMemo(() => {
     if (!form.namaToko) return [];
-    return masterSales.filter(
-      (s) => s?.toko === form.namaToko || !s?.toko
-    );
-  }, [masterSales, form.namaToko]);
 
-  const phone = value?.noTlpPelanggan ?? "";
-
-  const salesTitipanList = useMemo(() => {
-    if (!form.namaToko) return [];
-    return masterSales.filter(
-      (s) => s?.toko === form.namaToko && s?.jenis === "SALES_TITIPAN"
+    return masterKaryawan.filter(
+      (k) =>
+        k?.TOKO_BERTUGAS === form.namaToko &&
+        String(k?.JABATAN || "")
+          .toLowerCase()
+          .includes("s")
     );
-  }, [masterSales, form.namaToko]);
+  }, [masterKaryawan, form.namaToko]);
+
+  // SALES HANDLE = semua karyawan
+  const salesHandleList = useMemo(() => {
+    return masterKaryawan;
+  }, [masterKaryawan]);
 
   /* ================= RENDER ================= */
 
@@ -140,24 +162,24 @@ export default function FormUserSection({ value = {}, onChange }) {
         />
       </div>
 
+      {/* NO TELP */}
       <div>
         <label className="text-xs font-semibold">No Tlp Pelanggan</label>
         <input
           type="tel"
           className="w-full border rounded-lg px-2 py-1 text-sm"
-          placeholder="08xxxxxxxxxx"
-          value={phone}
+          placeholder="0857-8282-8928"
+          value={form.noTlpPelanggan}
           onChange={(e) =>
-            onChange({
-              ...value,
-              noTlpPelanggan: e.target.value,
+            update({
+              noTlpPelanggan: formatPhone(e.target.value),
             })
           }
         />
       </div>
 
-     {/* ================= TOKO (FIX UTAMA) ================= */}
-     <div>
+      {/* TOKO */}
+      <div>
         <label className="text-xs font-semibold">Nama Toko</label>
         <select
           className="w-full border rounded px-2 py-1"
@@ -167,10 +189,10 @@ export default function FormUserSection({ value = {}, onChange }) {
             const toko = masterToko.find((t) => t.id === tokoId);
 
             update({
-              namaTokoId: tokoId,         // 🔥 DIPAKAI FIREBASE
-              namaToko: toko?.nama || "", // 🔥 UNTUK DISPLAY
+              namaTokoId: tokoId,
+              namaToko: toko?.nama || "",
               namaSales: "",
-              salesTitipan: "",
+              salesHandle: "",
             });
           }}
         >
@@ -183,40 +205,43 @@ export default function FormUserSection({ value = {}, onChange }) {
         </select>
       </div>
 
-      {/* NAMA SALES */}
+      {/* ================= NAMA SALES ================= */}
       <div>
         <label className="text-xs font-semibold">Nama Sales</label>
-        <select
-          className="w-full border rounded px-2 py-1 text-black"
+
+        <input
+          list="list-sales"
+          className="w-full border rounded px-2 py-1"
           disabled={!form.namaToko}
+          placeholder="Pilih / ketik nama sales"
           value={form.namaSales}
           onChange={(e) => update({ namaSales: e.target.value })}
-        >
-          <option value="">-- Pilih Sales --</option>
-          {masterSales.map((s) => (
-            <option key={s.id} value={s.namaSales}>
-              {s.namaSales}
-            </option>
+        />
+
+        <datalist id="list-sales">
+          {salesByToko.map((s) => (
+            <option key={s.id} value={s.NAMA} />
           ))}
-        </select>
+        </datalist>
       </div>
 
-      {/* SALES TITIPAN */}
+      {/* ================= SALES HANDLE ================= */}
       <div>
-        <label className="text-xs font-semibold">Sales Titipan</label>
-        <select
-          className="w-full border rounded px-2 py-1 text-black"
-          disabled={!form.namaToko}
-          value={form.salesTitipan}
-          onChange={(e) => update({ salesTitipan: e.target.value })}
-        >
-          <option value="">-- Pilih Sales Titipan --</option>
-          {masterSales.map((s) => (
-            <option key={s.id} value={s.namaSales}>
-              {s.namaSales}
-            </option>
+        <label className="text-xs font-semibold">Sales Handle</label>
+
+        <input
+          list="list-handle"
+          className="w-full border rounded px-2 py-1"
+          placeholder="Pilih / ketik nama handle"
+          value={form.salesHandle}
+          onChange={(e) => update({ salesHandle: e.target.value })}
+        />
+
+        <datalist id="list-handle">
+          {salesHandleList.map((s) => (
+            <option key={s.id} value={s.NAMA} />
           ))}
-        </select>
+        </datalist>
       </div>
 
       <p className="text-[11px] text-gray-500">
