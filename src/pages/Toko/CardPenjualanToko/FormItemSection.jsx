@@ -31,6 +31,8 @@ export default function FormItemSection({
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterKategori, setMasterKategori] = useState([]);
   const [allTransaksi, setAllTransaksi] = useState([]);
+  const [imeiKeyword, setImeiKeyword] = useState("");
+
 
   /* ================= LOAD MASTER ================= */
   useEffect(() => {
@@ -57,41 +59,56 @@ export default function FormItemSection({
 
   /* ================= UNLOCK IMEI ================= */
   useEffect(() => {
-    return () => {
-      items.forEach((it) => {
-        it.imeiList?.forEach((im) => unlockImeiRealtime(im, tokoLogin));
+    if (!tokoLogin) return;
+  
+    const load = async () => {
+      const snap = await get(ref(db, "toko"));
+      const rows = [];
+  
+      snap.forEach((tokoSnap) => {
+        const tokoData = tokoSnap.val();
+        const transaksi = tokoData.transaksi || {};
+  
+        Object.values(transaksi).forEach((trx) => {
+          rows.push({
+            ...trx,
+            tokoId: tokoSnap.key
+          });
+        });
       });
+  
+      setAllTransaksi(rows);
     };
-    // eslint-disable-next-line
-  }, []);
+  
+    load();
+  }, [tokoLogin]);
+  
 
   /* ================= IMEI AVAILABLE ================= */
   const imeiAvailableList = useMemo(() => {
     if (!tokoLogin) return [];
-  
+
     // 1️⃣ Ambil IMEI dari transaksi PEMBELIAN Approved
     const imeiFromPembelian = allTransaksi
-      .filter(
-        (t) =>
-          t.NAMA_TOKO === tokoLogin &&
-          t.STATUS === "Approved" &&
-          t.PAYMENT_METODE === "PEMBELIAN" &&
-          t.IMEI
-      )
-      .map((t) => String(t.IMEI));
+    .filter(
+      (t) =>
+        t.NAMA_TOKO?.toUpperCase() === tokoLogin?.toUpperCase() &&
+        t.STATUS === "Approved" &&
+        t.PAYMENT_METODE === "PEMBELIAN" &&
+        t.IMEI
+    )
+    .map((t) => String(t.IMEI));
   
+
     // 2️⃣ IMEI yang sedang dipakai di form (anti duplikat)
-    const imeiDipakai = new Set(
-      items.flatMap((i) => i.imeiList || [])
-    );
-  
+    const imeiDipakai = new Set(items.flatMap((i) => i.imeiList || []));
+
     return imeiFromPembelian.filter(
       (imei) =>
-        !imeiDipakai.has(imei) &&                 // ❌ tidak duplikat
-        !stockRealtime?.soldImei?.[imei]           // ❌ belum terjual
+        !imeiDipakai.has(imei) && // ❌ tidak duplikat
+        !stockRealtime?.soldImei?.[imei] // ❌ belum terjual
     );
   }, [allTransaksi, tokoLogin, items, stockRealtime]);
-  
 
   /* ================= HELPERS ================= */
   const updateItem = (idx, patch) => {
@@ -241,35 +258,26 @@ export default function FormItemSection({
             )}
 
             {/* IMEI */}
+            {/* IMEI */}
             <input
               list={`imei-${idx}`}
               className="border rounded px-2 py-1 w-full"
-              placeholder="Pilih / ketik IMEI dari stok"
+              placeholder="Cari / ketik IMEI"
               value={item.imei || ""}
-              /* =================================
-     1️⃣ SAAT MENGETIK → TIDAK VALIDASI
-     ================================= */
               onChange={(e) => {
+                setImeiKeyword(e.target.value); // 🔍 realtime filter
                 updateItem(idx, {
                   imei: e.target.value,
                   imeiList: [],
                   qty: 0,
                 });
               }}
-              /* =================================
-     2️⃣ SAAT SELESAI INPUT → VALIDASI
-     ================================= */
               onBlur={() => {
                 const imei = (item.imei || "").trim();
 
-                // ✅ belum diisi → diamkan
                 if (!imei) return;
-
-                // ✅ belum lengkap → diamkan
                 if (imei.length < 14) return;
-                // kalau IMEI fix 17 digit → ganti jadi: !== 17
 
-                // ❌ tidak ada di stok pembelian toko
                 if (!imeiAvailableList.includes(imei)) {
                   alert("❌ IMEI tidak tersedia / sudah dipakai");
                   updateItem(idx, {
@@ -280,12 +288,12 @@ export default function FormItemSection({
                   return;
                 }
 
-                // 🔓 unlock IMEI lama
+                // 🔓 unlock lama
                 item.imeiList?.forEach((old) => {
                   if (old !== imei) unlockImeiRealtime(old, tokoLogin);
                 });
 
-                // 🔒 lock IMEI baru
+                // 🔒 lock baru
                 lockImeiRealtime(imei, tokoLogin);
 
                 updateItem(idx, {
@@ -296,11 +304,15 @@ export default function FormItemSection({
               }}
             />
 
-            <datalist id={`imei-${idx}`}>
-              {imeiAvailableList.map((im) => (
-                <option key={im} value={im} />
-              ))}
-            </datalist>
+        <datalist id={`imei-${idx}`}>
+  {imeiAvailableList
+    .filter((im) =>
+      im.toLowerCase().includes(imeiKeyword.toLowerCase())
+    )
+    .map((im) => (
+      <option key={im} value={im} />
+    ))}
+</datalist>
 
             {!item.isImei && (
               <input

@@ -297,7 +297,7 @@ useEffect(() => {
         {paymentSafe.paymentMethod === "KREDIT" && (
           <>
             <div>
-              <label className="font-semibold">Nama MDR</label>
+              <label className="font-semibold">Payment Metode MDR </label>
               <select
                 className="w-full border rounded px-2 py-1"
                 value={paymentSafe.namaMdr}
