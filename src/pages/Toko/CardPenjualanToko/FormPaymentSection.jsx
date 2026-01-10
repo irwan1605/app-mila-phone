@@ -125,10 +125,7 @@ export default function FormPaymentSection({
   /* ================= TOTAL SPLIT ================= */
   const totalSplit = useMemo(() => {
     if (!paymentSplit.enabled) return 0;
-    return paymentSplit.detail.reduce(
-      (s, x) => s + Number(x.nominal || 0),
-      0
-    );
+    return paymentSplit.detail.reduce((s, x) => s + Number(x.nominal || 0), 0);
   }, [paymentSplit]);
 
   const kembalianSplit = useMemo(() => {
@@ -146,9 +143,7 @@ export default function FormPaymentSection({
     if (!paymentSplit.enabled) return true;
     if (totalSplit < grandTotal) return false;
 
-    return paymentSplit.detail.every(
-      (p) => p.metode === "CASH" || p.bankId
-    );
+    return paymentSplit.detail.every((p) => p.metode === "CASH" || p.bankId);
   }, [paymentSplit, totalSplit, grandTotal]);
 
   /* ================= SYNC KE PARENT ================= */
@@ -180,8 +175,8 @@ export default function FormPaymentSection({
   /* ================= RENDER ================= */
   return (
     <fieldset
-      disabled={disabled || !isSplitValid}
-      className={disabled || !isSplitValid ? "opacity-50" : ""}
+      disabled={disabled} // 🔥 FIX: jangan pakai !isSplitValid
+      className={disabled ? "opacity-50" : ""}
     >
       <div className="space-y-3 text-sm">
         {/* STATUS */}
@@ -194,8 +189,7 @@ export default function FormPaymentSection({
               onChange({
                 ...paymentSafe,
                 status: e.target.value,
-                paymentMethod:
-                  e.target.value === "LUNAS" ? "CASH" : "KREDIT",
+                paymentMethod: e.target.value === "LUNAS" ? "CASH" : "KREDIT",
               })
             }
           >
@@ -203,9 +197,8 @@ export default function FormPaymentSection({
             <option value="PIUTANG">PIUTANG</option>
           </select>
         </div>
-
-       {/* SPLIT PAYMENT */}
-       {paymentSafe.status === "LUNAS" && (
+        {/* SPLIT PAYMENT */}
+        {paymentSafe.status === "LUNAS" && (
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -218,7 +211,6 @@ export default function FormPaymentSection({
                   enabled: active,
                 });
 
-                // 🔥 FIX UTAMA
                 if (active) {
                   setUangDibayar(0);
                   onChange({
@@ -232,7 +224,7 @@ export default function FormPaymentSection({
           </label>
         )}
 
-    {/* SPLIT DETAIL */}
+        {/* SPLIT DETAIL */}
         {paymentSplit.enabled &&
           paymentSplit.detail.map((p, i) => (
             <div key={i} className="grid grid-cols-4 gap-2">
@@ -335,6 +327,25 @@ export default function FormPaymentSection({
           </div>
         )}
 
+        {/* CASH NORMAL */}
+        {!paymentSplit.enabled && paymentSafe.paymentMethod === "CASH" && (
+          <div>
+            <label className="font-semibold">Uang Dibayarkan</label>
+            <input
+              type="number"
+              className="w-full border rounded px-2 py-1"
+              value={uangDibayar}
+              onChange={(e) => setUangDibayar(Number(e.target.value || 0))}
+            />
+          </div>
+        )}
+
+        {kembalian > 0 && (
+          <div className="text-right text-green-700 font-bold">
+            UANG KEMBALIAN: Rp {kembalian.toLocaleString("id-ID")}
+          </div>
+        )}
+
         {/* KREDIT */}
         {paymentSafe.paymentMethod === "KREDIT" && (
           <>
@@ -344,9 +355,7 @@ export default function FormPaymentSection({
                 className="w-full border rounded px-2 py-1"
                 value={paymentSafe.namaMdr}
                 onChange={(e) => {
-                  const m = masterMdr.find(
-                    (x) => x.nama === e.target.value
-                  );
+                  const m = masterMdr.find((x) => x.nama === e.target.value);
                   onChange({
                     ...paymentSafe,
                     namaMdr: m?.nama || "",
@@ -433,24 +442,15 @@ export default function FormPaymentSection({
         )}
 
         {/* CASH NORMAL */}
-        {!paymentSplit.enabled &&
-          paymentSafe.paymentMethod === "CASH" && (
-            <div>
-              <label className="font-semibold">Uang Dibayarkan</label>
-              <input
-                type="number"
-                className="w-full border rounded px-2 py-1"
-                value={uangDibayar}
-                onChange={(e) =>
-                  setUangDibayar(Number(e.target.value || 0))
-                }
-              />
-            </div>
-          )}
-
-        {kembalian > 0 && (
-          <div className="text-right text-green-700 font-bold">
-            UANG KEMBALIAN: Rp {kembalian.toLocaleString("id-ID")}
+        {!paymentSplit.enabled && paymentSafe.paymentMethod === "CASH" && (
+          <div>
+            <label className="font-semibold">Uang Dibayarkan</label>
+            <input
+              type="number"
+              className="w-full border rounded px-2 py-1"
+              value={uangDibayar}
+              onChange={(e) => setUangDibayar(Number(e.target.value || 0))}
+            />
           </div>
         )}
 
