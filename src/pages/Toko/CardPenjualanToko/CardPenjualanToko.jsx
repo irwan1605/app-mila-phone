@@ -340,18 +340,33 @@ export default function CardPenjualanToko() {
     }
   }, [items, formUser, payment, tokoAktifId, loading, submitting, userLogin]);
 
-  const isTahap2Valid = useMemo(() => {
-    if (!Array.isArray(items) || items.length === 0) return false;
+// ================= VALIDASI TAHAP 1 =================
+const isTahap1Valid = useMemo(() => {
+  return (
+    formUser.tanggal &&
+    formUser.noFaktur &&
+    formUser.namaPelanggan &&
+    formUser.idPelanggan &&
+    formUser.noTlpPelanggan &&
+    formUser.namaTokoId &&
+    formUser.namaSales
+  );
+}, [formUser]);
 
-    return items.every((item) => {
-      if (!item.namaBarang) return false;
-      if (item.isImei && (!item.imeiList || item.imeiList.length === 0))
-        return false;
-      if (!item.qty || item.qty <= 0) return false;
-      if (!item.hargaAktif || item.hargaAktif <= 0) return false;
-      return true;
-    });
-  }, [items]);
+// ================= VALIDASI TAHAP 2 =================
+const isTahap2Valid = useMemo(() => {
+  if (!Array.isArray(items) || items.length === 0) return false;
+
+  return items.every((item) => {
+    if (!item.namaBarang) return false;
+    if (item.isImei && (!item.imeiList || item.imeiList.length === 0))
+      return false;
+    if (!item.qty || item.qty <= 0) return false;
+    if (!item.hargaAktif || item.hargaAktif <= 0) return false;
+    return true;
+  });
+}, [items]);
+
 
   // ================= TOTAL =================
   const totalPenjualan = useMemo(() => {
@@ -373,7 +388,8 @@ export default function CardPenjualanToko() {
             value={items}
             onChange={setItems}
             tokoLogin={formUser.namaToko}
-            allowManual={!!formUser.namaTokoId}
+            allowManual={true}
+            tahap1Valid={isTahap1Valid} // ⬅️ WAJIB
             stockRealtime={stockRealtime}
           />
         </div>

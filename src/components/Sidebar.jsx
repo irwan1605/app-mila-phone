@@ -277,7 +277,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
   // ===========================
   const SidebarBody = () => (
     <>
-      <img src="/logoMMT.png" alt="Logo" className="logo mb-1" />
+      <img src="/logoMMT.png" alt="Logo" className="logo mb-1 " />
 
       <div className="font-bold p-1 text-center">
         <h2 className="text-gray-200 text-xs">PT. MILA MEDIA TELEKOMUNIKASI</h2>

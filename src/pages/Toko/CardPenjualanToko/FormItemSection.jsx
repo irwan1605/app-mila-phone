@@ -24,6 +24,7 @@ export default function FormItemSection({
   tokoLogin,
   allowManual = false,
   stockRealtime = {},
+  tahap1Valid = false, // ✅ VALIDATOR TAHAP 1
 }) {
   const items = useMemo(() => (Array.isArray(value) ? value : []), [value]);
   const safeOnChange = typeof onChange === "function" ? onChange : () => {};
@@ -32,7 +33,6 @@ export default function FormItemSection({
   const [masterKategori, setMasterKategori] = useState([]);
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [imeiKeyword, setImeiKeyword] = useState("");
-
 
   /* ================= LOAD MASTER ================= */
   useEffect(() => {
@@ -60,53 +60,49 @@ export default function FormItemSection({
   /* ================= UNLOCK IMEI ================= */
   useEffect(() => {
     if (!tokoLogin) return;
-  
+
     const load = async () => {
       const snap = await get(ref(db, "toko"));
       const rows = [];
-  
+
       snap.forEach((tokoSnap) => {
         const tokoData = tokoSnap.val();
         const transaksi = tokoData.transaksi || {};
-  
+
         Object.values(transaksi).forEach((trx) => {
           rows.push({
             ...trx,
-            tokoId: tokoSnap.key
+            tokoId: tokoSnap.key,
           });
         });
       });
-  
+
       setAllTransaksi(rows);
     };
-  
+
     load();
   }, [tokoLogin]);
-  
 
   /* ================= IMEI AVAILABLE ================= */
   const imeiAvailableList = useMemo(() => {
     if (!tokoLogin) return [];
 
-    // 1️⃣ Ambil IMEI dari transaksi PEMBELIAN Approved
     const imeiFromPembelian = allTransaksi
-    .filter(
-      (t) =>
-        t.NAMA_TOKO?.toUpperCase() === tokoLogin?.toUpperCase() &&
-        t.STATUS === "Approved" &&
-        t.PAYMENT_METODE === "PEMBELIAN" &&
-        t.IMEI
-    )
-    .map((t) => String(t.IMEI));
-  
+      .filter(
+        (t) =>
+          t.NAMA_TOKO?.toUpperCase() === tokoLogin?.toUpperCase() &&
+          t.STATUS === "Approved" &&
+          t.PAYMENT_METODE === "PEMBELIAN" &&
+          t.IMEI
+      )
+      .map((t) => String(t.IMEI));
 
-    // 2️⃣ IMEI yang sedang dipakai di form (anti duplikat)
     const imeiDipakai = new Set(items.flatMap((i) => i.imeiList || []));
 
     return imeiFromPembelian.filter(
       (imei) =>
-        !imeiDipakai.has(imei) && // ❌ tidak duplikat
-        !stockRealtime?.soldImei?.[imei] // ❌ belum terjual
+        !imeiDipakai.has(imei) &&
+        !stockRealtime?.soldImei?.[imei]
     );
   }, [allTransaksi, tokoLogin, items, stockRealtime]);
 
@@ -133,21 +129,38 @@ export default function FormItemSection({
 
   const barangList = (kategori, brand) =>
     masterBarang.filter(
-      (b) => b.kategoriBarang === kategori && (b.namaBrand || b.brand) === brand
+      (b) =>
+        b.kategoriBarang === kategori &&
+        (b.namaBrand || b.brand) === brand
     );
 
   /* ================= RENDER ================= */
   return (
-    <div className={!allowManual ? "opacity-50 pointer-events-none" : ""}>
+    <div
+      className={
+        !tahap1Valid
+          ? "opacity-50 pointer-events-none"
+          : !allowManual
+          ? "opacity-50 pointer-events-none"
+          : ""
+      }
+    >
+      {!tahap1Valid && (
+        <div className="text-red-600 text-xs mb-3 font-semibold">
+          ⚠ Lengkapi seluruh Form TAHAP 1 terlebih dahulu
+        </div>
+      )}
+
       {items.map((item, idx) => {
         const isImeiValid =
           !item.isImei ||
           (item.imeiList &&
             item.imeiList.length === 1 &&
             imeiAvailableList.includes(item.imeiList[0]) === false);
-        // note: false karena IMEI valid sudah dikeluarkan dari available list
 
-        const hargaAktif = isImeiValid ? Number(item.hargaAktif || 0) : 0;
+        const hargaAktif = isImeiValid
+          ? Number(item.hargaAktif || 0)
+          : 0;
 
         return (
           <div
@@ -201,9 +214,10 @@ export default function FormItemSection({
               disabled={!item.namaBrand}
               value={item.namaBarang || ""}
               onChange={(e) => {
-                const b = barangList(item.kategoriBarang, item.namaBrand).find(
-                  (x) => x.namaBarang === e.target.value
-                );
+                const b = barangList(
+                  item.kategoriBarang,
+                  item.namaBrand
+                ).find((x) => x.namaBarang === e.target.value);
                 if (!b) return;
 
                 updateItem(idx, {
@@ -218,12 +232,15 @@ export default function FormItemSection({
               }}
             >
               <option value="">-- Pilih Barang --</option>
-              {barangList(item.kategoriBarang, item.namaBrand).map((b) => (
+              {barangList(
+                item.kategoriBarang,
+                item.namaBrand
+              ).map((b) => (
                 <option key={b.id}>{b.namaBarang}</option>
               ))}
             </select>
 
-            {/* SKEMA HARGA */}
+            {/* SKEMA */}
             <select
               className="w-full border rounded p-2"
               value={item.skemaHarga}
@@ -258,14 +275,13 @@ export default function FormItemSection({
             )}
 
             {/* IMEI */}
-            {/* IMEI */}
             <input
               list={`imei-${idx}`}
               className="border rounded px-2 py-1 w-full"
               placeholder="Cari / ketik IMEI"
               value={item.imei || ""}
               onChange={(e) => {
-                setImeiKeyword(e.target.value); // 🔍 realtime filter
+                setImeiKeyword(e.target.value);
                 updateItem(idx, {
                   imei: e.target.value,
                   imeiList: [],
@@ -274,7 +290,6 @@ export default function FormItemSection({
               }}
               onBlur={() => {
                 const imei = (item.imei || "").trim();
-
                 if (!imei) return;
                 if (imei.length < 14) return;
 
@@ -288,12 +303,11 @@ export default function FormItemSection({
                   return;
                 }
 
-                // 🔓 unlock lama
                 item.imeiList?.forEach((old) => {
-                  if (old !== imei) unlockImeiRealtime(old, tokoLogin);
+                  if (old !== imei)
+                    unlockImeiRealtime(old, tokoLogin);
                 });
 
-                // 🔒 lock baru
                 lockImeiRealtime(imei, tokoLogin);
 
                 updateItem(idx, {
@@ -304,15 +318,17 @@ export default function FormItemSection({
               }}
             />
 
-        <datalist id={`imei-${idx}`}>
-  {imeiAvailableList
-    .filter((im) =>
-      im.toLowerCase().includes(imeiKeyword.toLowerCase())
-    )
-    .map((im) => (
-      <option key={im} value={im} />
-    ))}
-</datalist>
+            <datalist id={`imei-${idx}`}>
+              {imeiAvailableList
+                .filter((im) =>
+                  im
+                    .toLowerCase()
+                    .includes(imeiKeyword.toLowerCase())
+                )
+                .map((im) => (
+                  <option key={im} value={im} />
+                ))}
+            </datalist>
 
             {!item.isImei && (
               <input
@@ -320,7 +336,9 @@ export default function FormItemSection({
                 min={1}
                 value={item.qty || 1}
                 onChange={(e) =>
-                  updateItem(idx, { qty: Number(e.target.value || 1) })
+                  updateItem(idx, {
+                    qty: Number(e.target.value || 1),
+                  })
                 }
                 className="w-full border rounded-lg px-2 py-1 text-sm"
               />
@@ -337,7 +355,7 @@ export default function FormItemSection({
       <div className="flex gap-2">
         <button
           className="btn btn-outline flex-1"
-          disabled={!allowManual}
+          disabled={!allowManual || !tahap1Valid}
           onClick={() =>
             safeOnChange([
               ...items,
@@ -360,13 +378,16 @@ export default function FormItemSection({
 
         <button
           className="btn btn-outline btn-error flex-1"
-          disabled={!allowManual || items.length === 0}
+          disabled={
+            !allowManual ||
+            !tahap1Valid ||
+            items.length === 0
+          }
           onClick={() => {
             const last = items[items.length - 1];
-
-            // unlock IMEI jika ada
-            last?.imeiList?.forEach((im) => unlockImeiRealtime(im, tokoLogin));
-
+            last?.imeiList?.forEach((im) =>
+              unlockImeiRealtime(im, tokoLogin)
+            );
             safeOnChange(items.slice(0, -1));
           }}
         >
