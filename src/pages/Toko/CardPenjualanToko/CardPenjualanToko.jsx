@@ -195,12 +195,20 @@ export default function CardPenjualanToko() {
             throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
           }
 
-          await ensureImeiInInventory({
-            tokoNama: formUser.namaToko,
-            imei,
-          });
-
-          imeiLocked.push(imei);
+          // VALIDASI DARI STATE SAJA (SUDAH LOCK SEBELUMNYA)
+          if (item.isImei) {
+            if (!imei) {
+              throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
+            }
+          
+            // ✅ VALIDASI STATE SAJA (SUDAH DI LOCK)
+            if (!item.imeiList || !item.imeiList.includes(imei)) {
+              throw new Error(`IMEI tidak valid (${imei})`);
+            }
+          
+            imeiLocked.push(imei);
+          }
+          
         } else {
           if (!item.sku) {
             throw new Error(`SKU tidak ditemukan (${item.namaBarang})`);
@@ -220,7 +228,8 @@ export default function CardPenjualanToko() {
 
         if (item.isImei) {
           await kurangiStokImei({
-            tokoNama: formUser.namaToko,
+            tokoNama: String(formUser.namaToko).trim().toUpperCase(),
+
             imei,
           });
         } else {
@@ -340,33 +349,32 @@ export default function CardPenjualanToko() {
     }
   }, [items, formUser, payment, tokoAktifId, loading, submitting, userLogin]);
 
-// ================= VALIDASI TAHAP 1 =================
-const isTahap1Valid = useMemo(() => {
-  return (
-    formUser.tanggal &&
-    formUser.noFaktur &&
-    formUser.namaPelanggan &&
-    formUser.idPelanggan &&
-    formUser.noTlpPelanggan &&
-    formUser.namaTokoId &&
-    formUser.namaSales
-  );
-}, [formUser]);
+  // ================= VALIDASI TAHAP 1 =================
+  const isTahap1Valid = useMemo(() => {
+    return (
+      formUser.tanggal &&
+      formUser.noFaktur &&
+      formUser.namaPelanggan &&
+      formUser.idPelanggan &&
+      formUser.noTlpPelanggan &&
+      formUser.namaTokoId &&
+      formUser.namaSales
+    );
+  }, [formUser]);
 
-// ================= VALIDASI TAHAP 2 =================
-const isTahap2Valid = useMemo(() => {
-  if (!Array.isArray(items) || items.length === 0) return false;
+  // ================= VALIDASI TAHAP 2 =================
+  const isTahap2Valid = useMemo(() => {
+    if (!Array.isArray(items) || items.length === 0) return false;
 
-  return items.every((item) => {
-    if (!item.namaBarang) return false;
-    if (item.isImei && (!item.imeiList || item.imeiList.length === 0))
-      return false;
-    if (!item.qty || item.qty <= 0) return false;
-    if (!item.hargaAktif || item.hargaAktif <= 0) return false;
-    return true;
-  });
-}, [items]);
-
+    return items.every((item) => {
+      if (!item.namaBarang) return false;
+      if (item.isImei && (!item.imeiList || item.imeiList.length === 0))
+        return false;
+      if (!item.qty || item.qty <= 0) return false;
+      if (!item.hargaAktif || item.hargaAktif <= 0) return false;
+      return true;
+    });
+  }, [items]);
 
   // ================= TOTAL =================
   const totalPenjualan = useMemo(() => {

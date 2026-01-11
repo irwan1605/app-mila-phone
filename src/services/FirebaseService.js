@@ -2277,6 +2277,34 @@ export const logImeiAudit = ({
   });
 };
 
+export const kurangiStokImei = async ({ tokoNama, imei }) => {
+  if (!tokoNama || !imei) {
+    throw new Error("Parameter IMEI / Toko tidak lengkap");
+  }
+
+  const tokoKey = String(tokoNama).trim().toUpperCase();
+  const imeiKey = String(imei).trim();
+
+  // 🔥 PATH SESUAI STRUKTUR DB KAMU
+  const imeiRef = ref(
+    db,
+    `stokImei/${tokoKey}/${imeiKey}`
+  );
+
+  const snap = await get(imeiRef);
+
+  // ❌ kalau memang tidak ada di DB
+  if (!snap.exists()) {
+    throw new Error(`IMEI ${imeiKey} tidak ada di stok`);
+  }
+
+  // 🔥 HAPUS / SET SOLD
+  await set(imeiRef, null);
+
+  return true;
+};
+
+
 export const listenPenjualanRealtime = (callback) => {
   return onValue(ref(db, "penjualan"), (snap) => {
     if (!snap.exists()) return callback([]);
@@ -2688,30 +2716,6 @@ export const transferBarangFinal = async ({
   });
 };
 
-// ================================
-// 🔥 KURANGI STOK IMEI (FINAL)
-// ================================
-export async function kurangiStokImei({ tokoNama, imei }) {
-  if (!tokoNama || !imei) {
-    throw new Error("Parameter stok IMEI tidak lengkap");
-  }
-
-  const invRef = ref(db, `inventory/${tokoNama}/${imei}`);
-
-  const snap = await get(invRef);
-  if (!snap.exists()) {
-    throw new Error(`IMEI ${imei} tidak ditemukan di stok ${tokoNama}`);
-  }
-
-  if (snap.val()?.STATUS !== "AVAILABLE") {
-    throw new Error(`IMEI ${imei} tidak tersedia`);
-  }
-
-  await update(invRef, {
-    STATUS: "OUT",
-    UPDATED_AT: Date.now(),
-  });
-}
 
 
 export async function ensureImeiInInventory({
