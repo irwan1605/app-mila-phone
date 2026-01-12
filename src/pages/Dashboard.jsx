@@ -35,75 +35,58 @@ import {
   listenAllTransaksi,
   listenStockAll,
   forceDeleteTransaksi,
-  listenPenjualanRealtime, // ✅ ambil stok MASTER BARANG (CILANGKAP PUSAT)
+  listenPenjualanRealtime,
 } from "../services/FirebaseService";
+
+// 🔥 TAMBAHKAN DISINI
+const TOKO_LIST = [
+  "CILANGKAP PUSAT",
+  "CIBINONG",
+  "GAS ALAM",
+  "CITEUREUP",
+  "CIRACAS",
+  "METLAND 1",
+  "METLAND 2",
+  "PITARA",
+  "KOTA WISATA",
+  "SAWANGAN",
+];
 
 export default function Dashboard() {
   const navigate = useNavigate();
 
-  // === DATA FIREBASE ===
+  /* ================= STATE ================= */
   const [dataTransaksi, setDataTransaksi] = useState([]);
   const [stokMaster, setStokMaster] = useState([]);
 
-  const [tokoList, setTokoList] = useState([
-    "CILANGKAP PUSAT",
-    "CIBINONG",
-    "GAS ALAM",
-    "CITEUREUP",
-    "CIRACAS",
-    "METLAND 1",
-    "METLAND 2",
-    "PITARA",
-    "KOTA WISATA",
-    "SAWANGAN",
-  ]);
+  const [tokoList, setTokoList] = useState([]);
   const [salesList, setSalesList] = useState([]);
 
-  // === FILTER ===
   const [filterType, setFilterType] = useState("semua");
   const [filterValue, setFilterValue] = useState("");
   const [filterToko, setFilterToko] = useState("semua");
   const [filterSales, setFilterSales] = useState("semua");
 
-  const TOKO_LIST = [
-    "CILANGKAP PUSAT",
-    "CIBINONG",
-    "GAS ALAM",
-    "CITEUREUP",
-    "CIRACAS",
-    "METLAND 1",
-    "METLAND 2",
-    "PITARA",
-    "KOTA WISATA",
-    "SAWANGAN",
-  ];
-
-  // === SEARCH IMEI ===
   const [searchImei, setSearchImei] = useState("");
+
   const [stockData, setStockData] = useState({});
   const [transaksi, setTransaksi] = useState([]);
   const [penjualan, setPenjualan] = useState([]);
 
-  const [stockAll, setStockAll] = useState({});
+  /* ================= LISTENER ================= */
 
   useEffect(() => {
     const unsub = listenPenjualanRealtime((rows) => {
       setPenjualan(Array.isArray(rows) ? rows : []);
-    });
-
-    return () => unsub && unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsub = listenStockAll((s = {}) => {
-      setStockAll(s);
     });
     return () => unsub && unsub();
   }, []);
 
   useEffect(() => {
     const u1 = listenStockAll((s) => setStockData(s || {}));
-    const u2 = listenAllTransaksi((t) => setTransaksi(t || []));
+    const u2 = listenAllTransaksi((t) =>
+      setTransaksi(Array.isArray(t) ? t : [])
+    );
 
     return () => {
       u1 && u1();
@@ -111,14 +94,6 @@ export default function Dashboard() {
     };
   }, []);
 
-  useEffect(() => {
-    const unsub = listenStockAll((snap) => setStockData(snap || {}));
-    return () => unsub && unsub();
-  }, []);
-
-  // =======================================================
-  // LISTEN MASTER STOK (CILANGKAP PUSAT) — MASTER BARANG
-  // =======================================================
   useEffect(() => {
     const unsub = listenStockAll((listRaw = []) => {
       setStokMaster(Array.isArray(listRaw) ? listRaw : []);
@@ -282,7 +257,7 @@ export default function Dashboard() {
       (x) =>
         x.TANGGAL_TRANSAKSI && x.TANGGAL_TRANSAKSI.slice(0, 10) === todayStr
     );
-  }, [filteredData]);
+  }, [filteredData, todayStr]);
 
   const penjualanHariIni = useMemo(() => {
     return dataHariIni.filter((x) => x.STATUS === "Approved").length;
@@ -407,20 +382,67 @@ export default function Dashboard() {
     XLSX.writeFile(wb, "Dashboard_Pusat.xlsx");
   };
 
-  // =======================================================
-  // HANDLER SEARCH IMEI → ARAHKAN KE CardPenjualanToko
-  // =======================================================
+  const TOKO_AKTIF = "CILANGKAP PUSAT"; 
+
+  /* ============================
+      🔥 PENJUALAN CEPAT IMEI
+  ============================ */
   const handleSearchImei = () => {
-    if (!searchImei.trim()) {
-      alert("Masukkan IMEI terlebih dahulu");
+    const imei = searchImei.trim();
+    if (!imei) return alert("Masukan IMEI");
+  
+    // 1. Cari IMEI
+    const imeiFound = transaksi.find((t) => {
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+      const status = String(t.STATUS || "").toUpperCase();
+  
+      return (
+        String(t.IMEI || "").trim() === imei &&
+        (metode.includes("PEMBELIAN") || metode.includes("TRANSFER")) &&
+        status === "APPROVED"
+      );
+    });
+  
+    if (!imeiFound) {
+      alert(`IMEI ${imei} tidak ditemukan`);
       return;
     }
-    navigate(
-      `/toko/cilangkap-pusat/penjualan?imei=${encodeURIComponent(
-        searchImei.trim()
-      )}`
-    );
+  
+    // 2. CEK TOKO
+    if (
+      String(imeiFound.NAMA_TOKO || "").toUpperCase() !==
+      TOKO_AKTIF.toUpperCase()
+    ) {
+      alert(
+        `❌ Stok IMEI ada di toko ${imeiFound.NAMA_TOKO}, bukan di ${TOKO_AKTIF}`
+      );
+      return;
+    }
+  
+    // 3. Lanjut jual
+    const payload = {
+      kategoriBarang: imeiFound.KATEGORI_BRAND,
+      namaBrand: imeiFound.NAMA_BRAND,
+      namaBarang: imeiFound.NAMA_BARANG,
+      imei,
+      qty: 1,
+      bundling: imeiFound.BUNDLING_ITEMS || [],
+      hargaMap: {
+        srp: imeiFound.HARGA_UNIT || 0,
+        grosir: imeiFound.HARGA_GROSIR || 0,
+        reseller: imeiFound.HARGA_RESELLER || 0,
+      },
+    };
+  
+    navigate("/toko/cilangkap-pusat/penjualan", {
+      state: {
+        fastSale: true,
+        imeiData: payload,
+      },
+    });
   };
+  
+  
 
   const handleOpenStockOpname = () => {
     navigate("/stok-opname");
@@ -435,21 +457,19 @@ export default function Dashboard() {
         Dashboard Pusat - CILANGKAP PUSAT
       </h2>
 
-      {/* SEARCH IMEI UNTUK PENJUALAN MULTI BARANG */}
-      <div className="bg-white rounded-2xl shadow mb-6 p-4 flex flex-col md:flex-row gap-3 items-center">
-        <div className="flex items-center flex-1 gap-2">
-          <FaSearch className="text-gray-400" />
-          <input
-            type="text"
-            value={searchImei}
-            onChange={(e) => setSearchImei(e.target.value)}
-            className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none"
-            placeholder="Cari IMEI dari stok MASTER BARANG untuk transaksi penjualan..."
-          />
-        </div>
+      {/* ================= FAST SALE IMEI ================= */}
+      <div className="bg-white p-4 rounded-xl shadow mb-6 flex gap-2">
+        <FaSearch className="text-gray-400" /> {/* ✅ dipakai */}
+        <input
+          type="text"
+          value={searchImei}
+          onChange={(e) => setSearchImei(e.target.value)}
+          className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none"
+          placeholder="Cari IMEI..."
+        />
         <button
           onClick={handleSearchImei}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded"
         >
           Proses Penjualan
         </button>
@@ -560,6 +580,27 @@ export default function Dashboard() {
             <div className="text-xs">Penjualan Hari Ini</div>
             <div className="text-xl font-bold">
               Rp {totalHariIni.toLocaleString("id-ID")}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow p-4">
+            <div className="text-xs text-gray-500">TOTAL PENJUALAN</div>
+            <div className="text-xl font-bold text-blue-600">
+              {totalPenjualan} Transaksi
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow p-4">
+            <div className="text-xs text-gray-500">TOTAL OMZET</div>
+            <div className="text-xl font-bold text-green-600">
+              Rp {totalOmzet.toLocaleString("id-ID")}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow p-4">
+            <div className="text-xs text-gray-500">STOK MASTER BARANG</div>
+            <div className="text-xl font-bold">
+              {stokMaster.length.toLocaleString("id-ID")} Unit
             </div>
           </div>
 

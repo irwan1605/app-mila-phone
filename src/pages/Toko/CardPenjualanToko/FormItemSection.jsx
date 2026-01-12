@@ -12,6 +12,9 @@ import {
 } from "../../../services/FirebaseService";
 import { ref, get } from "firebase/database";
 import { db } from "../../../firebase/FirebaseInit";
+import { useCallback } from "react";
+import { useLocation } from "react-router-dom";
+
 
 /* ================= KONSTANTA ================= */
 const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
@@ -27,12 +30,53 @@ export default function FormItemSection({
   tahap1Valid = false, // ✅ VALIDATOR TAHAP 1
 }) {
   const items = useMemo(() => (Array.isArray(value) ? value : []), [value]);
-  const safeOnChange = typeof onChange === "function" ? onChange : () => {};
+  const safeOnChange = useCallback(
+    (v) => typeof onChange === "function" && onChange(v),
+    [onChange]
+  );
 
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterKategori, setMasterKategori] = useState([]);
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [imeiKeyword, setImeiKeyword] = useState("");
+  const location = useLocation();
+
+  const TOKO_AKTIF = "CILANGKAP PUSAT";
+
+  useEffect(() => {
+    if (!location?.state?.fastSale) return;
+  
+    const d = location.state.imeiData;
+    if (!d) return;
+  
+    // Safety check toko
+    if (d.toko && d.toko !== TOKO_AKTIF) {
+      alert("❌ Stok bukan milik toko ini");
+      return;
+    }
+  
+    safeOnChange([
+      {
+        id: Date.now(),
+        kategoriBarang: d.kategoriBarang,
+        namaBrand: d.namaBrand,
+        namaBarang: d.namaBarang,
+        imei: d.imei,
+        imeiList: [d.imei],
+        qty: 1,
+        hargaMap: d.hargaMap,
+        skemaHarga: "srp",
+        hargaAktif: d.hargaMap?.srp || 0,
+        isImei: true,
+        bundling: d.bundling || [],
+      },
+    ]);
+  }, [location, safeOnChange]);
+  
+  
+  
+ 
+  
 
   /* ================= LOAD MASTER ================= */
   useEffect(() => {
@@ -84,8 +128,15 @@ export default function FormItemSection({
   }, [tokoLogin]);
 
   useEffect(() => {
-    // Jika tahap 2 aktif & belum ada item → auto buat 1 form
-    if (tahap1Valid && allowManual && items.length === 0) {
+    if (!tahap1Valid) return;
+  
+    // FAST SALE
+    if (items.length === 1 && items[0].imeiList?.length === 1) {
+      return;
+    }
+  
+    // AUTO CREATE FORM
+    if (allowManual && items.length === 0) {
       safeOnChange([
         {
           id: Date.now(),
@@ -100,7 +151,9 @@ export default function FormItemSection({
         },
       ]);
     }
-  }, [tahap1Valid, allowManual]);
+  }, [tahap1Valid, allowManual, items, safeOnChange]);
+  
+  
   
 
   /* ================= IMEI AVAILABLE ================= */

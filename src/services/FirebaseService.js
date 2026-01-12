@@ -50,6 +50,17 @@ import {
    HELPERS
 ============================================================ */
 
+export const listenUserProfile = (uid, callback) => {
+  const db = getDatabase();
+  const userRef = ref(db, `users/${uid}`);
+
+  return onValue(userRef, (snap) => {
+    if (snap.exists()) {
+      callback(snap.val());
+    }
+  });
+};
+
 // ================= MASTER BANK =================
 export const listenMasterBank = (callback) => {
   const bankRef = ref(db, "masterBank");

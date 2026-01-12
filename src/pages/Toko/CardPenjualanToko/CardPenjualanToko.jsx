@@ -19,6 +19,8 @@ import FormPaymentSection from "./FormPaymentSection";
 import TablePenjualan from "../../table/TablePenjualan";
 import ExportExcelButton from "../../../components/ExportExcelButton";
 import CetakInvoicePenjualan from "../../Print/CetakInvoicePenjualan";
+import { useLocation } from "react-router-dom";
+
 
 import {
   listenPenjualan,
@@ -41,6 +43,7 @@ const genInvoice = () =>
 // ================= COMPONENT =================
 export default function CardPenjualanToko() {
   const navigate = useNavigate();
+  
   const previewRef = useRef(null);
 
   // ================= USER LOGIN =================
@@ -75,6 +78,36 @@ export default function CardPenjualanToko() {
   const [printData, setPrintData] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [stockRealtime, setStockRealtime] = useState({});
+  const location = useLocation();
+
+useEffect(() => {
+  if (!location.state?.fastSale) return;
+
+  const d = location.state.imeiData;
+
+  if (!d?.imei) return;
+
+  setItems([
+    {
+      id: Date.now(),
+      kategoriBarang: d.kategoriBarang,
+      namaBrand: d.namaBrand,
+      namaBarang: d.namaBarang,
+      imei: d.imei,
+      imeiList: [d.imei],
+      qty: 1,
+      bundlingItems: d.bundling || [],
+      isImei: true,
+
+      hargaMap: d.hargaMap || {},
+      skemaHarga: "srp",
+      hargaAktif: Number(d.hargaMap?.srp || 0),
+    },
+  ]);
+}, [location.state]);
+
+  
+
 
   useEffect(() => {
     const unsub = listenStockAll((data) => {
