@@ -4,10 +4,12 @@
 // =======================================================
 
 import React, { useEffect, useMemo, useState } from "react";
+
 import {
   listenPenjualan,
-  voidTransaksiPenjualan,
   refundRestorePenjualan,
+  updateTransaksiPenjualan,
+  getUserRole ,
 } from "../../services/FirebaseService";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -28,6 +30,10 @@ export default function TablePenjualan() {
   const [page, setPage] = useState(1);
   const [printData, setPrintData] = useState(null);
   const [showPrint, setShowPrint] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editData, setEditData] = useState(null);
+
+  
 
   const pageSize = 10;
 
@@ -40,8 +46,30 @@ export default function TablePenjualan() {
     }
   }, []);
 
-  const isSuperAdmin =
-    userLogin?.role === "superadmin" || userLogin?.role === "admin";
+  const [roleDb, setRoleDb] = useState(null);
+
+// DEBUG
+console.log("LOGIN:", userLogin);
+console.log(
+  "LOGIN KEY:",
+  userLogin?.username || userLogin?.name || userLogin?.nik
+);
+console.log("ROLE DB:", roleDb);
+
+useEffect(() => {
+  const loginKey =
+    userLogin?.username ||
+    userLogin?.name ||
+    userLogin?.nik;
+
+  if (!loginKey) return;
+
+  getUserRole(loginKey).then(setRoleDb);
+}, [userLogin]);
+  
+
+  const isSuperAdmin = 
+  String(roleDb || "").toLowerCase() === "superadmin";
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
@@ -112,18 +140,16 @@ export default function TablePenjualan() {
     setShowPrint(true);
   };
 
-  /* ================= ACTION ================= */
-  const handleVoid = async (row) => {
-    if (!isSuperAdmin) return;
-    if (!window.confirm(`VOID Invoice ${row.invoice}?`)) return;
 
-    await voidTransaksiPenjualan(row.id);
-    alert("✅ Transaksi berhasil di VOID");
-  };
 
   const handleEdit = (row) => {
     if (!isSuperAdmin) return;
-    alert(`EDIT Invoice ${row.invoice} (siap diarahkan ke form edit)`);
+
+    const trx = rows.find((x) => x.id === row.id);
+    if (!trx) return alert("Data transaksi tidak ditemukan");
+
+    setEditData(trx);
+    setShowEdit(true);
   };
 
   const exportPDF = () => {
@@ -161,6 +187,17 @@ export default function TablePenjualan() {
     });
 
     doc.save(`Laporan_Penjualan_${Date.now()}.pdf`);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      await updateTransaksiPenjualan(editData.id, editData, userLogin);
+
+      alert("✅ Transaksi berhasil diupdate");
+      setShowEdit(false);
+    } catch (e) {
+      alert(e.message || "❌ Gagal update");
+    }
   };
 
   const handleRefund = async (row) => {
@@ -217,7 +254,7 @@ export default function TablePenjualan() {
   return (
     <div className="bg-white rounded-2xl shadow-lg p-5">
       {showPrint && printData && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex justify-center items-center">
+        <div className="fixed inset-0 bg-black/40 z-40 flex justify-center items-center pointer-events-auto">
           <div className="bg-white rounded-xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-auto">
             <CetakInvoicePenjualan
               transaksi={printData}
@@ -322,48 +359,41 @@ export default function TablePenjualan() {
                   </span>
                 </td>
 
-                <td className="text-center space-x-2">
+                <td className="text-center">
                   <div className="flex gap-2 justify-center">
-                    {/* PRINT - semua role */}
+                    {/* PRINT - SEMUA ROLE */}
                     <button
                       onClick={() => handlePrint(row)}
                       className="px-2 py-1 bg-blue-600 text-white rounded text-xs"
                     >
-                      Print
+                      🖨 Print
                     </button>
 
-                    {/* SUPERADMIN ONLY */}
-                    {isSuperAdmin && (
-                      <>
-                        <button
-                          className="px-2 py-1 bg-yellow-600 text-white rounded text-xs"
-                          onClick={() => handleEdit(row)}
-                        >
-                          Edit
-                        </button>
+                    {/* EDIT */}
+                    <button
+                      onClick={() => handleEdit(row)}
+                      className={`px-2 py-1 rounded text-xs ${
+                        isSuperAdmin
+                          ? "bg-yellow-500 text-white"
+                          : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      }`}
+                      disabled={!isSuperAdmin}
+                    >
+                      ✏️ Edit
+                    </button>
 
-                        <button
-                          className="px-2 py-1 bg-orange-600 text-white rounded text-xs"
-                          onClick={() => handleRefund(row)}
-                        >
-                          Refund
-                        </button>
-
-                        <button
-                          className="px-2 py-1 bg-red-600 text-white rounded text-xs"
-                          onClick={() => handleVoid(row)}
-                        >
-                          Reject
-                        </button>
-
-                        <button
-                          className="px-2 py-1 bg-gray-700 text-white rounded text-xs"
-                          onClick={() => handleVoid(row)}
-                        >
-                          VOID
-                        </button>
-                      </>
-                    )}
+                    {/* REFUND */}
+                    <button
+                      onClick={() => handleRefund(row)}
+                      className={`px-2 py-1 rounded text-xs ${
+                        isSuperAdmin
+                          ? "bg-orange-500 text-white"
+                          : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      }`}
+                      disabled={!isSuperAdmin}
+                    >
+                      🔄 Refund
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -402,6 +432,82 @@ export default function TablePenjualan() {
           Next
         </button>
       </div>
+      {showEdit && editData && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex justify-center items-center">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-xl p-6">
+            <h3 className="text-lg font-bold mb-4">✏️ Edit Transaksi</h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm">Nama Pelanggan</label>
+                <input
+                  value={editData.user?.namaPelanggan || ""}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      user: {
+                        ...editData.user,
+                        namaPelanggan: e.target.value,
+                      },
+                    })
+                  }
+                  className="w-full border rounded px-3 py-1"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm">No Telepon</label>
+                <input
+                  value={editData.user?.noTlpPelanggan || ""}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      user: {
+                        ...editData.user,
+                        noTlpPelanggan: e.target.value,
+                      },
+                    })
+                  }
+                  className="w-full border rounded px-3 py-1"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm">Nama Sales</label>
+                <input
+                  value={editData.user?.namaSales || ""}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      user: {
+                        ...editData.user,
+                        namaSales: e.target.value,
+                      },
+                    })
+                  }
+                  className="w-full border rounded px-3 py-1"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setShowEdit(false)}
+                className="px-3 py-1 bg-gray-500 text-white rounded"
+              >
+                Batal
+              </button>
+
+              <button
+                onClick={handleSaveEdit}
+                className="px-3 py-1 bg-blue-600 text-white rounded"
+              >
+                💾 Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

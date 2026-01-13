@@ -30,7 +30,7 @@
 import { db } from "./FirebaseInit";
 import {
   getDatabase,
-  increment ,
+  increment,
   ref,
   onValue,
   get,
@@ -39,16 +39,82 @@ import {
   push,
   remove,
   runTransaction,
-  query, // ⬅️ TAMBAH
-  orderByChild, // ⬅️ TAMBAH
-  limitToLast, // ⬅️ TAMBAH
-  startAt, // ⬅️ TAMBAH
-  endAt, // ⬅️ TAMBAH
+  query,
+  orderByChild,
+  limitToLast,
+  startAt,
+  endAt,
 } from "firebase/database";
 
 /* ============================================================
    HELPERS
 ============================================================ */
+
+
+export const getUserRole = async (username) => {
+  if (!username) return null;
+
+  // 🔥 SESUAI DB BARU (TANPA @)
+  const key = String(username).toUpperCase();
+
+  const snap = await get(ref(db, `users/${key}`));
+
+  if (!snap.exists()) return null;
+
+  return snap.val().role || null;
+};
+
+
+
+/**
+ * ===============================
+ * UPDATE TRANSAKSI (REALTIME DB)
+ * ===============================
+ */
+export const updateTransaksiPenjualan = async (
+  trxId,
+  payload,
+  userLogin
+) => {
+  if (!trxId) throw new Error("ID transaksi kosong");
+
+  // 🔒 Proteksi role
+  if (!["superadmin", "admin"].includes(userLogin.role)) {
+    throw new Error("Akses ditolak");
+  }
+
+  const trxRef = ref(db, `penjualan/${trxId}`);
+  const snap = await get(trxRef);
+
+  if (!snap.exists()) {
+    throw new Error("Transaksi tidak ditemukan");
+  }
+
+  const oldData = snap.val();
+
+  // 🧾 Audit log
+  const audit = {
+    action: "EDIT",
+    invoice: oldData.invoice,
+    before: {
+      user: oldData.user,
+    },
+    after: {
+      user: payload.user,
+    },
+    editedBy: userLogin.username || userLogin.uid,
+    role: userLogin.role,
+    at: Date.now(),
+  };
+
+  await update(trxRef, {
+    user: payload.user,
+    updatedAt: Date.now(),
+    audit: [...(oldData.audit || []), audit],
+  });
+};
+
+
 
 export const listenUserProfile = (uid, callback) => {
   const db = getDatabase();

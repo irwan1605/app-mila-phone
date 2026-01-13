@@ -16,16 +16,16 @@ const rupiah = (n) =>
 export default function CetakInvoicePenjualan({ transaksi, onClose }) {
   const printRef = useRef(null);
 
-  /**
-   * ✅ HOOK HARUS DI ATAS (TIDAK BOLEH DI DALAM IF)
-   */
   const handlePrint = useReactToPrint({
-    content: () => printRef.current,
+    contentRef: printRef,
     documentTitle: transaksi?.invoice || "Invoice",
-    removeAfterPrint: true,
   });
+  
 
-
+  useEffect(() => {
+    console.log("PRINT DATA:", transaksi);
+    console.log("REF:", printRef.current);
+  }, [transaksi]);
 
   if (!transaksi) return null;
 
@@ -50,8 +50,14 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
         </button>
 
         <button
-          onClick={handlePrint}
-          className="px-4 py-2 bg-blue-600 text-white rounded"
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            console.log("BUTTON DIKLIK");
+            handlePrint();
+          }}
+          className="px-4 py-2 bg-blue-600 text-white rounded 
+             z-[9999] relative pointer-events-auto"
         >
           🖨️ CETAK INVOICE
         </button>

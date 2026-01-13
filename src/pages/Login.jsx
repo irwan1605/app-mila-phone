@@ -83,14 +83,16 @@ export default function Login({ onLogin, users: usersProp }) {
     }
 
     const logged = {
-      _key: u._key || u.username, // 🔥 FALLBACK KE USERNAME
-      username: u.username,
-      name: u.name || u.username,
-      role: u.role,
-      toko: u.toko,
+      username: u.username,   // IRWAN
+      name: u.name,
+      role: u.role,           // superadmin
+      status: u.status,
+      toko: u.toko || null,
     };
     
-    localStorage.setItem("user", JSON.stringify(logged));
+    localStorage.setItem("userLogin", JSON.stringify(logged));
+    
+    
     
     
     if (typeof onLogin === "function") onLogin(logged);
