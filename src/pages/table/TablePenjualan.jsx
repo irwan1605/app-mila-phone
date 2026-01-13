@@ -13,6 +13,7 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import CetakInvoicePenjualan from "../Print/CetakInvoicePenjualan";
 
 /* ================= UTIL ================= */
 const rupiah = (n) =>
@@ -25,6 +26,9 @@ const rupiah = (n) =>
 export default function TablePenjualan() {
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
+  const [printData, setPrintData] = useState(null);
+  const [showPrint, setShowPrint] = useState(false);
+
   const pageSize = 10;
 
   /* ================= USER LOGIN ================= */
@@ -100,6 +104,14 @@ export default function TablePenjualan() {
     return tableRows.slice(start, start + pageSize);
   }, [tableRows, page]);
 
+  const handlePrint = (row) => {
+    const trx = rows.find((x) => x.id === row.id);
+    if (!trx) return alert("Data transaksi tidak ditemukan");
+
+    setPrintData(trx);
+    setShowPrint(true);
+  };
+
   /* ================= ACTION ================= */
   const handleVoid = async (row) => {
     if (!isSuperAdmin) return;
@@ -153,9 +165,9 @@ export default function TablePenjualan() {
 
   const handleRefund = async (row) => {
     if (!isSuperAdmin) return;
-  
+
     if (!window.confirm(`Refund transaksi ${row.invoice}?`)) return;
-  
+
     try {
       await refundRestorePenjualan(row);
       alert("✅ Refund berhasil & stok dikembalikan");
@@ -163,7 +175,6 @@ export default function TablePenjualan() {
       alert("❌ Gagal refund");
     }
   };
-  
 
   /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {
@@ -205,9 +216,19 @@ export default function TablePenjualan() {
   /* ================= RENDER ================= */
   return (
     <div className="bg-white rounded-2xl shadow-lg p-5">
+      {showPrint && printData && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex justify-center items-center">
+          <div className="bg-white rounded-xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-auto">
+            <CetakInvoicePenjualan
+              transaksi={printData}
+              onClose={() => setShowPrint(false)}
+            />
+          </div>
+        </div>
+      )}
       <h2 className="text-lg font-bold mb-4">📊 TABEL PENJUALAN</h2>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 p-4">
         <button
           onClick={exportExcel}
           className="px-3 py-1 bg-green-600 text-white rounded"
@@ -302,30 +323,48 @@ export default function TablePenjualan() {
                 </td>
 
                 <td className="text-center space-x-2">
-                {isSuperAdmin ? (
-                    <>
-                      <button
-                        className="px-2 py-1 bg-red-600 text-white rounded"
-                        onClick={() => handleRefund(row)}
-                      >
-                        Refund
-                      </button>
-                      <button
-                        onClick={() => handleEdit(row)}
-                        className="text-blue-600 hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleVoid(row)}
-                        className="text-red-600 hover:underline"
-                      >
-                        VOID
-                      </button>
-                    </>
-                  ) : (
-                    "-"
-                  )}
+                  <div className="flex gap-2 justify-center">
+                    {/* PRINT - semua role */}
+                    <button
+                      onClick={() => handlePrint(row)}
+                      className="px-2 py-1 bg-blue-600 text-white rounded text-xs"
+                    >
+                      Print
+                    </button>
+
+                    {/* SUPERADMIN ONLY */}
+                    {isSuperAdmin && (
+                      <>
+                        <button
+                          className="px-2 py-1 bg-yellow-600 text-white rounded text-xs"
+                          onClick={() => handleEdit(row)}
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          className="px-2 py-1 bg-orange-600 text-white rounded text-xs"
+                          onClick={() => handleRefund(row)}
+                        >
+                          Refund
+                        </button>
+
+                        <button
+                          className="px-2 py-1 bg-red-600 text-white rounded text-xs"
+                          onClick={() => handleVoid(row)}
+                        >
+                          Reject
+                        </button>
+
+                        <button
+                          className="px-2 py-1 bg-gray-700 text-white rounded text-xs"
+                          onClick={() => handleVoid(row)}
+                        >
+                          VOID
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

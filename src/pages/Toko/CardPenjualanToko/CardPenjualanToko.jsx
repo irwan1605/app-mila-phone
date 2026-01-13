@@ -21,7 +21,6 @@ import ExportExcelButton from "../../../components/ExportExcelButton";
 import CetakInvoicePenjualan from "../../Print/CetakInvoicePenjualan";
 import { useLocation } from "react-router-dom";
 
-
 import {
   listenPenjualan,
   addPenjualan,
@@ -43,7 +42,7 @@ const genInvoice = () =>
 // ================= COMPONENT =================
 export default function CardPenjualanToko() {
   const navigate = useNavigate();
-  
+
   const previewRef = useRef(null);
 
   // ================= USER LOGIN =================
@@ -80,34 +79,31 @@ export default function CardPenjualanToko() {
   const [stockRealtime, setStockRealtime] = useState({});
   const location = useLocation();
 
-useEffect(() => {
-  if (!location.state?.fastSale) return;
+  useEffect(() => {
+    if (!location.state?.fastSale) return;
 
-  const d = location.state.imeiData;
+    const d = location.state.imeiData;
 
-  if (!d?.imei) return;
+    if (!d?.imei) return;
 
-  setItems([
-    {
-      id: Date.now(),
-      kategoriBarang: d.kategoriBarang,
-      namaBrand: d.namaBrand,
-      namaBarang: d.namaBarang,
-      imei: d.imei,
-      imeiList: [d.imei],
-      qty: 1,
-      bundlingItems: d.bundling || [],
-      isImei: true,
+    setItems([
+      {
+        id: Date.now(),
+        kategoriBarang: d.kategoriBarang,
+        namaBrand: d.namaBrand,
+        namaBarang: d.namaBarang,
+        imei: d.imei,
+        imeiList: [d.imei],
+        qty: 1,
+        bundlingItems: d.bundling || [],
+        isImei: true,
 
-      hargaMap: d.hargaMap || {},
-      skemaHarga: "srp",
-      hargaAktif: Number(d.hargaMap?.srp || 0),
-    },
-  ]);
-}, [location.state]);
-
-  
-
+        hargaMap: d.hargaMap || {},
+        skemaHarga: "srp",
+        hargaAktif: Number(d.hargaMap?.srp || 0),
+      },
+    ]);
+  }, [location.state]);
 
   useEffect(() => {
     const unsub = listenStockAll((data) => {
@@ -118,7 +114,7 @@ useEffect(() => {
 
   useEffect(() => {
     if (!formUser.namaToko) return;
-  
+
     const sync = async () => {
       for (const item of items) {
         if (item.isImei && item.imeiList?.length) {
@@ -129,10 +125,9 @@ useEffect(() => {
         }
       }
     };
-  
+
     sync();
   }, [items, formUser.namaToko]);
-  
 
   // ================= LISTEN TABLE =================
   useEffect(() => {
@@ -251,15 +246,14 @@ useEffect(() => {
             if (!imei) {
               throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
             }
-          
+
             // ✅ VALIDASI STATE SAJA (SUDAH DI LOCK)
             if (!item.imeiList || !item.imeiList.includes(imei)) {
               throw new Error(`IMEI tidak valid (${imei})`);
             }
-          
+
             imeiLocked.push(imei);
           }
-          
         } else {
           if (!item.sku) {
             throw new Error(`SKU tidak ditemukan (${item.namaBarang})`);
@@ -470,22 +464,21 @@ useEffect(() => {
             >
               {submitting ? "Menyimpan..." : "SUBMIT PENJUALAN"}
             </button>
+            <div className="flex justify-between">
+              {showPreview && printData && (
+                <CetakInvoicePenjualan transaksi={printData} ref={previewRef} />
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-lg p-5">
+    
         <div className="flex justify-between items-center mb-3">
-          <h2 className="text-lg font-bold">📊 TABEL PENJUALAN</h2>
-          <ExportExcelButton transaksiType="penjualan" />
+          <TablePenjualan data={penjualanList} />
         </div>
-
-        <TablePenjualan data={penjualanList} />
       </div>
-
-      {showPreview && printData && (
-        <CetakInvoicePenjualan transaksi={printData} ref={previewRef} />
-      )}
     </div>
   );
 }

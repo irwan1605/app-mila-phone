@@ -13,7 +13,7 @@ const rupiah = (n) =>
     maximumFractionDigits: 0,
   });
 
-export default function CetakInvoicePenjualan({ transaksi }) {
+export default function CetakInvoicePenjualan({ transaksi, onClose }) {
   const printRef = useRef(null);
 
   /**
@@ -21,39 +21,13 @@ export default function CetakInvoicePenjualan({ transaksi }) {
    */
   const handlePrint = useReactToPrint({
     content: () => printRef.current,
-    documentTitle: transaksi?.invoice
-      ? `Invoice-${transaksi.invoice}`
-      : "Invoice",
-    pageStyle: `
-      @page { size: A4; margin: 12mm; }
-      @media print {
-        body { -webkit-print-color-adjust: exact; }
-      }
-    `,
+    documentTitle: transaksi?.invoice || "Invoice",
+    removeAfterPrint: true,
   });
 
-  /**
-   * ✅ OPTIONAL: AUTO PRINT SAAT HALAMAN DIBUKA
-   * (boleh dihapus kalau tidak mau auto print)
-   */
-  useEffect(() => {
-    if (!transaksi) return;
-    const t = setTimeout(() => {
-      handlePrint();
-    }, 600);
-    return () => clearTimeout(t);
-  }, [transaksi, handlePrint]);
 
-  /**
-   * ⛔ RETURN BOLEH SETELAH SEMUA HOOK
-   */
-  if (!transaksi) {
-    return (
-      <div className="p-10 text-center text-gray-500">
-        Data invoice tidak ditemukan
-      </div>
-    );
-  }
+
+  if (!transaksi) return null;
 
   const {
     invoice,
@@ -65,14 +39,21 @@ export default function CetakInvoicePenjualan({ transaksi }) {
   } = transaksi;
 
   return (
-    <div className="bg-gray-100 min-h-screen p-4">
-      {/* TOMBOL CETAK (TIDAK IKUT KE PDF) */}
-      <div className="mb-4 text-right print:hidden">
+    <div className="p-4">
+      {/* BUTTON AREA */}
+      <div className="flex justify-between mb-4 print:hidden">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 bg-gray-600 text-white rounded"
+        >
+          ❌ Cancel
+        </button>
+
         <button
           onClick={handlePrint}
           className="px-4 py-2 bg-blue-600 text-white rounded"
         >
-          🖨️ Cetak PDF
+          🖨️ CETAK INVOICE
         </button>
       </div>
 
