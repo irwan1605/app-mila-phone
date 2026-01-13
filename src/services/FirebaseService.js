@@ -2252,22 +2252,25 @@ export const getImeiDetailByToko = async (namaToko, imei) => {
 };
 
 
-export const lockImeiRealtime = async (imei, toko, user = {}) => {
-  const r = ref(db, `imei_locks/${imei}`);
-  const snap = await get(r);
+export const lockImeiRealtime = async (imei, toko) => {
+  const lockRef = ref(db, `imei_locks/${imei}`);
+  const snap = await get(lockRef);
 
   if (snap.exists()) {
     throw new Error("IMEI sedang dipakai user lain");
   }
 
-  if (!imei || !toko) return;
+  await set(lockRef, {
+    toko,
+    lockedAt: Date.now(),
+  });
+
   await update(ref(db, `inventory/${toko}/${imei}`), {
     STATUS: "LOCKED",
     lockedAt: Date.now(),
-
- 
   });
 };
+
 
 export const logImeiAudit = ({
   imei,
@@ -2293,27 +2296,33 @@ export const kurangiStokImei = async ({ tokoNama, imei }) => {
     throw new Error("Parameter IMEI / Toko tidak lengkap");
   }
 
-  const tokoKey = String(tokoNama).trim().toUpperCase();
+  const toko = String(tokoNama).trim();
   const imeiKey = String(imei).trim();
 
-  // 🔥 PATH SESUAI STRUKTUR DB KAMU
-  const imeiRef = ref(
-    db,
-    `stokImei/${tokoKey}/${imeiKey}`
-  );
+  const refImei = ref(db, `inventory/${toko}/${imeiKey}`);
+  const snap = await get(refImei);
 
-  const snap = await get(imeiRef);
-
-  // ❌ kalau memang tidak ada di DB
   if (!snap.exists()) {
-    throw new Error(`IMEI ${imeiKey} tidak ada di stok`);
+    throw new Error(`IMEI ${imeiKey} tidak ada di stok ${toko}`);
   }
 
-  // 🔥 HAPUS / SET SOLD
-  await set(imeiRef, null);
+  const data = snap.val();
+
+  if (data.STATUS !== "AVAILABLE") {
+    throw new Error(
+      `IMEI ${imeiKey} tidak tersedia (STATUS: ${data.STATUS})`
+    );
+  }
+
+  // 🔥 tandai SOLD
+  await update(refImei, {
+    STATUS: "SOLD",
+    soldAt: Date.now(),
+  });
 
   return true;
 };
+
 
 
 export const listenPenjualanRealtime = (callback) => {
@@ -2333,11 +2342,13 @@ export const listenPenjualanRealtime = (callback) => {
 // UNLOCK IMEI
 export const unlockImeiRealtime = async (imei, toko) => {
   if (!imei || !toko) return;
+
   await update(ref(db, `inventory/${toko}/${imei}`), {
     STATUS: "AVAILABLE",
     unlockedAt: Date.now(),
   });
 };
+
 
 export const refundRestorePenjualan = async (trx) => {
   // 1. tandai refund
@@ -2746,6 +2757,7 @@ export async function ensureImeiInInventory({
     });
   }
 }
+
 
 
 

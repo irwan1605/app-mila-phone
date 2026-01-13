@@ -116,6 +116,24 @@ useEffect(() => {
     return () => unsub && unsub();
   }, []);
 
+  useEffect(() => {
+    if (!formUser.namaToko) return;
+  
+    const sync = async () => {
+      for (const item of items) {
+        if (item.isImei && item.imeiList?.length) {
+          await ensureImeiInInventory({
+            tokoNama: formUser.namaToko,
+            imei: item.imeiList[0],
+          });
+        }
+      }
+    };
+  
+    sync();
+  }, [items, formUser.namaToko]);
+  
+
   // ================= LISTEN TABLE =================
   useEffect(() => {
     const unsub = listenPenjualan((rows) =>
