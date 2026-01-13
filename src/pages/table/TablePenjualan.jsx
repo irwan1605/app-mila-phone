@@ -9,7 +9,7 @@ import {
   listenPenjualan,
   refundRestorePenjualan,
   updateTransaksiPenjualan,
-  getUserRole ,
+  getUserRole,
 } from "../../services/FirebaseService";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -32,8 +32,10 @@ export default function TablePenjualan() {
   const [showPrint, setShowPrint] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editData, setEditData] = useState(null);
-
-  
+  /* ================= FILTER ================= */
+  const [keyword, setKeyword] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const pageSize = 10;
 
@@ -48,28 +50,23 @@ export default function TablePenjualan() {
 
   const [roleDb, setRoleDb] = useState(null);
 
-// DEBUG
-console.log("LOGIN:", userLogin);
-console.log(
-  "LOGIN KEY:",
-  userLogin?.username || userLogin?.name || userLogin?.nik
-);
-console.log("ROLE DB:", roleDb);
+  // DEBUG
+  console.log("LOGIN:", userLogin);
+  console.log(
+    "LOGIN KEY:",
+    userLogin?.username || userLogin?.name || userLogin?.nik
+  );
+  console.log("ROLE DB:", roleDb);
 
-useEffect(() => {
-  const loginKey =
-    userLogin?.username ||
-    userLogin?.name ||
-    userLogin?.nik;
+  useEffect(() => {
+    const loginKey = userLogin?.username || userLogin?.name || userLogin?.nik;
 
-  if (!loginKey) return;
+    if (!loginKey) return;
 
-  getUserRole(loginKey).then(setRoleDb);
-}, [userLogin]);
-  
+    getUserRole(loginKey).then(setRoleDb);
+  }, [userLogin]);
 
-  const isSuperAdmin = 
-  String(roleDb || "").toLowerCase() === "superadmin";
+  const isSuperAdmin = String(roleDb || "").toLowerCase() === "superadmin";
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
@@ -79,58 +76,98 @@ useEffect(() => {
     return () => unsub && unsub();
   }, []);
 
-  /* ================= FLATTEN DATA ================= */
-  const tableRows = useMemo(() => {
-    const result = [];
+  useEffect(() => {
+    setPage(1);
+  }, [keyword, dateFrom, dateTo]);
 
-    rows.forEach((trx) => {
-      const items = Array.isArray(trx.items) ? trx.items : [];
+/* ================= FLATTEN DATA ================= */
+const tableRows = useMemo(() => {
+  const result = [];
 
-      items.forEach((item) => {
-        result.push({
-          id: trx.id,
-          tanggal: trx.tanggal || trx.createdAt,
-          invoice: trx.invoice,
-          toko: trx.toko || "-",
+  rows.forEach((trx) => {
+    const items = Array.isArray(trx.items) ? trx.items : [];
 
-          pelanggan: trx.user?.namaPelanggan || "-",
-          telp: trx.user?.noTlpPelanggan || "-",
-          sales: trx.user?.namaSales || "-",
+    items.forEach((item) => {
+      result.push({
+        id: trx.id,
+        tanggal: trx.tanggal || trx.createdAt,
+        invoice: trx.invoice,
+        toko: trx.toko || "-",
 
-          kategoriBarang: item.kategoriBarang || "-",
-          namaBrand: item.namaBrand || "-",
-          namaBarang: item.namaBarang || "-",
+        pelanggan: trx.user?.namaPelanggan || "-",
+        telp: trx.user?.noTlpPelanggan || "-",
+        sales: trx.user?.namaSales || "-",
 
-          bundling: Array.isArray(item.bundlingItems)
-            ? item.bundlingItems.map((b) => b.namaBarang).join(", ")
-            : "-",
+        kategoriBarang: item.kategoriBarang || "-",
+        namaBrand: item.namaBrand || "-",
+        namaBarang: item.namaBarang || "-",
 
-          imei: Array.isArray(item.imeiList) ? item.imeiList.join(", ") : "-",
+        bundling: Array.isArray(item.bundlingItems)
+          ? item.bundlingItems.map((b) => b.namaBarang).join(", ")
+          : "-",
 
-          qty: Number(item.qty || 0),
+        imei: Array.isArray(item.imeiList)
+          ? item.imeiList.join(", ")
+          : "-",
 
-          statusBayar: trx.payment?.status || "-",
-          namaMdr: trx.payment?.namaMdr || "-",
-          nominalMdr: trx.payment?.nominalMdr || 0,
-          tenor: trx.payment?.tenor || "-",
-          cicilan: trx.payment?.cicilan || 0,
-          grandTotal: trx.payment?.grandTotal || 0,
+        qty: Number(item.qty || 0),
 
-          status: trx.statusPembayaran || "OK",
-        });
+        statusBayar: trx.payment?.status || "-",
+        namaMdr: trx.payment?.namaMdr || "-",
+        nominalMdr: trx.payment?.nominalMdr || 0,
+        tenor: trx.payment?.tenor || "-",
+        cicilan: trx.payment?.cicilan || 0,
+        grandTotal: trx.payment?.grandTotal || 0,
+
+        status: trx.statusPembayaran || "OK",
       });
     });
+  });
 
-    return result;
-  }, [rows]);
+  return result;
+}, [rows]);
+
+/* ================= FILTER ================= */
+const filteredRows = useMemo(() => {
+  return tableRows.filter((r) => {
+    const text = `
+      ${r.invoice}
+      ${r.toko}
+      ${r.pelanggan}
+      ${r.sales}
+      ${r.kategoriBarang}
+      ${r.namaBrand}
+      ${r.namaBarang}
+      ${r.imei}
+    `.toLowerCase();
+
+    const matchText = text.includes(keyword.toLowerCase());
+
+    let matchDate = true;
+
+    if (dateFrom) {
+      matchDate =
+        new Date(r.tanggal) >= new Date(dateFrom);
+    }
+
+    if (matchDate && dateTo) {
+      matchDate =
+        new Date(r.tanggal) <= new Date(dateTo);
+    }
+
+    return matchText && matchDate;
+  });
+}, [tableRows, keyword, dateFrom, dateTo]);
+
+
 
   /* ================= PAGINATION ================= */
-  const pageCount = Math.ceil(tableRows.length / pageSize);
+  const pageCount = Math.ceil(filteredRows.length / pageSize);
 
   const pagedData = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return tableRows.slice(start, start + pageSize);
-  }, [tableRows, page]);
+    return filteredRows.slice(start, start + pageSize);
+  }, [filteredRows, page]);
 
   const handlePrint = (row) => {
     const trx = rows.find((x) => x.id === row.id);
@@ -139,8 +176,6 @@ useEffect(() => {
     setPrintData(trx);
     setShowPrint(true);
   };
-
-
 
   const handleEdit = (row) => {
     if (!isSuperAdmin) return;
@@ -279,6 +314,29 @@ useEffect(() => {
         >
           Export PDF
         </button>
+      </div>
+
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        <input
+          placeholder="🔍 Cari Invoice, Toko, Pelanggan, Sales, Barang, IMEI..."
+          className="border rounded px-3 py-1 col-span-2"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+        />
+
+        <input
+          type="date"
+          className="border rounded px-3 py-1"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+        />
+
+        <input
+          type="date"
+          className="border rounded px-3 py-1"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+        />
       </div>
 
       {/* SCROLL HORIZONTAL */}

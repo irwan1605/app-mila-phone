@@ -49,6 +49,13 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
   const totalKredit =
     Number(totalBarang || 0) + Number(payment?.nominalMdr || 0);
 
+  // TANGGAL CETAK (HARI INI)
+  const tanggalCetak = new Date().toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <div className="p-4">
       {/* BUTTON AREA */}
@@ -86,7 +93,7 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
           <div className="text-right">
             <h2 className="font-bold text-lg">INVOICE PENJUALAN</h2>
             <p>No Invoice : {invoice}</p>
-            <p>Tanggal : {user?.tanggal}</p>
+            <p>Tanggal : {tanggalCetak}</p>
           </div>
         </div>
 
