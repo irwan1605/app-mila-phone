@@ -113,8 +113,15 @@ export default function FormPaymentSection({
   const cicilanPerBulan = useMemo(() => {
     if (paymentSafe.status !== "PIUTANG") return 0;
     if (!paymentSafe.tenor) return 0;
-    return Math.ceil(grandTotal / Number(paymentSafe.tenor));
+  
+    // ambil angka dari "6 BULAN"
+    const tenorAngka = parseInt(paymentSafe.tenor);
+  
+    if (!tenorAngka || tenorAngka <= 0) return 0;
+  
+    return Math.ceil(grandTotal / tenorAngka);
   }, [grandTotal, paymentSafe.status, paymentSafe.tenor]);
+  
 
   /* ================= CASH ================= */
   const kembalian = useMemo(() => {
@@ -433,9 +440,18 @@ export default function FormPaymentSection({
             </div>
 
             {paymentSafe.tenor && (
-              <div className="text-sm">
-                <b>Cicilan / Bulan:</b> Rp{" "}
-                {cicilanPerBulan.toLocaleString("id-ID")}
+              <div className="mt-2 p-2 bg-blue-50 rounded">
+                <div className="font-semibold text-blue-700">
+                  SIMULASI CICILAN
+                </div>
+                <div>Tenor: {paymentSafe.tenor} bulan</div>
+                <div>
+                  Cicilan / bulan:
+                  <b className="text-green-700">
+                    {" "}
+                    Rp {cicilanPerBulan.toLocaleString("id-ID")}
+                  </b>
+                </div>
               </div>
             )}
           </>
@@ -451,6 +467,15 @@ export default function FormPaymentSection({
               value={uangDibayar}
               onChange={(e) => setUangDibayar(Number(e.target.value || 0))}
             />
+          </div>
+        )}
+
+        {paymentSafe.status === "PIUTANG" && (
+          <div className="text-xs bg-gray-50 p-2 rounded">
+            <div>Harga Barang: Rp {totalBarang.toLocaleString("id-ID")}</div>
+            <div>MDR: Rp {nominalMdr.toLocaleString("id-ID")}</div>
+            <div>DP User: Rp {paymentSafe.dpUser.toLocaleString("id-ID")}</div>
+            <div>Voucher: Rp {paymentSafe.voucher.toLocaleString("id-ID")}</div>
           </div>
         )}
 

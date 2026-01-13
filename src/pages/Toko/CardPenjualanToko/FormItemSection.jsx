@@ -74,8 +74,35 @@ export default function FormItemSection({
   }, [location, safeOnChange]);
   
   
+  useEffect(() => {
+    const handleLeave = () => {
+      items.forEach((it) => {
+        it.imeiList?.forEach((im) => {
+          unlockImeiRealtime(im, tokoLogin);
+        });
+      });
+    };
   
- 
+    window.addEventListener("beforeunload", handleLeave);
+  
+    return () => {
+      handleLeave();
+      window.removeEventListener("beforeunload", handleLeave);
+    };
+  }, [items, tokoLogin]);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      items.forEach((it) => {
+        it.imeiList?.forEach((im) => {
+          unlockImeiRealtime(im, tokoLogin);
+        });
+      });
+    }, 5 * 60 * 1000); // 5 menit
+  
+    return () => clearTimeout(timer);
+  }, [items, tokoLogin]);
+  
   
 
   /* ================= LOAD MASTER ================= */
@@ -239,6 +266,35 @@ export default function FormItemSection({
   // push ke penjualan
   safeOnChange([...items, newItem]);
 };
+
+const findBarangByImei = (imei) => {
+  // cari dari transaksi pembelian
+  const trx = allTransaksi.find(
+    (t) =>
+      String(t.IMEI || "").trim() === imei &&
+      String(t.NAMA_TOKO || "").toUpperCase() ===
+        String(tokoLogin || "").toUpperCase()
+  );
+
+  if (!trx) return null;
+
+  // mapping ke master barang
+  const barang = masterBarang.find(
+    (b) =>
+      String(b.namaBarang || "").toUpperCase() ===
+      String(trx.NAMA_BARANG || "").toUpperCase()
+  );
+
+  if (!barang) return null;
+
+  return {
+    kategoriBarang: barang.kategoriBarang,
+    namaBrand: barang.namaBrand || barang.brand,
+    namaBarang: barang.namaBarang,
+    hargaMap: barang.harga || {},
+  };
+};
+
   
 
   /* ================= RENDER ================= */
@@ -389,13 +445,13 @@ export default function FormItemSection({
                   qty: 0,
                 });
               }}
-              onBlur={() => {
+              onBlur={async () => {
                 const imei = (item.imei || "").trim();
                 if (!imei) return;
-                if (imei.length < 14) return;
-
+              
+                // CEK IMEI ADA DI STOK TOKO
                 if (!imeiAvailableList.includes(imei)) {
-                  alert("❌ IMEI tidak tersedia / sudah dipakai");
+                  alert("❌ IMEI tidak ada di stok toko ini");
                   updateItem(idx, {
                     imei: "",
                     imeiList: [],
@@ -403,19 +459,43 @@ export default function FormItemSection({
                   });
                   return;
                 }
-
-                item.imeiList?.forEach((old) => {
-                  if (old !== imei) unlockImeiRealtime(old, tokoLogin);
-                });
-
-                lockImeiRealtime(imei, tokoLogin);
-
+              
+                // AUTO FILL BARANG
+                const autoBarang = findBarangByImei(imei);
+              
+                if (!autoBarang) {
+                  alert("❌ Data barang IMEI tidak ditemukan");
+                  return;
+                }
+              
+                try {
+                  await lockImeiRealtime(imei, tokoLogin);
+                } catch (e) {
+                  alert("❌ IMEI sedang dipakai user lain");
+                  updateItem(idx, {
+                    imei: "",
+                    imeiList: [],
+                    qty: 0,
+                  });
+                  return;
+                }
+              
                 updateItem(idx, {
                   imei,
                   imeiList: [imei],
                   qty: 1,
+              
+                  kategoriBarang: autoBarang.kategoriBarang,
+                  namaBrand: autoBarang.namaBrand,
+                  namaBarang: autoBarang.namaBarang,
+                  hargaMap: autoBarang.hargaMap,
+                  skemaHarga: "srp",
+                  hargaAktif: Number(autoBarang.hargaMap?.srp || 0),
+                  isImei: true,
                 });
               }}
+              
+              
             />
 
             <datalist id={`imei-${idx}`}>

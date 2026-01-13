@@ -20,7 +20,6 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
     contentRef: printRef,
     documentTitle: transaksi?.invoice || "Invoice",
   });
-  
 
   useEffect(() => {
     console.log("PRINT DATA:", transaksi);
@@ -29,14 +28,26 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
 
   if (!transaksi) return null;
 
-  const {
-    invoice,
-    toko,
-    user = {},
-    items = [],
-    payment = {},
-    totalBarang,
-  } = transaksi;
+  const { invoice, toko, user = {}, items = [], payment = {} } = transaksi;
+
+  // HITUNG TOTAL BARANG DARI ITEMS
+  const totalBarang = items.reduce(
+    (s, it) => s + Number(it.qty || 0) * Number(it.hargaUnit || 0),
+    0
+  );
+
+  const isKredit = payment?.status === "PIUTANG";
+
+  const tenorAngka = parseInt(payment?.tenor || 0);
+
+  const cicilan =
+    tenorAngka > 0
+      ? Math.ceil(Number(payment.grandTotal || 0) / tenorAngka)
+      : 0;
+
+  // TOTAL KREDIT = total barang + MDR
+  const totalKredit =
+    Number(totalBarang || 0) + Number(payment?.nominalMdr || 0);
 
   return (
     <div className="p-4">
@@ -129,6 +140,23 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
           </tbody>
         </table>
 
+        {isKredit && (
+          <div className="mt-3 text-right text-sm">
+            <p>
+              Total Nominal Barang : <b>{rupiah(totalBarang)}</b>
+            </p>
+            <p>
+              MDR : <b>{rupiah(payment.nominalMdr)}</b>
+            </p>
+
+            <hr className="my-1" />
+
+            <p className="text-base font-bold text-indigo-700">
+              TOTAL KREDIT : {rupiah(totalKredit)}
+            </p>
+          </div>
+        )}
+
         {/* TOTAL */}
         <div className="mt-4 text-right">
           <p>
@@ -138,14 +166,26 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
             Status Bayar : <b>{payment?.status}</b>
           </p>
           <p>
-            Metode Bayar : <b>{payment?.metode}</b>
+            Metode Bayar : <b>{payment?.paymentMethod}</b>
           </p>
 
-          {payment?.metode === "KREDIT" && (
-            <>
-              <p>Tenor : {payment.tenor} Bulan</p>
-              <p>Bayar / Bulan : {rupiah(payment.bayarPerBulan)}</p>
-            </>
+          {isKredit && (
+            <div className="mt-2 text-xs space-y-1">
+              <p>Harga Barang : {rupiah(totalBarang)}</p>
+              <p>MDR : {rupiah(payment.nominalMdr)}</p>
+              <p>DP User : {rupiah(payment.dpUser)}</p>
+              <p>Voucher : {rupiah(payment.voucher)}</p>
+
+              <hr />
+
+              <p>
+                <b>Sisa Hutang :</b> {rupiah(payment.grandTotal)}
+              </p>
+              <p>Tenor : {payment.tenor}</p>
+              <p>
+                Cicilan / bulan : <b>{rupiah(cicilan)}</b>
+              </p>
+            </div>
           )}
 
           <p className="text-lg font-bold mt-2">
