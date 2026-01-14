@@ -9,12 +9,12 @@ import {
   listenMasterKategoriBarang,
   unlockImeiRealtime,
   lockImeiRealtime,
-  submitPenjualanAtomic,
 } from "../../../services/FirebaseService";
 import { ref, get } from "firebase/database";
 import { db } from "../../../firebase/FirebaseInit";
 import { useCallback } from "react";
 import { useLocation } from "react-router-dom";
+
 
 /* ================= KONSTANTA ================= */
 const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
@@ -28,7 +28,6 @@ export default function FormItemSection({
   allowManual = false,
   stockRealtime = {},
   tahap1Valid = false, // ✅ VALIDATOR TAHAP 1
-  formPayment, // ⬅ TERIMA DARI TAHAP 3
 }) {
   const items = useMemo(() => (Array.isArray(value) ? value : []), [value]);
   const safeOnChange = useCallback(
@@ -42,6 +41,8 @@ export default function FormItemSection({
   const [imeiKeyword, setImeiKeyword] = useState("");
   const location = useLocation();
 
+  
+
   const userLogin = JSON.parse(localStorage.getItem("userLogin") || "{}");
 
   const TOKO_AKTIF =
@@ -52,13 +53,14 @@ export default function FormItemSection({
       : userLogin.toko === "1"
       ? "CILANGKAP PUSAT"
       : "";
+  
 
   useEffect(() => {
     if (!location?.state?.fastSale) return;
-
+  
     const d = location.state.imeiData;
     if (!d) return;
-
+  
     // Safety check toko
     if (
       String(d.toko || "").toUpperCase() !==
@@ -67,7 +69,7 @@ export default function FormItemSection({
       alert("❌ Stok bukan milik toko ini");
       return;
     }
-
+  
     safeOnChange([
       {
         id: Date.now(),
@@ -85,19 +87,19 @@ export default function FormItemSection({
       },
     ]);
   }, [location, safeOnChange]);
-
+  
   useEffect(() => {
     if (!location?.state?.fastSale) return;
-
+  
     const d = location.state.imeiData;
     if (!d) return;
-
+  
     // VALIDASI TOKO
     if (d.toko && d.toko !== TOKO_AKTIF) {
       alert("❌ Stok bukan milik toko ini");
       return;
     }
-
+  
     safeOnChange([
       {
         id: Date.now(),
@@ -115,7 +117,8 @@ export default function FormItemSection({
       },
     ]);
   }, [location, safeOnChange]);
-
+  
+  
   useEffect(() => {
     const handleLeave = () => {
       items.forEach((it) => {
@@ -124,15 +127,15 @@ export default function FormItemSection({
         });
       });
     };
-
+  
     window.addEventListener("beforeunload", handleLeave);
-
+  
     return () => {
       handleLeave();
       window.removeEventListener("beforeunload", handleLeave);
     };
   }, [items, tokoLogin]);
-
+  
   useEffect(() => {
     const timer = setTimeout(() => {
       items.forEach((it) => {
@@ -141,9 +144,11 @@ export default function FormItemSection({
         });
       });
     }, 5 * 60 * 1000); // 5 menit
-
+  
     return () => clearTimeout(timer);
   }, [items, tokoLogin]);
+  
+  
 
   /* ================= LOAD MASTER ================= */
   useEffect(() => {
@@ -196,12 +201,12 @@ export default function FormItemSection({
 
   useEffect(() => {
     if (!tahap1Valid) return;
-
+  
     // FAST SALE
     if (items.length === 1 && items[0].imeiList?.length === 1) {
       return;
     }
-
+  
     // AUTO CREATE FORM
     if (allowManual && items.length === 0) {
       safeOnChange([
@@ -219,6 +224,9 @@ export default function FormItemSection({
       ]);
     }
   }, [tahap1Valid, allowManual, items, safeOnChange]);
+  
+  
+  
 
   /* ================= IMEI AVAILABLE ================= */
   const imeiAvailableList = useMemo(() => {
@@ -269,89 +277,70 @@ export default function FormItemSection({
     masterBarang.filter(
       (b) => b.kategoriBarang === kategori && (b.namaBrand || b.brand) === brand
     );
-
+    
   const handleTambahBarang = () => {
-    // validasi minimal
-    const last = items[items.length - 1];
+  // validasi minimal
+  const last = items[items.length - 1];
 
-    if (!last) {
-      alert("⚠ Isi barang terlebih dahulu");
-      return;
-    }
+  if (!last) {
+    alert("⚠ Isi barang terlebih dahulu");
+    return;
+  }
 
-    if (!last.namaBarang) {
-      alert("⚠ Pilih barang dulu");
-      return;
-    }
+  if (!last.namaBarang) {
+    alert("⚠ Pilih barang dulu");
+    return;
+  }
 
-    if (last.isImei && (!last.imeiList || last.imeiList.length === 0)) {
-      alert("⚠ IMEI wajib diisi");
-      return;
-    }
+  if (last.isImei && (!last.imeiList || last.imeiList.length === 0)) {
+    alert("⚠ IMEI wajib diisi");
+    return;
+  }
 
-    if (!last.isImei && (!last.qty || last.qty < 1)) {
-      alert("⚠ Qty tidak valid");
-      return;
-    }
+  if (!last.isImei && (!last.qty || last.qty < 1)) {
+    alert("⚠ Qty tidak valid");
+    return;
+  }
 
-    // CLONE agar aman (atomic)
-    const newItem = {
-      ...last,
-      id: Date.now(),
-    };
-
-    // push ke penjualan
-    safeOnChange([...items, newItem]);
+  // CLONE agar aman (atomic)
+  const newItem = {
+    ...last,
+    id: Date.now(),
   };
 
-  const findBarangByImei = (imei) => {
-    // cari dari transaksi pembelian
-    const trx = allTransaksi.find(
-      (t) =>
-        String(t.IMEI || "").trim() === imei &&
-        String(t.NAMA_TOKO || "").toUpperCase() ===
-          String(tokoLogin || "").toUpperCase()
-    );
+  // push ke penjualan
+  safeOnChange([...items, newItem]);
+};
 
-    if (!trx) return null;
+const findBarangByImei = (imei) => {
+  // cari dari transaksi pembelian
+  const trx = allTransaksi.find(
+    (t) =>
+      String(t.IMEI || "").trim() === imei &&
+      String(t.NAMA_TOKO || "").toUpperCase() ===
+        String(tokoLogin || "").toUpperCase()
+  );
 
-    // mapping ke master barang
-    const barang = masterBarang.find(
-      (b) =>
-        String(b.namaBarang || "").toUpperCase() ===
-        String(trx.NAMA_BARANG || "").toUpperCase()
-    );
+  if (!trx) return null;
 
-    if (!barang) return null;
+  // mapping ke master barang
+  const barang = masterBarang.find(
+    (b) =>
+      String(b.namaBarang || "").toUpperCase() ===
+      String(trx.NAMA_BARANG || "").toUpperCase()
+  );
 
-    return {
-      kategoriBarang: barang.kategoriBarang,
-      namaBrand: barang.namaBrand || barang.brand,
-      namaBarang: barang.namaBarang,
-      hargaMap: barang.harga || {},
-    };
+  if (!barang) return null;
+
+  return {
+    kategoriBarang: barang.kategoriBarang,
+    namaBrand: barang.namaBrand || barang.brand,
+    namaBarang: barang.namaBarang,
+    hargaMap: barang.harga || {},
   };
+};
 
-  const handleSubmitPenjualan = async () => {
-    try {
-      const payload = {
-        tokoId: tokoLogin,
-        tokoNama: TOKO_AKTIF,
-        invoice: `INV-${Date.now()}`,
-        items,
-        payment: formPayment,
-        user: userLogin,
-      };
-
-      await submitPenjualanAtomic(payload);
-
-      alert("✅ PENJUALAN BERHASIL");
-
-      safeOnChange([]); // reset form
-    } catch (e) {
-      alert("❌ Gagal simpan penjualan");
-    }
-  };
+  
 
   /* ================= RENDER ================= */
   return (
@@ -504,7 +493,7 @@ export default function FormItemSection({
               onBlur={async () => {
                 const imei = (item.imei || "").trim();
                 if (!imei) return;
-
+              
                 // CEK IMEI ADA DI STOK TOKO
                 if (!imeiAvailableList.includes(imei)) {
                   alert("❌ IMEI tidak ada di stok toko ini");
@@ -515,15 +504,15 @@ export default function FormItemSection({
                   });
                   return;
                 }
-
+              
                 // AUTO FILL BARANG
                 const autoBarang = findBarangByImei(imei);
-
+              
                 if (!autoBarang) {
                   alert("❌ Data barang IMEI tidak ditemukan");
                   return;
                 }
-
+              
                 try {
                   await lockImeiRealtime(imei, tokoLogin);
                 } catch (e) {
@@ -535,12 +524,12 @@ export default function FormItemSection({
                   });
                   return;
                 }
-
+              
                 updateItem(idx, {
                   imei,
                   imeiList: [imei],
                   qty: 1,
-
+              
                   kategoriBarang: autoBarang.kategoriBarang,
                   namaBrand: autoBarang.namaBrand,
                   namaBarang: autoBarang.namaBarang,
@@ -550,6 +539,8 @@ export default function FormItemSection({
                   isImei: true,
                 });
               }}
+              
+              
             />
 
             <datalist id={`imei-${idx}`}>
@@ -603,12 +594,6 @@ export default function FormItemSection({
           }}
         >
           ❌ Cancel
-        </button>
-        <button
-          onClick={handleSubmitPenjualan}
-          className="w-full bg-green-600 text-white py-2 rounded-xl"
-        >
-          💾 SIMPAN PENJUALAN
         </button>
       </div>
     </div>

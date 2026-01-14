@@ -15,6 +15,7 @@ export default function FormPaymentSection({
   onChange,
   disabled = false,
   totalBarang = 0,
+  onSubmit, // ⬅ TAMBAHAN
 }) {
   /* ================= MASTER DATA ================= */
   const [masterMdr, setMasterMdr] = useState([]);

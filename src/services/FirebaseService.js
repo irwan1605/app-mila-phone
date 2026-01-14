@@ -842,19 +842,19 @@ export const getAllUsersOnce = async () => {
 ============================================================ */
 
 export const addPenjualan = async (tokoId, data) => {
-  if (!tokoId) {
-    throw new Error("tokoId wajib");
-  }
+  if (!tokoId) throw new Error("tokoId kosong");
 
-  const r = ref(db, `toko/${tokoId}/penjualan`);
-  const newRef = push(r);
+  const id = push(ref(db, `toko/${tokoId}/penjualan`)).key;
 
-  await set(newRef, {
-    ...data,
-    createdAt: Date.now(),
-  });
-
-  return newRef.key;
+  await set(
+    ref(db, `toko/${tokoId}/penjualan/${id}`),
+    {
+      ...data,
+      id,
+      PAYMENT_METODE: "PENJUALAN",
+      STATUS: "Approved",
+    }
+  );
 };
 
 
