@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase/FirebaseInit";
 import FirebaseService from "../../services/FirebaseService";
 import { FaPrint } from "react-icons/fa";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 export default function TableTransferBarang({ currentRole }) {
   const isSuperAdmin = currentRole === "superadmin";
@@ -35,6 +37,42 @@ export default function TableTransferBarang({ currentRole }) {
     });
   }, []);
 
+  const handleExportExcel = () => {
+    const filteredData = rows.filter(
+      (r) => filterStatus === "ALL" || r.status === filterStatus
+    );
+
+    const excelData = filteredData.map((r, i) => ({
+      No: i + 1,
+      Tanggal: r.tanggal || "-",
+      "No DO": r.noDo || "-",
+      "No Surat Jalan": r.noSuratJalan || "-",
+      Pengirim: r.pengirim || "-",
+      "Toko Pengirim": r.tokoPengirim || "-",
+      "Toko Tujuan": r.ke || "-",
+      Brand: r.brand || "-",
+      Barang: r.barang || "-",
+      IMEI: Array.isArray(r.imeis) ? r.imeis.join(", ") : "-",
+      Qty: r.qty || 0,
+      Status: r.status || "Pending",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Transfer Barang");
+
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "array",
+    });
+
+    const fileData = new Blob([excelBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
+    });
+
+    saveAs(fileData, `Transfer_Barang_${Date.now()}.xlsx`);
+  };
+
   return (
     <div
       id="table-transfer-barang"
@@ -44,7 +82,7 @@ export default function TableTransferBarang({ currentRole }) {
         📦 TABEL TRANSFER BARANG
       </h3>
 
-      <div className="hover:bg-indigo-50 transition-colors p-2">
+      <div className="hover:bg-indigo-50 transition-colors p-2 flex gap-3">
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
@@ -56,6 +94,17 @@ export default function TableTransferBarang({ currentRole }) {
           <option value="Rejected">Rejected</option>
           <option value="Voided">Voided</option>
         </select>
+
+        <button
+        onClick={handleExportExcel}
+        className="
+      px-4 py-2 rounded-xl text-sm font-bold text-white
+      bg-gradient-to-r from-emerald-500 to-green-600
+      hover:scale-105 transition
+    "
+      >
+        ⬇ EXPORT EXCEL
+      </button>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-300 p-2">

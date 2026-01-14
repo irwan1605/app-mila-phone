@@ -8,7 +8,11 @@ import {
   FaExchangeAlt,
   FaSun,
   FaMoon,
+  FaSearch,
 } from "react-icons/fa";
+
+import { ref, onValue } from "firebase/database";
+import { db } from "../firebase";
 
 import {
   listenPenjualanHemat,
@@ -16,6 +20,8 @@ import {
 } from "../services/FirebaseService";
 
 import * as XLSX from "xlsx";
+
+const userLogin = JSON.parse(localStorage.getItem("userLogin") || "{}");
 
 // ======================= KONSTAN =======================
 const TOKO_LIST = [
@@ -39,19 +45,6 @@ const fmt = (n) => {
   }
 };
 
-
-// Preset contoh untuk KREDIT/PIUTANG (boleh kamu sesuaikan)
-const CREDIT_PRESET = {
-  AKULAKU: { mdr: "2.5", kategoriHarga: "KREDIT", mpProtec: "YA", tenor: "12" },
-  KREDIVO: { mdr: "2.0", kategoriHarga: "KREDIT", mpProtec: "YA", tenor: "6" },
-  "HOME CREDIT INDONESIA (HCI)": {
-    mdr: "3.0",
-    kategoriHarga: "KREDIT",
-    mpProtec: "YA",
-    tenor: "12",
-  },
-};
-
 // ✅ KEY UNTUK SIMPAN TEMA
 const THEME_KEY = "DASHBOARD_TOKO_THEME";
 
@@ -64,6 +57,22 @@ export default function DashboardToko(props) {
   const isPicToko = roleUser === "PIC_TOKO";
 
   const toko = TOKO_LIST.find((t) => t.id === String(tokoId));
+  const TOKO_AKTIF = toko?.tokoName || "";
+
+  const MAP_TOKO = {
+    1: "-OhxxxxCILANGKAP",
+    2: "-OhxxxxCIBINONG",
+    3: "-OhxxxxGASALAM",
+    4: "-OhxxxxCITEUREUP",
+    5: "-OhxxxxCIRACAS",
+    6: "-OhxxxxMETLAND1",
+    7: "-OhWcqjXukQ2kZ8SGwUV", // METLAND 2
+    8: "-OhxxxxPITARA",
+    9: "-OhxxxxKOTAWISATA",
+    10: "-OhxxxxSAWANGAN",
+  };
+
+  const firebaseTokoId = MAP_TOKO[userLogin.toko] || MAP_TOKO[tokoId];
 
   // ✅ SIMPAN TOKO LOGIN & ROLE (UNTUK TRANSFER BARANG)
   useEffect(() => {
@@ -85,6 +94,38 @@ export default function DashboardToko(props) {
 
   // ✅ LIST KHUSUS TOKO INI (HEMAT) UNTUK IMEI, VOID, RETURN
   const [transaksiToko, setTransaksiToko] = useState([]);
+  const [stockToko, setStockToko] = useState([]);
+  const [loadingStock, setLoadingStock] = useState(true);
+
+  useEffect(() => {
+    if (!firebaseTokoId) return;
+
+    const dbRef = ref(db, `toko/${firebaseTokoId}/transaksi`);
+
+    const unsub = onValue(dbRef, (snap) => {
+      if (!snap.exists()) {
+        setStockToko([]);
+        setLoadingStock(false);
+        return;
+      }
+
+      const raw = snap.val();
+      const rows = Object.values(raw);
+
+      // 🔥 FILTER STOK REAL
+      const stokAktif = rows.filter((x) => {
+        const status = String(x.STATUS || "").toUpperCase();
+        const metode = String(x.PAYMENT_METODE || "").toUpperCase();
+
+        return metode === "PEMBELIAN" && status === "APPROVED";
+      });
+
+      setStockToko(stokAktif);
+      setLoadingStock(false);
+    });
+
+    return () => unsub();
+  }, [firebaseTokoId]);
 
   // ======================= LAPORAN VOID & RETURN =======================
   const [laporanVoid, setLaporanVoid] = useState([]);
@@ -254,7 +295,6 @@ export default function DashboardToko(props) {
       unsubToko && unsubToko();
     };
   }, [tokoId]);
- 
 
   // ======================= FILTER REALTIME VOID & RETURN (KHUSUS TOKO INI) =======================
   const dataVoidRealtime = useMemo(() => {
@@ -279,40 +319,6 @@ export default function DashboardToko(props) {
     setLaporanVoid(dataVoidRealtime);
     setLaporanReturn(dataReturnRealtime);
   }, [dataVoidRealtime, dataReturnRealtime]);
-
-  // ======================= INDEX IMEI DARI DATA PEMBELIAN (KHUSUS TOKO INI) =======================
-  const imeiIndex = useMemo(() => {
-    const map = {};
-    (transaksiToko || []).forEach((x) => {
-      const pm = (x.PAYMENT_METODE || "").toUpperCase();
-      const imei = String(x.IMEI || "").trim();
-      if (!imei) return;
-      if (pm !== "PEMBELIAN") return; // hanya stok dari pembelian toko ini
-
-      map[imei] = x;
-    });
-    return map;
-  }, [transaksiToko]);
-
-  // ======================= RINGKASAN PENJUALAN CEPAT =======================
-  const totalQty = useMemo(
-    () =>
-      (quickItems || []).reduce(
-        (sum, it) => sum + (Number(it.qty || 1) || 0),
-        0
-      ),
-    [quickItems]
-  );
-
-  const totalBayar = useMemo(
-    () =>
-      (quickItems || []).reduce(
-        (sum, it) =>
-          sum + Number(it.hargaUnit || 0) * (Number(it.qty || 1) || 0),
-        0
-      ),
-    [quickItems]
-  );
 
   // eslint-disable-next-line no-unused-vars
   const totalVoid = useMemo(() => {
@@ -362,6 +368,8 @@ export default function DashboardToko(props) {
 
   // ======================= HANDLER =======================
 
+  /* ================= HANDLER ================= */
+
   const handleToggleTheme = () => {
     setIsDark((prev) => !prev);
   };
@@ -369,7 +377,6 @@ export default function DashboardToko(props) {
   const handleOpen = (type) => {
     if (!toko) return;
 
-    // ✅ PAKAI CODE / SLUG TOKO, BUKAN ID ANGKA
     const tokoSlug =
       toko.code || (toko.tokoName || "").toLowerCase().replace(/\s+/g, "-");
 
@@ -377,161 +384,71 @@ export default function DashboardToko(props) {
       navigate(`/toko/${tokoSlug}/penjualan`);
     } else if (type === "stock") {
       navigate("/stok-opname", {
-        state: {
-          lockedToko: toko.tokoName, // 🔒 kunci toko
-        },
+        state: { lockedToko: toko.tokoName },
       });
     } else if (type === "transfer") {
       navigate("/transfer-barang");
     }
   };
 
-  const handleAddItemByImei = () => {
-    const imei = searchImei.trim();
-    if (!imei) {
-      alert("Masukkan IMEI terlebih dahulu.");
-      return;
-    }
+  console.log("🔥 FIREBASE TOKO ID:", firebaseTokoId);
 
-    // ✅ CEK DUPLIKAT DI TABEL DRAFT
-    const alreadyDraft = quickItems.find((p) => p.imei === imei);
-    if (alreadyDraft) {
-      alert("❌ IMEI ini sudah ada di tabel penjualan.");
-      return;
-    }
-
-    const data = imeiIndex[imei];
-
-    if (!data) {
-      alert("❌ IMEI tidak ditemukan di stok pembelian toko ini.");
-      return;
-    }
-
-    // ✅ BLOKIR JIKA IMEI SUDAH TERJUAL
-    const isSold = (transaksiToko || []).some(
-      (t) =>
-        String(t.IMEI || "") === imei &&
-        (t.STATUS || "").toUpperCase() === "LUNAS" &&
-        (t.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
-    );
-
-    if (isSold) {
-      alert("❌ IMEI ini sudah pernah terjual.");
-      return;
-    }
-
-    const hargaUnit =
-      Number(data.HARGA_UNIT || data.HARGA_JUAL || data.TOTAL || 0) || 0;
-
-    const newItem = {
-      id: `${imei}-${Date.now()}`,
-      tanggal: new Date().toISOString().slice(0, 10),
-      noInvoice: `INV-${tokoId || "X"}-${Date.now()}`,
-      namaBrand: data.NAMA_BRAND || "",
-      namaBarang: data.NAMA_BARANG || "",
-      imei,
-      hargaUnit,
-      qty: 1,
-    };
-
-    setQuickItems((prev) => [...prev, newItem]);
-    setSearchImei("");
-  };
-
+  /* ============================
+      🔥 PENJUALAN CEPAT IMEI
+  ============================ */
+  const handleSearchImei = () => {
+    const input = String(searchImei).trim();
   
-
- 
-
-  const buildInvoiceHtml = (invoiceNo, tanggal) => {
-    const rowsHtml = (quickItems || [])
-      .map(
-        (it, idx) => `
-      <tr>
-        <td>${idx + 1}</td>
-        <td>${it.tanggal}</td>
-        <td>${it.noInvoice}</td>
-        <td>${it.namaBrand}</td>
-        <td>${it.namaBarang}</td>
-        <td>${it.imei}</td>
-        <td style="text-align:right;">${fmt(it.hargaUnit)}</td>
-      </tr>`
-      )
-      .join("");
-
-    const jenisBayarLabel =
-      paymentType === "CASH"
-        ? "CASH"
-        : paymentType === "TRANSFER"
-        ? "TRANSFER DEBIT"
-        : paymentType === "KREDIT"
-        ? "KREDIT / PIUTANG"
-        : "-";
-
-    return `
-      <html>
-      <head>
-        <title>Invoice Penjualan</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 20px; }
-          h2,h3 { margin: 0; padding: 0; }
-          table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-          th, td { border: 1px solid #444; padding: 6px 8px; font-size: 12px; }
-          th { background: #f1f5f9; }
-        </style>
-      </head>
-      <body>
-        <h2>INVOICE PENJUALAN</h2>
-        <h3>${toko ? toko.tokoName : "-"}</h3>
-        <p><b>No Invoice:</b> ${invoiceNo}</p>
-        <p><b>Tanggal:</b> ${tanggal}</p>
-        <p><b>Jenis Pembayaran:</b> ${jenisBayarLabel}</p>
-        ${
-          paymentType === "KREDIT"
-            ? `<p><b>Payment Method:</b> ${creditForm.paymentMethod || "-"} |
-               <b>MDR:</b> ${creditForm.mdr || "-"}% |
-               <b>Kategori Harga:</b> ${creditForm.kategoriHarga || "-"} |
-               <b>MP Protek:</b> ${creditForm.mpProtec || "-"} |
-               <b>Tenor:</b> ${creditForm.tenor || "-"}</p>`
-            : ""
-        }
-
-        <table>
-          <thead>
-            <tr>
-              <th>No</th>
-              <th>Tanggal</th>
-              <th>No Invoice Sumber</th>
-              <th>Brand</th>
-              <th>Barang</th>
-              <th>IMEI</th>
-              <th>Harga Unit</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml || "<tr><td colspan='7'>Tidak ada item.</td></tr>"}
-          </tbody>
-        </table>
-
-        <h3>Total Qty: ${totalQty}</h3>
-        <h3>Total Bayar: Rp ${fmt(totalBayar)}</h3>
-      </body>
-      </html>
-    `;
-  };
-
-  const handleQuickSellByImei = () => {
-    const imei = searchImei.trim();
-    if (!imei) {
-      alert("Masukkan IMEI terlebih dahulu");
+    if (!input) {
+      alert("Masukan IMEI");
       return;
     }
-
+  
+    if (loadingStock) {
+      alert("⏳ Data masih dimuat...");
+      return;
+    }
+  
+    // 1️⃣ CARI IMEI DULU
+    const imeiFound = stockToko.find(
+      (x) => String(x.IMEI || x.imei || "").trim() === input
+    );
+  
+    // 2️⃣ JIKA TIDAK ADA
+    if (!imeiFound) {
+      alert(`❌ IMEI ${input} tidak ditemukan di stok ${TOKO_AKTIF}`);
+      return;
+    }
+  
+    // 3️⃣ VALIDASI TOKO (PAKAI ID TOKO)
+    if (
+      String(imeiFound.tokoId || "") !==
+      String(firebaseTokoId || "")
+    ) {
+      alert("❌ IMEI bukan milik toko ini");
+      return;
+    }
+  
+    // 4️⃣ LANJUT FAST SALE
     navigate(`/toko/${toko.code}/penjualan`, {
       state: {
-        quickImei: imei,
+        fastSale: true,
+        imeiData: {
+          toko: TOKO_AKTIF,
+          kategoriBarang: imeiFound.KATEGORI_BRAND,
+          namaBrand: imeiFound.NAMA_BRAND,
+          namaBarang: imeiFound.NAMA_BARANG,
+          imei: imeiFound.IMEI,
+          hargaMap: {
+            srp: imeiFound.HARGA_UNIT,
+            grosir: imeiFound.HARGA_UNIT,
+            reseller: "",
+          },
+        },
       },
     });
   };
+  
 
   // ======================= HANDLE TIDAK ADA TOKO =======================
   if (!toko) {
@@ -556,8 +473,6 @@ export default function DashboardToko(props) {
     ? "bg-slate-900/70 border border-slate-700/80 text-slate-100"
     : "bg-white border border-slate-200 text-slate-900";
 
-  const subTextClass = isDark ? "text-slate-400" : "text-slate-500";
-
   return (
     <div className={`min-h-screen ${rootBgClass} p-4 sm:p-6`}>
       <div className="max-w-6xl mx-auto space-y-5">
@@ -579,26 +494,23 @@ export default function DashboardToko(props) {
                 </span>
               </span>
             </h1>
-            <p className={`text-xs sm:text-sm ${subTextClass} max-w-xl`}>
-              Kelola penjualan, stok, dan mutasi barang untuk toko ini secara
-              realtime terintegrasi dengan Firebase.
-            </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* ================= FAST SALE IMEI ================= */}
+          <div className="bg-white p-4 rounded-xl shadow mb-6 flex gap-2">
+            <FaSearch className="text-gray-400" /> {/* ✅ dipakai */}
             <input
               type="text"
               value={searchImei}
               onChange={(e) => setSearchImei(e.target.value)}
-              placeholder="Scan / Input IMEI"
-              className="px-3 py-2 rounded-xl border text-sm w-44"
+              className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none"
+              placeholder="Cari IMEI..."
             />
-
             <button
-              onClick={handleQuickSellByImei}
-              className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+              onClick={handleSearchImei}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded"
             >
-              Tambah
+              Proses Penjualan
             </button>
           </div>
 

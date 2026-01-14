@@ -68,6 +68,13 @@ export default function TablePenjualan() {
 
   const isSuperAdmin = String(roleDb || "").toLowerCase() === "superadmin";
 
+  const tokoLogin =
+  userLogin?.toko ||
+  userLogin?.namaToko ||
+  userLogin?.nama_toko ||
+  "";
+
+
   /* ================= LOAD DATA ================= */
   useEffect(() => {
     const unsub = listenPenjualan((data) => {
@@ -130,6 +137,17 @@ const tableRows = useMemo(() => {
 /* ================= FILTER ================= */
 const filteredRows = useMemo(() => {
   return tableRows.filter((r) => {
+
+    // 🔐 FILTER TOKO (KHUSUS PIC)
+    if (!isSuperAdmin && tokoLogin) {
+      if (
+        String(r.toko || "").toUpperCase() !==
+        String(tokoLogin || "").toUpperCase()
+      ) {
+        return false;
+      }
+    }
+
     const text = `
       ${r.invoice}
       ${r.toko}
@@ -157,7 +175,15 @@ const filteredRows = useMemo(() => {
 
     return matchText && matchDate;
   });
-}, [tableRows, keyword, dateFrom, dateTo]);
+}, [
+  tableRows,
+  keyword,
+  dateFrom,
+  dateTo,
+  isSuperAdmin,
+  tokoLogin,
+]);
+
 
 
 

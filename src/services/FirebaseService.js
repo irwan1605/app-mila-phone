@@ -50,6 +50,92 @@ import {
    HELPERS
 ============================================================ */
 
+export const submitPenjualanAtomic = async (data) => {
+  const {
+    tokoId,
+    tokoNama,
+    invoice,
+    items,
+    payment,
+    user,
+  } = data;
+
+  const updates = {};
+
+  const trxId = push(ref(db, `toko/${tokoId}/penjualan`)).key;
+
+  const payload = {
+    id: trxId,
+    invoice,
+    toko: tokoNama,
+    items,
+    payment,
+    user,
+    statusPembayaran: "OK",
+    PAYMENT_METODE: "PENJUALAN",
+    STATUS: "Approved",
+    createdAt: Date.now(),
+    tanggal: new Date().toISOString(),
+  };
+
+  // 1️⃣ TABLE PENJUALAN TOKO
+  updates[`toko/${tokoId}/penjualan/${trxId}`] = payload;
+
+  // 2️⃣ SALES REPORT GLOBAL
+  updates[`reports/sales/${trxId}`] = payload;
+
+  // 3️⃣ TRANSAKSI LOG
+  updates[`toko/${tokoId}/transaksi/${trxId}`] = {
+    ...payload,
+    SYSTEM_PAYMENT: "PENJUALAN",
+  };
+
+  // 4️⃣ HAPUS STOK (IMEI)
+  items.forEach((it) => {
+    it.imeiList?.forEach((imei) => {
+      updates[
+        `stokLock/${imei}`
+      ] = null; // unlock
+    });
+  });
+
+  await update(ref(db), updates);
+};
+
+
+// ================================
+// LISTEN STOCK BY TOKO
+// ================================
+
+export const listenStockByToko = (tokoId, cb) => {
+  if (!tokoId) return;
+
+  const stokRef = ref(db, `${tokoId}/transaksi`);
+
+  console.log("🔥 LISTEN PATH:", `${tokoId}/transaksi`);
+
+  return onValue(stokRef, (snap) => {
+    if (!snap.exists()) {
+      console.log("❌ SNAPSHOT KOSONG");
+      cb([]);
+      return;
+    }
+
+    const raw = snap.val();
+
+    const list = Object.values(raw).filter(
+      (x) =>
+        x.PAYMENT_METODE === "PEMBELIAN" &&
+        x.STATUS === "Approved"
+    );
+
+    console.log("✅ RAW STOK:", list);
+
+    cb(list);
+  });
+};
+
+
 
 export const getUserRole = async (username) => {
   if (!username) return null;
