@@ -140,13 +140,19 @@ const filteredRows = useMemo(() => {
 
     // 🔐 FILTER TOKO (KHUSUS PIC)
     if (!isSuperAdmin && tokoLogin) {
-      if (
-        String(r.toko || "").toUpperCase() !==
-        String(tokoLogin || "").toUpperCase()
-      ) {
+      const dbToko = String(r.toko || "")
+        .replace(/\s+/g, "")
+        .toUpperCase();
+    
+      const loginToko = String(tokoLogin || "")
+        .replace(/\s+/g, "")
+        .toUpperCase();
+    
+      if (dbToko !== loginToko) {
         return false;
       }
     }
+    
 
     const text = `
       ${r.invoice}

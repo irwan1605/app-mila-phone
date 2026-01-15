@@ -398,38 +398,18 @@ export default function DashboardToko(props) {
   ============================ */
   const handleSearchImei = () => {
     const input = String(searchImei).trim();
+    if (!input) return alert("Masukan IMEI");
+    if (loadingStock) return alert("⏳ Loading data...");
   
-    if (!input) {
-      alert("Masukan IMEI");
-      return;
-    }
-  
-    if (loadingStock) {
-      alert("⏳ Data masih dimuat...");
-      return;
-    }
-  
-    // 1️⃣ CARI IMEI DULU
     const imeiFound = stockToko.find(
-      (x) => String(x.IMEI || x.imei || "").trim() === input
+      (x) => String(x.IMEI || "").trim() === input
     );
   
-    // 2️⃣ JIKA TIDAK ADA
     if (!imeiFound) {
-      alert(`❌ IMEI ${input} tidak ditemukan di stok ${TOKO_AKTIF}`);
+      alert(`❌ IMEI ${input} tidak ditemukan`);
       return;
     }
   
-    // 3️⃣ VALIDASI TOKO (PAKAI ID TOKO)
-    if (
-      String(imeiFound.tokoId || "") !==
-      String(firebaseTokoId || "")
-    ) {
-      alert("❌ IMEI bukan milik toko ini");
-      return;
-    }
-  
-    // 4️⃣ LANJUT FAST SALE
     navigate(`/toko/${toko.code}/penjualan`, {
       state: {
         fastSale: true,
@@ -439,10 +419,11 @@ export default function DashboardToko(props) {
           namaBrand: imeiFound.NAMA_BRAND,
           namaBarang: imeiFound.NAMA_BARANG,
           imei: imeiFound.IMEI,
+  
           hargaMap: {
-            srp: imeiFound.HARGA_UNIT,
-            grosir: imeiFound.HARGA_UNIT,
-            reseller: "",
+            srp: Number(imeiFound.HARGA_SRP || imeiFound.HARGA_UNIT || 0),
+            grosir: Number(imeiFound.HARGA_GROSIR || 0),
+            reseller: Number(imeiFound.HARGA_RESELLER || 0),
           },
         },
       },
@@ -497,8 +478,8 @@ export default function DashboardToko(props) {
           </div>
 
           {/* ================= FAST SALE IMEI ================= */}
-          <div className="bg-white p-4 rounded-xl shadow mb-6 flex gap-2">
-            <FaSearch className="text-gray-400" /> {/* ✅ dipakai */}
+          {/* <div className="bg-white p-4 rounded-xl shadow mb-6 flex gap-2">
+            <FaSearch className="text-gray-400" /> 
             <input
               type="text"
               value={searchImei}
@@ -512,7 +493,7 @@ export default function DashboardToko(props) {
             >
               Proses Penjualan
             </button>
-          </div>
+          </div> */}
 
           <div className="flex items-center gap-3 justify-end">
             <button

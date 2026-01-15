@@ -458,22 +458,22 @@ export default function Dashboard() {
       </h2>
 
       {/* ================= FAST SALE IMEI ================= */}
-      <div className="bg-white p-4 rounded-xl shadow mb-6 flex gap-2">
-        <FaSearch className="text-gray-400" /> {/* ✅ dipakai */}
-        <input
+      {/* <div className="bg-white p-4 rounded-xl shadow mb-6 flex gap-2"> */}
+        {/* <FaSearch className="text-gray-400" /> */}
+        {/* <input
           type="text"
           value={searchImei}
           onChange={(e) => setSearchImei(e.target.value)}
           className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none"
           placeholder="Cari IMEI..."
-        />
-        <button
+        /> */}
+        {/* <button
           onClick={handleSearchImei}
           className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded"
         >
           Proses Penjualan
-        </button>
-      </div>
+        </button> */}
+      {/* </div> */}
 
       {/* 3 CARD MENU UTAMA (PENJUALAN, STOCK OPNAME, TRANSFER GUDANG) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
