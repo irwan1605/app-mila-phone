@@ -25,6 +25,20 @@ const rupiah = (n) =>
     maximumFractionDigits: 0,
   });
 
+  const TOKO_MAP = {
+    1: "CILANGKAP PUSAT",
+    2: "CIBINONG",
+    3: "GAS ALAM",
+    4: "CITEUREUP",
+    5: "CIRACAS",
+    6: "METLAND 1",
+    7: "METLAND 2",
+    8: "PITARA",
+    9: "KOTA WISATA",
+    10: "SAWANGAN",
+  };
+  
+
 export default function TablePenjualan() {
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
@@ -68,12 +82,25 @@ export default function TablePenjualan() {
 
   const isSuperAdmin = String(roleDb || "").toLowerCase() === "superadmin";
 
-  const tokoLogin =
-  userLogin?.toko ||
-  userLogin?.namaToko ||
-  userLogin?.nama_toko ||
-  "";
-
+  const tokoLogin = useMemo(() => {
+    // jika superadmin → kosong (tidak filter)
+    if (isSuperAdmin) return "";
+  
+    // PIC TOKO → ambil dari role
+    if (roleDb?.startsWith("pic_toko")) {
+      const id = roleDb.replace("pic_toko", "");
+      return TOKO_MAP[id] || "";
+    }
+  
+    // fallback
+    return (
+      userLogin?.toko ||
+      userLogin?.namaToko ||
+      userLogin?.nama_toko ||
+      ""
+    );
+  }, [roleDb, userLogin, isSuperAdmin]);
+  
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {

@@ -44,6 +44,7 @@ import {
   limitToLast,
   startAt,
   endAt,
+  child ,
 } from "firebase/database";
 
 /* ============================================================
@@ -106,6 +107,46 @@ export const submitPenjualanAtomic = async (data) => {
 // ================================
 // LISTEN STOCK BY TOKO
 // ================================
+
+export const saveTransaksiPenjualan = async (data) => {
+  return await addTransaksi(data);
+};
+
+
+export const kurangiStokSetelahPenjualan = async (trx) => {
+  const dbRef = ref(db);
+
+  for (let item of trx.items) {
+    if (!Array.isArray(item.imeiList)) continue;
+
+    for (let imei of item.imeiList) {
+      // cari stok di inventory
+      const snap = await get(
+        child(dbRef, `inventory`)
+      );
+
+      if (!snap.exists()) continue;
+
+      const data = snap.val();
+      const key = Object.keys(data).find(
+        (k) => data[k].IMEI === imei
+      );
+
+      if (!key) continue;
+
+      // update stok jadi SOLD
+      await update(
+        child(dbRef, `inventory/${key}`),
+        {
+          STATUS: "SOLD",
+          SOLD_AT: Date.now(),
+          SOLD_BY: trx.invoice,
+        }
+      );
+    }
+  }
+};
+
 
 export const listenStockByToko = (tokoId, cb) => {
   if (!tokoId) return;
