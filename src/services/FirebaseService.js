@@ -109,8 +109,23 @@ export const submitPenjualanAtomic = async (data) => {
 // ================================
 
 export const saveTransaksiPenjualan = async (data) => {
-  return await addTransaksi(data);
+  const tokoFix = String(
+    data?.tokoId?.id ||
+    data?.tokoId?.tokoId ||
+    data?.tokoId ||
+    ""
+  );
+
+  if (!tokoFix || tokoFix === "[object Object]") {
+    throw new Error("ID TOKO INVALID (GLOBAL)");
+  }
+
+  return addTransaksi(tokoFix, {
+    ...data,
+    tokoId: tokoFix
+  });
 };
+
 
 
 export const kurangiStokSetelahPenjualan = async (trx) => {
@@ -1700,25 +1715,18 @@ export const updateTransaksi = async (tokoId, id, data) => {
  * Returns the generated key.
  */
 export const addTransaksi = async (tokoId, data) => {
-  if (!tokoId) throw new Error("TOKO LOGIN WAJIB");
+  const tokoFix = String(
+    tokoId?.id || tokoId?.tokoId || tokoId || ""
+  );
 
-  const r = push(ref(db, `toko/${tokoId}/transaksi`));
+  if (!tokoFix || tokoFix === "[object Object]") {
+    throw new Error("ID TOKO INVALID (BACKEND)");
+  }
 
-  const payload = {
-    ...data,
-    id: r.key,
-    tokoId,
-    STATUS: data.STATUS || "Approved",
-    TANGGAL_TRANSAKSI:
-      data.TANGGAL_TRANSAKSI ||
-      data.TANGGAL ||
-      new Date().toISOString().slice(0, 10),
-    createdAt: Date.now(),
-  };
-
-  await set(r, payload);
-  return r.key;
+  const refPath = ref(db, `toko/${tokoFix}/transaksi`);
+  return push(refPath, data);
 };
+
 
 
 // =======================

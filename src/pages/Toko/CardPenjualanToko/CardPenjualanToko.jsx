@@ -146,9 +146,29 @@ export default function CardPenjualanToko() {
     return userLogin?.tokoId || formUser.namaTokoId || null;
   }, [userLogin, formUser.namaTokoId]);
 
+  useEffect(() => {
+    const unlockAll = async () => {
+      for (const item of items) {
+        if (item.isImei) {
+          for (const im of item.imeiList || []) {
+            await unlockImeiRealtime(im, userLogin?.email || "unknown");
+          }
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", unlockAll);
+
+    return () => {
+      unlockAll();
+      window.removeEventListener("beforeunload", unlockAll);
+    };
+  }, [items]);
+
   // ================= VALIDASI =================
   const validate = () => {
-    if (!tokoAktifId) {
+    if (!normalizeTokoId(tokoAktifId)
+    ) {
       alert("❌ Penjualan gagal: Toko belum dipilih");
       return false;
     }
@@ -227,18 +247,30 @@ export default function CardPenjualanToko() {
     if (typeof t === "string") return t;
     if (typeof t === "number") return String(t);
     if (typeof t === "object") {
-      return (
-        String(t.id || t.tokoId || t.nama || t.namaToko || "")
-      );
+      return String(t.id || t.tokoId || t.nama || t.namaToko || "");
     }
     return String(t);
   };
+
   
 
   const handleSubmitPenjualan = useCallback(async () => {
     if (loading || submitting) return;
     if (!validate()) return;
     if (!validatePayment()) return;
+  
+    // =========================
+    // FIX TOKO ID (ANTI OBJECT)
+    // =========================
+    const tokoIdFix = normalizeTokoId(tokoAktifId);
+  
+    console.log("TOKO RAW:", tokoAktifId);
+    console.log("TOKO FIX:", tokoIdFix);
+  
+    if (!tokoIdFix || tokoIdFix === "[object Object]") {
+      alert("❌ ID TOKO INVALID\nSilahkan logout & login ulang");
+      return;
+    }
   
     const imeiLocked = [];
     const stokNonImeiReduced = [];
@@ -258,17 +290,11 @@ export default function CardPenjualanToko() {
             throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
           }
   
-          if (!item.imeiList || !item.imeiList.includes(imei)) {
-            throw new Error(`IMEI tidak valid (${imei})`);
-          }
-  
-          // ❌ CEK DUPLIKAT IMEI (GLOBAL)
           const sold = await cekImeiSudahTerjual(imei);
           if (sold) {
             throw new Error(`IMEI ${imei} sudah pernah terjual`);
           }
   
-          // 🔒 LOCK REALTIME
           try {
             await lockImeiRealtime(
               imei,
@@ -297,8 +323,7 @@ export default function CardPenjualanToko() {
         invoice: formUser.noFaktur,
         tanggal: formUser.tanggal,
         toko: formUser.namaToko,
-        tokoId: normalizeTokoId(tokoAktifId),
-
+        tokoId: tokoIdFix, // ✅ SUDAH FIX STRING
   
         user: {
           namaPelanggan: formUser.namaPelanggan,
@@ -307,7 +332,6 @@ export default function CardPenjualanToko() {
         },
   
         payment: { ...payment },
-  
         statusPembayaran: "OK",
         createdAt: Date.now(),
   
@@ -326,18 +350,21 @@ export default function CardPenjualanToko() {
       };
   
       // =================================================
-      // 3️⃣ SIMPAN TRANSAKSI (DULU)
+      // 3️⃣ SIMPAN TRANSAKSI (FIX PATH)
       // =================================================
-      const key = await addPenjualan(tokoAktifId, transaksi);
+      const key = await addPenjualan(tokoIdFix, transaksi);
       if (!key) {
         throw new Error("Gagal menyimpan transaksi");
       }
   
-      // simpan global laporan
-      await saveTransaksiPenjualan(transaksi);
+      // simpan laporan global
+      await saveTransaksiPenjualan({
+        ...transaksi,
+        tokoId: tokoIdFix, // 🔥 PAKSA STRING
+      });
   
       // =================================================
-      // 4️⃣ BARU KURANGI STOK
+      // 4️⃣ KURANGI STOK
       // =================================================
       for (const item of items) {
         const qty = Number(item.qty || 0);
@@ -352,8 +379,7 @@ export default function CardPenjualanToko() {
           });
         } else {
           await kurangiStokToko({
-            tokoId: normalizeTokoId(tokoAktifId),
-
+            tokoId: tokoIdFix,
             sku: item.sku,
             qty,
           });
@@ -365,11 +391,10 @@ export default function CardPenjualanToko() {
         }
       }
   
-      // 🔥 UPDATE INVENTORY
       await kurangiStokSetelahPenjualan(transaksi);
   
       // =================================================
-      // 5️⃣ AUDIT LOG IMEI
+      // 5️⃣ AUDIT IMEI
       // =================================================
       for (const imei of imeiLocked) {
         try {
@@ -377,20 +402,17 @@ export default function CardPenjualanToko() {
             imei,
             aksi: "SALE",
             toko: formUser.namaToko,
-            tokoId: normalizeTokoId(tokoAktifId),
-
+            tokoId: tokoIdFix,
             invoice: formUser.noFaktur,
             user: userLogin?.email || "",
           });
-        } catch {
-          console.warn("Audit IMEI gagal:", imei);
-        }
+        } catch {}
       }
   
-      alert("✅ Penjualan berhasil");
+      alert("✅ PENJUALAN BERHASIL");
   
       // =================================================
-      // 6️⃣ RESET FORM
+      // 6️⃣ RESET
       // =================================================
       setItems([]);
       setPayment({});
@@ -401,12 +423,11 @@ export default function CardPenjualanToko() {
         idPelanggan: "",
         noTlpPelanggan: "",
       }));
+  
     } catch (e) {
       console.error(e);
   
-      // =================================================
-      // 🔥 ROLLBACK IMEI
-      // =================================================
+      // ROLLBACK IMEI
       for (const imei of imeiLocked) {
         try {
           await unlockImeiRealtime(
@@ -416,14 +437,11 @@ export default function CardPenjualanToko() {
         } catch {}
       }
   
-      // =================================================
-      // 🔥 ROLLBACK STOK NON IMEI
-      // =================================================
+      // ROLLBACK STOK
       for (const s of stokNonImeiReduced) {
         try {
           await kurangiStokToko({
-            tokoId: normalizeTokoId(tokoAktifId),
-
+            tokoId: tokoIdFix,
             sku: s.sku,
             qty: -Math.abs(s.qty),
           });

@@ -580,11 +580,11 @@ const findBarangByImei = (imei) => {
                 // 4️⃣ LOCK IMEI REALTIME
                 // ===============================
                 try {
-                  await lockImeiRealtime(
-                    imei,
-                    tokoLogin,
-                    userLogin.uid || userLogin.username
-                  );
+                  // await lockImeiRealtime(
+                  //   imei,
+                  //   tokoLogin,
+                  //   userLogin.uid || userLogin.username
+                  // );
                 } catch (e) {
                   alert("❌ IMEI sedang dipakai user lain");
                   return;
