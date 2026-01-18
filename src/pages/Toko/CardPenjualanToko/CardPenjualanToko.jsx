@@ -32,6 +32,8 @@ import {
   logImeiAudit,
   saveTransaksiPenjualan,
   kurangiStokSetelahPenjualan,
+  cekImeiSudahTerjual,
+  lockImeiRealtime,
 } from "../../../services/FirebaseService";
 
 // ================= UTIL =================
@@ -220,6 +222,19 @@ export default function CardPenjualanToko() {
     return true;
   };
 
+  const normalizeTokoId = (t) => {
+    if (!t) return "";
+    if (typeof t === "string") return t;
+    if (typeof t === "number") return String(t);
+    if (typeof t === "object") {
+      return (
+        String(t.id || t.tokoId || t.nama || t.namaToko || "")
+      );
+    }
+    return String(t);
+  };
+  
+
   const handleSubmitPenjualan = useCallback(async () => {
     if (loading || submitting) return;
     if (!validate()) return;
@@ -247,6 +262,23 @@ export default function CardPenjualanToko() {
             throw new Error(`IMEI tidak valid (${imei})`);
           }
   
+          // ❌ CEK DUPLIKAT IMEI (GLOBAL)
+          const sold = await cekImeiSudahTerjual(imei);
+          if (sold) {
+            throw new Error(`IMEI ${imei} sudah pernah terjual`);
+          }
+  
+          // 🔒 LOCK REALTIME
+          try {
+            await lockImeiRealtime(
+              imei,
+              formUser.namaToko,
+              userLogin?.email || "unknown"
+            );
+          } catch {
+            throw new Error(`IMEI ${imei} sedang dipakai user lain`);
+          }
+  
           imeiLocked.push(imei);
         } else {
           if (!item.sku) {
@@ -259,39 +291,14 @@ export default function CardPenjualanToko() {
       }
   
       // =================================================
-      // 2️⃣ KURANGI STOK
-      // =================================================
-      for (const item of items) {
-        const qty = Number(item.qty || 0);
-        const imei = item.isImei ? item.imeiList?.[0] : null;
-  
-        if (item.isImei) {
-          await kurangiStokImei({
-            tokoNama: String(formUser.namaToko).trim().toUpperCase(),
-            imei,
-          });
-        } else {
-          await kurangiStokToko({
-            tokoId: tokoAktifId,
-            sku: item.sku,
-            qty,
-          });
-  
-          stokNonImeiReduced.push({
-            sku: item.sku,
-            qty,
-          });
-        }
-      }
-  
-      // =================================================
-      // 3️⃣ BENTUK OBJEK TRANSAKSI
+      // 2️⃣ BENTUK OBJEK TRANSAKSI
       // =================================================
       const transaksi = {
         invoice: formUser.noFaktur,
         tanggal: formUser.tanggal,
         toko: formUser.namaToko,
-        tokoId: tokoAktifId,
+        tokoId: normalizeTokoId(tokoAktifId),
+
   
         user: {
           namaPelanggan: formUser.namaPelanggan,
@@ -313,17 +320,50 @@ export default function CardPenjualanToko() {
           qty: Number(item.qty || 0),
           hargaUnit: Number(item.hargaAktif || 0),
           total:
-            Number(item.qty || 0) * Number(item.hargaAktif || 0),
+            Number(item.qty || 0) *
+            Number(item.hargaAktif || 0),
         })),
       };
   
       // =================================================
-      // 4️⃣ SIMPAN TRANSAKSI
+      // 3️⃣ SIMPAN TRANSAKSI (DULU)
       // =================================================
-      await addPenjualan(tokoAktifId, transaksi);
+      const key = await addPenjualan(tokoAktifId, transaksi);
+      if (!key) {
+        throw new Error("Gagal menyimpan transaksi");
+      }
   
       // simpan global laporan
       await saveTransaksiPenjualan(transaksi);
+  
+      // =================================================
+      // 4️⃣ BARU KURANGI STOK
+      // =================================================
+      for (const item of items) {
+        const qty = Number(item.qty || 0);
+        const imei = item.isImei ? item.imeiList?.[0] : null;
+  
+        if (item.isImei) {
+          await kurangiStokImei({
+            tokoNama: String(formUser.namaToko)
+              .trim()
+              .toUpperCase(),
+            imei,
+          });
+        } else {
+          await kurangiStokToko({
+            tokoId: normalizeTokoId(tokoAktifId),
+
+            sku: item.sku,
+            qty,
+          });
+  
+          stokNonImeiReduced.push({
+            sku: item.sku,
+            qty,
+          });
+        }
+      }
   
       // 🔥 UPDATE INVENTORY
       await kurangiStokSetelahPenjualan(transaksi);
@@ -337,11 +377,12 @@ export default function CardPenjualanToko() {
             imei,
             aksi: "SALE",
             toko: formUser.namaToko,
-            tokoId: tokoAktifId,
+            tokoId: normalizeTokoId(tokoAktifId),
+
             invoice: formUser.noFaktur,
             user: userLogin?.email || "",
           });
-        } catch (e) {
+        } catch {
           console.warn("Audit IMEI gagal:", imei);
         }
       }
@@ -368,7 +409,10 @@ export default function CardPenjualanToko() {
       // =================================================
       for (const imei of imeiLocked) {
         try {
-          await unlockImeiRealtime(imei, formUser.namaToko);
+          await unlockImeiRealtime(
+            imei,
+            userLogin?.email || "unknown"
+          );
         } catch {}
       }
   
@@ -378,7 +422,8 @@ export default function CardPenjualanToko() {
       for (const s of stokNonImeiReduced) {
         try {
           await kurangiStokToko({
-            tokoId: tokoAktifId,
+            tokoId: normalizeTokoId(tokoAktifId),
+
             sku: s.sku,
             qty: -Math.abs(s.qty),
           });
@@ -398,6 +443,7 @@ export default function CardPenjualanToko() {
     submitting,
     userLogin,
   ]);
+  
 
   // ================= VALIDASI TAHAP 1 =================
   const isTahap1Valid = useMemo(() => {

@@ -881,22 +881,32 @@ export const getAllUsersOnce = async () => {
 /* ============================================================
    PENJUALAN (DataManagement)
 ============================================================ */
+export const cekImeiSudahTerjual = async (imei) => {
+  const snap = await get(ref(db, "penjualan"));
+  if (!snap.exists()) return false;
+
+  const data = snap.val();
+  for (const tokoId in data) {
+    const trx = data[tokoId];
+    for (const id in trx) {
+      const items = trx[id].items || [];
+      for (const it of items) {
+        if (it.imeiList?.includes(imei)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+};
+
+
 
 export const addPenjualan = async (tokoId, data) => {
-  if (!tokoId) throw new Error("tokoId kosong");
-
-  const id = push(ref(db, `toko/${tokoId}/penjualan`)).key;
-
-  await set(
-    ref(db, `toko/${tokoId}/penjualan/${id}`),
-    {
-      ...data,
-      id,
-      PAYMENT_METODE: "PENJUALAN",
-      STATUS: "Approved",
-    }
-  );
+  const res = await push(ref(db, `${tokoId}/penjualan`), data);
+  return res.key; // 🔥 KUNCI
 };
+
 
 
 export const updatePenjualan = (id, data) => {
@@ -2445,23 +2455,50 @@ export const getImeiDetailByToko = async (namaToko, imei) => {
 };
 
 
-export const lockImeiRealtime = async (imei, toko) => {
-  const lockRef = ref(db, `imei_locks/${imei}`);
+export const lockImeiRealtime = async (imei, toko, userId) => {
+  const lockRef = ref(db, `imeiLock/${imei}`);
   const snap = await get(lockRef);
 
-  if (snap.exists()) {
-    throw new Error("IMEI sedang dipakai user lain");
+  // Jika belum ada lock → langsung lock
+  if (!snap.exists()) {
+    await set(lockRef, {
+      userId,
+      toko,
+      time: Date.now(),
+    });
+    return;
   }
 
-  await set(lockRef, {
-    toko,
-    lockedAt: Date.now(),
-  });
+  const data = snap.val();
 
-  await update(ref(db, `inventory/${toko}/${imei}`), {
-    STATUS: "LOCKED",
-    lockedAt: Date.now(),
-  });
+  // Jika lock milik user sendiri → lanjutkan
+  if (data.userId === userId) return;
+
+  // Auto unlock jika > 5 menit
+  if (Date.now() - data.time > 5 * 60 * 1000) {
+    await set(lockRef, {
+      userId,
+      toko,
+      time: Date.now(),
+    });
+    return;
+  }
+
+  // Selain itu → ditolak
+  throw new Error("LOCKED_BY_OTHER");
+};
+
+export const unlockImeiRealtime = async (imei, userId) => {
+  const lockRef = ref(db, `imeiLock/${imei}`);
+  const snap = await get(lockRef);
+  if (!snap.exists()) return;
+
+  const data = snap.val();
+
+  // hanya owner boleh unlock
+  if (data.userId === userId) {
+    await remove(lockRef);
+  }
 };
 
 
@@ -2532,38 +2569,59 @@ export const listenPenjualanRealtime = (callback) => {
 };
 
 
-// UNLOCK IMEI
-export const unlockImeiRealtime = async (imei, toko) => {
-  if (!imei || !toko) return;
+export const refundRestorePenjualan = async (row) => {
+  const {
+    id,
+    toko,
+    userLogin,
+    imei,
+  } = row;
 
-  await update(ref(db, `inventory/${toko}/${imei}`), {
-    STATUS: "AVAILABLE",
-    unlockedAt: Date.now(),
-  });
-};
+  if (!id) throw new Error("ID transaksi tidak ditemukan");
 
+  // 🔥 NORMALISASI TOKO
+  const tokoId = String(toko || "")
+    .trim()
+    .replace(/\s+/g, " ");
 
-export const refundRestorePenjualan = async (trx) => {
-  // 1. tandai refund
-  await update(ref(db, `penjualan/${trx.id}`), {
-    STATUS: "REFUND",
-    refundedAt: Date.now(),
-  });
+  // ============================
+  // 1. UPDATE STATUS TRANSAKSI
+  // ============================
+  await update(
+    ref(db, `toko/${tokoId}/penjualan/${id}`),
+    {
+      statusPembayaran: "VOID",
+      refundedAt: Date.now(),
+      refundedBy: userLogin?.username || userLogin?.email || "system",
+    }
+  );
 
-  // 2. restore item
-  for (const item of trx.items) {
-    if (item.isImei && item.imeiList?.length) {
-      const imei = item.imeiList[0];
-      await update(ref(db, `inventory/${trx.toko}/${imei}`), {
-        STATUS: "AVAILABLE",
-        restoredAt: Date.now(),
+  // ============================
+  // 2. RESTORE STOK IMEI
+  // ============================
+  if (imei && imei !== "-") {
+    const imeiArr = imei.split(",");
+
+    for (const im of imeiArr) {
+      const snap = await get(
+        ref(db, `toko/${tokoId}/transaksi`)
+      );
+
+      snap.forEach((c) => {
+        if (c.val().IMEI === im.trim()) {
+          update(
+            ref(db, `toko/${tokoId}/transaksi/${c.key}`),
+            { STATUS: "APPROVED" }
+          );
+        }
       });
-    } else {
-      await update(ref(db, `stock/${trx.toko}/${item.sku}`), {
-        qty: increment(item.qty),
-      });
+
+      // UNLOCK realtime
+      await remove(ref(db, `imeiLock/${im.trim()}`));
     }
   }
+
+  return true;
 };
 
 

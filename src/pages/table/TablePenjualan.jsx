@@ -25,19 +25,18 @@ const rupiah = (n) =>
     maximumFractionDigits: 0,
   });
 
-  const TOKO_MAP = {
-    1: "CILANGKAP PUSAT",
-    2: "CIBINONG",
-    3: "GAS ALAM",
-    4: "CITEUREUP",
-    5: "CIRACAS",
-    6: "METLAND 1",
-    7: "METLAND 2",
-    8: "PITARA",
-    9: "KOTA WISATA",
-    10: "SAWANGAN",
-  };
-  
+const TOKO_MAP = {
+  1: "CILANGKAP PUSAT",
+  2: "CIBINONG",
+  3: "GAS ALAM",
+  4: "CITEUREUP",
+  5: "CIRACAS",
+  6: "METLAND 1",
+  7: "METLAND 2",
+  8: "PITARA",
+  9: "KOTA WISATA",
+  10: "SAWANGAN",
+};
 
 export default function TablePenjualan() {
   const [rows, setRows] = useState([]);
@@ -85,22 +84,16 @@ export default function TablePenjualan() {
   const tokoLogin = useMemo(() => {
     // jika superadmin → kosong (tidak filter)
     if (isSuperAdmin) return "";
-  
+
     // PIC TOKO → ambil dari role
     if (roleDb?.startsWith("pic_toko")) {
       const id = roleDb.replace("pic_toko", "");
       return TOKO_MAP[id] || "";
     }
-  
+
     // fallback
-    return (
-      userLogin?.toko ||
-      userLogin?.namaToko ||
-      userLogin?.nama_toko ||
-      ""
-    );
+    return userLogin?.toko || userLogin?.namaToko || userLogin?.nama_toko || "";
   }, [roleDb, userLogin, isSuperAdmin]);
-  
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
@@ -114,74 +107,70 @@ export default function TablePenjualan() {
     setPage(1);
   }, [keyword, dateFrom, dateTo]);
 
-/* ================= FLATTEN DATA ================= */
-const tableRows = useMemo(() => {
-  const result = [];
+  /* ================= FLATTEN DATA ================= */
+  const tableRows = useMemo(() => {
+    const result = [];
 
-  rows.forEach((trx) => {
-    const items = Array.isArray(trx.items) ? trx.items : [];
+    rows.forEach((trx) => {
+      const items = Array.isArray(trx.items) ? trx.items : [];
 
-    items.forEach((item) => {
-      result.push({
-        id: trx.id,
-        tanggal: trx.tanggal || trx.createdAt,
-        invoice: trx.invoice,
-        toko: trx.toko || "-",
+      items.forEach((item) => {
+        result.push({
+          id: trx.id,
+          tanggal: trx.tanggal || trx.createdAt,
+          invoice: trx.invoice,
+          toko: trx.toko || "-",
 
-        pelanggan: trx.user?.namaPelanggan || "-",
-        telp: trx.user?.noTlpPelanggan || "-",
-        sales: trx.user?.namaSales || "-",
+          pelanggan: trx.user?.namaPelanggan || "-",
+          telp: trx.user?.noTlpPelanggan || "-",
+          sales: trx.user?.namaSales || "-",
 
-        kategoriBarang: item.kategoriBarang || "-",
-        namaBrand: item.namaBrand || "-",
-        namaBarang: item.namaBarang || "-",
+          kategoriBarang: item.kategoriBarang || "-",
+          namaBrand: item.namaBrand || "-",
+          namaBarang: item.namaBarang || "-",
 
-        bundling: Array.isArray(item.bundlingItems)
-          ? item.bundlingItems.map((b) => b.namaBarang).join(", ")
-          : "-",
+          bundling: Array.isArray(item.bundlingItems)
+            ? item.bundlingItems.map((b) => b.namaBarang).join(", ")
+            : "-",
 
-        imei: Array.isArray(item.imeiList)
-          ? item.imeiList.join(", ")
-          : "-",
+          imei: Array.isArray(item.imeiList) ? item.imeiList.join(", ") : "-",
 
-        qty: Number(item.qty || 0),
+          qty: Number(item.qty || 0),
 
-        statusBayar: trx.payment?.status || "-",
-        namaMdr: trx.payment?.namaMdr || "-",
-        nominalMdr: trx.payment?.nominalMdr || 0,
-        tenor: trx.payment?.tenor || "-",
-        cicilan: trx.payment?.cicilan || 0,
-        grandTotal: trx.payment?.grandTotal || 0,
+          statusBayar: trx.payment?.status || "-",
+          namaMdr: trx.payment?.namaMdr || "-",
+          nominalMdr: trx.payment?.nominalMdr || 0,
+          tenor: trx.payment?.tenor || "-",
+          cicilan: trx.payment?.cicilan || 0,
+          grandTotal: trx.payment?.grandTotal || 0,
 
-        status: trx.statusPembayaran || "OK",
+          status: trx.statusPembayaran || "OK",
+        });
       });
     });
-  });
 
-  return result;
-}, [rows]);
+    return result;
+  }, [rows]);
 
-/* ================= FILTER ================= */
-const filteredRows = useMemo(() => {
-  return tableRows.filter((r) => {
+  /* ================= FILTER ================= */
+  const filteredRows = useMemo(() => {
+    return tableRows.filter((r) => {
+      // 🔐 FILTER TOKO (KHUSUS PIC)
+      if (!isSuperAdmin && tokoLogin) {
+        const dbToko = String(r.toko || "")
+          .replace(/\s+/g, "")
+          .toUpperCase();
 
-    // 🔐 FILTER TOKO (KHUSUS PIC)
-    if (!isSuperAdmin && tokoLogin) {
-      const dbToko = String(r.toko || "")
-        .replace(/\s+/g, "")
-        .toUpperCase();
-    
-      const loginToko = String(tokoLogin || "")
-        .replace(/\s+/g, "")
-        .toUpperCase();
-    
-      if (dbToko !== loginToko) {
-        return false;
+        const loginToko = String(tokoLogin || "")
+          .replace(/\s+/g, "")
+          .toUpperCase();
+
+        if (dbToko !== loginToko) {
+          return false;
+        }
       }
-    }
-    
 
-    const text = `
+      const text = `
       ${r.invoice}
       ${r.toko}
       ${r.pelanggan}
@@ -192,33 +181,21 @@ const filteredRows = useMemo(() => {
       ${r.imei}
     `.toLowerCase();
 
-    const matchText = text.includes(keyword.toLowerCase());
+      const matchText = text.includes(keyword.toLowerCase());
 
-    let matchDate = true;
+      let matchDate = true;
 
-    if (dateFrom) {
-      matchDate =
-        new Date(r.tanggal) >= new Date(dateFrom);
-    }
+      if (dateFrom) {
+        matchDate = new Date(r.tanggal) >= new Date(dateFrom);
+      }
 
-    if (matchDate && dateTo) {
-      matchDate =
-        new Date(r.tanggal) <= new Date(dateTo);
-    }
+      if (matchDate && dateTo) {
+        matchDate = new Date(r.tanggal) <= new Date(dateTo);
+      }
 
-    return matchText && matchDate;
-  });
-}, [
-  tableRows,
-  keyword,
-  dateFrom,
-  dateTo,
-  isSuperAdmin,
-  tokoLogin,
-]);
-
-
-
+      return matchText && matchDate;
+    });
+  }, [tableRows, keyword, dateFrom, dateTo, isSuperAdmin, tokoLogin]);
 
   /* ================= PAGINATION ================= */
   const pageCount = Math.ceil(filteredRows.length / pageSize);
@@ -297,13 +274,22 @@ const filteredRows = useMemo(() => {
   const handleRefund = async (row) => {
     if (!isSuperAdmin) return;
 
+    if (row.status === "VOID") {
+      return alert("⚠ Transaksi ini sudah di-refund");
+    }
+
     if (!window.confirm(`Refund transaksi ${row.invoice}?`)) return;
 
     try {
-      await refundRestorePenjualan(row);
+      await refundRestorePenjualan({
+        ...row,
+        userLogin,
+      });
+
       alert("✅ Refund berhasil & stok dikembalikan");
     } catch (e) {
-      alert("❌ Gagal refund");
+      console.error(e);
+      alert("❌ Gagal refund: " + e.message);
     }
   };
 
@@ -472,7 +458,7 @@ const filteredRows = useMemo(() => {
                         : "bg-green-100 text-green-700"
                     }`}
                   >
-                    {row.status}
+                    {row.status === "VOID" ? "Refund Berhasil" : row.status}
                   </span>
                 </td>
 

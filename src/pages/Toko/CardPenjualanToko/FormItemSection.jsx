@@ -123,7 +123,11 @@ export default function FormItemSection({
     const handleLeave = () => {
       items.forEach((it) => {
         it.imeiList?.forEach((im) => {
-          unlockImeiRealtime(im, tokoLogin);
+          unlockImeiRealtime(
+            im,
+            userLogin.uid || userLogin.username
+          );
+          
         });
       });
     };
@@ -140,7 +144,11 @@ export default function FormItemSection({
     const timer = setTimeout(() => {
       items.forEach((it) => {
         it.imeiList?.forEach((im) => {
-          unlockImeiRealtime(im, tokoLogin);
+          unlockImeiRealtime(
+            im,
+            userLogin.uid || userLogin.username
+          );
+          
         });
       });
     }, 5 * 60 * 1000); // 5 menit
@@ -225,7 +233,22 @@ export default function FormItemSection({
     }
   }, [tahap1Valid, allowManual, items, safeOnChange]);
   
-  
+  // ===============================
+// HELPER: Cari toko asal IMEI
+// ===============================
+const findTokoByImei = (imei, allTransaksi = []) => {
+  if (!imei) return null;
+
+  const trx = allTransaksi.find(
+    (t) =>
+      String(t.IMEI || "").trim() === String(imei).trim() &&
+      String(t.STATUS || "").toUpperCase() === "APPROVED" &&
+      String(t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN"
+  );
+
+  return trx?.NAMA_TOKO || null;
+};
+
   
 
   /* ================= IMEI AVAILABLE ================= */
@@ -482,19 +505,35 @@ const findBarangByImei = (imei) => {
               className="border rounded px-2 py-1 w-full"
               placeholder="Cari / ketik IMEI"
               value={item.imei || ""}
-              onChange={(e) => {
-                setImeiKeyword(e.target.value);
+              onChange={async (e) => {
+                const val = e.target.value;
+              
+                // 🔓 unlock jika user hapus imei
+                if (!val && item.imeiList?.length) {
+                  for (const im of item.imeiList) {
+                    await unlockImeiRealtime(
+                      im,
+                      userLogin.uid || userLogin.username
+                    );
+                    
+                  }
+                }
+              
+                setImeiKeyword(val);
                 updateItem(idx, {
-                  imei: e.target.value,
+                  imei: val,
                   imeiList: [],
                   qty: 0,
                 });
               }}
+              
               onBlur={async () => {
                 const imei = (item.imei || "").trim();
                 if (!imei) return;
               
-                // CEK IMEI ADA DI STOK TOKO
+                // ===============================
+                // 1️⃣ CEK IMEI ADA DI STOK TOKO
+                // ===============================
                 if (!imeiAvailableList.includes(imei)) {
                   alert("❌ IMEI tidak ada di stok toko ini");
                   updateItem(idx, {
@@ -505,18 +544,20 @@ const findBarangByImei = (imei) => {
                   return;
                 }
               
-                // AUTO FILL BARANG
-                const autoBarang = findBarangByImei(imei);
+                // ===============================
+                // 2️⃣ VALIDASI TOKO ASAL IMEI
+                // ===============================
+                const tokoImei = findTokoByImei(imei, allTransaksi);
               
-                if (!autoBarang) {
-                  alert("❌ Data barang IMEI tidak ditemukan");
-                  return;
-                }
+                if (
+                  tokoImei &&
+                  String(tokoImei).toUpperCase() !==
+                    String(tokoLogin).toUpperCase()
+                ) {
+                  alert(
+                    `❌ IMEI milik toko ${tokoImei}, bukan ${tokoLogin}`
+                  );
               
-                try {
-                  await lockImeiRealtime(imei, tokoLogin);
-                } catch (e) {
-                  alert("❌ IMEI sedang dipakai user lain");
                   updateItem(idx, {
                     imei: "",
                     imeiList: [],
@@ -525,6 +566,33 @@ const findBarangByImei = (imei) => {
                   return;
                 }
               
+                // ===============================
+                // 3️⃣ AUTO FILL DATA BARANG
+                // ===============================
+                const autoBarang = findBarangByImei(imei);
+              
+                if (!autoBarang) {
+                  alert("❌ Data barang IMEI tidak ditemukan");
+                  return;
+                }
+              
+                // ===============================
+                // 4️⃣ LOCK IMEI REALTIME
+                // ===============================
+                try {
+                  await lockImeiRealtime(
+                    imei,
+                    tokoLogin,
+                    userLogin.uid || userLogin.username
+                  );
+                } catch (e) {
+                  alert("❌ IMEI sedang dipakai user lain");
+                  return;
+                }
+              
+                // ===============================
+                // 5️⃣ SET DATA KE FORM
+                // ===============================
                 updateItem(idx, {
                   imei,
                   imeiList: [imei],
@@ -533,12 +601,14 @@ const findBarangByImei = (imei) => {
                   kategoriBarang: autoBarang.kategoriBarang,
                   namaBrand: autoBarang.namaBrand,
                   namaBarang: autoBarang.namaBarang,
+              
                   hargaMap: autoBarang.hargaMap,
                   skemaHarga: "srp",
                   hargaAktif: Number(autoBarang.hargaMap?.srp || 0),
                   isImei: true,
                 });
               }}
+              
               
               
             />
@@ -589,7 +659,10 @@ const findBarangByImei = (imei) => {
           disabled={!allowManual || !tahap1Valid || items.length === 0}
           onClick={() => {
             const last = items[items.length - 1];
-            last?.imeiList?.forEach((im) => unlockImeiRealtime(im, tokoLogin));
+            last?.imeiList?.forEach((im) => unlockImeiRealtime(
+              im,
+              userLogin.uid || userLogin.username
+            ));
             safeOnChange(items.slice(0, -1));
           }}
         >
