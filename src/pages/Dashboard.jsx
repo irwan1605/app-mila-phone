@@ -701,7 +701,7 @@ export default function Dashboard() {
 </div>
 
   <p className="text-[11px] text-gray-500">
-    Total barang hasil Transfer gudang
+    Total barang hasil Transfer Gudang
   </p>
 </div>
 
