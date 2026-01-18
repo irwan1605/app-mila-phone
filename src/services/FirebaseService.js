@@ -30,7 +30,6 @@
 import { db } from "./FirebaseInit";
 import {
   getDatabase,
-  increment,
   ref,
   onValue,
   get,
