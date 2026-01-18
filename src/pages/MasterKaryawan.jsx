@@ -1,4 +1,3 @@
-// src/pages/MasterKaryawan.jsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   listenKaryawan,
@@ -20,7 +19,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
-/* ================= MASTER TOKO ================= */
+/* ================= OPTIONS ================= */
 const TOKO_OPTIONS = [
   "CILANGKAP PUSAT",
   "CIBINONG",
@@ -43,17 +42,22 @@ const JABATAN_OPTIONS = [
   "SPG MAGANG",
 ];
 
+const DIVISI_OPTIONS = ["Operasional", "Office", "After Sales"];
+
 const fmtRupiah = (v) =>
-  "Rp " +
-  Number(v || 0).toLocaleString("id-ID", { minimumFractionDigits: 0 });
+  "Rp " + Number(v || 0).toLocaleString("id-ID", { minimumFractionDigits: 0 });
 
 export default function MasterKaryawan() {
   const [list, setList] = useState([]);
   const [search, setSearch] = useState("");
+  const [filterDivisi, setFilterDivisi] = useState("");
+
   const [showTambah, setShowTambah] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
 
   const tableRef = useRef(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10; // jumlah data per halaman
 
   /* ================= USER LOGIN ================= */
   const userLogin = JSON.parse(localStorage.getItem("user") || "{}");
@@ -66,13 +70,48 @@ export default function MasterKaryawan() {
     nik: "",
     namaKaryawan: "",
     jabatan: "",
+    divisi: "",
     gaji: "",
     tokoBertugas: "",
   });
 
+  const filteredList = useMemo(() => {
+    const q = search.toLowerCase();
+  
+    return list.filter((x) => {
+      const matchSearch =
+        String(x.NIK || "").toLowerCase().includes(q) ||
+        String(x.NAMA || "").toLowerCase().includes(q) ||
+        String(x.JABATAN || "").toLowerCase().includes(q) ||
+        String(x.TOKO_BERTUGAS || "").toLowerCase().includes(q);
+  
+      const matchDivisi =
+        !filterDivisi || x.DIVISI === filterDivisi;
+  
+      if (roleLogin === "admin" || roleLogin === "superadmin") {
+        return matchSearch && matchDivisi;
+      }
+  
+      return (
+        matchSearch &&
+        matchDivisi &&
+        String(x.TOKO_BERTUGAS || "").toUpperCase() ===
+          String(tokoLogin || "").toUpperCase()
+      );
+    });
+  }, [list, search, filterDivisi, roleLogin, tokoLogin]);
+  
+
+  const totalPages = Math.ceil(filteredList.length / rowsPerPage);
+
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    return filteredList.slice(start, start + rowsPerPage);
+  }, [filteredList, currentPage]);
+
   const [formEdit, setFormEdit] = useState(null);
 
-  /* ================= LISTENER FIREBASE ================= */
+  /* ================= LISTENER ================= */
   useEffect(() => {
     const unsub = listenKaryawan((rows) => {
       setList(Array.isArray(rows) ? rows : []);
@@ -80,29 +119,11 @@ export default function MasterKaryawan() {
     return () => unsub && unsub();
   }, []);
 
-  /* ================= FILTER ================= */
-  const filteredList = useMemo(() => {
-    const q = search.toLowerCase();
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterDivisi]);
 
-    return list.filter((x) => {
-      const match =
-        String(x.NIK || "").toLowerCase().includes(q) ||
-        String(x.NAMA || "").toLowerCase().includes(q) ||
-        String(x.JABATAN || "").toLowerCase().includes(q) ||
-        String(x.TOKO_BERTUGAS || "").toLowerCase().includes(q);
-
-      if (roleLogin === "admin" || roleLogin === "superadmin") {
-        return match;
-      }
-
-      return (
-        match &&
-        String(x.TOKO_BERTUGAS || "").toUpperCase() ===
-          String(tokoLogin || "").toUpperCase()
-      );
-    });
-  }, [list, search, roleLogin, tokoLogin]);
-
+  
   /* ================= TOTAL GAJI ================= */
   const totalGaji = useMemo(
     () => filteredList.reduce((sum, x) => sum + Number(x.GAJI || 0), 0),
@@ -111,11 +132,13 @@ export default function MasterKaryawan() {
 
   /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {
-    const rows = filteredList.map((x) => ({
+    const rows = filteredList.map((x, i) => ({
+      No: i + 1,
       Tanggal_Masuk: x.TANGGAL_MASUK,
-      NIK: x.NIK,
-      Nama: x.NAMA,
+      NIK_Karyawan: x.NIK,
+      Nama_Lengkap: x.NAMA,
       Jabatan: x.JABATAN,
+      Divisi: x.DIVISI,
       Toko: x.TOKO_BERTUGAS,
       Gaji: Number(x.GAJI || 0),
     }));
@@ -148,9 +171,10 @@ export default function MasterKaryawan() {
       !formTambah.tanggalMasuk ||
       !formTambah.nik ||
       !formTambah.namaKaryawan ||
+      !formTambah.divisi ||
       !formTambah.tokoBertugas
     ) {
-      alert("Lengkapi semua field wajib");
+      alert("⚠ Lengkapi semua field wajib!");
       return;
     }
 
@@ -159,6 +183,7 @@ export default function MasterKaryawan() {
       NIK: formTambah.nik,
       NAMA: formTambah.namaKaryawan,
       JABATAN: formTambah.jabatan,
+      DIVISI: formTambah.divisi,
       GAJI: Number(formTambah.gaji || 0),
       TOKO_BERTUGAS: formTambah.tokoBertugas,
     };
@@ -170,6 +195,7 @@ export default function MasterKaryawan() {
       nik: "",
       namaKaryawan: "",
       jabatan: "",
+      divisi: "",
       gaji: "",
       tokoBertugas: "",
     });
@@ -183,6 +209,7 @@ export default function MasterKaryawan() {
       nik: row.NIK,
       namaKaryawan: row.NAMA,
       jabatan: row.JABATAN,
+      divisi: row.DIVISI,
       gaji: row.GAJI,
       tokoBertugas: row.TOKO_BERTUGAS,
     });
@@ -190,11 +217,17 @@ export default function MasterKaryawan() {
   };
 
   const submitEdit = async () => {
+    if (!formEdit.divisi) {
+      alert("⚠ Divisi wajib diisi!");
+      return;
+    }
+
     const payload = {
       TANGGAL_MASUK: formEdit.tanggalMasuk,
       NIK: formEdit.nik,
       NAMA: formEdit.namaKaryawan,
       JABATAN: formEdit.jabatan,
+      DIVISI: formEdit.divisi,
       GAJI: Number(formEdit.gaji || 0),
       TOKO_BERTUGAS: formEdit.tokoBertugas,
     };
@@ -225,6 +258,17 @@ export default function MasterKaryawan() {
           />
         </div>
 
+        <select
+          className="border rounded px-3 py-2 text-sm"
+          value={filterDivisi}
+          onChange={(e) => setFilterDivisi(e.target.value)}
+        >
+          <option value="">Semua Divisi</option>
+          {DIVISI_OPTIONS.map((d) => (
+            <option key={d}>{d}</option>
+          ))}
+        </select>
+
         <button
           onClick={() => setShowTambah(true)}
           className="bg-indigo-600 text-white px-3 py-2 rounded flex items-center"
@@ -247,7 +291,7 @@ export default function MasterKaryawan() {
         </button>
       </div>
 
-      {/* TOTAL GAJI */}
+      {/* TOTAL */}
       <div className="bg-slate-100 p-3 rounded">
         Total Gaji Karyawan: <b>{fmtRupiah(totalGaji)}</b>
       </div>
@@ -257,28 +301,33 @@ export default function MasterKaryawan() {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-100">
             <tr>
-              <th className="p-2 border">Tanggal</th>
-              <th className="p-2 border">NIK</th>
-              <th className="p-2 border">Nama</th>
+              <th className="p-2 border">No</th>
+              <th className="p-2 border">Tanggal Join</th>
+              <th className="p-2 border">NIK Karyawan</th>
+              <th className="p-2 border">Nama Lengkap</th>
               <th className="p-2 border">Jabatan</th>
+              <th className="p-2 border">Divisi</th>
               <th className="p-2 border">Toko</th>
               <th className="p-2 border">Gaji</th>
               <th className="p-2 border">Aksi</th>
             </tr>
           </thead>
+
           <tbody>
-            {filteredList.map((x) => (
+            {paginatedData.map((x, i) => (
               <tr key={x.id}>
+                <td className="border p-2 text-center">
+                  {(currentPage - 1) * rowsPerPage + i + 1}
+                </td>
                 <td className="border p-2">{x.TANGGAL_MASUK}</td>
                 <td className="border p-2">{x.NIK}</td>
                 <td className="border p-2">{x.NAMA}</td>
                 <td className="border p-2">{x.JABATAN}</td>
-                <td className="border p-2 font-semibold text-indigo-700">
+                <td className="border p-2 font-semibold">{x.DIVISI}</td>
+                <td className="border p-2 text-indigo-700 font-semibold">
                   {x.TOKO_BERTUGAS}
                 </td>
-                <td className="border p-2 text-right">
-                  {fmtRupiah(x.GAJI)}
-                </td>
+                <td className="border p-2 text-right">{fmtRupiah(x.GAJI)}</td>
                 <td className="border p-2 text-center space-x-2">
                   <button onClick={() => openEdit(x)} className="text-blue-600">
                     <FaEdit />
@@ -294,9 +343,50 @@ export default function MasterKaryawan() {
             ))}
           </tbody>
         </table>
+        {/* PAGINATION */}
+<div className="flex justify-between items-center mt-4">
+
+<span className="text-sm text-gray-600">
+  Page {currentPage} dari {totalPages}
+</span>
+
+<div className="flex gap-1">
+
+  <button
+    disabled={currentPage === 1}
+    onClick={() => setCurrentPage(currentPage - 1)}
+    className="px-3 py-1 border rounded disabled:opacity-50"
+  >
+    Prev
+  </button>
+
+  {[...Array(totalPages)].map((_, i) => (
+    <button
+      key={i}
+      onClick={() => setCurrentPage(i + 1)}
+      className={`px-3 py-1 border rounded 
+        ${currentPage === i + 1
+          ? "bg-indigo-600 text-white"
+          : ""}`}
+    >
+      {i + 1}
+    </button>
+  ))}
+
+  <button
+    disabled={currentPage === totalPages}
+    onClick={() => setCurrentPage(currentPage + 1)}
+    className="px-3 py-1 border rounded disabled:opacity-50"
+  >
+    Next
+  </button>
+
+</div>
+</div>
+
       </div>
 
-      {/* MODAL TAMBAH & EDIT */}
+      {/* MODAL */}
       {(showTambah || showEdit) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
           <div className="bg-white p-4 rounded w-full max-w-md">
@@ -304,132 +394,118 @@ export default function MasterKaryawan() {
               {showTambah ? "Tambah Karyawan" : "Edit Karyawan"}
             </h3>
 
-            {(showTambah ? formTambah : formEdit) && (
-              <div className="space-y-2 text-sm">
-                <input
-                  type="date"
-                  className="input"
-                  value={
-                    showTambah
-                      ? formTambah.tanggalMasuk
-                      : formEdit.tanggalMasuk
-                  }
-                  onChange={(e) =>
-                    showTambah
-                      ? setFormTambah({
-                          ...formTambah,
-                          tanggalMasuk: e.target.value,
-                        })
-                      : setFormEdit({
-                          ...formEdit,
-                          tanggalMasuk: e.target.value,
-                        })
-                  }
-                />
+            <div className="space-y-2 text-sm">
+              <label>Tanggal Bergabung (Join)</label>
+              <input
+                type="date"
+                className="input"
+                value={
+                  showTambah ? formTambah.tanggalMasuk : formEdit.tanggalMasuk
+                }
+                onChange={(e) =>
+                  showTambah
+                    ? setFormTambah({
+                        ...formTambah,
+                        tanggalMasuk: e.target.value,
+                      })
+                    : setFormEdit({ ...formEdit, tanggalMasuk: e.target.value })
+                }
+              />
 
-                <input
-                  className="input"
-                  placeholder="NIK"
-                  value={showTambah ? formTambah.nik : formEdit.nik}
-                  onChange={(e) =>
-                    showTambah
-                      ? setFormTambah({
-                          ...formTambah,
-                          nik: e.target.value,
-                        })
-                      : setFormEdit({ ...formEdit, nik: e.target.value })
-                  }
-                />
+              <label>NIK Karyawan</label>
+              <input
+                className="input"
+                value={showTambah ? formTambah.nik : formEdit.nik}
+                onChange={(e) =>
+                  showTambah
+                    ? setFormTambah({ ...formTambah, nik: e.target.value })
+                    : setFormEdit({ ...formEdit, nik: e.target.value })
+                }
+              />
 
-                <input
-                  className="input"
-                  placeholder="Nama Karyawan"
-                  value={
-                    showTambah
-                      ? formTambah.namaKaryawan
-                      : formEdit.namaKaryawan
-                  }
-                  onChange={(e) =>
-                    showTambah
-                      ? setFormTambah({
-                          ...formTambah,
-                          namaKaryawan: e.target.value,
-                        })
-                      : setFormEdit({
-                          ...formEdit,
-                          namaKaryawan: e.target.value,
-                        })
-                  }
-                />
+              <label>Nama Lengkap</label>
+              <input
+                className="input"
+                value={
+                  showTambah ? formTambah.namaKaryawan : formEdit.namaKaryawan
+                }
+                onChange={(e) =>
+                  showTambah
+                    ? setFormTambah({
+                        ...formTambah,
+                        namaKaryawan: e.target.value,
+                      })
+                    : setFormEdit({ ...formEdit, namaKaryawan: e.target.value })
+                }
+              />
 
-                <input
-                  list="jabatan-list"
-                  className="input"
-                  placeholder="Jabatan"
-                  value={showTambah ? formTambah.jabatan : formEdit.jabatan}
-                  onChange={(e) =>
-                    showTambah
-                      ? setFormTambah({
-                          ...formTambah,
-                          jabatan: e.target.value,
-                        })
-                      : setFormEdit({
-                          ...formEdit,
-                          jabatan: e.target.value,
-                        })
-                  }
-                />
+              <label>Jabatan</label>
+              <input
+                list="jabatan-list"
+                className="input"
+                value={showTambah ? formTambah.jabatan : formEdit.jabatan}
+                onChange={(e) =>
+                  showTambah
+                    ? setFormTambah({ ...formTambah, jabatan: e.target.value })
+                    : setFormEdit({ ...formEdit, jabatan: e.target.value })
+                }
+              />
+              <datalist id="jabatan-list">
+                {JABATAN_OPTIONS.map((j) => (
+                  <option key={j} value={j} />
+                ))}
+              </datalist>
 
-                <datalist id="jabatan-list">
-                  {JABATAN_OPTIONS.map((j) => (
-                    <option key={j} value={j} />
-                  ))}
-                </datalist>
+              <label>Divisi *</label>
+              <input
+                list="divisi-list"
+                className="input"
+                value={showTambah ? formTambah.divisi : formEdit.divisi}
+                onChange={(e) =>
+                  showTambah
+                    ? setFormTambah({ ...formTambah, divisi: e.target.value })
+                    : setFormEdit({ ...formEdit, divisi: e.target.value })
+                }
+              />
+              <datalist id="divisi-list">
+                {DIVISI_OPTIONS.map((d) => (
+                  <option key={d} value={d} />
+                ))}
+              </datalist>
 
-                <select
-                  className="input"
-                  value={
-                    showTambah
-                      ? formTambah.tokoBertugas
-                      : formEdit.tokoBertugas
-                  }
-                  onChange={(e) =>
-                    showTambah
-                      ? setFormTambah({
-                          ...formTambah,
-                          tokoBertugas: e.target.value,
-                        })
-                      : setFormEdit({
-                          ...formEdit,
-                          tokoBertugas: e.target.value,
-                        })
-                  }
-                >
-                  <option value="">Pilih Toko</option>
-                  {TOKO_OPTIONS.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
+              <label>Toko Bertugas</label>
+              <select
+                className="input"
+                value={
+                  showTambah ? formTambah.tokoBertugas : formEdit.tokoBertugas
+                }
+                onChange={(e) =>
+                  showTambah
+                    ? setFormTambah({
+                        ...formTambah,
+                        tokoBertugas: e.target.value,
+                      })
+                    : setFormEdit({ ...formEdit, tokoBertugas: e.target.value })
+                }
+              >
+                <option value="">Pilih Toko</option>
+                {TOKO_OPTIONS.map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
 
-                <input
-                  type="number"
-                  className="input"
-                  placeholder="Gaji"
-                  value={showTambah ? formTambah.gaji : formEdit.gaji}
-                  onChange={(e) =>
-                    showTambah
-                      ? setFormTambah({
-                          ...formTambah,
-                          gaji: e.target.value,
-                        })
-                      : setFormEdit({
-                          ...formEdit,
-                          gaji: e.target.value,
-                        })
-                  }
-                />
-              </div>
-            )}
+              <label>Gaji</label>
+              <input
+                type="number"
+                className="input"
+                value={showTambah ? formTambah.gaji : formEdit.gaji}
+                onChange={(e) =>
+                  showTambah
+                    ? setFormTambah({ ...formTambah, gaji: e.target.value })
+                    : setFormEdit({ ...formEdit, gaji: e.target.value })
+                }
+              />
+            </div>
 
             <div className="flex justify-end gap-2 mt-4">
               <button
@@ -441,6 +517,7 @@ export default function MasterKaryawan() {
               >
                 <FaTimes /> Batal
               </button>
+
               <button
                 onClick={showTambah ? submitTambah : submitEdit}
                 className="bg-indigo-600 text-white px-3 py-1 rounded"

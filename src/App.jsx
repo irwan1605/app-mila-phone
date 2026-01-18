@@ -245,6 +245,8 @@ export default function App() {
                     path="/laporan-summary-transfer"
                     element={<SummaryTransferReport />}SummaryTransferReport
                   />
+                  <Route path="/surat-jalan/:id" element={<PrintSuratJalan />} />
+
                   <Route
                     path="/laporan-summary-pembelian"
                     element={<SummaryPembelianReport />}
