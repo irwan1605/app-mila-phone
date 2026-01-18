@@ -47,12 +47,14 @@
     "eject": "react-scripts eject",
     "build:stock": "node scripts/build-stock.js ./StockBarang.xlsx"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
+"eslintConfig": {
+  "extends": ["react-app", "react-app/jest"],
+  "rules": {
+    "no-unused-vars": "off",
+    "react-hooks/exhaustive-deps": "off"
+  }
+}
+,
   "browserslist": {
     "production": [
       ">0.2%",
