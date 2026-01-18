@@ -578,7 +578,7 @@ export default function Dashboard() {
   </div>
 
   <p className="text-[11px] text-gray-500">
-    Jumlah transaksi berhasil
+    Jumlah Transaksi berhasil
   </p>
 </div>
 
@@ -609,7 +609,7 @@ export default function Dashboard() {
   </div>
 
   <p className="text-[11px] text-gray-500">
-    Menunggu proses
+    Menunggu Proses
   </p>
 </div>
 
@@ -666,7 +666,7 @@ export default function Dashboard() {
   </div>
 
   <p className="text-[11px] text-gray-500">
-    Total unit stok masuk
+    Total Unit Stok Masuk
   </p>
 </div>
 
