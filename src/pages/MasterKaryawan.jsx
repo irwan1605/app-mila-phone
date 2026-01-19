@@ -64,34 +64,41 @@ export default function MasterKaryawan() {
   const roleLogin = String(userLogin?.role || "").toLowerCase();
   const tokoLogin = userLogin?.tokoBertugas || userLogin?.toko || null;
 
-  /* ================= FORM ================= */
   const [formTambah, setFormTambah] = useState({
     tanggalMasuk: "",
     nik: "",
     namaKaryawan: "",
     jabatan: "",
     divisi: "",
-    gaji: "",
     tokoBertugas: "",
+    gaji: "",
+    referensi: "",
   });
 
   const filteredList = useMemo(() => {
     const q = search.toLowerCase();
-  
+
     return list.filter((x) => {
       const matchSearch =
-        String(x.NIK || "").toLowerCase().includes(q) ||
-        String(x.NAMA || "").toLowerCase().includes(q) ||
-        String(x.JABATAN || "").toLowerCase().includes(q) ||
-        String(x.TOKO_BERTUGAS || "").toLowerCase().includes(q);
-  
-      const matchDivisi =
-        !filterDivisi || x.DIVISI === filterDivisi;
-  
+        String(x.NIK || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(x.NAMA || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(x.JABATAN || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(x.TOKO_BERTUGAS || "")
+          .toLowerCase()
+          .includes(q);
+
+      const matchDivisi = !filterDivisi || x.DIVISI === filterDivisi;
+
       if (roleLogin === "admin" || roleLogin === "superadmin") {
         return matchSearch && matchDivisi;
       }
-  
+
       return (
         matchSearch &&
         matchDivisi &&
@@ -100,7 +107,6 @@ export default function MasterKaryawan() {
       );
     });
   }, [list, search, filterDivisi, roleLogin, tokoLogin]);
-  
 
   const totalPages = Math.ceil(filteredList.length / rowsPerPage);
 
@@ -123,7 +129,6 @@ export default function MasterKaryawan() {
     setCurrentPage(1);
   }, [search, filterDivisi]);
 
-  
   /* ================= TOTAL GAJI ================= */
   const totalGaji = useMemo(
     () => filteredList.reduce((sum, x) => sum + Number(x.GAJI || 0), 0),
@@ -184,8 +189,9 @@ export default function MasterKaryawan() {
       NAMA: formTambah.namaKaryawan,
       JABATAN: formTambah.jabatan,
       DIVISI: formTambah.divisi,
-      GAJI: Number(formTambah.gaji || 0),
       TOKO_BERTUGAS: formTambah.tokoBertugas,
+      GAJI: Number(formTambah.gaji || 0),
+      REFERENSI: formTambah.referensi,
     };
 
     await addKaryawan(payload);
@@ -196,8 +202,9 @@ export default function MasterKaryawan() {
       namaKaryawan: "",
       jabatan: "",
       divisi: "",
-      gaji: "",
       tokoBertugas: "",
+      gaji: "",
+      referensi: "",
     });
   };
 
@@ -208,6 +215,7 @@ export default function MasterKaryawan() {
       tanggalMasuk: row.TANGGAL_MASUK,
       nik: row.NIK,
       namaKaryawan: row.NAMA,
+      referensi: row.REFERENSI || "",
       jabatan: row.JABATAN,
       divisi: row.DIVISI,
       gaji: row.GAJI,
@@ -226,6 +234,7 @@ export default function MasterKaryawan() {
       TANGGAL_MASUK: formEdit.tanggalMasuk,
       NIK: formEdit.nik,
       NAMA: formEdit.namaKaryawan,
+      REFERENSI: formEdit.referensi,
       JABATAN: formEdit.jabatan,
       DIVISI: formEdit.divisi,
       GAJI: Number(formEdit.gaji || 0),
@@ -239,6 +248,34 @@ export default function MasterKaryawan() {
   const handleDelete = async (id) => {
     if (!window.confirm("Hapus karyawan ini?")) return;
     await deleteKaryawan(id);
+  };
+
+  const hitungLamaKerja = (tanggalMasuk) => {
+    if (!tanggalMasuk) return "-";
+
+    const start = new Date(tanggalMasuk);
+    const now = new Date();
+
+    let tahun = now.getFullYear() - start.getFullYear();
+    let bulan = now.getMonth() - start.getMonth();
+    let hari = now.getDate() - start.getDate();
+
+    if (hari < 0) {
+      bulan--;
+      const prevMonth = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0
+      ).getDate();
+      hari += prevMonth;
+    }
+
+    if (bulan < 0) {
+      tahun--;
+      bulan += 12;
+    }
+
+    return `${tahun} tahun ${bulan} bulan ${hari} hari`;
   };
 
   /* ================= UI ================= */
@@ -302,9 +339,11 @@ export default function MasterKaryawan() {
           <thead className="bg-gray-100">
             <tr>
               <th className="p-2 border">No</th>
-              <th className="p-2 border">Tanggal Join</th>
+              <th className="p-2 border">Nama Karyawan</th>
               <th className="p-2 border">NIK Karyawan</th>
-              <th className="p-2 border">Nama Lengkap</th>
+              <th className="p-2 border">Tanggal Join</th>
+              <th className="p-2 border">Lama Bekerja</th>
+              <th className="p-2 border">Refrensi</th>
               <th className="p-2 border">Jabatan</th>
               <th className="p-2 border">Divisi</th>
               <th className="p-2 border">Toko</th>
@@ -314,76 +353,95 @@ export default function MasterKaryawan() {
           </thead>
 
           <tbody>
-            {paginatedData.map((x, i) => (
-              <tr key={x.id}>
-                <td className="border p-2 text-center">
-                  {(currentPage - 1) * rowsPerPage + i + 1}
-                </td>
-                <td className="border p-2">{x.TANGGAL_MASUK}</td>
-                <td className="border p-2">{x.NIK}</td>
-                <td className="border p-2">{x.NAMA}</td>
-                <td className="border p-2">{x.JABATAN}</td>
-                <td className="border p-2 font-semibold">{x.DIVISI}</td>
-                <td className="border p-2 text-indigo-700 font-semibold">
-                  {x.TOKO_BERTUGAS}
-                </td>
-                <td className="border p-2 text-right">{fmtRupiah(x.GAJI)}</td>
-                <td className="border p-2 text-center space-x-2">
-                  <button onClick={() => openEdit(x)} className="text-blue-600">
-                    <FaEdit />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(x.id)}
-                    className="text-red-600"
-                  >
-                    <FaTrash />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {paginatedData.map((x, i) => {
+              // hitung lama bekerja otomatis
+              const lamaKerja = x.TANGGAL_MASUK
+                ? Math.floor(
+                    (new Date() - new Date(x.TANGGAL_MASUK)) /
+                      (1000 * 60 * 60 * 24 * 30)
+                  )
+                : 0;
+
+              return (
+                <tr key={x.id}>
+                  <td className="border p-2 text-center">
+                    {(currentPage - 1) * rowsPerPage + i + 1}
+                  </td>
+
+                  <td className="border p-2">{x.NAMA}</td>
+                  <td className="border p-2">{x.NIK}</td>
+                  <td className="border p-2">{x.TANGGAL_MASUK}</td>
+
+                  <td className="border p-2 text-center">
+                    {hitungLamaKerja(x.TANGGAL_MASUK)}
+                  </td>
+
+                  <td className="border p-2">{x.REFERENSI || "-"}</td>
+
+                  <td className="border p-2">{x.JABATAN}</td>
+                  <td className="border p-2 font-semibold">{x.DIVISI}</td>
+
+                  <td className="border p-2 text-indigo-700 font-semibold">
+                    {x.TOKO_BERTUGAS}
+                  </td>
+
+                  <td className="border p-2 text-right">{fmtRupiah(x.GAJI)}</td>
+
+                  <td className="border p-2 text-center space-x-2">
+                    <button
+                      onClick={() => openEdit(x)}
+                      className="text-blue-600"
+                    >
+                      <FaEdit />
+                    </button>
+
+                    <button
+                      onClick={() => handleDelete(x.id)}
+                      className="text-red-600"
+                    >
+                      <FaTrash />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {/* PAGINATION */}
-<div className="flex justify-between items-center mt-4">
+        <div className="flex justify-between items-center mt-4">
+          <span className="text-sm text-gray-600">
+            Page {currentPage} dari {totalPages}
+          </span>
 
-<span className="text-sm text-gray-600">
-  Page {currentPage} dari {totalPages}
-</span>
+          <div className="flex gap-1">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(currentPage - 1)}
+              className="px-3 py-1 border rounded disabled:opacity-50"
+            >
+              Prev
+            </button>
 
-<div className="flex gap-1">
+            {[...Array(totalPages)].map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentPage(i + 1)}
+                className={`px-3 py-1 border rounded 
+        ${currentPage === i + 1 ? "bg-indigo-600 text-white" : ""}`}
+              >
+                {i + 1}
+              </button>
+            ))}
 
-  <button
-    disabled={currentPage === 1}
-    onClick={() => setCurrentPage(currentPage - 1)}
-    className="px-3 py-1 border rounded disabled:opacity-50"
-  >
-    Prev
-  </button>
-
-  {[...Array(totalPages)].map((_, i) => (
-    <button
-      key={i}
-      onClick={() => setCurrentPage(i + 1)}
-      className={`px-3 py-1 border rounded 
-        ${currentPage === i + 1
-          ? "bg-indigo-600 text-white"
-          : ""}`}
-    >
-      {i + 1}
-    </button>
-  ))}
-
-  <button
-    disabled={currentPage === totalPages}
-    onClick={() => setCurrentPage(currentPage + 1)}
-    className="px-3 py-1 border rounded disabled:opacity-50"
-  >
-    Next
-  </button>
-
-</div>
-</div>
-
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(currentPage + 1)}
+              className="px-3 py-1 border rounded disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* MODAL */}
@@ -420,6 +478,23 @@ export default function MasterKaryawan() {
                   showTambah
                     ? setFormTambah({ ...formTambah, nik: e.target.value })
                     : setFormEdit({ ...formEdit, nik: e.target.value })
+                }
+              />
+
+              <label>Referensi</label>
+              <input
+                className="input"
+                value={showTambah ? formTambah.referensi : formEdit.referensi}
+                onChange={(e) =>
+                  showTambah
+                    ? setFormTambah({
+                        ...formTambah,
+                        referensi: e.target.value,
+                      })
+                    : setFormEdit({
+                        ...formEdit,
+                        referensi: e.target.value,
+                      })
                 }
               />
 
