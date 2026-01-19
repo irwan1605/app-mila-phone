@@ -94,11 +94,6 @@ export default function DetailStockToko() {
         map[imei].toko = toko;
       }
 
-      if (metode === "TRANSFER_KELUAR") {
-        map[imei].toko = null;
-        map[imei].keterangan = `Transfer barang dari Toko ${toko}`;
-      }
-
       if (metode === "TRANSFER_MASUK") {
         map[imei].toko = toko;
         map[imei].keterangan = `Transfer masuk ke Toko ${toko}`;

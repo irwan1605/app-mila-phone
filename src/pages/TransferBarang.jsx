@@ -390,14 +390,39 @@ export default function TransferBarang() {
     ).length;
   }, [inventory, form.tokoPengirim, form.barang]);
 
+  const validateForm = () => {
+    if (!form.tokoPengirim) return "Toko Pengirim wajib diisi";
+    if (!form.ke) return "Toko Tujuan wajib diisi";
+    if (!form.pengirim) return "Nama pengirim wajib diisi";
+    if (!form.kategori) return "Kategori wajib diisi";
+    if (!form.brand) return "Brand wajib diisi";
+    if (!form.barang) return "Nama barang wajib diisi";
+  
+    if (isKategoriImei && form.imeis.length === 0)
+      return "Minimal 1 IMEI harus dimasukkan";
+  
+    if (!isKategoriImei && form.qty <= 0)
+      return "Qty wajib diisi";
+  
+    return null;
+  };
+  
+
   // ================= SUBMIT TRANSFER (FINAL 100%) =================
   const submitTransfer = async () => {
+    const error = validateForm();
+    if (error) {
+      alert("❌ " + error);
+      return;
+    }
+    
     try {
       const payload = {
         ...form,
         status: "Pending",
         createdAt: Date.now(),
       };
+      
 
       // 🔥 SIMPAN KE NODE YANG DIBACA TABLE
       const transferRef = push(ref(db, "transfer_barang"));
