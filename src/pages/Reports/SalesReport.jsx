@@ -65,11 +65,16 @@ export default function SalesReport() {
   useEffect(() => {
     if (typeof listenAllTransaksi === "function") {
       const unsub = listenAllTransaksi((items = []) => {
-        const onlyPenjualan = (items || []).filter(
-          (x) =>
+        const onlyPenjualan = (items || []).filter((x) => {
+          const invoice = String(x.NO_INVOICE || x.invoice || "");
+
+          return (
             (x.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN" &&
-            (x.SYSTEM_PAYMENT || "").toUpperCase() !== "PEMBELIAN"
-        );
+            (x.SYSTEM_PAYMENT || "").toUpperCase() !== "PEMBELIAN" &&
+            // 🔐 HANYA INVOICE FORMAT BARU
+            invoice.startsWith("INV-")
+          );
+        });
 
         const normalized = onlyPenjualan.map((r) => normalizeRecord(r));
 
@@ -88,33 +93,43 @@ export default function SalesReport() {
   }, []);
 
   const normalizeRecord = (r = {}) => {
+    const item = r.items?.[0] || {};
+
     return {
-      id: r.id ?? r._id ?? r.key ?? String(Date.now() + Math.random()),
-      TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || r.TANGGAL || "",
-      NO_INVOICE: r.NO_INVOICE || "",
-      NAMA_USER: r.NAMA_USER || "",
-      NO_HP_USER: r.NAMA_PIC_TOKO || "",
-      NAMA_PIC_TOKO: r.NAMA_PIC_TOKO || "",
-      NAMA_SALES: r.NAMA_SALES || "",
-      TITIPAN_REFERENSI: r.TITIPAN_REFERENSI || "",
-      NAMA_TOKO: r.NAMA_TOKO || r.TOKO || "",
-      NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "",
-      NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "",
-      QTY: Number(r.QTY || 0),
-      NOMOR_UNIK: r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
-      IMEI: r.IMEI || "",
-      KATEGORI_HARGA: r.KATEGORI_HARGA || "",
-      HARGA_UNIT: Number(r.HARGA_UNIT || r.HARGA || 0),
-      PAYMENT_METODE: r.PAYMENT_METODE || "",
-      SYSTEM_PAYMENT: r.SYSTEM_PAYMENT || "",
-      MDR: Number(r.MDR || 0),
-      POTONGAN_MDR: Number(r.POTONGAN_MDR || 0),
-      STATUS: r.STATUS || "Pending",
-      TOTAL:
-        Number(r.TOTAL) ||
-        Number(r.QTY || 0) * Number(r.HARGA_UNIT || r.HARGA || 0) ||
-        0,
-      _raw: r,
+      id: r.id ?? r._id ?? r.key,
+
+      // ✅ TANGGAL
+      TANGGAL_TRANSAKSI: r.tanggal || r.createdAt || r.TANGGAL_TRANSAKSI || "",
+
+      NO_INVOICE: r.invoice || r.NO_INVOICE,
+
+      // ===== USER =====
+      NAMA_USER: r.user?.namaPelanggan || "-",
+      NO_HP_USER: r.user?.noTlpPelanggan || "-",
+
+      // ===== PIC TOKO =====
+      NAMA_PIC_TOKO: r.user?.namaPic || "-",
+
+      // ===== SALES =====
+      NAMA_SALES: r.user?.namaSales || "-",
+
+      // ===== BARANG =====
+      NAMA_BARANG: item.namaBarang || "-",
+      NAMA_BRAND: item.namaBrand || "-", // 🔥 FIX BRAND
+      KATEGORI: item.kategoriBarang || "-", // 🔥 FIX KATEGORI
+
+      QTY: Number(item.qty || 0),
+
+      // ===== HARGA =====
+      HARGA_SRP: Number(item.hargaSRP || 0),
+      HARGA_GROSIR: Number(item.hargaGrosir || 0),
+      HARGA_RESELLER: Number(item.hargaReseller || 0),
+
+      // total
+      TOTAL: Number(r.payment?.grandTotal || 0),
+
+      NAMA_TOKO: r.toko || "-",
+      STATUS: r.statusPembayaran || "OK",
     };
   };
 
@@ -170,10 +185,18 @@ export default function SalesReport() {
         const s = search.trim().toLowerCase();
         ok =
           ok &&
-          (String(r.NO_INVOICE || "").toLowerCase().includes(s) ||
-            String(r.NAMA_USER || "").toLowerCase().includes(s) ||
-            String(r.NOMOR_UNIK || "").toLowerCase().includes(s) ||
-            String(r.NAMA_BARANG || "").toLowerCase().includes(s));
+          (String(r.NO_INVOICE || "")
+            .toLowerCase()
+            .includes(s) ||
+            String(r.NAMA_USER || "")
+              .toLowerCase()
+              .includes(s) ||
+            String(r.NOMOR_UNIK || "")
+              .toLowerCase()
+              .includes(s) ||
+            String(r.NAMA_BARANG || "")
+              .toLowerCase()
+              .includes(s));
       }
 
       return ok;
@@ -355,7 +378,9 @@ export default function SalesReport() {
 
         <div className="bg-white p-3 rounded shadow text-center">
           <div className="text-sm text-gray-600">Total Qty</div>
-          <div className="text-2xl font-bold">{totalQty.toLocaleString("id-ID")}</div>
+          <div className="text-2xl font-bold">
+            {totalQty.toLocaleString("id-ID")}
+          </div>
         </div>
 
         <div className="bg-white p-3 rounded shadow text-center">
@@ -371,44 +396,72 @@ export default function SalesReport() {
         <table ref={tableRef} className="w-full text-sm border-collapse">
           <thead className="bg-blue-600 text-white">
             <tr>
+              <th className="p-2 border">No</th>
               <th className="p-2 border">Tanggal</th>
               <th className="p-2 border">Invoice</th>
               <th className="p-2 border">User</th>
-              <th className="p-2 border">PIC</th>
               <th className="p-2 border">Sales</th>
               <th className="p-2 border">Toko</th>
               <th className="p-2 border">Brand</th>
               <th className="p-2 border">Barang</th>
               <th className="p-2 border">Qty</th>
-              <th className="p-2 border">Harga</th>
               <th className="p-2 border">Total</th>
               <th className="p-2 border">Status</th>
             </tr>
           </thead>
 
           <tbody>
-            {paginated.map((r) => (
-              <tr key={r.id}>
-                <td className="p-2 border">{r.TANGGAL_TRANSAKSI}</td>
-                <td className="p-2 border">{r.NO_INVOICE}</td>
-                <td className="p-2 border">{r.NAMA_USER}</td>
-                <td className="p-2 border">{r.NAMA_PIC_TOKO}</td>
-                <td className="p-2 border">{r.NAMA_SALES}</td>
-                <td className="p-2 border">{r.NAMA_TOKO}</td>
-                <td className="p-2 border">{r.NAMA_BRAND}</td>
-                <td className="p-2 border">{r.NAMA_BARANG}</td>
-                <td className="p-2 border text-center">{r.QTY}</td>
-                <td className="p-2 border text-right">
-                  {r.HARGA_UNIT.toLocaleString("id-ID")}
+            {paginated.map((row, index) => (
+              <tr key={row.id}>
+                <td className="p-2 border text-center">
+                  {(currentPage - 1) * rowsPerPage + index + 1}
                 </td>
-                <td className="p-2 border text-right">
-                  {r.TOTAL.toLocaleString("id-ID")}
+                <td className="p-2 border">
+                  {row.TANGGAL_TRANSAKSI
+                    ? new Date(row.TANGGAL_TRANSAKSI).toLocaleDateString(
+                        "id-ID"
+                      )
+                    : "-"}
                 </td>
-                <td className="p-2 border">{r.STATUS}</td>
+
+                <td className="p-2 border">{row.NO_INVOICE}</td>
+                <td className="p-2 border">{row.NAMA_USER}</td>
+                <td className="p-2 border">{row.NAMA_SALES}</td>
+                <td className="p-2 border">{row.NAMA_TOKO}</td>
+                <td className="p-2 border">{row.NAMA_BRAND}</td>
+                <td className="p-2 border">{row.NAMA_BARANG}</td>
+                <td className="p-2 border text-center">{row.QTY}</td>
+
+                <td className="p-2 border text-right font-bold">
+                  Rp {Number(row.TOTAL || 0).toLocaleString("id-ID")}
+                </td>
+
+                <td className="p-2 border">{row.STATUS}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        <div className="flex justify-center items-center gap-2 mt-4">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1 border rounded"
+          >
+            <FaChevronLeft />
+          </button>
+
+          <span className="text-sm">
+            Page {currentPage} / {totalPages}
+          </span>
+
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 border rounded"
+          >
+            <FaChevronRight />
+          </button>
+        </div>
       </div>
 
       {/* PAGINATION */}
@@ -426,9 +479,7 @@ export default function SalesReport() {
             <FaChevronLeft />
           </button>
           <button
-            onClick={() =>
-              setCurrentPage((p) => Math.min(totalPages, p + 1))
-            }
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
             className="px-2 py-1 border rounded disabled:opacity-40"
           >

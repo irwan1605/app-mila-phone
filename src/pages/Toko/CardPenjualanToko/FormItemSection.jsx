@@ -300,6 +300,27 @@ const findTokoByImei = (imei, allTransaksi = []) => {
     masterBarang.filter(
       (b) => b.kategoriBarang === kategori && (b.namaBrand || b.brand) === brand
     );
+
+    /* ================= IMEI BY BARANG ================= */
+const imeiByBarang = useMemo(() => {
+  if (!tokoLogin) return [];
+
+  return allTransaksi
+    .filter(
+      (t) =>
+        String(t.NAMA_TOKO || "").toUpperCase() ===
+          String(tokoLogin || "").toUpperCase() &&
+        String(t.STATUS || "").toUpperCase() === "APPROVED" &&
+        (t.PAYMENT_METODE === "PEMBELIAN" ||
+          t.tipe === "PEMBELIAN" ||
+          t.jenis === "PEMBELIAN") &&
+        t.IMEI &&
+        String(t.NAMA_BARANG || "").toUpperCase() ===
+          String(items[0]?.namaBarang || "").toUpperCase() // 🔥 filter barang
+    )
+    .map((t) => String(t.IMEI).trim());
+}, [allTransaksi, tokoLogin, items]);
+
     
   const handleTambahBarang = () => {
   // validasi minimal
@@ -499,129 +520,99 @@ const findBarangByImei = (imei) => {
               />
             )}
 
-            {/* IMEI */}
-            <input
-              list={`imei-${idx}`}
-              className="border rounded px-2 py-1 w-full"
-              placeholder="Cari / ketik IMEI"
-              value={item.imei || ""}
-              onChange={async (e) => {
-                const val = e.target.value;
-              
-                // 🔓 unlock jika user hapus imei
-                if (!val && item.imeiList?.length) {
-                  for (const im of item.imeiList) {
-                    await unlockImeiRealtime(
-                      im,
-                      userLogin.uid || userLogin.username
-                    );
-                    
-                  }
-                }
-              
-                setImeiKeyword(val);
-                updateItem(idx, {
-                  imei: val,
-                  imeiList: [],
-                  qty: 0,
-                });
-              }}
-              
-              onBlur={async () => {
-                const imei = (item.imei || "").trim();
-                if (!imei) return;
-              
-                // ===============================
-                // 1️⃣ CEK IMEI ADA DI STOK TOKO
-                // ===============================
-                if (!imeiAvailableList.includes(imei)) {
-                  alert("❌ IMEI tidak ada di stok toko ini");
-                  updateItem(idx, {
-                    imei: "",
-                    imeiList: [],
-                    qty: 0,
-                  });
-                  return;
-                }
-              
-                // ===============================
-                // 2️⃣ VALIDASI TOKO ASAL IMEI
-                // ===============================
-                const tokoImei = findTokoByImei(imei, allTransaksi);
-              
-                if (
-                  tokoImei &&
-                  String(tokoImei).toUpperCase() !==
-                    String(tokoLogin).toUpperCase()
-                ) {
-                  alert(
-                    `❌ IMEI milik toko ${tokoImei}, bukan ${tokoLogin}`
-                  );
-              
-                  updateItem(idx, {
-                    imei: "",
-                    imeiList: [],
-                    qty: 0,
-                  });
-                  return;
-                }
-              
-                // ===============================
-                // 3️⃣ AUTO FILL DATA BARANG
-                // ===============================
-                const autoBarang = findBarangByImei(imei);
-              
-                if (!autoBarang) {
-                  alert("❌ Data barang IMEI tidak ditemukan");
-                  return;
-                }
-              
-                // ===============================
-                // 4️⃣ LOCK IMEI REALTIME
-                // ===============================
-                try {
-                  // await lockImeiRealtime(
-                  //   imei,
-                  //   tokoLogin,
-                  //   userLogin.uid || userLogin.username
-                  // );
-                } catch (e) {
-                  alert("❌ IMEI sedang dipakai user lain");
-                  return;
-                }
-              
-                // ===============================
-                // 5️⃣ SET DATA KE FORM
-                // ===============================
-                updateItem(idx, {
-                  imei,
-                  imeiList: [imei],
-                  qty: 1,
-              
-                  kategoriBarang: autoBarang.kategoriBarang,
-                  namaBrand: autoBarang.namaBrand,
-                  namaBarang: autoBarang.namaBarang,
-              
-                  hargaMap: autoBarang.hargaMap,
-                  skemaHarga: "srp",
-                  hargaAktif: Number(autoBarang.hargaMap?.srp || 0),
-                  isImei: true,
-                });
-              }}
-              
-              
-              
-            />
+           {/* IMEI */}
+<input
+  list={`imei-${idx}`}
+  className="border rounded px-2 py-1 w-full"
+  placeholder="Cari / ketik IMEI"
+  value={item.imei || ""}
+  onChange={async (e) => {
+    const val = e.target.value;
 
-            <datalist id={`imei-${idx}`}>
-              {imeiAvailableList
-                .filter((im) =>
-                  im.toLowerCase().includes(imeiKeyword.toLowerCase())
-                )
-                .map((im) => (
-                  <option key={im} value={im} />
-                ))}
-            </datalist>
+    // 🔓 unlock jika user hapus imei
+    if (!val && item.imeiList?.length) {
+      for (const im of item.imeiList) {
+        await unlockImeiRealtime(
+          im,
+          userLogin.uid || userLogin.username
+        );
+      }
+    }
+
+    setImeiKeyword(val);
+    updateItem(idx, {
+      imei: val,
+      imeiList: [],
+      qty: 0,
+    });
+  }}
+  onBlur={async () => {
+    const imei = (item.imei || "").trim();
+    if (!imei) return;
+
+    // 1️⃣ CEK STOK
+    if (!imeiAvailableList.includes(imei)) {
+      alert("❌ IMEI tidak ada di stok toko ini");
+      updateItem(idx, {
+        imei: "",
+        imeiList: [],
+        qty: 0,
+      });
+      return;
+    }
+
+    // 2️⃣ VALIDASI TOKO
+    const tokoImei = findTokoByImei(imei, allTransaksi);
+    if (
+      tokoImei &&
+      String(tokoImei).toUpperCase() !==
+        String(tokoLogin).toUpperCase()
+    ) {
+      alert(`❌ IMEI milik toko ${tokoImei}`);
+      updateItem(idx, {
+        imei: "",
+        imeiList: [],
+        qty: 0,
+      });
+      return;
+    }
+
+    // 3️⃣ AUTO FILL BARANG
+    const autoBarang = findBarangByImei(imei);
+    if (!autoBarang) {
+      alert("❌ Data barang IMEI tidak ditemukan");
+      return;
+    }
+
+    // 4️⃣ SET DATA
+    updateItem(idx, {
+      imei,
+      imeiList: [imei],
+      qty: 1,
+
+      kategoriBarang: autoBarang.kategoriBarang,
+      namaBrand: autoBarang.namaBrand,
+      namaBarang: autoBarang.namaBarang,
+
+      hargaMap: autoBarang.hargaMap,
+      skemaHarga: "srp",
+      hargaAktif: Number(autoBarang.hargaMap?.srp || 0),
+      isImei: true,
+    });
+  }}
+/>
+
+{/* ====== INI YANG SUDAH DI FILTER BARANG ====== */}
+<datalist id={`imei-${idx}`}>
+  {imeiByBarang
+    .filter((im) =>
+      im.toLowerCase().includes(imeiKeyword.toLowerCase())
+    )
+    .map((im) => (
+      <option key={im} value={im} />
+    ))}
+</datalist>
+
 
             {!item.isImei && (
               <input
