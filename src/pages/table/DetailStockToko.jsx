@@ -110,22 +110,34 @@ export default function DetailStockToko() {
   /* ======================
      BUILD ROWS
   ====================== */
-  const rows = useMemo(() => {
-    if (!namaToko) return [];
+/* ======================
+   BUILD ROWS (FIX FINAL)
+====================== */
+const rows = useMemo(() => {
+  if (!namaToko) return [];
 
-    return transaksi
-      .filter(
-        (t) =>
-          t.STATUS === "Approved" &&
-          t.NAMA_TOKO === namaToko &&
-          t.PAYMENT_METODE !== "PENJUALAN"
-      )
-      .map((t) => {
-        const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-        const master = masterMap[key] || {};
-        const qty = Number(t.QTY || 0);
+  const map = {};
 
-        return {
+  transaksi
+    .filter(
+      (t) =>
+        t.STATUS === "Approved" &&
+        t.NAMA_TOKO === namaToko
+    )
+    .forEach((t) => {
+
+      const key = t.IMEI || `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+      // 🔥 LOGIKA PENENTU QTY
+      const qty =
+        ["PENJUALAN", "TRANSFER_KELUAR"].includes(
+          String(t.PAYMENT_METODE || "").toUpperCase()
+        )
+          ? -1
+          : 1;
+
+      if (!map[key]) {
+        map[key] = {
           tanggal: t.TANGGAL_TRANSAKSI || "-",
           noDo: t.NO_INVOICE || "-",
           supplier: t.NAMA_SUPPLIER || "-",
@@ -133,20 +145,39 @@ export default function DetailStockToko() {
           brand: t.NAMA_BRAND || "-",
           barang: t.NAMA_BARANG || "-",
           imei: t.IMEI || "",
-          qty,
+          qty: 0,
 
-          hargaSRP: master.hargaSRP || 0,
-          hargaGrosir: master.hargaGrosir || 0,
-          hargaReseller: master.hargaReseller || 0,
+          hargaSRP: masterMap?.[
+            `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
+          ]?.hargaSRP || 0,
 
-          totalSRP: master.hargaSRP * qty,
-          totalGrosir: master.hargaGrosir * qty,
-          totalReseller: master.hargaReseller * qty,
+          hargaGrosir: masterMap?.[
+            `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
+          ]?.hargaGrosir || 0,
 
-          bundling: master.bundling || "-",
+          hargaReseller: masterMap?.[
+            `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
+          ]?.hargaReseller || 0,
+
+          bundling:
+            masterMap?.[
+              `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
+            ]?.bundling || "-",
         };
-      });
-  }, [transaksi, imeiFinalMap, masterMap, namaToko]);
+      }
+
+      // 🔥 TAMBAH / KURANGI STOK
+      map[key].qty += qty;
+    });
+
+  // ❌ HAPUS YANG STOKNYA HABIS
+  return Object.values(map).filter(
+    (r) => r.qty > 0
+  );
+}, [transaksi, masterMap, namaToko]);
+
+
+  
 
   /* ======================
      SEARCH FILTER

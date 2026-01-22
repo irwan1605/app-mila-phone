@@ -98,10 +98,16 @@ export default function TablePenjualan() {
   /* ================= LOAD DATA ================= */
   useEffect(() => {
     const unsub = listenPenjualan((data) => {
+      console.log("DATA PENJUALAN:", data); // 👈 DEBUG
+  
       setRows(Array.isArray(data) ? data : []);
     });
-    return () => unsub && unsub();
+  
+    return () => {
+      if (unsub) unsub();
+    };
   }, []);
+  
 
   useEffect(() => {
     setPage(1);
@@ -160,6 +166,8 @@ export default function TablePenjualan() {
         const dbToko = String(r.toko || "")
           .replace(/\s+/g, "")
           .toUpperCase();
+        console.log("DB TOKO:", dbToko);
+        console.log("LOGIN TOKO:", loginToko);
 
         const loginToko = String(tokoLogin || "")
           .replace(/\s+/g, "")

@@ -178,37 +178,30 @@ export default function Dashboard() {
   // ==========================
   const stokByToko = useMemo(() => {
     const map = {};
-
-    TOKO_LIST.forEach((toko) => {
-      map[toko] = { kategori: {}, items: [] };
-    });
-
-    // PUSAT → dari stockData
-    Object.values(stockData["CILANGKAP PUSAT"] || {}).forEach((s) => {
-      const kat = s.kategoriBrand || "LAINNYA";
-      map["CILANGKAP PUSAT"].kategori[kat] =
-        (map["CILANGKAP PUSAT"].kategori[kat] || 0) + Number(s.qty || 0);
-
-      map["CILANGKAP PUSAT"].items.push(s);
-    });
-
-    // TOKO → dari transaksi pembelian
-    transaksi.forEach((t) => {
-      if (t.STATUS !== "Approved" || t.PAYMENT_METODE !== "PEMBELIAN") return;
-
+  
+    transaksi.forEach(t => {
+      if (t.STATUS !== "Approved") return;
+  
       const toko = t.NAMA_TOKO;
-      if (!map[toko]) return;
-
-      const kat = t.KATEGORI_BRAND || "LAINNYA";
+      if (!map[toko]) map[toko] = {};
+  
+      const key = t.IMEI || t.SKU || t.NAMA_BARANG;
       const qty = t.IMEI ? 1 : Number(t.QTY || 0);
-
-      map[toko].kategori[kat] = (map[toko].kategori[kat] || 0) + qty;
-
-      map[toko].items.push(t);
+  
+      if (!map[toko][key]) map[toko][key] = 0;
+  
+      if (["PEMBELIAN","TRANSFER_MASUK"].includes(t.PAYMENT_METODE)) {
+        map[toko][key] += qty;
+      }
+  
+      if (["PENJUALAN","TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)) {
+        map[toko][key] -= qty;
+      }
     });
-
+  
     return map;
-  }, [transaksi, stockData]);
+  }, [transaksi]);
+  
 
   // =======================================================
   // FILTERING (UNTUK CHART & INFO)
@@ -279,10 +272,17 @@ export default function Dashboard() {
   }, [filteredData]);
 
   const totalStockSemuaToko = useMemo(() => {
-    return Object.values(stokByToko).reduce((sum, t) => {
-      return sum + Object.values(t.kategori).reduce((s, v) => s + v, 0);
+    return Object.values(stokByToko || {}).reduce((sum, tokoData) => {
+      return (
+        sum +
+        Object.values(tokoData || {}).reduce(
+          (s, v) => s + Number(v || 0),
+          0
+        )
+      );
     }, 0);
   }, [stokByToko]);
+  
 
   const totalPenjualan = useMemo(() => {
     return filteredData.filter((x) => x.STATUS === "Approved").length;
@@ -314,26 +314,32 @@ export default function Dashboard() {
 
   const registeredTokoSet = useMemo(() => {
     return new Set(
-      tokoList.filter(Boolean).filter((t) => !/^TOKO\s+\d+$/i.test(t))
+      TOKO_LIST.map(t => t.toUpperCase().trim())
     );
-  }, [tokoList]);
+  }, []);
+  
 
   const omzetPerToko = useMemo(() => {
     const map = {};
+  
     filteredData.forEach((x) => {
-      const toko = x.NAMA_TOKO || x.TOKO;
-
-      if (!toko) return;
+      const tokoRaw = x.NAMA_TOKO || x.TOKO;
+      if (!tokoRaw) return;
+  
+      const toko = tokoRaw.toUpperCase().trim();
+  
+      // 🔥 FILTER TOKO RESMI SAJA
       if (!registeredTokoSet.has(toko)) return;
-
+  
       map[toko] = (map[toko] || 0) + Number(x.TOTAL || 0);
     });
-
+  
     return Object.entries(map).map(([toko, omzet]) => ({
       toko,
       omzet,
     }));
   }, [filteredData, registeredTokoSet]);
+  
 
   const omzetPerSales = useMemo(() => {
     const map = {};
@@ -397,7 +403,8 @@ export default function Dashboard() {
       const status = String(t.STATUS || "").toUpperCase();
 
       return (
-        String(t.IMEI || "").trim() === imei &&
+        String(t.IMEI || "").trim().toUpperCase() === imei.toUpperCase()
+ &&
         (metode.includes("PEMBELIAN") || metode.includes("TRANSFER")) &&
         status === "APPROVED"
       );
@@ -561,7 +568,7 @@ export default function Dashboard() {
     dataTransaksi
       .filter(
         (x) =>
-          x.PAYMENT_METODE === "PENJUALAN" &&
+          String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN" &&
           x.STATUS === "Approved" &&
           (
             String(x.STATUS_BAYAR || x.SYSTEM_PAYMENT || "")
@@ -602,7 +609,7 @@ export default function Dashboard() {
     {
       dataTransaksi.filter(
         (x) =>
-          x.PAYMENT_METODE === "PENJUALAN" &&
+          String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN" &&
           x.STATUS === "Pending"
       ).length
     }
@@ -646,7 +653,7 @@ export default function Dashboard() {
   <div className="flex items-center gap-2">
     <FaBoxes className="text-purple-600" />
     <span className="text-xs text-gray-500">
-      STOK MASTER BARANG
+      TRANSAKSI MASTER PEMBELIAN
     </span>
   </div>
 
@@ -688,8 +695,8 @@ export default function Dashboard() {
       ...new Set(
         dataTransaksi
           .filter((x) =>
-            ["TRANSFER_MASUK", "TRANSFER_KELUAR"].includes(
-              x.PAYMENT_METODE
+            ["TRANSFER_MASUK","TRANSFER_KELUAR"].includes(
+              String(x.PAYMENT_METODE || "").toUpperCase()
             )
           )
           .map((x) => x.NO_SURAT_JALAN) // 🔥 HITUNG PER SURAT JALAN
@@ -752,7 +759,7 @@ export default function Dashboard() {
   <div className="text-xl font-bold text-sky-600">
     {
       dataTransaksi.filter(
-        (x) => x.PAYMENT_METODE === "PENJUALAN"
+        (x) => String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
       ).length
     }{" "}
     Transaksi

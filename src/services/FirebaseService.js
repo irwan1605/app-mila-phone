@@ -2668,26 +2668,30 @@ export const getImeiListByToko = async (namaToko, keyword = "") => {
 // 🔥 LISTEN PENJUALAN (FINAL – AUTO TAMPIL DI TABLE)
 // =====================================================
 // 🔥 KHUSUS PENJUALAN
-export const listenPenjualan = (callback) => {
+export const listenPenjualan = (cb) => {
   const r = ref(db, "toko");
 
-  return onValue(r, (snap) => {
+  onValue(r, (snap) => {
+    const val = snap.val();
+    if (!val) return cb([]);
+
     const result = [];
 
-    snap.forEach((tokoSnap) => {
-      const penjualanSnap = tokoSnap.child("penjualan");
-      if (!penjualanSnap.exists()) return;
+    Object.keys(val).forEach((tokoId) => {
+      const transaksi = val[tokoId]?.transaksi || {};
 
-      penjualanSnap.forEach((trx) => {
+      Object.keys(transaksi).forEach((key) => {
         result.push({
-          id: trx.key,
-          tokoId: tokoSnap.key,
-          ...trx.val(),
+          id: key,
+          ...transaksi[key],
         });
       });
     });
 
-    callback(result);
+    // 🔥 URUTKAN TERBARU
+    result.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    cb(result);
   });
 };
 
