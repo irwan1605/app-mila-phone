@@ -142,19 +142,21 @@ export default function StockOpname() {
           (t) =>
             t &&
             t.STATUS === "Approved" &&
-            // 🔒 SUMBER STOK HANYA DARI MASTER PEMBELIAN & TRANSFER MASUK
-            ["PEMBELIAN", "TRANSFER_MASUK", "STOK OPNAME", "VOID OPNAME"].includes(
-              t.PAYMENT_METODE
-            )
+            [
+              "PEMBELIAN",
+              "TRANSFER_MASUK",
+              "STOK OPNAME",
+              "VOID OPNAME",
+              "PENJUALAN",
+              "TRANSFER_KELUAR",
+            ].includes(t.PAYMENT_METODE)
         )
       );
     });
   
     return () => unsub && unsub();
   }, []);
-
   
-
  
   // ===============================
   // 3️⃣ STOCK MAP (AGREGAT STOK)
@@ -165,12 +167,18 @@ export default function StockOpname() {
         (t) =>
           t &&
           t.STATUS === "Approved" &&
-          ["PEMBELIAN", "TRANSFER_MASUK", "STOK OPNAME"].includes(
-            t.PAYMENT_METODE
-          )
+          [
+            "PEMBELIAN",
+            "TRANSFER_MASUK",
+            "STOK OPNAME",
+            "PENJUALAN",
+            "TRANSFER_KELUAR",
+            "RETUR",
+          ].includes(t.PAYMENT_METODE)
       )
     );
   }, [allTransaksi]);
+  
 
   const normalizeKey = (t = {}) => {
     if (t.IMEI) return String(t.IMEI).trim();

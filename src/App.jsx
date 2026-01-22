@@ -72,6 +72,7 @@ import PrintSuratJalan from "./pages/Print/PrintSuratJalan";
 import useAutoLogout from "./hooks/useAutoLogout";
 import SummaryPembelianReport from "./pages/Reports/SummaryPembelianReport ";
 import SummaryTransferReport from "./pages/Reports/SummaryTransferReport ";
+import RefundReport from "./pages/RefundReport";
 
 /* ===========================
     Utility role → toko
@@ -219,6 +220,7 @@ export default function App() {
                     path="/toko/:tokoId/penjualan"
                     element={<CardPenjualanToko />}
                   />
+                  <Route path="/laporan-retur" element={<RefundReport />} />
                   <Route
                     path="/print/cetak-invoice-penjualan"
                     element={<CetakInvoicePenjualan />}
@@ -243,9 +245,13 @@ export default function App() {
                   />
                   <Route
                     path="/laporan-summary-transfer"
-                    element={<SummaryTransferReport />}SummaryTransferReport
+                    element={<SummaryTransferReport />}
+                    SummaryTransferReport
                   />
-                  <Route path="/surat-jalan/:id" element={<PrintSuratJalan />} />
+                  <Route
+                    path="/surat-jalan/:id"
+                    element={<PrintSuratJalan />}
+                  />
 
                   <Route
                     path="/laporan-summary-pembelian"

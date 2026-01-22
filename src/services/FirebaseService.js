@@ -1715,7 +1715,10 @@ export const updateTransaksi = async (tokoId, id, data) => {
  */
 export const addTransaksi = async (tokoId, data) => {
   const tokoFix = String(
-    tokoId?.id || tokoId?.tokoId || tokoId || ""
+    tokoId?.id ||
+    tokoId?.tokoId ||
+    tokoId ||
+    ""
   );
 
   if (!tokoFix || tokoFix === "[object Object]") {
@@ -1725,6 +1728,7 @@ export const addTransaksi = async (tokoId, data) => {
   const refPath = ref(db, `toko/${tokoFix}/transaksi`);
   return push(refPath, data);
 };
+
 
 
 

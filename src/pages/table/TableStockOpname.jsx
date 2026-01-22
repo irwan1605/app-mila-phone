@@ -47,7 +47,15 @@ export default function TableStockOpname({
 
                 <td className="p-2 border">{r.brand}</td>
 
-                <td className="p-2 border font-medium">{r.barang}</td>
+                <td className="p-2 border font-medium">
+                  {r.barang}
+
+                  {r.qty === 0 && (
+                    <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded">
+                      SOLD
+                    </span>
+                  )}
+                </td>
 
                 <td className="p-2 border font-mono text-xs">
                   {r.imei ? r.imei : "NON-IMEI"}

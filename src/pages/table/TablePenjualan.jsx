@@ -10,6 +10,7 @@ import {
   refundRestorePenjualan,
   updateTransaksiPenjualan,
   getUserRole,
+  addTransaksi,
 } from "../../services/FirebaseService";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -99,15 +100,14 @@ export default function TablePenjualan() {
   useEffect(() => {
     const unsub = listenPenjualan((data) => {
       console.log("DATA PENJUALAN:", data); // 👈 DEBUG
-  
+
       setRows(Array.isArray(data) ? data : []);
     });
-  
+
     return () => {
       if (unsub) unsub();
     };
   }, []);
-  
 
   useEffect(() => {
     setPage(1);
@@ -277,27 +277,91 @@ export default function TablePenjualan() {
     }
   };
 
-  const handleRefund = async (row) => {
-    if (!isSuperAdmin) return;
 
-    if (row.status === "VOID") {
-      return alert("⚠ Transaksi ini sudah di-refund");
+  const TOKO_MAP = {
+    "CILANGKAP PUSAT": "1",
+    "CIBINONG": "2",
+    "GAS ALAM": "3",
+    "CITEUREUP": "4",
+    "CIRACAS": "5",
+    "METLAND 1": "6",
+    "METLAND 2": "7",
+    "PITARA": "8",
+    "KOTA WISATA": "9",
+    "SAWANGAN": "10",
+  };
+  
+  const normalizeTokoId = (row) => {
+    // 1️⃣ kalau ada tokoId langsung pakai
+    if (row.tokoId) {
+      if (typeof row.tokoId === "string") return row.tokoId;
+      if (typeof row.tokoId === "number") return String(row.tokoId);
+      if (typeof row.tokoId === "object")
+        return String(row.tokoId.id || "");
     }
-
-    if (!window.confirm(`Refund transaksi ${row.invoice}?`)) return;
-
+  
+    // 2️⃣ fallback dari nama toko
+    const nama = String(row.toko || "")
+      .trim()
+      .toUpperCase();
+  
+    return TOKO_MAP[nama] || "";
+  };
+  
+  const handleRefund = async (row) => {
+    if (!window.confirm("Yakin ingin RETUR barang ini?")) return;
+  
     try {
-      await refundRestorePenjualan({
-        ...row,
-        userLogin,
-      });
-
-      alert("✅ Refund berhasil & stok dikembalikan");
+      const tokoIdFix = normalizeTokoId(row);
+  
+      console.log("REFUND TOKO NAME:", row.toko);
+      console.log("REFUND TOKO FIX:", tokoIdFix);
+  
+      if (!tokoIdFix) {
+        throw new Error("ID TOKO INVALID");
+      }
+  
+      const payload = {
+        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+        NO_INVOICE: `RET-${Date.now()}`,
+        NAMA_TOKO: row.toko,
+        NAMA_SUPPLIER: "-",
+  
+        NAMA_BRAND:
+          row.items?.[0]?.namaBrand ||
+          row.brand ||
+          "",
+  
+        NAMA_BARANG:
+          row.items?.[0]?.namaBarang ||
+          row.barang ||
+          "",
+  
+        QTY: row.items?.[0]?.imeiList?.length
+          ? 1
+          : Number(row.items?.[0]?.qty || 1),
+  
+        IMEI: row.items?.[0]?.imeiList?.[0] || "",
+  
+        NOMOR_UNIK:
+          row.items?.[0]?.imeiList?.[0] ||
+          `${row.brand}|${row.barang}`,
+  
+        PAYMENT_METODE: "RETUR",
+        STATUS: "Approved",
+        KETERANGAN: `REFUND dari invoice ${row.invoice}`,
+      };
+  
+      await addTransaksi(tokoIdFix, payload);
+  
+      alert("✅ Refund berhasil, stok kembali");
+  
     } catch (e) {
       console.error(e);
-      alert("❌ Gagal refund: " + e.message);
+      alert("❌ Refund gagal: " + e.message);
     }
   };
+  
 
   /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {
@@ -494,12 +558,7 @@ export default function TablePenjualan() {
                     {/* REFUND */}
                     <button
                       onClick={() => handleRefund(row)}
-                      className={`px-2 py-1 rounded text-xs ${
-                        isSuperAdmin
-                          ? "bg-orange-500 text-white"
-                          : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      }`}
-                      disabled={!isSuperAdmin}
+                      className="bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600"
                     >
                       🔄 Refund
                     </button>

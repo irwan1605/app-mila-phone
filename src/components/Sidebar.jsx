@@ -355,6 +355,18 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
                 <li>
                   <Link
+                    to="/laporan-retur"
+                    className={`flex items-center p-2 hover:bg-blue-500 ${
+                      activePath === "/sales-report" ? "bg-blue-600" : ""
+                    }`}
+                  >
+                    <BsGraphUp className="text-lg" />
+                    <span className="ml-2"> 🔄 Laporan Retur</span>
+                  </Link>
+                </li>
+
+                <li>
+                  <Link
                     to="/inventory-report"
                     className={`flex items-center p-2 hover:bg-blue-500 ${
                       activePath === "/inventory-report" ? "bg-blue-600" : ""
