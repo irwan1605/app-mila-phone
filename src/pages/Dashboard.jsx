@@ -489,7 +489,7 @@ export default function Dashboard() {
           <FaStore size={28} />
           <h3 className="mt-3 font-bold text-lg">Penjualan Pusat</h3>
           <p className="text-xs opacity-90 mt-1">
-            Melakukan Transaksi Penjualan Langsung Dari stok CILANGKAP PUSAT.
+            Melakukan Transaksi Penjualan Langsung Dari Stok CILANGKAP PUSAT.
           </p>
         </div>
 
