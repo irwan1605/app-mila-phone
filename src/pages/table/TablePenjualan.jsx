@@ -166,8 +166,6 @@ export default function TablePenjualan() {
         const dbToko = String(r.toko || "")
           .replace(/\s+/g, "")
           .toUpperCase();
-        console.log("DB TOKO:", dbToko);
-        console.log("LOGIN TOKO:", loginToko);
 
         const loginToko = String(tokoLogin || "")
           .replace(/\s+/g, "")
