@@ -500,7 +500,7 @@ export default function Dashboard() {
           <FaClipboardList size={28} />
           <h3 className="mt-3 font-bold text-lg">Stock Opname Pusat</h3>
           <p className="text-xs opacity-90 mt-1">
-            Audit dan penyesuaian stok barang secara realtime dari gudang pusat.
+            Audit dan penyesuaian stok barang secara realtime dari Gudang Pusat.
           </p>
           <p className="text-xl font-bold">
             {totalStockSemuaToko.toLocaleString("id-ID")} Unit
