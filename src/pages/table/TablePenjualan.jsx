@@ -312,45 +312,59 @@ export default function TablePenjualan() {
     if (!window.confirm("Yakin ingin RETUR barang ini?")) return;
   
     try {
-      const tokoIdFix = normalizeTokoId(row);
+      /* ================= TOKO ID ================= */
+      const TOKO_MAP = {
+        "CILANGKAP PUSAT": "1",
+        "CIBINONG": "2",
+        "GAS ALAM": "3",
+        "CITEUREUP": "4",
+        "CIRACAS": "5",
+        "METLAND 1": "6",
+        "METLAND 2": "7",
+        "PITARA": "8",
+        "KOTA WISATA": "9",
+        "SAWANGAN": "10",
+      };
   
-      console.log("REFUND TOKO NAME:", row.toko);
-      console.log("REFUND TOKO FIX:", tokoIdFix);
+      const tokoName = String(row.toko || "")
+        .trim()
+        .toUpperCase();
   
-      if (!tokoIdFix) {
-        throw new Error("ID TOKO INVALID");
-      }
+      const tokoIdFix = TOKO_MAP[tokoName];
+      if (!tokoIdFix) throw new Error("ID TOKO INVALID");
   
+      /* ================= DATA BARANG (FINAL FIX) ================= */
+      const brand = row.namaBrand || "-";
+      const barang = row.namaBarang || "-";
+  
+      // kalau multiple IMEI → ambil satu2
+      const imei =
+        row.imei && row.imei !== "-"
+          ? row.imei.split(",")[0]
+          : "";
+  
+      const qty = Number(row.qty || 1);
+  
+      /* ================= PAYLOAD ================= */
       const payload = {
         TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
         NO_INVOICE: `RET-${Date.now()}`,
-        NAMA_TOKO: row.toko,
+        NAMA_TOKO: tokoName,
         NAMA_SUPPLIER: "-",
   
-        NAMA_BRAND:
-          row.items?.[0]?.namaBrand ||
-          row.brand ||
-          "",
+        NAMA_BRAND: brand,
+        NAMA_BARANG: barang,
   
-        NAMA_BARANG:
-          row.items?.[0]?.namaBarang ||
-          row.barang ||
-          "",
-  
-        QTY: row.items?.[0]?.imeiList?.length
-          ? 1
-          : Number(row.items?.[0]?.qty || 1),
-  
-        IMEI: row.items?.[0]?.imeiList?.[0] || "",
-  
-        NOMOR_UNIK:
-          row.items?.[0]?.imeiList?.[0] ||
-          `${row.brand}|${row.barang}`,
+        QTY: qty,
+        IMEI: imei,
+        NOMOR_UNIK: imei || `${brand}|${barang}`,
   
         PAYMENT_METODE: "RETUR",
         STATUS: "Approved",
         KETERANGAN: `REFUND dari invoice ${row.invoice}`,
       };
+  
+      console.log("🔥 PAYLOAD REFUND FINAL:", payload);
   
       await addTransaksi(tokoIdFix, payload);
   
@@ -362,7 +376,6 @@ export default function TablePenjualan() {
     }
   };
   
-
   /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {
     const data = tableRows.map((r, i) => ({

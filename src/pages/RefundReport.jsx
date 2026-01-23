@@ -11,14 +11,39 @@ export default function RefundReport() {
   /* ================= LISTENER ================= */
   useEffect(() => {
     const unsub = listenAllTransaksi((data = []) => {
-      setRows(
-        data.filter(
+      const refundRows = data
+        .filter(
           (t) =>
             t &&
             t.STATUS === "Approved" &&
             t.PAYMENT_METODE === "RETUR"
         )
-      );
+        .map((r) => {
+            const brand =
+              r.NAMA_BRAND && r.NAMA_BRAND !== "-"
+                ? r.NAMA_BRAND
+                : r.NOMOR_UNIK?.split("|")[0] || "-";
+          
+            const barang =
+              r.NAMA_BARANG && r.NAMA_BARANG !== "-"
+                ? r.NAMA_BARANG
+                : r.NOMOR_UNIK?.split("|")[1] || "-";
+          
+            const imei =
+              r.IMEI &&
+              !r.IMEI.includes("undefined")
+                ? r.IMEI
+                : "";
+          
+            return {
+              ...r,
+              NAMA_BRAND: brand,
+              NAMA_BARANG: barang,
+              IMEI: imei,
+            };
+          });
+
+      setRows(refundRows);
     });
 
     return () => unsub && unsub();
@@ -124,7 +149,7 @@ export default function RefundReport() {
               <th className="border p-2">Toko</th>
               <th className="border p-2">Brand</th>
               <th className="border p-2">Barang</th>
-              <th className="border p-2">IMEI / SKU</th>
+              <th className="border p-2">No IMEI</th>
               <th className="border p-2">Qty</th>
               <th className="border p-2">Invoice</th>
               <th className="border p-2">Keterangan</th>
@@ -133,12 +158,16 @@ export default function RefundReport() {
 
           <tbody>
             {filtered.map((r, i) => (
-              <tr key={r.id} className="hover:bg-gray-50">
+              <tr key={r.id || i} className="hover:bg-gray-50">
                 <td className="border p-2 text-center">{i + 1}</td>
                 <td className="border p-2">{r.TANGGAL_TRANSAKSI}</td>
                 <td className="border p-2">{r.NAMA_TOKO}</td>
-                <td className="border p-2">{r.NAMA_BRAND}</td>
-                <td className="border p-2">{r.NAMA_BARANG}</td>
+                <td className="border p-2 font-semibold text-indigo-600">
+                  {r.NAMA_BRAND}
+                </td>
+                <td className="border p-2 font-medium">
+                  {r.NAMA_BARANG}
+                </td>
                 <td className="border p-2 font-mono text-xs">
                   {r.IMEI || "NON-IMEI"}
                 </td>

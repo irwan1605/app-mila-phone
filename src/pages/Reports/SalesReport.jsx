@@ -63,75 +63,158 @@ export default function SalesReport() {
 
   /* ===================== REALTIME ===================== */
   useEffect(() => {
-    if (typeof listenAllTransaksi === "function") {
-      const unsub = listenAllTransaksi((items = []) => {
-        const onlyPenjualan = (items || []).filter((x) => {
-          const invoice = String(x.NO_INVOICE || x.invoice || "");
-
-          return (
-            (x.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN" &&
-            (x.SYSTEM_PAYMENT || "").toUpperCase() !== "PEMBELIAN" &&
-            // 🔐 HANYA INVOICE FORMAT BARU
-            invoice.startsWith("INV-")
-          );
-        });
-
-        const normalized = onlyPenjualan.map((r) => normalizeRecord(r));
-
-        normalized.sort(
-          (a, b) =>
-            new Date(b.TANGGAL_TRANSAKSI || 0) -
-            new Date(a.TANGGAL_TRANSAKSI || 0)
-        );
-
-        setAllData(normalized);
-        setCurrentPage(1);
+    const unsub = listenAllTransaksi((items = []) => {
+      console.log("🔥 RAW ALL TRANSAKSI:", items);
+  
+      // ===============================
+      // 1️⃣ HEADER PENJUALAN (INVOICE)
+      // ===============================
+      const headerMap = {};
+      items.forEach((x) => {
+        const invoice = x.invoice || x.NO_INVOICE;
+        if (
+          invoice &&
+          invoice.startsWith("INV-") &&
+          x.payment
+        ) {
+          headerMap[invoice] = {
+            invoice,
+            tanggal: x.tanggal || x.createdAt,
+            user: x.user || {},
+            sales: x.user?.namaSales || "-",
+            toko: x.toko || x.NAMA_TOKO || x.TOKO,
+            total: x.payment?.grandTotal || 0,
+            status: x.statusPembayaran || "OK",
+          };
+        }
       });
-
-      return () => unsub && unsub();
-    }
+  
+      // ===============================
+      // 2️⃣ DETAIL BARANG (AUTO FROM PENJUALAN)
+      // ===============================
+      const detailRows = items.filter(
+        (x) =>
+          x.KETERANGAN === "AUTO FROM PENJUALAN" &&
+          (x.invoice || x.NO_INVOICE)
+      );
+  
+      // ===============================
+      // 3️⃣ INVOICE YANG DIRETUR
+      // ===============================
+      const refundedInvoices = new Set(
+        items
+          .filter((x) =>
+            String(x.KETERANGAN || "").startsWith("REFUND dari invoice")
+          )
+          .map((x) =>
+            String(x.KETERANGAN)
+              .replace("REFUND dari invoice ", "")
+              .trim()
+          )
+      );
+  
+      // ===============================
+      // 4️⃣ JOIN HEADER + DETAIL
+      // ===============================
+      const finalRows = detailRows
+      .filter((d) => {
+        const inv = d.invoice || d.NO_INVOICE;
+        return !refundedInvoices.has(inv);
+      })
+      .map((d, idx) => {
+        const inv = d.invoice || d.NO_INVOICE;
+        const h = headerMap[inv] || {};
+    
+        return {
+          id: d.id || `${inv}-${idx}`,
+    
+          // ⬇⬇⬇ SAMAKAN DENGAN UI ⬇⬇⬇
+          TANGGAL_TRANSAKSI: h.tanggal || d.createdAt,
+          NO_INVOICE: inv,
+    
+          NAMA_USER: h.user?.namaPelanggan || "SYSTEM",
+          NAMA_SALES: h.sales || "-",
+          NAMA_TOKO: h.toko || d.TOKO || "-",
+    
+          NAMA_BRAND: d.NAMA_BRAND || "-",
+          NAMA_BARANG: d.NAMA_BARANG || "-",
+          IMEI: d.IMEI || "NON-IMEI",
+    
+          QTY: 1,
+          TOTAL: h.total || 0,
+          STATUS: h.status || "OK",
+        };
+      });
+  
+      setAllData(finalRows);
+      setCurrentPage(1);
+    });
+  
+    return () => unsub && unsub();
   }, []);
+  
+  
 
-  const normalizeRecord = (r = {}) => {
+
+
+  const normalizeRow = (r) => {
     const item = r.items?.[0] || {};
 
     return {
-      id: r.id ?? r._id ?? r.key,
-
-      // ✅ TANGGAL
-      TANGGAL_TRANSAKSI: r.tanggal || r.createdAt || r.TANGGAL_TRANSAKSI || "",
-
-      NO_INVOICE: r.invoice || r.NO_INVOICE,
-
-      // ===== USER =====
-      NAMA_USER: r.user?.namaPelanggan || "-",
-      NO_HP_USER: r.user?.noTlpPelanggan || "-",
-
-      // ===== PIC TOKO =====
-      NAMA_PIC_TOKO: r.user?.namaPic || "-",
-
-      // ===== SALES =====
-      NAMA_SALES: r.user?.namaSales || "-",
-
-      // ===== BARANG =====
-      NAMA_BARANG: item.namaBarang || "-",
-      NAMA_BRAND: item.namaBrand || "-", // 🔥 FIX BRAND
-      KATEGORI: item.kategoriBarang || "-", // 🔥 FIX KATEGORI
-
-      QTY: Number(item.qty || 0),
-
-      // ===== HARGA =====
-      HARGA_SRP: Number(item.hargaSRP || 0),
-      HARGA_GROSIR: Number(item.hargaGrosir || 0),
-      HARGA_RESELLER: Number(item.hargaReseller || 0),
-
-      // total
-      TOTAL: Number(r.payment?.grandTotal || 0),
-
-      NAMA_TOKO: r.toko || "-",
-      STATUS: r.statusPembayaran || "OK",
+      id: r.id || r.key,
+      Tanggal: r.tanggal || r.createdAt,
+      Invoice: r.invoice || r.NO_INVOICE,
+      User: r.user?.namaPelanggan || "-",
+      Sales: r.user?.namaSales || "-",
+      Toko: r.toko || r.NAMA_TOKO || "-",
+      Brand: item.namaBrand || r.NAMA_BRAND || "-",
+      Barang: item.namaBarang || r.NAMA_BARANG || "-",
+      IMEI: item.imeiList?.join(", ") || r.IMEI || "NON-IMEI",
+      Qty: Number(item.qty || r.QTY || 1),
+      Total: Number(r.payment?.grandTotal || r.TOTAL || 0),
+      Status: r.statusPembayaran || r.STATUS || "OK",
     };
   };
+
+
+
+  const normalizeRecord = (r) => {
+    return {
+      id: r.id || r.key,
+  
+      // ===== INVOICE =====
+      NO_INVOICE: r.invoice || r.NO_INVOICE || "-",
+  
+      // ===== TANGGAL =====
+      TANGGAL_TRANSAKSI: r.createdAt || r.CREATED_AT || null,
+  
+      // ===== TOKO =====
+      NAMA_TOKO:
+        r.toko ||
+        r.TOKO ||
+        "-", // real data kamu pakai TOKO
+  
+      // ===== BARANG =====
+      NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "-",
+      NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "-",
+  
+      // ===== IMEI =====
+      IMEI: r.IMEI || "NON-IMEI",
+  
+      // ===== QTY =====
+      QTY: r.QTY ? Number(r.QTY) : r.IMEI ? 1 : 0,
+  
+      // ===== TOTAL =====
+      TOTAL: Number(r.TOTAL || r.HARGA_JUAL || r.HARGA_SUPLAYER || 0),
+  
+      // ===== USER =====
+      NAMA_USER: r.NAMA_USER || "-",
+      NAMA_SALES: r.NAMA_SALES || "-",
+  
+      STATUS: "OK",
+    };
+  };
+  
 
   /* ===================== OPTIONS ===================== */
   const tokoOptions = useMemo(() => {
@@ -404,6 +487,7 @@ export default function SalesReport() {
               <th className="p-2 border">Toko</th>
               <th className="p-2 border">Brand</th>
               <th className="p-2 border">Barang</th>
+              <th className="p-2 border">No IMEI</th>
               <th className="p-2 border">Qty</th>
               <th className="p-2 border">Total</th>
               <th className="p-2 border">Status</th>
@@ -430,6 +514,9 @@ export default function SalesReport() {
                 <td className="p-2 border">{row.NAMA_TOKO}</td>
                 <td className="p-2 border">{row.NAMA_BRAND}</td>
                 <td className="p-2 border">{row.NAMA_BARANG}</td>
+                <td className="p-2 border font-mono text-xs">
+                  {row.IMEI !== "-" ? row.IMEI : "NON-IMEI"}
+                </td>
                 <td className="p-2 border text-center">{row.QTY}</td>
 
                 <td className="p-2 border text-right font-bold">
