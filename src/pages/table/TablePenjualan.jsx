@@ -39,6 +39,29 @@ const TOKO_MAP = {
   10: "SAWANGAN",
 };
 
+// 🔥 HARUS DI PALING ATAS FILE
+function getBundlingByKategori(kategori) {
+  const k = String(kategori || "").toUpperCase();
+
+  if (k === "MOTOR LISTRIK") {
+    return [
+      { namaBarang: "Charger", qty: 1 },
+      { namaBarang: "Toolkit", qty: 1 },
+      { namaBarang: "Buku Manual", qty: 1 },
+    ];
+  }
+
+  if (k === "SEPEDA LISTRIK") {
+    return [
+      { namaBarang: "Charger", qty: 1 },
+      { namaBarang: "Kunci", qty: 2 },
+    ];
+  }
+
+  return [];
+}
+
+
 export default function TablePenjualan() {
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
@@ -117,10 +140,10 @@ export default function TablePenjualan() {
   const tableRows = useMemo(() => {
     const result = [];
 
-    rows.forEach((trx) => {
-      const items = Array.isArray(trx.items) ? trx.items : [];
+    (rows || []).forEach((trx) => {
+      if (!Array.isArray(trx.items)) return;
 
-      items.forEach((item) => {
+      trx.items.forEach((item) => {
         result.push({
           id: trx.id,
           tanggal: trx.tanggal || trx.createdAt,
@@ -135,13 +158,42 @@ export default function TablePenjualan() {
           namaBrand: item.namaBrand || "-",
           namaBarang: item.namaBarang || "-",
 
-          bundling: Array.isArray(item.bundlingItems)
-            ? item.bundlingItems.map((b) => b.namaBarang).join(", ")
-            : "-",
+          bundling: (() => {
+            // 1️⃣ prioritas: data transaksi (kalau suatu hari sudah ada)
+            let bundlingRaw =
+              item.bundlingItems ||
+              item.bundling ||
+              trx.BUNDLING_ITEMS;
+          
+            // 2️⃣ fallback: generate dari kategori
+            if (!Array.isArray(bundlingRaw) || bundlingRaw.length === 0) {
+              bundlingRaw = getBundlingByKategori(item.kategoriBarang);
+            }
+          
+            return Array.isArray(bundlingRaw) && bundlingRaw.length
+              ? bundlingRaw
+                  .map(
+                    (b, i) =>
+                      `${i + 1}. ${b.namaBarang} (${b.qty || 1})`
+                  )
+                  .join(" | ")
+              : "-";
+          })(),
+          
 
           imei: Array.isArray(item.imeiList) ? item.imeiList.join(", ") : "-",
 
           qty: Number(item.qty || 0),
+
+          // 🔥 HARGA SESUAI SKEMA PILIHAN
+          hargaSRP:
+            item.skemaHarga === "srp" ? Number(item.hargaAktif || 0) : 0,
+
+          hargaGrosir:
+            item.skemaHarga === "grosir" ? Number(item.hargaAktif || 0) : 0,
+
+          hargaReseller:
+            item.skemaHarga === "reseller" ? Number(item.hargaAktif || 0) : 0,
 
           statusBayar: trx.payment?.status || "-",
           namaMdr: trx.payment?.namaMdr || "-",
@@ -152,11 +204,19 @@ export default function TablePenjualan() {
 
           status: trx.statusPembayaran || "OK",
         });
+        console.log("🔥 BUNDLING RAW:", {
+          itemBundlingItems: item.bundlingItems,
+          itemBundling: item.bundling,
+          trxBundling: trx.BUNDLING_ITEMS,
+        });
       });
     });
 
+    
+
     return result;
   }, [rows]);
+
 
   /* ================= FILTER ================= */
   const filteredRows = useMemo(() => {
@@ -277,105 +337,100 @@ export default function TablePenjualan() {
     }
   };
 
-
-  const TOKO_MAP = {
+  const TOKO_NAME_TO_ID = {
     "CILANGKAP PUSAT": "1",
-    "CIBINONG": "2",
+    CIBINONG: "2",
     "GAS ALAM": "3",
-    "CITEUREUP": "4",
-    "CIRACAS": "5",
+    CITEUREUP: "4",
+    CIRACAS: "5",
     "METLAND 1": "6",
     "METLAND 2": "7",
-    "PITARA": "8",
+    PITARA: "8",
     "KOTA WISATA": "9",
-    "SAWANGAN": "10",
+    SAWANGAN: "10",
   };
   
+
   const normalizeTokoId = (row) => {
     // 1️⃣ kalau ada tokoId langsung pakai
     if (row.tokoId) {
       if (typeof row.tokoId === "string") return row.tokoId;
       if (typeof row.tokoId === "number") return String(row.tokoId);
-      if (typeof row.tokoId === "object")
-        return String(row.tokoId.id || "");
+      if (typeof row.tokoId === "object") return String(row.tokoId.id || "");
     }
-  
+
     // 2️⃣ fallback dari nama toko
     const nama = String(row.toko || "")
       .trim()
       .toUpperCase();
-  
-    return TOKO_MAP[nama] || "";
+
+    return TOKO_NAME_TO_ID[nama] || "";
   };
-  
+
   const handleRefund = async (row) => {
     if (!window.confirm("Yakin ingin RETUR barang ini?")) return;
-  
+
     try {
       /* ================= TOKO ID ================= */
-      const TOKO_MAP = {
+      const TOKO_REFUND_MAP = {
         "CILANGKAP PUSAT": "1",
-        "CIBINONG": "2",
+        CIBINONG: "2",
         "GAS ALAM": "3",
-        "CITEUREUP": "4",
-        "CIRACAS": "5",
+        CITEUREUP: "4",
+        CIRACAS: "5",
         "METLAND 1": "6",
         "METLAND 2": "7",
-        "PITARA": "8",
+        PITARA: "8",
         "KOTA WISATA": "9",
-        "SAWANGAN": "10",
+        SAWANGAN: "10",
       };
-  
+
       const tokoName = String(row.toko || "")
         .trim()
         .toUpperCase();
-  
-      const tokoIdFix = TOKO_MAP[tokoName];
+
+      const tokoIdFix = TOKO_REFUND_MAP[tokoName];
       if (!tokoIdFix) throw new Error("ID TOKO INVALID");
-  
+
       /* ================= DATA BARANG (FINAL FIX) ================= */
       const brand = row.namaBrand || "-";
       const barang = row.namaBarang || "-";
-  
+
       // kalau multiple IMEI → ambil satu2
-      const imei =
-        row.imei && row.imei !== "-"
-          ? row.imei.split(",")[0]
-          : "";
-  
+      const imei = row.imei && row.imei !== "-" ? row.imei.split(",")[0] : "";
+
       const qty = Number(row.qty || 1);
-  
+
       /* ================= PAYLOAD ================= */
       const payload = {
         TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
         NO_INVOICE: `RET-${Date.now()}`,
         NAMA_TOKO: tokoName,
         NAMA_SUPPLIER: "-",
-  
+
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
-  
+
         QTY: qty,
         IMEI: imei,
         NOMOR_UNIK: imei || `${brand}|${barang}`,
-  
+
         PAYMENT_METODE: "RETUR",
         STATUS: "Approved",
         KETERANGAN: `REFUND dari invoice ${row.invoice}`,
       };
-  
+
       console.log("🔥 PAYLOAD REFUND FINAL:", payload);
-  
+
       await addTransaksi(tokoIdFix, payload);
-  
+
       alert("✅ Refund berhasil, stok kembali");
-  
     } catch (e) {
       console.error(e);
       alert("❌ Refund gagal: " + e.message);
     }
   };
-  
+
   /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {
     const data = tableRows.map((r, i) => ({
@@ -487,6 +542,10 @@ export default function TablePenjualan() {
               <th>No IMEI</th>
               <th>QTY</th>
 
+              <th>Harga SRP</th>
+              <th>Harga Grosir</th>
+              <th>Harga Reseller</th>
+
               <th>Status Bayar</th>
               <th>Nama MDR</th>
               <th>Nominal MDR</th>
@@ -520,10 +579,12 @@ export default function TablePenjualan() {
                 <td>{row.kategoriBarang}</td>
                 <td>{row.namaBrand}</td>
                 <td>{row.namaBarang}</td>
-                <td>{row.bundling}</td>
+                <td className="text-xs">{row.bundling}</td>
                 <td className="max-w-[200px] break-all">{row.imei}</td>
                 <td className="text-center">{row.qty}</td>
-
+                <td className="text-right">{rupiah(row.hargaSRP)}</td>
+                <td className="text-right">{rupiah(row.hargaGrosir)}</td>
+                <td className="text-right">{rupiah(row.hargaReseller)}</td>
                 <td className="text-center">{row.statusBayar}</td>
                 <td>{row.namaMdr}</td>
                 <td className="text-right">{rupiah(row.nominalMdr)}</td>

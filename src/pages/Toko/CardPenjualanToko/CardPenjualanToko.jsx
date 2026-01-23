@@ -83,6 +83,7 @@ export default function CardPenjualanToko() {
   const [showPreview, setShowPreview] = useState(false);
   const [stockRealtime, setStockRealtime] = useState({});
   const location = useLocation();
+  const [listBarang, setListBarang] = useState([]);
 
   useEffect(() => {
     if (!location.state?.fastSale) return;
@@ -283,6 +284,8 @@ export default function CardPenjualanToko() {
     );
   }, [formUser]);
 
+  const barangList = listBarang || [];
+
   const handleSubmitPenjualan = useCallback(async () => {
     if (loading || submitting) return;
     if (!validate()) return;
@@ -349,17 +352,55 @@ export default function CardPenjualanToko() {
         statusPembayaran: "OK",
         createdAt: Date.now(),
 
-        items: items.map((item) => ({
-          kategoriBarang: item.kategoriBarang,
-          namaBrand: item.namaBrand,
-          namaBarang: item.namaBarang,
-          bundlingItems: item.bundlingItems || [],
-          imeiList: item.isImei ? item.imeiList : [],
-          qty: Number(item.qty || 0),
-          hargaUnit: Number(item.hargaAktif || 0),
-          total: Number(item.qty || 0) * Number(item.hargaAktif || 0),
-        })),
+        items: items.map((item) => {
+          const masterBarang = barangList.find(
+            (b) =>
+              String(b.namaBarang || "").trim() ===
+              String(item.namaBarang || "").trim()
+          );
+        
+          const bundlingSnapshot = Array.isArray(masterBarang?.bundling)
+            ? masterBarang.bundling.map((b) => ({
+                namaBarang: b.namaBarang,
+                qty: Number(b.qty || 1),
+              }))
+            : [];
+        
+          console.log("🔥 BUNDLING SNAPSHOT FINAL:", {
+            namaBarang: item.namaBarang,
+            bundlingSnapshot,
+          });
+        
+          return {
+            kategoriBarang: item.kategoriBarang,
+            namaBrand: item.namaBrand,
+            namaBarang: item.namaBarang,
+        
+            qty: Number(item.qty || 0),
+            imeiList: item.isImei ? item.imeiList : [],
+        
+            skemaHarga: item.skemaHarga,
+            hargaAktif: Number(item.hargaAktif || 0),
+        
+            // 🔥🔥🔥 INI KUNCI UTAMA
+            bundlingItems: bundlingSnapshot,
+          };
+        }),
+        
+        
       };
+
+       // ==================================================
+    // 🔥🔥🔥 PASANG CONSOLE.LOG DI SINI (WAJIB)
+    // ==================================================
+    console.log(
+      "🔥 ITEMS DI TRANSAKSI:",
+      transaksi.items.map((i) => ({
+        namaBarang: i.namaBarang,
+        bundlingItems: i.bundlingItems,
+      }))
+    );
+
 
       /* =================================================
          3️⃣ SIMPAN TRANSAKSI KE FIREBASE
@@ -367,11 +408,7 @@ export default function CardPenjualanToko() {
       const key = await addPenjualan(tokoIdFix, transaksi);
       if (!key) throw new Error("Gagal menyimpan transaksi");
 
-      await saveTransaksiPenjualan({
-        ...transaksi,
-        id: key, // pakai key firebase
-        tokoId: tokoIdFix,
-      });
+      await saveTransaksiPenjualan(transaksi);
 
       /* =================================================
    🔥 3C — CATAT TRANSAKSI STOK (PENJUALAN)
