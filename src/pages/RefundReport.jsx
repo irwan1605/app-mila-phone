@@ -11,39 +11,22 @@ export default function RefundReport() {
   /* ================= LISTENER ================= */
   useEffect(() => {
     const unsub = listenAllTransaksi((data = []) => {
-      const refundRows = data
-        .filter(
-          (t) =>
-            t &&
-            t.STATUS === "Approved" &&
-            t.PAYMENT_METODE === "RETUR"
-        )
-        .map((r) => {
-            const brand =
-              r.NAMA_BRAND && r.NAMA_BRAND !== "-"
-                ? r.NAMA_BRAND
-                : r.NOMOR_UNIK?.split("|")[0] || "-";
-          
-            const barang =
-              r.NAMA_BARANG && r.NAMA_BARANG !== "-"
-                ? r.NAMA_BARANG
-                : r.NOMOR_UNIK?.split("|")[1] || "-";
-          
-            const imei =
-              r.IMEI &&
-              !r.IMEI.includes("undefined")
-                ? r.IMEI
-                : "";
-          
-            return {
-              ...r,
-              NAMA_BRAND: brand,
-              NAMA_BARANG: barang,
-              IMEI: imei,
-            };
-          });
-
-      setRows(refundRows);
+      const refundRowsRaw = data.filter(
+        (t) => t.PAYMENT_METODE === "RETUR" && t.STATUS === "Approved"
+      );
+      
+      const uniqueMap = new Map();
+      
+      refundRowsRaw.forEach((r) => {
+        const key = r.INVOICE_ASAL || r.NO_INVOICE;
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, r);
+        }
+      });
+      
+      setRows(Array.from(uniqueMap.values()));
+      
+      
     });
 
     return () => unsub && unsub();

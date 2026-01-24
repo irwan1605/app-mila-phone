@@ -9,6 +9,7 @@ import {
   listenMasterToko,
   listenMasterSales,
   listenKaryawan,
+  listenMasterStoreHead,
 } from "../../../services/FirebaseService";
 
 export default function FormUserSection({ value = {}, onChange }) {
@@ -17,6 +18,7 @@ export default function FormUserSection({ value = {}, onChange }) {
   const [masterToko, setMasterToko] = useState([]);
   const [masterSales, setMasterSales] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
+  const [masterStoreHead, setMasterStoreHead] = useState([]);
 
   /* ================= LISTENER REALTIME ================= */
 
@@ -24,11 +26,13 @@ export default function FormUserSection({ value = {}, onChange }) {
     const unsubToko = listenMasterToko(setMasterToko);
     const unsubSales = listenMasterSales(setMasterSales);
     const unsubKar = listenKaryawan(setMasterKaryawan);
+    const unsubStoreHead = listenMasterStoreHead(setMasterStoreHead); // ✅
 
     return () => {
       unsubToko && unsubToko();
       unsubSales && unsubSales();
       unsubKar && unsubKar();
+      unsubStoreHead && unsubStoreHead(); // ✅
     };
   }, []);
 
@@ -76,6 +80,7 @@ export default function FormUserSection({ value = {}, onChange }) {
       namaToko: value?.namaToko || "",
       namaSales: value?.namaSales || "",
       salesHandle: value?.salesHandle || "",
+      storeHead: value?.storeHead || "",
     }),
     [value]
   );
@@ -203,6 +208,25 @@ export default function FormUserSection({ value = {}, onChange }) {
             </option>
           ))}
         </select>
+      </div>
+
+        {/* ================= STORE HEAD ================= */}
+        <div>
+        <label className="text-xs font-semibold">Store Head</label>
+
+        <input
+          list="list-store-head"
+          className="w-full border rounded px-2 py-1"
+          placeholder="Pilih / ketik Store Head"
+          value={form.storeHead}
+          onChange={(e) => update({ storeHead: e.target.value })}
+        />
+
+        <datalist id="list-store-head">
+          {masterStoreHead.map((s) => (
+            <option key={s.id} value={s.NAMA || s.nama} />
+          ))}
+        </datalist>
       </div>
 
       {/* ================= NAMA SALES ================= */}
