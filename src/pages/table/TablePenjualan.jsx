@@ -152,6 +152,7 @@ export default function TablePenjualan() {
 
           pelanggan: trx.user?.namaPelanggan || "-",
           telp: trx.user?.noTlpPelanggan || "-",
+          storeHead: trx.user?.storeHead || "-",
           sales: trx.user?.namaSales || "-",
 
           kategoriBarang: item.kategoriBarang || "-",
@@ -432,41 +433,52 @@ export default function TablePenjualan() {
   };
 
   /* ================= EXPORT EXCEL ================= */
-  const exportExcel = () => {
-    const data = tableRows.map((r, i) => ({
-      No: i + 1,
-      Tanggal: new Date(r.tanggal).toLocaleDateString("id-ID"),
-      Invoice: r.invoice,
-      Toko: r.toko,
-      Pelanggan: r.pelanggan,
-      Telp: r.telp,
-      Sales: r.sales,
-      Kategori: r.kategoriBarang,
-      Brand: r.namaBrand,
-      Barang: r.namaBarang,
-      Bundling: r.bundling,
-      IMEI: r.imei,
-      QTY: r.qty,
-      StatusBayar: r.statusBayar,
-      MDR: r.namaMdr,
-      NominalMDR: r.nominalMdr,
-      Tenor: r.tenor,
-      Cicilan: r.cicilan,
-      GrandTotal: r.grandTotal,
-      Status: r.status,
-    }));
+/* ================= EXPORT EXCEL ================= */
+const exportExcel = () => {
+  const data = tableRows.map((r, i) => ({
+    No: i + 1,
+    Tanggal: new Date(r.tanggal).toLocaleDateString("id-ID"),
+    Invoice: r.invoice,
+    Toko: r.toko,
+    Pelanggan: r.pelanggan,
+    Telp: r.telp,
+    StoreHead: r.storeHead,
+    Sales: r.sales,
+    Kategori: r.kategoriBarang,
+    Brand: r.namaBrand,
+    Barang: r.namaBarang,
+    Bundling: r.bundling,
+    IMEI: r.imei,
+    QTY: r.qty,
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Penjualan");
+    HargaSRP: r.hargaSRP || 0,          // ✅ FIX
+    HargaGrosir: r.hargaGrosir || 0,    // ✅ FIX
+    HargaReseller: r.hargaReseller || 0,// ✅ FIX
 
-    const excelBuffer = XLSX.write(wb, {
-      bookType: "xlsx",
-      type: "array",
-    });
+    StatusBayar: r.statusBayar,
+    MDR: r.namaMdr,
+    NominalMDR: r.nominalMdr,
+    Tenor: r.tenor,
+    Cicilan: r.cicilan,
+    GrandTotal: r.grandTotal,
+    Status: r.status,
+  }));
 
-    saveAs(new Blob([excelBuffer]), `Laporan_Penjualan_${Date.now()}.xlsx`);
-  };
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Penjualan");
+
+  const excelBuffer = XLSX.write(wb, {
+    bookType: "xlsx",
+    type: "array",
+  });
+
+  saveAs(
+    new Blob([excelBuffer]),
+    `Laporan_Penjualan_${Date.now()}.xlsx`
+  );
+};
+
 
   /* ================= RENDER ================= */
   return (
@@ -533,6 +545,7 @@ export default function TablePenjualan() {
               <th>Nama Toko</th>
               <th>Nama Pelanggan</th>
               <th>No TLP</th>
+              <th>Nama Store Head</th>
               <th>Nama Sales</th>
 
               <th>Kategori</th>
@@ -574,6 +587,7 @@ export default function TablePenjualan() {
                 <td>{row.toko}</td>
                 <td>{row.pelanggan}</td>
                 <td>{row.telp}</td>
+                <td>{row.storeHead} </td> 
                 <td>{row.sales}</td>
 
                 <td>{row.kategoriBarang}</td>

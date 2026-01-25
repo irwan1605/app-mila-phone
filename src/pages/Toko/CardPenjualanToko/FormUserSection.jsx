@@ -210,8 +210,8 @@ export default function FormUserSection({ value = {}, onChange }) {
         </select>
       </div>
 
-        {/* ================= STORE HEAD ================= */}
-        <div>
+      {/* ================= STORE HEAD ================= */}
+      <div>
         <label className="text-xs font-semibold">Store Head</label>
 
         <input
@@ -223,9 +223,11 @@ export default function FormUserSection({ value = {}, onChange }) {
         />
 
         <datalist id="list-store-head">
-          {masterStoreHead.map((s) => (
-            <option key={s.id} value={s.NAMA || s.nama} />
-          ))}
+          {masterStoreHead
+            .filter((s) => s.namaToko === form.namaToko)
+            .map((s) => (
+              <option key={s.id} value={s.namaSH} />
+            ))}
         </datalist>
       </div>
 

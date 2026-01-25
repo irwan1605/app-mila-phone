@@ -1,14 +1,7 @@
 // src/components/master-management/MasterCrudCard.jsx
 import React, { useEffect, useState } from "react";
 import * as FirebaseService from "../../services/FirebaseService";
-import {
-  FaPlus,
-  FaSave,
-  FaEdit,
-  FaTrash,
-  FaTimes,
-} from "react-icons/fa";
-
+import { FaPlus, FaSave, FaEdit, FaTrash, FaTimes } from "react-icons/fa";
 
 export default function MasterCrudCard({
   title,
@@ -37,15 +30,14 @@ export default function MasterCrudCard({
   useEffect(() => {
     const unsubscribe = FirebaseService[listenFnName]((data) => {
       setRows(data); // state internal table
-  
+
       if (onDataChange) {
         onDataChange(data); // 🔥 KIRIM KE PARENT
       }
     });
-  
+
     return () => unsubscribe && unsubscribe();
   }, [listenFnName]);
-  
 
   // ===============================
   // LISTENER REALTIME
@@ -131,46 +123,64 @@ export default function MasterCrudCard({
 
       {/* FORM */}
       {showForm && (
-        <div className="bg-slate-50 p-4 rounded-lg border mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {fields.map((f) => (
-              <div key={f.name}>
-                <label className="text-xs text-slate-600">
-                  {f.label}
-                </label>
-                {f.type === "textarea" ? (
-                  <textarea
-                    name={f.name}
-                    value={form[f.name] || ""}
-                    onChange={handleChange}
-                    className="w-full border p-2 rounded"
-                  />
-                ) : (
-                  <input
-                    type={f.type || "text"}
-                    name={f.name}
-                    value={form[f.name] || ""}
-                    onChange={handleChange}
-                    className="w-full border p-2 rounded"
-                  />
-                )}
-              </div>
-            ))}
-          </div>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-xl rounded-xl shadow-lg p-5 relative">
+            <h3 className="text-lg font-bold mb-3">
+              {editId ? "Edit Data" : "Tambah Data"}
+            </h3>
 
-          <div className="flex justify-end gap-2 mt-4">
-            <button
-              onClick={resetForm}
-              className="px-3 py-1 bg-gray-400 text-white rounded flex items-center gap-1"
-            >
-              <FaTimes /> Batal
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="px-3 py-1 bg-green-600 text-white rounded flex items-center gap-1"
-            >
-              <FaSave /> {submitLabel || "Simpan"}
-            </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {fields.map((f) => (
+                <div key={f.name}>
+                  <label className="text-xs text-slate-600">{f.label}</label>
+                  {f.type === "textarea" ? (
+                    <textarea
+                      name={f.name}
+                      value={form[f.name] || ""}
+                      onChange={handleChange}
+                      className="w-full border p-2 rounded"
+                    />
+                  ) : f.type === "select" ? (
+                    <select
+                      name={f.name}
+                      value={form[f.name] || ""}
+                      onChange={handleChange}
+                      className="w-full border p-2 rounded"
+                    >
+                      <option value="">-- Pilih {f.label} --</option>
+                      {(f.options || []).map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={f.type || "text"}
+                      name={f.name}
+                      value={form[f.name] || ""}
+                      onChange={handleChange}
+                      className="w-full border p-2 rounded"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={resetForm}
+                className="px-3 py-1 bg-gray-400 text-white rounded flex items-center gap-1"
+              >
+                <FaTimes /> Batal
+              </button>
+              <button
+                onClick={handleSubmit}
+                className="px-3 py-1 bg-green-600 text-white rounded flex items-center gap-1"
+              >
+                <FaSave /> {submitLabel || "Simpan"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -182,7 +192,9 @@ export default function MasterCrudCard({
             <tr>
               <th className="p-2">No</th>
               {fields.map((f) => (
-                <th key={f.name} className="p-2">{f.label}</th>
+                <th key={f.name} className="p-2">
+                  {f.label}
+                </th>
               ))}
               <th className="p-2">Aksi</th>
             </tr>

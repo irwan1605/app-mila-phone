@@ -345,6 +345,7 @@ export default function CardPenjualanToko() {
         user: {
           namaPelanggan: formUser.namaPelanggan,
           noTlpPelanggan: formUser.noTlpPelanggan,
+          storeHead: formUser.storeHead,
           namaSales: formUser.namaSales,
         },
 

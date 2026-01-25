@@ -259,13 +259,18 @@ export default function FormItemSection({
   }, [allTransaksi, tokoLogin, items, stockRealtime]);
 
   /* ================= HELPERS ================= */
+  const getStockByToko = (namaBarang) => {
+    if (!namaBarang) return 0;
+    return stockRealtime?.barang?.[namaBarang] || 0;
+  };
+  
   const updateItem = (index, updated) => {
     const newItems = items.map((item, i) =>
       i === index
         ? {
             ...item,
             ...updated,
-  
+
             // 🔥 PAKSA BUNDLING TIDAK HILANG
             bundling:
               updated.bundling !== undefined
@@ -274,11 +279,9 @@ export default function FormItemSection({
           }
         : item
     );
-  
+
     safeOnChange(newItems);
   };
-  
-  
 
   const kategoriList = useMemo(
     () => masterKategori.map((k) => k.namaKategori),
@@ -454,21 +457,34 @@ export default function FormItemSection({
             </select>
 
             {/* BARANG */}
-            <select
+            <input
+              list={`barang-${idx}`}
               className="w-full border rounded-lg p-2"
               disabled={!item.namaBrand}
+              placeholder="Pilih / ketik nama barang"
               value={item.namaBarang || ""}
               onChange={(e) => {
+                const val = e.target.value;
+
                 const b = barangList(item.kategoriBarang, item.namaBrand).find(
-                  (x) => x.namaBarang === e.target.value
+                  (x) => x.namaBarang === val
                 );
-                if (!b) return;
-            
+
+                // jika ketik manual (tidak ada di master)
+                if (!b) {
+                  updateItem(idx, {
+                    namaBarang: val,
+                    isImei: false,
+                    qty: 1,
+                  });
+                  return;
+                }
+
                 const isBundlingKategori = [
                   "MOTOR LISTRIK",
                   "SEPEDA LISTRIK",
                 ].includes(String(b.kategoriBarang || "").toUpperCase());
-            
+
                 updateItem(idx, {
                   namaBarang: b.namaBarang,
                   kategoriBarang: b.kategoriBarang,
@@ -477,17 +493,22 @@ export default function FormItemSection({
                   skemaHarga: "srp",
                   hargaAktif: Number(b.harga?.srp || 0),
                   qty: isImeiKategori(b.kategoriBarang) ? 0 : 1,
-            
-                  // 🔥 AUTO BUNDLING (INI JAWABAN KAMU)
                   bundling: isBundlingKategori ? b.bundling || [] : [],
                 });
               }}
-            >
-              <option value="">-- Pilih Barang --</option>
+            />
+            <datalist id={`barang-${idx}`}>
               {barangList(item.kategoriBarang, item.namaBrand).map((b) => (
-                <option key={b.id}>{b.namaBarang}</option>
+                <option key={b.id} value={b.namaBarang} />
               ))}
-            </select>
+            </datalist>
+
+            {item.namaBarang && !item.isImei && (
+              <div className="text-xs text-slate-600">
+                📦 Stok tersedia di toko:{" "}
+                <b>{getStockByToko(item.namaBarang)}</b>
+              </div>
+            )}
 
             {/* 🔥 AUTO BUNDLING DISPLAY */}
             {item.bundling?.length > 0 && (
