@@ -19,6 +19,12 @@ export default function FormUserSection({ value = {}, onChange }) {
   const [masterSales, setMasterSales] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
   const [masterStoreHead, setMasterStoreHead] = useState([]);
+  const user = JSON.parse(localStorage.getItem("userLogin") || "{}");
+
+  // role bisa: pic_toko2, pic_toko3, dst
+  const isPicToko = String(user?.role || "").startsWith("pic_toko");
+  const picTokoId = isPicToko ? String(user.role).replace("pic_toko", "") : null;
+  
 
   /* ================= LISTENER REALTIME ================= */
 
@@ -52,19 +58,20 @@ export default function FormUserSection({ value = {}, onChange }) {
   }, []);
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("userLogin") || "{}");
-
-    if (user?.role === "pic_toko" && user?.tokoId) {
-      const toko = masterToko.find((t) => t.id === user.tokoId);
-      if (toko) {
-        onChange({
-          ...value,
-          namaTokoId: toko.id,
-          namaToko: toko.nama,
-        });
-      }
+    if (!isPicToko || !picTokoId) return;
+    if (!masterToko.length) return;
+  
+    const toko = masterToko.find((t) => String(t.id) === picTokoId);
+  
+    if (toko) {
+      onChange({
+        ...value,
+        namaTokoId: toko.id,
+        namaToko: toko.nama,
+      });
     }
-  }, [masterToko]);
+  }, [isPicToko, picTokoId, masterToko]);
+  
 
   // =================================================
   // SAFE FORM
@@ -111,9 +118,10 @@ export default function FormUserSection({ value = {}, onChange }) {
   }, [masterSales, form.namaToko]);
 
   // SALES HANDLE = semua karyawan
+  // SALES HANDLE = semua data dari MASTER SALES
   const salesHandleList = useMemo(() => {
-    return masterKaryawan;
-  }, [masterKaryawan]);
+    return masterSales;
+  }, [masterSales]);
 
   /* ================= RENDER ================= */
 
@@ -182,8 +190,9 @@ export default function FormUserSection({ value = {}, onChange }) {
       <div>
         <label className="text-xs font-semibold">Nama Toko</label>
         <select
-          className="w-full border rounded px-2 py-1"
+          className="w-full border rounded px-2 py-1 bg-gray-100"
           value={form.namaTokoId}
+          disabled={isPicToko} // 🔒 terkunci jika PIC TOKO
           onChange={(e) => {
             const tokoId = e.target.value;
             const toko = masterToko.find((t) => t.id === tokoId);
@@ -261,7 +270,7 @@ export default function FormUserSection({ value = {}, onChange }) {
 
         <datalist id="list-handle">
           {salesHandleList.map((s) => (
-            <option key={s.id} value={s.NAMA} />
+            <option key={s.id} value={s.namaSales} />
           ))}
         </datalist>
       </div>
