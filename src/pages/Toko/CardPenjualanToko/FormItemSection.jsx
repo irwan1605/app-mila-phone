@@ -579,6 +579,27 @@ export default function FormItemSection({
               />
             )}
 
+            {/* QTY — KHUSUS NON IMEI (ACCESSORIES) */}
+            {!item.isImei && (
+              <div>
+                <label className="text-xs font-semibold">QTY</label>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-full border rounded-lg p-2"
+                  value={item.qty || 1}
+                  onChange={(e) =>
+                    updateItem(idx, {
+                      qty: Number(e.target.value || 1),
+                    })
+                  }
+                />
+                <div className="text-xs text-gray-500">
+                  ℹ️ QTY bisa diinput manual untuk Accessories
+                </div>
+              </div>
+            )}
+
             {/* IMEI — HANYA MUNCUL JIKA BARANG IMEI */}
             {item.isImei && (
               <>
