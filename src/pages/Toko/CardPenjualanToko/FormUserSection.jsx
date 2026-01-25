@@ -103,17 +103,12 @@ export default function FormUserSection({ value = {}, onChange }) {
   /* ================= FILTER DATA ================= */
 
   // SALES = hanya yg bertugas di toko + jabatan sales / leader
+  // ================= FILTER SALES DARI MASTER SALES =================
   const salesByToko = useMemo(() => {
     if (!form.namaToko) return [];
 
-    return masterKaryawan.filter(
-      (k) =>
-        k?.TOKO_BERTUGAS === form.namaToko &&
-        String(k?.JABATAN || "")
-          .toLowerCase()
-          .includes("s")
-    );
-  }, [masterKaryawan, form.namaToko]);
+    return masterSales.filter((s) => s?.namaToko === form.namaToko);
+  }, [masterSales, form.namaToko]);
 
   // SALES HANDLE = semua karyawan
   const salesHandleList = useMemo(() => {
@@ -232,6 +227,7 @@ export default function FormUserSection({ value = {}, onChange }) {
       </div>
 
       {/* ================= NAMA SALES ================= */}
+      {/* ================= NAMA SALES ================= */}
       <div>
         <label className="text-xs font-semibold">Nama Sales</label>
 
@@ -246,7 +242,7 @@ export default function FormUserSection({ value = {}, onChange }) {
 
         <datalist id="list-sales">
           {salesByToko.map((s) => (
-            <option key={s.id} value={s.NAMA} />
+            <option key={s.id} value={s.namaSales} />
           ))}
         </datalist>
       </div>
