@@ -6,6 +6,7 @@ import { listenMasterToko } from "../../services/FirebaseService";
 export default function MasterSalesCard() {
   const [rows, setRows] = useState([]);
   const [masterToko, setMasterToko] = useState([]);
+  const [filterToko, setFilterToko] = useState("");
 
   useEffect(() => {
     const unsub = listenMasterToko((data) => {
@@ -31,13 +32,18 @@ export default function MasterSalesCard() {
     { name: "alamat", label: "Alamat", type: "textarea" },
   ];
 
+  // FILTER BERDASARKAN TOKO
+  const filteredRows = filterToko
+    ? rows.filter((r) => r.namaToko === filterToko)
+    : rows;
+
   const handleExport = () => {
-    if (!rows || rows.length === 0) {
+    if (!filteredRows || filteredRows.length === 0) {
       alert("❌ Data kosong, tidak bisa export");
       return;
     }
 
-    const formattedData = rows.map((row) => {
+    const formattedData = filteredRows.map((row) => {
       const obj = {};
       fields.forEach((f) => {
         obj[f.label] = row[f.name] ?? "";
@@ -54,10 +60,11 @@ export default function MasterSalesCard() {
 
   return (
     <div>
+      {/* HEADER */}
       <div className="flex justify-between items-center mb-4">
         <div>
           <h2 className="text-lg font-bold">MASTER SALES</h2>
-          <p className="text-sm text-slate-500">Data sales penjualan</p>
+          <p className="text-sm text-slate-500">Data sales per toko</p>
         </div>
 
         <button
@@ -66,6 +73,23 @@ export default function MasterSalesCard() {
         >
           Export Excel
         </button>
+      </div>
+
+      {/* FILTER TOKO */}
+      <div className="mb-3 flex gap-3 items-center">
+        <label className="text-sm">Filter Toko:</label>
+        <select
+          value={filterToko}
+          onChange={(e) => setFilterToko(e.target.value)}
+          className="border rounded px-2 py-1"
+        >
+          <option value="">Semua Toko</option>
+          {masterToko.map((t) => (
+            <option key={t.id} value={t.nama}>
+              {t.nama}
+            </option>
+          ))}
+        </select>
       </div>
 
       <MasterCrudCard
@@ -78,6 +102,7 @@ export default function MasterSalesCard() {
         updateFnName="updateMasterSales"
         deleteFnName="deleteMasterSales"
         onDataChange={setRows}
+        externalRows={filteredRows}   // ⬅️ kirim data hasil filter
       />
     </div>
   );
