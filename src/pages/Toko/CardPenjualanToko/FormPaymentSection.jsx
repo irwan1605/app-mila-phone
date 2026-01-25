@@ -189,7 +189,7 @@ export default function FormPaymentSection({
       <div className="space-y-3 text-sm">
         {/* STATUS */}
         <div>
-          <label className="font-semibold">Status Pembayaran</label>
+          <label className="font-semibold">System Pembayaran</label>
           <select
             className="w-full border rounded px-2 py-1"
             value={paymentSafe.status}
@@ -201,8 +201,8 @@ export default function FormPaymentSection({
               })
             }
           >
-            <option value="LUNAS">LUNAS</option>
-            <option value="PIUTANG">PIUTANG</option>
+            <option value="LUNAS">CASH</option>
+            <option value="PIUTANG">KREDIT</option>
           </select>
         </div>
         {/* SPLIT PAYMENT */}

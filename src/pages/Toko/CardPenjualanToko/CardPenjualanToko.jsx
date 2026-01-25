@@ -319,13 +319,21 @@ export default function CardPenjualanToko() {
           if (sold) throw new Error(`IMEI ${imei} sudah pernah terjual`);
 
           // 🔥 CEK DARI DATA TABLE YANG SUDAH ADA (DOUBLE SAFETY)
-          const sudahAdaDiTable = penjualanList.some(
-            (trx) => String(trx.IMEI || "").trim() === String(imei).trim()
+          const sudahAdaDiTable = penjualanList.some((trx) =>
+            Array.isArray(trx.items) &&
+            trx.items.some(
+              (it) =>
+                Array.isArray(it.imeiList) &&
+                it.imeiList.some(
+                  (im) => String(im).trim() === String(imei).trim()
+                )
+            )
           );
-
+          
           if (sudahAdaDiTable) {
-            throw new Error(`IMEI ${imei} sudah pernah terjual (DATA LAMA)`);
+            throw new Error(`IMEI ${imei} sudah pernah terjual`);
           }
+          
 
           await lockImeiRealtime(
             imei,
