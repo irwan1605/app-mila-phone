@@ -39,29 +39,6 @@ const TOKO_MAP = {
   10: "SAWANGAN",
 };
 
-// 🔥 HARUS DI PALING ATAS FILE
-function getBundlingByKategori(kategori) {
-  const k = String(kategori || "").toUpperCase();
-
-  if (k === "MOTOR LISTRIK") {
-    return [
-      { namaBarang: "Charger", qty: 1 },
-      { namaBarang: "Toolkit", qty: 1 },
-      { namaBarang: "Buku Manual", qty: 1 },
-    ];
-  }
-
-  if (k === "SEPEDA LISTRIK") {
-    return [
-      { namaBarang: "Charger", qty: 1 },
-      { namaBarang: "Kunci", qty: 2 },
-    ];
-  }
-
-  return [];
-}
-
-
 export default function TablePenjualan() {
   const [rows, setRows] = useState([]);
   const [page, setPage] = useState(1);
@@ -159,29 +136,6 @@ export default function TablePenjualan() {
           namaBrand: item.namaBrand || "-",
           namaBarang: item.namaBarang || "-",
 
-          bundling: (() => {
-            // 1️⃣ prioritas: data transaksi (kalau suatu hari sudah ada)
-            let bundlingRaw =
-              item.bundlingItems ||
-              item.bundling ||
-              trx.BUNDLING_ITEMS;
-          
-            // 2️⃣ fallback: generate dari kategori
-            if (!Array.isArray(bundlingRaw) || bundlingRaw.length === 0) {
-              bundlingRaw = getBundlingByKategori(item.kategoriBarang);
-            }
-          
-            return Array.isArray(bundlingRaw) && bundlingRaw.length
-              ? bundlingRaw
-                  .map(
-                    (b, i) =>
-                      `${i + 1}. ${b.namaBarang} (${b.qty || 1})`
-                  )
-                  .join(" | ")
-              : "-";
-          })(),
-          
-
           imei: Array.isArray(item.imeiList) ? item.imeiList.join(", ") : "-",
 
           qty: Number(item.qty || 0),
@@ -205,19 +159,11 @@ export default function TablePenjualan() {
 
           status: trx.statusPembayaran || "OK",
         });
-        console.log("🔥 BUNDLING RAW:", {
-          itemBundlingItems: item.bundlingItems,
-          itemBundling: item.bundling,
-          trxBundling: trx.BUNDLING_ITEMS,
-        });
       });
     });
 
-    
-
     return result;
   }, [rows]);
-
 
   /* ================= FILTER ================= */
   const filteredRows = useMemo(() => {
@@ -350,7 +296,6 @@ export default function TablePenjualan() {
     "KOTA WISATA": "9",
     SAWANGAN: "10",
   };
-  
 
   const normalizeTokoId = (row) => {
     // 1️⃣ kalau ada tokoId langsung pakai
@@ -433,52 +378,48 @@ export default function TablePenjualan() {
   };
 
   /* ================= EXPORT EXCEL ================= */
-/* ================= EXPORT EXCEL ================= */
-const exportExcel = () => {
-  const data = tableRows.map((r, i) => ({
-    No: i + 1,
-    Tanggal: new Date(r.tanggal).toLocaleDateString("id-ID"),
-    Invoice: r.invoice,
-    Toko: r.toko,
-    Pelanggan: r.pelanggan,
-    Telp: r.telp,
-    StoreHead: r.storeHead,
-    Sales: r.sales,
-    Kategori: r.kategoriBarang,
-    Brand: r.namaBrand,
-    Barang: r.namaBarang,
-    Bundling: r.bundling,
-    IMEI: r.imei,
-    QTY: r.qty,
+  /* ================= EXPORT EXCEL ================= */
+  const exportExcel = () => {
+    const data = tableRows.map((r, i) => ({
+      No: i + 1,
+      Tanggal: new Date(r.tanggal).toLocaleDateString("id-ID"),
+      Invoice: r.invoice,
+      Toko: r.toko,
+      Pelanggan: r.pelanggan,
+      Telp: r.telp,
+      StoreHead: r.storeHead,
+      Sales: r.sales,
+      Kategori: r.kategoriBarang,
+      Brand: r.namaBrand,
+      Barang: r.namaBarang,
 
-    HargaSRP: r.hargaSRP || 0,          // ✅ FIX
-    HargaGrosir: r.hargaGrosir || 0,    // ✅ FIX
-    HargaReseller: r.hargaReseller || 0,// ✅ FIX
+      IMEI: r.imei,
+      QTY: r.qty,
 
-    StatusBayar: r.statusBayar,
-    MDR: r.namaMdr,
-    NominalMDR: r.nominalMdr,
-    Tenor: r.tenor,
-    Cicilan: r.cicilan,
-    GrandTotal: r.grandTotal,
-    Status: r.status,
-  }));
+      HargaSRP: r.hargaSRP || 0, // ✅ FIX
+      HargaGrosir: r.hargaGrosir || 0, // ✅ FIX
+      HargaReseller: r.hargaReseller || 0, // ✅ FIX
 
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Penjualan");
+      StatusBayar: r.statusBayar,
+      MDR: r.namaMdr,
+      NominalMDR: r.nominalMdr,
+      Tenor: r.tenor,
+      Cicilan: r.cicilan,
+      GrandTotal: r.grandTotal,
+      Status: r.status,
+    }));
 
-  const excelBuffer = XLSX.write(wb, {
-    bookType: "xlsx",
-    type: "array",
-  });
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Penjualan");
 
-  saveAs(
-    new Blob([excelBuffer]),
-    `Laporan_Penjualan_${Date.now()}.xlsx`
-  );
-};
+    const excelBuffer = XLSX.write(wb, {
+      bookType: "xlsx",
+      type: "array",
+    });
 
+    saveAs(new Blob([excelBuffer]), `Laporan_Penjualan_${Date.now()}.xlsx`);
+  };
 
   /* ================= RENDER ================= */
   return (
@@ -551,7 +492,7 @@ const exportExcel = () => {
               <th>Kategori</th>
               <th>Brand</th>
               <th>Nama Barang</th>
-              <th>Barang Bundling</th>
+
               <th>No IMEI</th>
               <th>QTY</th>
 
@@ -587,13 +528,12 @@ const exportExcel = () => {
                 <td>{row.toko}</td>
                 <td>{row.pelanggan}</td>
                 <td>{row.telp}</td>
-                <td>{row.storeHead} </td> 
+                <td>{row.storeHead} </td>
                 <td>{row.sales}</td>
 
                 <td>{row.kategoriBarang}</td>
                 <td>{row.namaBrand}</td>
                 <td>{row.namaBarang}</td>
-                <td className="text-xs">{row.bundling}</td>
                 <td className="max-w-[200px] break-all">{row.imei}</td>
                 <td className="text-center">{row.qty}</td>
                 <td className="text-right">{rupiah(row.hargaSRP)}</td>

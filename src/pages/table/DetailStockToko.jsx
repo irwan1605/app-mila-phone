@@ -59,9 +59,6 @@ export default function DetailStockToko() {
         hargaSRP: Number(b.harga?.srp ?? b.hargaSRP ?? 0),
         hargaGrosir: Number(b.harga?.grosir ?? b.hargaGrosir ?? 0),
         hargaReseller: Number(b.harga?.reseller ?? b.hargaReseller ?? 0),
-        bundling: Array.isArray(b.BUNDLING_ITEMS)
-          ? b.BUNDLING_ITEMS.map((x) => x.namaBarang).join(", ")
-          : "-",
       };
     });
     return map;
@@ -110,74 +107,56 @@ export default function DetailStockToko() {
   /* ======================
      BUILD ROWS
   ====================== */
-/* ======================
+  /* ======================
    BUILD ROWS (FIX FINAL)
 ====================== */
-const rows = useMemo(() => {
-  if (!namaToko) return [];
+  const rows = useMemo(() => {
+    if (!namaToko) return [];
 
-  const map = {};
+    const map = {};
 
-  transaksi
-    .filter(
-      (t) =>
-        t.STATUS === "Approved" &&
-        t.NAMA_TOKO === namaToko
-    )
-    .forEach((t) => {
+    transaksi
+      .filter((t) => t.STATUS === "Approved" && t.NAMA_TOKO === namaToko)
+      .forEach((t) => {
+        const key = t.IMEI || `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
 
-      const key = t.IMEI || `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-
-      // 🔥 LOGIKA PENENTU QTY
-      const qty =
-        ["PENJUALAN", "TRANSFER_KELUAR"].includes(
+        // 🔥 LOGIKA PENENTU QTY
+        const qty = ["PENJUALAN", "TRANSFER_KELUAR"].includes(
           String(t.PAYMENT_METODE || "").toUpperCase()
         )
           ? -1
           : 1;
 
-      if (!map[key]) {
-        map[key] = {
-          tanggal: t.TANGGAL_TRANSAKSI || "-",
-          noDo: t.NO_INVOICE || "-",
-          supplier: t.NAMA_SUPPLIER || "-",
-          namaToko: t.NAMA_TOKO || "-",
-          brand: t.NAMA_BRAND || "-",
-          barang: t.NAMA_BARANG || "-",
-          imei: t.IMEI || "",
-          qty: 0,
+        if (!map[key]) {
+          map[key] = {
+            tanggal: t.TANGGAL_TRANSAKSI || "-",
+            noDo: t.NO_INVOICE || "-",
+            supplier: t.NAMA_SUPPLIER || "-",
+            namaToko: t.NAMA_TOKO || "-",
+            brand: t.NAMA_BRAND || "-",
+            barang: t.NAMA_BARANG || "-",
+            imei: t.IMEI || "",
+            qty: 0,
 
-          hargaSRP: masterMap?.[
-            `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
-          ]?.hargaSRP || 0,
+            hargaSRP:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
 
-          hargaGrosir: masterMap?.[
-            `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
-          ]?.hargaGrosir || 0,
+            hargaGrosir:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
 
-          hargaReseller: masterMap?.[
-            `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
-          ]?.hargaReseller || 0,
+            hargaReseller:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller ||
+              0,
+          };
+        }
 
-          bundling:
-            masterMap?.[
-              `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
-            ]?.bundling || "-",
-        };
-      }
+        // 🔥 TAMBAH / KURANGI STOK
+        map[key].qty += qty;
+      });
 
-      // 🔥 TAMBAH / KURANGI STOK
-      map[key].qty += qty;
-    });
-
-  // ❌ HAPUS YANG STOKNYA HABIS
-  return Object.values(map).filter(
-    (r) => r.qty > 0
-  );
-}, [transaksi, masterMap, namaToko]);
-
-
-  
+    // ❌ HAPUS YANG STOKNYA HABIS
+    return Object.values(map).filter((r) => r.qty > 0);
+  }, [transaksi, masterMap, namaToko]);
 
   /* ======================
      SEARCH FILTER
@@ -317,9 +296,7 @@ const rows = useMemo(() => {
                   <th className="px-3 py-2 text-left whitespace-nowrap">
                     Total Reseller
                   </th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">
-                    Bundling
-                  </th>
+
                   <th className="px-3 py-2 text-left whitespace-nowrap">
                     Keterangan
                   </th>
@@ -371,9 +348,7 @@ const rows = useMemo(() => {
                     <td className="px-3 py-2 text-right font-mono">
                       {rupiah(r.totalReseller)}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      {r.bundling}
-                    </td>
+
                     <td className="px-3 py-2 text-right font-mono text-xs text-gray-600">
                       {r.keterangan || "-"}
                     </td>

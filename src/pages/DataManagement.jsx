@@ -26,7 +26,6 @@ import MasterTokoCard from "../components/master-management/MasterTokoCard";
 import MasterSupplierCard from "../components/master-management/MasterSupplierCard";
 import MasterKategoriBarangCard from "../components/master-management/MasterKategoriBarangCard";
 import MasterBarangKategoriCard from "../components/master-management/MasterBarangKategoriCard";
-import MasterBarangBundlingCard from "../components/master-management/MasterBarangBundlingCard";
 
 const cardsConfig = [
   {
@@ -122,13 +121,6 @@ const cardsConfig = [
     icon: FaMoneyBillWave,
     gradient: "from-emerald-500 to-green-500",
   },
-  {
-    key: "masterBarangBundling",
-    title: "MASTER BARANG BUNDLING",
-    description: "Kelola harga bundling accessories",
-    icon: FaCubes,
-    gradient: "from-indigo-500 via-purple-400 to-pink-400",
-  },
 ];
 
 export default function MasterManagement() {
@@ -163,8 +155,7 @@ export default function MasterManagement() {
         return <MasterBarangKategoriCard kategori="ACCESSORIES" />;
       case "barangSparePartListrik":
         return <MasterBarangKategoriCard kategori="SPARE PART" />;
-      case "masterBarangBundling":
-        return <MasterBarangBundlingCard />;
+   
 
       default:
         return null;

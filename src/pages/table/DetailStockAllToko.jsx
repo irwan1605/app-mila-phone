@@ -53,9 +53,6 @@ export default function DetailStockAllToko() {
         hargaSRP: Number(b.harga?.srp ?? b.hargaSRP ?? 0),
         hargaGrosir: Number(b.harga?.grosir ?? b.hargaGrosir ?? 0),
         hargaReseller: Number(b.harga?.reseller ?? b.hargaReseller ?? 0),
-        bundling: Array.isArray(b.BUNDLING_ITEMS)
-          ? b.BUNDLING_ITEMS.map((x) => x.namaBarang).join(", ")
-          : "-",
       };
     });
     return map;
@@ -66,8 +63,9 @@ export default function DetailStockAllToko() {
   ====================== */
   const rows = useMemo(() => {
     return transaksi
-      .filter((t) => t.STATUS === "Approved" &&
-    t.PAYMENT_METODE !== "PENJUALAN")
+      .filter(
+        (t) => t.STATUS === "Approved" && t.PAYMENT_METODE !== "PENJUALAN"
+      )
       .map((t) => {
         const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
         const master = masterMap[key] || {};
@@ -91,8 +89,6 @@ export default function DetailStockAllToko() {
           totalSRP: master.hargaSRP * qty,
           totalGrosir: master.hargaGrosir * qty,
           totalReseller: master.hargaReseller * qty,
-
-          bundling: master.bundling || "-",
         };
       });
   }, [transaksi, masterMap]);
@@ -159,16 +155,17 @@ export default function DetailStockAllToko() {
         </button>
       </div>
 
-      <div className="
+      <div
+        className="
   bg-white 
   text-slate-800
   rounded-2xl 
   shadow-xl 
   overflow-x-auto
   scrollbar-dark
-">
-
-<table className="w-full text-sm min-w-[2000px]">
+"
+      >
+        <table className="w-full text-sm min-w-[2000px]">
           <thead className="bg-blue-100 sticky top-0 z-10 text-xs uppercase tracking-wider">
             <tr
               className="
@@ -207,9 +204,7 @@ export default function DetailStockAllToko() {
               <th className="px-3 py-2 text-left whitespace-nowrap">
                 Total Reseller
               </th>
-              <th className="px-3 py-2 text-left whitespace-nowrap">
-                Bundling
-              </th>
+
               <th className="px-3 py-2 text-left whitespace-nowrap">Aksi</th>
             </tr>
           </thead>
@@ -248,7 +243,7 @@ export default function DetailStockAllToko() {
                 <td className="px-3 py-2 text-right font-mono">
                   {rupiah(r.totalReseller)}
                 </td>
-                <td className="px-3 py-2 text-right font-mono">{r.bundling}</td>
+
                 <td className="px-3 py-2 text-right font-mono">
                   <button
                     onClick={() =>

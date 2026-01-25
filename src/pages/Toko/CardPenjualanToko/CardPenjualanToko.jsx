@@ -101,7 +101,7 @@ export default function CardPenjualanToko() {
         imei: d.imei,
         imeiList: [d.imei],
         qty: 1,
-        bundlingItems: d.bundling || [],
+
         isImei: true,
 
         hargaMap: d.hargaMap || {},
@@ -359,49 +359,20 @@ export default function CardPenjualanToko() {
               String(b.namaBarang || "").trim() ===
               String(item.namaBarang || "").trim()
           );
-        
-          const bundlingSnapshot = Array.isArray(masterBarang?.bundling)
-            ? masterBarang.bundling.map((b) => ({
-                namaBarang: b.namaBarang,
-                qty: Number(b.qty || 1),
-              }))
-            : [];
-        
-          console.log("🔥 BUNDLING SNAPSHOT FINAL:", {
-            namaBarang: item.namaBarang,
-            bundlingSnapshot,
-          });
-        
+
           return {
             kategoriBarang: item.kategoriBarang,
             namaBrand: item.namaBrand,
             namaBarang: item.namaBarang,
-        
+
             qty: Number(item.qty || 0),
             imeiList: item.isImei ? item.imeiList : [],
-        
+
             skemaHarga: item.skemaHarga,
             hargaAktif: Number(item.hargaAktif || 0),
-        
-            // 🔥🔥🔥 INI KUNCI UTAMA
-            bundlingItems: bundlingSnapshot,
           };
         }),
-        
-        
       };
-
-       // ==================================================
-    // 🔥🔥🔥 PASANG CONSOLE.LOG DI SINI (WAJIB)
-    // ==================================================
-    console.log(
-      "🔥 ITEMS DI TRANSAKSI:",
-      transaksi.items.map((i) => ({
-        namaBarang: i.namaBarang,
-        bundlingItems: i.bundlingItems,
-      }))
-    );
-
 
       /* =================================================
          3️⃣ SIMPAN TRANSAKSI KE FIREBASE

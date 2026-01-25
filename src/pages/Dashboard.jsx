@@ -178,30 +178,29 @@ export default function Dashboard() {
   // ==========================
   const stokByToko = useMemo(() => {
     const map = {};
-  
-    transaksi.forEach(t => {
+
+    transaksi.forEach((t) => {
       if (t.STATUS !== "Approved") return;
-  
+
       const toko = t.NAMA_TOKO;
       if (!map[toko]) map[toko] = {};
-  
+
       const key = t.IMEI || t.SKU || t.NAMA_BARANG;
       const qty = t.IMEI ? 1 : Number(t.QTY || 0);
-  
+
       if (!map[toko][key]) map[toko][key] = 0;
-  
-      if (["PEMBELIAN","TRANSFER_MASUK"].includes(t.PAYMENT_METODE)) {
+
+      if (["PEMBELIAN", "TRANSFER_MASUK"].includes(t.PAYMENT_METODE)) {
         map[toko][key] += qty;
       }
-  
-      if (["PENJUALAN","TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)) {
+
+      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)) {
         map[toko][key] -= qty;
       }
     });
-  
+
     return map;
   }, [transaksi]);
-  
 
   // =======================================================
   // FILTERING (UNTUK CHART & INFO)
@@ -275,14 +274,10 @@ export default function Dashboard() {
     return Object.values(stokByToko || {}).reduce((sum, tokoData) => {
       return (
         sum +
-        Object.values(tokoData || {}).reduce(
-          (s, v) => s + Number(v || 0),
-          0
-        )
+        Object.values(tokoData || {}).reduce((s, v) => s + Number(v || 0), 0)
       );
     }, 0);
   }, [stokByToko]);
-  
 
   const totalPenjualan = useMemo(() => {
     return filteredData.filter((x) => x.STATUS === "Approved").length;
@@ -313,33 +308,29 @@ export default function Dashboard() {
   ];
 
   const registeredTokoSet = useMemo(() => {
-    return new Set(
-      TOKO_LIST.map(t => t.toUpperCase().trim())
-    );
+    return new Set(TOKO_LIST.map((t) => t.toUpperCase().trim()));
   }, []);
-  
 
   const omzetPerToko = useMemo(() => {
     const map = {};
-  
+
     filteredData.forEach((x) => {
       const tokoRaw = x.NAMA_TOKO || x.TOKO;
       if (!tokoRaw) return;
-  
+
       const toko = tokoRaw.toUpperCase().trim();
-  
+
       // 🔥 FILTER TOKO RESMI SAJA
       if (!registeredTokoSet.has(toko)) return;
-  
+
       map[toko] = (map[toko] || 0) + Number(x.TOTAL || 0);
     });
-  
+
     return Object.entries(map).map(([toko, omzet]) => ({
       toko,
       omzet,
     }));
   }, [filteredData, registeredTokoSet]);
-  
 
   const omzetPerSales = useMemo(() => {
     const map = {};
@@ -403,8 +394,9 @@ export default function Dashboard() {
       const status = String(t.STATUS || "").toUpperCase();
 
       return (
-        String(t.IMEI || "").trim().toUpperCase() === imei.toUpperCase()
- &&
+        String(t.IMEI || "")
+          .trim()
+          .toUpperCase() === imei.toUpperCase() &&
         (metode.includes("PEMBELIAN") || metode.includes("TRANSFER")) &&
         status === "APPROVED"
       );
@@ -433,7 +425,7 @@ export default function Dashboard() {
       namaBarang: imeiFound.NAMA_BARANG,
       imei,
       qty: 1,
-      bundling: imeiFound.BUNDLING_ITEMS || [],
+
       hargaMap: {
         srp: imeiFound.HARGA_UNIT || 0,
         grosir: imeiFound.HARGA_GROSIR || 0,
@@ -519,259 +511,224 @@ export default function Dashboard() {
         </div>
       </div>
 
-    {/* ================= CARD SUMMARY DASHBOARD ================= */}
-<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {/* ================= CARD SUMMARY DASHBOARD ================= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* 1. INFORMASI KEUANGAN */}
+        <div
+          onClick={() => navigate("/master-pembelian")}
+          className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-green-50"
+        >
+          <div className="flex items-center gap-2">
+            <FaMoneyBillWave className="text-green-600" />
+            <span className="text-xs text-gray-500">Informasi Keuangan</span>
+          </div>
 
-{/* 1. INFORMASI KEUANGAN */}
-<div
-  onClick={() => navigate("/master-pembelian")}
-  className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-green-50"
->
-  <div className="flex items-center gap-2">
-    <FaMoneyBillWave className="text-green-600" />
-    <span className="text-xs text-gray-500">
-      Informasi Keuangan
-    </span>
-  </div>
+          <div className="text-xl font-bold text-green-600">
+            Rp{" "}
+            {dataTransaksi
+              .filter(
+                (x) =>
+                  x.PAYMENT_METODE === "PEMBELIAN" && x.STATUS === "Approved"
+              )
+              .reduce((s, x) => s + Number(x.TOTAL || 0), 0)
+              .toLocaleString("id-ID")}
+          </div>
 
-  <div className="text-xl font-bold text-green-600">
-    Rp{" "}
-    {dataTransaksi
-      .filter(
-        (x) =>
-          x.PAYMENT_METODE === "PEMBELIAN" &&
-          x.STATUS === "Approved"
-      )
-      .reduce((s, x) => s + Number(x.TOTAL || 0), 0)
-      .toLocaleString("id-ID")}
-  </div>
+          <p className="text-[11px] text-gray-500">
+            Total nominal pembelian stok
+          </p>
+        </div>
 
-  <p className="text-[11px] text-gray-500">
-    Total nominal pembelian stok
-  </p>
-</div>
+        {/* 2. INFORMASI PENJUALAN */}
+        <div
+          onClick={() => navigate("/toko/:tokoId/penjualan")}
+          className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-blue-50"
+        >
+          <div className="flex items-center gap-2">
+            <FaStore className="text-blue-600" />
+            <span className="text-xs text-gray-500">Informasi Penjualan</span>
+          </div>
 
-{/* 2. INFORMASI PENJUALAN */}
-<div
-  onClick={() => navigate("/toko/:tokoId/penjualan")}
-  className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-blue-50"
->
-  <div className="flex items-center gap-2">
-    <FaStore className="text-blue-600" />
-    <span className="text-xs text-gray-500">
-      Informasi Penjualan
-    </span>
-  </div>
+          <div className="text-xl font-bold text-blue-600">
+            {dataTransaksi
+              .filter(
+                (x) =>
+                  String(x.PAYMENT_METODE || "").toUpperCase() ===
+                    "PENJUALAN" &&
+                  x.STATUS === "Approved" &&
+                  String(
+                    x.STATUS_BAYAR || x.SYSTEM_PAYMENT || ""
+                  ).toUpperCase() === "LUNAS"
+              )
+              .reduce(
+                (total, x) => total + (x.IMEI ? 1 : Number(x.QTY || 0)),
+                0
+              )}{" "}
+            Transaksi
+          </div>
 
-  <div className="text-xl font-bold text-blue-600">
-  {
-    dataTransaksi
-      .filter(
-        (x) =>
-          String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN" &&
-          x.STATUS === "Approved" &&
-          (
-            String(x.STATUS_BAYAR || x.SYSTEM_PAYMENT || "")
-              .toUpperCase() === "LUNAS"
-          )
-      )
-      .reduce(
-        (total, x) =>
-          total + (x.IMEI ? 1 : Number(x.QTY || 0)),
-        0
-      )
-  }{" "}
-    Transaksi
-  </div>
+          <p className="text-[11px] text-gray-500">Jumlah Transaksi berhasil</p>
+        </div>
 
-  <p className="text-[11px] text-gray-500">
-    Jumlah Transaksi berhasil
-  </p>
-</div>
+        {/* 3. TRANSAKSI PENDING */}
+        <div
+          onClick={() =>
+            navigate("/toko/:tokoId/penjualan", {
+              state: { status: "Pending" },
+            })
+          }
+          className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-yellow-50"
+        >
+          <div className="flex items-center gap-2">
+            <FaClock className="text-yellow-500" />
+            <span className="text-xs text-gray-500">Transaksi Pending</span>
+          </div>
 
-{/* 3. TRANSAKSI PENDING */}
-<div
-  onClick={() =>
-    navigate("/toko/:tokoId/penjualan", {
-      state: { status: "Pending" },
-    })
-  }
-  className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-yellow-50"
->
-  <div className="flex items-center gap-2">
-    <FaClock className="text-yellow-500" />
-    <span className="text-xs text-gray-500">
-      Transaksi Pending
-    </span>
-  </div>
+          <div className="text-xl font-bold text-yellow-600">
+            {
+              dataTransaksi.filter(
+                (x) =>
+                  String(x.PAYMENT_METODE || "").toUpperCase() ===
+                    "PENJUALAN" && x.STATUS === "Pending"
+              ).length
+            }
+          </div>
 
-  <div className="text-xl font-bold text-yellow-600">
-    {
-      dataTransaksi.filter(
-        (x) =>
-          String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN" &&
-          x.STATUS === "Pending"
-      ).length
-    }
-  </div>
+          <p className="text-[11px] text-gray-500">Menunggu Proses</p>
+        </div>
 
-  <p className="text-[11px] text-gray-500">
-    Menunggu Proses
-  </p>
-</div>
+        {/* 4. PENJUALAN HARI INI */}
+        <div
+          onClick={() =>
+            navigate("/toko/:tokoId/penjualan", {
+              state: { status: "Approved", tanggal: todayStr },
+            })
+          }
+          className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-indigo-50"
+        >
+          <div className="flex items-center gap-2">
+            <FaMoneyBillWave className="text-indigo-600" />
+            <span className="text-xs text-gray-500">Penjualan Hari Ini</span>
+          </div>
 
-{/* 4. PENJUALAN HARI INI */}
-<div
-  onClick={() =>
-    navigate("/toko/:tokoId/penjualan", {
-      state: { status: "Approved", tanggal: todayStr },
-    })
-  }
-  className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-indigo-50"
->
-  <div className="flex items-center gap-2">
-    <FaMoneyBillWave className="text-indigo-600" />
-    <span className="text-xs text-gray-500">
-      Penjualan Hari Ini
-    </span>
-  </div>
+          <div className="text-xl font-bold text-indigo-600">
+            Rp {omzetHariIni.toLocaleString("id-ID")}
+          </div>
 
-  <div className="text-xl font-bold text-indigo-600">
-    Rp {omzetHariIni.toLocaleString("id-ID")}
-  </div>
+          <p className="text-[11px] text-gray-500">
+            Total nominal transaksi berhasil hari ini
+          </p>
+        </div>
 
-  <p className="text-[11px] text-gray-500">
-    Total nominal transaksi berhasil hari ini
-  </p>
-</div>
+        {/* 5. STOK MASTER BARANG */}
+        <div
+          onClick={() => navigate("/master-pembelian")}
+          className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-purple-50"
+        >
+          <div className="flex items-center gap-2">
+            <FaBoxes className="text-purple-600" />
+            <span className="text-xs text-gray-500">
+              TRANSAKSI MASTER PEMBELIAN
+            </span>
+          </div>
 
-{/* 5. STOK MASTER BARANG */}
-<div
-  onClick={() => navigate("/master-pembelian")}
-  className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-purple-50"
->
-  <div className="flex items-center gap-2">
-    <FaBoxes className="text-purple-600" />
-    <span className="text-xs text-gray-500">
-      TRANSAKSI MASTER PEMBELIAN
-    </span>
-  </div>
+          <div className="text-xl font-bold text-purple-600">
+            {dataTransaksi
+              .filter(
+                (x) =>
+                  x.PAYMENT_METODE === "PEMBELIAN" && x.STATUS === "Approved"
+              )
+              .reduce((s, x) => s + (x.IMEI ? 1 : Number(x.QTY || 0)), 0)}{" "}
+            Unit
+          </div>
 
-  <div className="text-xl font-bold text-purple-600">
-    {
-      dataTransaksi.filter(
-        (x) =>
-          x.PAYMENT_METODE === "PEMBELIAN" &&
-          x.STATUS === "Approved"
-      ).reduce(
-        (s, x) =>
-          s + (x.IMEI ? 1 : Number(x.QTY || 0)),
-        0
-      )
-    }{" "}
-    Unit
-  </div>
+          <p className="text-[11px] text-gray-500">Total Unit Stok Masuk</p>
+        </div>
 
-  <p className="text-[11px] text-gray-500">
-    Total Unit Stok Masuk
-  </p>
-</div>
+        {/* 6. TOTAL TRANSAKSI TRANSFER GUDANG */}
+        <div
+          onClick={() => navigate("/transfer-barang")}
+          className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-orange-50"
+        >
+          <div className="flex items-center gap-2">
+            <FaExchangeAlt className="text-orange-600" />
+            <span className="text-xs text-gray-500">
+              Total Transaksi Transfer Gudang
+            </span>
+          </div>
 
-{/* 6. TOTAL TRANSAKSI TRANSFER GUDANG */}
-<div
-  onClick={() => navigate("/transfer-barang")}
-  className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-orange-50"
->
-  <div className="flex items-center gap-2">
-    <FaExchangeAlt className="text-orange-600" />
-    <span className="text-xs text-gray-500">
-      Total Transaksi Transfer Gudang
-    </span>
-  </div>
+          <div className="text-xl font-bold text-orange-600">
+            {
+              [
+                ...new Set(
+                  dataTransaksi
+                    .filter((x) =>
+                      ["TRANSFER_MASUK", "TRANSFER_KELUAR"].includes(
+                        String(x.PAYMENT_METODE || "").toUpperCase()
+                      )
+                    )
+                    .map((x) => x.NO_SURAT_JALAN) // 🔥 HITUNG PER SURAT JALAN
+                    .filter(Boolean)
+                ),
+              ].length
+            }{" "}
+            Surat Jalan
+          </div>
 
-  <div className="text-xl font-bold text-orange-600">
-  {
-    [
-      ...new Set(
-        dataTransaksi
-          .filter((x) =>
-            ["TRANSFER_MASUK","TRANSFER_KELUAR"].includes(
-              String(x.PAYMENT_METODE || "").toUpperCase()
-            )
-          )
-          .map((x) => x.NO_SURAT_JALAN) // 🔥 HITUNG PER SURAT JALAN
-          .filter(Boolean)
-      ),
-    ].length
-  }{" "}
-  Surat Jalan
-</div>
+          <p className="text-[11px] text-gray-500">
+            Total Barang hasil Transfer Gudang
+          </p>
+        </div>
 
-  <p className="text-[11px] text-gray-500">
-    Total Barang hasil Transfer Gudang
-  </p>
-</div>
+        {/* 7. INFORMASI PIUTANG */}
+        <div
+          onClick={() =>
+            navigate("/toko/:tokoId/penjualan", {
+              state: { payment: "PIUTANG" },
+            })
+          }
+          className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-red-50"
+        >
+          <div className="flex items-center gap-2">
+            <FaHandHoldingUsd className="text-red-600" />
+            <span className="text-xs text-gray-500">Informasi Piutang</span>
+          </div>
 
-{/* 7. INFORMASI PIUTANG */}
-<div
-  onClick={() =>
-    navigate("/toko/:tokoId/penjualan", {
-      state: { payment: "PIUTANG" },
-    })
-  }
-  className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-red-50"
->
-  <div className="flex items-center gap-2">
-    <FaHandHoldingUsd className="text-red-600" />
-    <span className="text-xs text-gray-500">
-      Informasi Piutang
-    </span>
-  </div>
+          <div className="text-xl font-bold text-red-600">
+            {
+              dataTransaksi.filter(
+                (x) => x.SYSTEM_PAYMENT === "PIUTANG" && x.STATUS === "Approved"
+              ).length
+            }{" "}
+            Transaksi
+          </div>
 
-  <div className="text-xl font-bold text-red-600">
-    {
-      dataTransaksi.filter(
-        (x) =>
-          x.SYSTEM_PAYMENT === "PIUTANG" &&
-          x.STATUS === "Approved"
-      ).length
-    }{" "}
-    Transaksi
-  </div>
+          <p className="text-[11px] text-gray-500">Transaksi status PIUTANG</p>
+        </div>
 
-  <p className="text-[11px] text-gray-500">
-    Transaksi status PIUTANG
-  </p>
-</div>
+        {/* 8. TOTAL PENJUALAN */}
+        <div
+          onClick={() => navigate("/toko/:tokoId/penjualan")}
+          className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-sky-50"
+        >
+          <div className="flex items-center gap-2">
+            <FaStore className="text-sky-600" />
+            <span className="text-xs text-gray-500">TOTAL PENJUALAN</span>
+          </div>
 
-{/* 8. TOTAL PENJUALAN */}
-<div
-  onClick={() => navigate("/toko/:tokoId/penjualan")}
-  className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-sky-50"
->
-  <div className="flex items-center gap-2">
-    <FaStore className="text-sky-600" />
-    <span className="text-xs text-gray-500">
-      TOTAL PENJUALAN
-    </span>
-  </div>
+          <div className="text-xl font-bold text-sky-600">
+            {
+              dataTransaksi.filter(
+                (x) =>
+                  String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
+              ).length
+            }{" "}
+            Transaksi
+          </div>
 
-  <div className="text-xl font-bold text-sky-600">
-    {
-      dataTransaksi.filter(
-        (x) => String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
-      ).length
-    }{" "}
-    Transaksi
-  </div>
-
-  <p className="text-[11px] text-gray-500">
-    Semua status transaksi
-  </p>
-</div>
-
-</div>
-
+          <p className="text-[11px] text-gray-500">Semua status transaksi</p>
+        </div>
+      </div>
 
       {/* FILTER (UNTUK CHART & ANALYTIC) */}
       <div className="bg-white rounded-2xl shadow p-4 mb-4">

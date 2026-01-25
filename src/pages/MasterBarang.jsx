@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   listenMasterKategoriBarang,
   listenMasterBarang,
-  listenMasterBarangBundling,
   addMasterBarang, // ✅ TAMBAHKAN INI
   updateMasterBarang,
   deleteMasterBarangMasing,
@@ -26,27 +25,6 @@ const KATEGORI_OPTIONS = [
   "ACCESORIES",
 ];
 
-// const BRAND_OPTIONS = [
-//   "OFERO",
-//   "UWNFLY",
-//   "E NINE",
-//   "ZXTEX",
-//   "UNITED",
-//   "RAKATA",
-//   "OPPO",
-//   "SAMSUNG",
-//   "REALME",
-//   "VIVO",
-//   "IPHONE",
-//   "ZTE NUBIA",
-//   "XIOMI",
-//   "INFINIX",
-//   "OLIKE",
-//   "ROBOT",
-//   "BATERAI",
-//   "CHARGER",
-// ];
-
 const fmt = (n) => Number(n || 0).toLocaleString("id-ID");
 
 export default function MasterBarang() {
@@ -67,105 +45,19 @@ export default function MasterBarang() {
     hargaSRP: "",
     hargaGrosir: "",
     hargaReseller: "",
-
-    // === BUNDLING ===
-    isBundling: false,
-    bundlingItems: [], // [{ namaBarang, harga }]
   });
 
   const [kategoriList, setKategoriList] = useState([]);
 
   const [masterBarang, setMasterBarang] = useState([]);
-  const [masterBundling, setMasterBundling] = useState([]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   useEffect(() => {
-    // RESET dulu
-    setForm((f) => ({
-      ...f,
-      isBundling: false,
-      bundlingItems: [],
-    }));
-
-    // MOTOR & SEPEDA → bundling harga 0
-    if (
-      form.kategori === "MOTOR LISTRIK" ||
-      form.kategori === "SEPEDA LISTRIK"
-    ) {
-      const bundlingList = masterBundling
-        .filter((b) => b.kategoriBarang === form.kategori)
-        .map((b) => ({
-          namaBarang: b.namaBarang,
-          harga: 0,
-        }));
-
-      setForm((f) => ({
-        ...f,
-        isBundling: true,
-        bundlingItems: bundlingList,
-      }));
-    }
-
-    // ACCESSORIES → harga dari master bundling
-    if (form.kategori === "ACCESSORIES") {
-      const bundlingList = masterBundling
-        .filter((b) => b.kategoriBarang === "ACCESSORIES")
-        .map((b) => ({
-          namaBarang: b.namaBarang,
-          harga: Number(b.hargaBundling || 0),
-        }));
-
-      if (bundlingList.length > 0) {
-        setForm((f) => ({
-          ...f,
-          isBundling: true,
-          bundlingItems: bundlingList,
-        }));
-      }
-    }
-  }, [form.kategori, masterBundling]);
-
-  useEffect(() => {
     const unsub = listenMasterBarang(setMasterBarang);
     return () => unsub && unsub();
   }, []);
-
-  useEffect(() => {
-    const unsub = listenMasterBarangBundling(setMasterBundling);
-    return () => unsub && unsub();
-  }, []);
-
-  useEffect(() => {
-    setForm((f) => ({
-      ...f,
-      isBundling: false,
-      bundlingItems: [],
-    }));
-
-    // ===============================
-    // MOTOR & SEPEDA LISTRIK
-    // ===============================
-    if (
-      form.kategori === "MOTOR LISTRIK" ||
-      form.kategori === "SEPEDA LISTRIK"
-    ) {
-      const autoBundling = masterBundling
-        .filter((b) => b.kategoriBarang === form.kategori)
-        .map((b) => ({
-          namaBarang: b.namaBarang,
-          harga: Number(b.hargaBundling || 0),
-          source: "AUTO",
-        }));
-
-      setForm((f) => ({
-        ...f,
-        isBundling: autoBundling.length > 0,
-        bundlingItems: autoBundling,
-      }));
-    }
-  }, [form.kategori, masterBundling]);
 
   useEffect(() => {
     const unsub = listenMasterKategoriBarang((rows) => {
@@ -215,12 +107,6 @@ export default function MasterBarang() {
           hargaSRP: Number(harga.srp ?? b.hargaSRP ?? 0),
           hargaGrosir: Number(harga.grosir ?? b.hargaGrosir ?? 0),
           hargaReseller: Number(harga.reseller ?? b.hargaReseller ?? 0),
-
-          // 🔥 BUNDLING (AMAN)
-          IS_BUNDLING: Boolean(b.IS_BUNDLING),
-          BUNDLING_ITEMS: Array.isArray(b.BUNDLING_ITEMS)
-            ? b.BUNDLING_ITEMS
-            : [],
         };
       });
   }, [masterBarang]);
@@ -330,9 +216,6 @@ export default function MasterBarang() {
           reseller: Number(form.hargaReseller || 0),
         },
 
-        IS_BUNDLING: Boolean(form.isBundling),
-        BUNDLING_ITEMS: form.isBundling ? form.bundlingItems : [],
-
         CREATED_AT: Date.now(),
       };
 
@@ -355,8 +238,6 @@ export default function MasterBarang() {
         hargaSRP: "",
         hargaGrosir: "",
         hargaReseller: "",
-        isBundling: false,
-        bundlingItems: [],
       });
 
       // ✅ TUTUP MODAL
@@ -424,22 +305,6 @@ export default function MasterBarang() {
         grosir: Number(editData.hargaGrosir || 0),
         reseller: Number(editData.hargaReseller || 0),
       },
-
-      // ===== BUNDLING (LEVEL ATAS) =====
-      IS_BUNDLING: Boolean(editData.IS_BUNDLING),
-
-      BUNDLING_ITEMS: Array.isArray(editData.BUNDLING_ITEMS)
-        ? editData.BUNDLING_ITEMS
-        : [],
-
-      NAMA_BANDLING_1: editData.NAMA_BANDLING_1 || "",
-      HARGA_BANDLING_1: Number(editData.HARGA_BANDLING_1 || 0),
-
-      NAMA_BANDLING_2: editData.NAMA_BANDLING_2 || "",
-      HARGA_BANDLING_2: Number(editData.HARGA_BANDLING_2 || 0),
-
-      NAMA_BANDLING_3: editData.NAMA_BANDLING_3 || "",
-      HARGA_BANDLING_3: Number(editData.HARGA_BANDLING_3 || 0),
     };
 
     try {
@@ -453,17 +318,6 @@ export default function MasterBarang() {
       alert("Gagal memperbarui Master Barang");
     }
   };
-
-  // ===============================
-// SPAREPART / ACCESSORIES OPTIONS (UNTUK BUNDLING)
-// ===============================
-const sparepartOptions = useMemo(() => {
-  return masterBarang.filter(
-    (b) =>
-      b.kategoriBarang === "ACCESSORIES" ||
-      b.kategoriBarang === "SPAREPART"
-  );
-}, [masterBarang]);
 
   // ================== UI ==================
   return (
@@ -515,7 +369,6 @@ const sparepartOptions = useMemo(() => {
                 <th className="p-2 border text-right">Harga SRP</th>
                 <th className="p-2 border text-right">Harga Grosir</th>
                 <th className="p-2 border text-right">Harga Reseller</th>
-                <th className="p-2 border">Barang Bundling</th>
 
                 <th className="p-2 border">Aksi</th>
               </tr>
@@ -538,25 +391,6 @@ const sparepartOptions = useMemo(() => {
                   </td>
                   <td className="border p-2 text-right">
                     Rp {fmt(x.hargaReseller)}
-                  </td>
-                  <td className="border p-2">
-                    {x.BUNDLING_ITEMS.length === 0 ? (
-                      <span className="text-slate-400 italic">—</span>
-                    ) : (
-                      <div className="space-y-1">
-                        {x.BUNDLING_ITEMS.map((b, i) => (
-                          <div
-                            key={i}
-                            className="flex justify-between gap-2 text-xs bg-slate-100 px-2 py-1 rounded"
-                          >
-                            <span>{b.namaBarang}</span>
-                            <span className="font-semibold">
-                              Rp {fmt(b.harga)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </td>
 
                   <td className="border p-2 text-center space-x-2">
@@ -657,8 +491,6 @@ const sparepartOptions = useMemo(() => {
                       hargaSRP: "",
                       hargaGrosir: "",
                       hargaReseller: "",
-                      isBundling: false,
-                      bundlingItems: [],
                     })
                   }
                 >
@@ -772,95 +604,6 @@ const sparepartOptions = useMemo(() => {
                 />{" "}
               </div>
             </div>
-            {form.isBundling && (
-              <div className="mt-4">
-                <label className="text-xs font-semibold">Barang Bundling</label>
-
-                <div className="space-y-2 mt-2">
-                  {form.bundlingItems.map((b, i) => (
-                    <div
-                      key={i}
-                      className="grid grid-cols-3 gap-2 items-center"
-                    >
-                      <input
-                        list="sparepart-list"
-                        className="input"
-                        value={b.namaBarang}
-                        placeholder="Nama Sparepart"
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setForm((prev) => {
-                            const items = [...prev.bundlingItems];
-                            items[i] = {
-                              ...items[i],
-                              namaBarang: v,
-                              source: "MANUAL",
-                            };
-                            return { ...prev, bundlingItems: items };
-                          });
-                        }}
-                      />
-
-                      <input
-                        type="number"
-                        className="input"
-                        value={b.harga}
-                        placeholder="Harga"
-                        onChange={(e) => {
-                          const v = Number(e.target.value || 0);
-                          setForm((prev) => {
-                            const items = [...prev.bundlingItems];
-                            items[i] = {
-                              ...items[i],
-                              harga: v,
-                              source: "MANUAL",
-                            };
-                            return { ...prev, bundlingItems: items };
-                          });
-                        }}
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            bundlingItems: prev.bundlingItems.filter(
-                              (_, idx) => idx !== i
-                            ),
-                          }))
-                        }
-                        className="bg-rose-500 text-white rounded px-2"
-                      >
-                        Hapus
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setForm((prev) => ({
-                      ...prev,
-                      bundlingItems: [
-                        ...(prev.bundlingItems || []),
-                        { namaBarang: "", harga: 0, source: "MANUAL" },
-                      ],
-                    }))
-                  }
-                  className="text-xs text-indigo-600 mt-2"
-                >
-                  + Tambah Barang Bundling Manual
-                </button>
-
-                <datalist id="sparepart-list">
-                  {sparepartOptions.map((s) => (
-                    <option key={s.id} value={s.namaBarang} />
-                  ))}
-                </datalist>
-              </div>
-            )}
 
             <div className="flex justify-end gap-2 mt-4">
               <button
@@ -1005,7 +748,7 @@ const sparepartOptions = useMemo(() => {
                 </div>
 
                 {/* Bandling edit — rapi di baris/kolom */}
-                {/* <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="text-xs text-slate-500">
                       Nama Bandling 1
@@ -1095,7 +838,7 @@ const sparepartOptions = useMemo(() => {
                       }
                     />
                   </div>
-                </div> */}
+                </div>
 
                 <div className="flex justify-end gap-3 mt-6">
                   <button
