@@ -79,8 +79,10 @@ export default function CardPenjualanToko() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const [printData, setPrintData] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+
+  const [printData, setPrintData] = useState(null);
   const [stockRealtime, setStockRealtime] = useState({});
   const location = useLocation();
   const [listBarang, setListBarang] = useState([]);
@@ -166,6 +168,26 @@ export default function CardPenjualanToko() {
       window.removeEventListener("beforeunload", unlockAll);
     };
   }, [items]);
+
+  const handlePreview = () => {
+    const draftTransaksi = {
+      invoice: "PREVIEW",
+      toko: formUser.namaToko,
+      user: {
+        namaSales: formUser.namaSales,
+        namaPelanggan: formUser.namaPelanggan,
+        noTlpPelanggan: formUser.noTlpPelanggan,
+      },
+      items: items.map((it) => ({
+        ...it,
+        hargaUnit: it.hargaAktif || 0,
+      })),
+      payment: payment,
+    };
+
+    setPreviewData(draftTransaksi);
+    setShowPreview(true);
+  };
 
   // ================= CEK DUPLIKASI IMEI DI FORM =================
   const hasDuplicateImeiInForm = () => {
@@ -513,28 +535,26 @@ export default function CardPenjualanToko() {
   // ================= VALIDASI TAHAP 2 =================
   const isTahap2Valid = useMemo(() => {
     if (!Array.isArray(items) || items.length === 0) return false;
-  
+
     return items.every((item) => {
       if (!item.namaBarang) return false;
-  
+
       // IMEI wajib kalau barang IMEI
       if (item.isImei && (!item.imeiList || item.imeiList.length === 0))
         return false;
-  
+
       // QTY wajib
       if (!item.qty || item.qty <= 0) return false;
-  
+
       // 🔥 HARGA:
       // - IMEI → wajib > 0
       // - NON IMEI (ACCESSORIES) → BOLEH 0
       if (item.isImei && (!item.hargaAktif || item.hargaAktif <= 0))
         return false;
-  
+
       return true;
     });
   }, [items]);
-  
-  
 
   // ================= TOTAL =================
   const totalPenjualan = useMemo(() => {
@@ -572,21 +592,37 @@ export default function CardPenjualanToko() {
           />
 
           <div className="flex gap-3 mt-4">
-            <button
-              onClick={handleSubmitPenjualan}
-              disabled={submitting || !isTahap2Valid || !payment?.grandTotal}
-              className="px-4 py-2 rounded bg-green-600 text-white"
-            >
-              {submitting ? "Menyimpan..." : "SUBMIT PENJUALAN"}
-            </button>
-            <div className="flex justify-between">
-              {showPreview && printData && (
-                <CetakInvoicePenjualan transaksi={printData} ref={previewRef} />
-              )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handlePreview}
+                className="px-4 py-2 bg-blue-500 text-white rounded"
+              >
+                👁 Preview
+              </button>
+
+              <button
+                onClick={handleSubmitPenjualan}
+                className="px-4 py-2 bg-green-600 text-white rounded"
+              >
+                💾 Submit Penjualan
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      {showPreview && previewData && (
+        <div className="fixed inset-0 bg-black/40 z-40 flex justify-center items-center">
+          <div className="bg-white rounded-xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-auto">
+            <CetakInvoicePenjualan
+              transaksi={previewData}
+              onClose={() => setShowPreview(false)}
+              mode="preview"
+            />
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl shadow-lg p-5">
         <div className="flex justify-between items-center mb-3">

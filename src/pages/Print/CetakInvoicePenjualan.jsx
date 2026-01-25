@@ -13,7 +13,11 @@ const rupiah = (n) =>
     maximumFractionDigits: 0,
   });
 
-export default function CetakInvoicePenjualan({ transaksi, onClose }) {
+  export default function CetakInvoicePenjualan({
+    transaksi,
+    onClose,
+    mode = "print", // 🔥 default = print
+  }) {
   const printRef = useRef(null);
 
   const handlePrint = useReactToPrint({
@@ -64,21 +68,22 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
           onClick={onClose}
           className="px-4 py-2 bg-gray-600 text-white rounded"
         >
-          ❌ Cancel
+          ❌ Close
         </button>
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            console.log("BUTTON DIKLIK");
-            handlePrint();
-          }}
-          className="px-4 py-2 bg-blue-600 text-white rounded 
-             z-[9999] relative pointer-events-auto"
-        >
-          🖨️ CETAK INVOICE
-        </button>
+        {/* 🔥 HANYA TAMPIL JIKA MODE PRINT */}
+        {mode === "print" && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePrint();
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded"
+          >
+            🖨️ CETAK INVOICE
+          </button>
+        )}
       </div>
 
       {/* AREA CETAK */}
@@ -152,9 +157,6 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
             <p>
               Total Nominal Barang : <b>{rupiah(totalBarang)}</b>
             </p>
-            <p>
-              MDR : <b>{rupiah(payment.nominalMdr)}</b>
-            </p>
 
             <hr className="my-1" />
 
@@ -179,7 +181,7 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
           {isKredit && (
             <div className="mt-2 text-xs space-y-1">
               <p>Harga Barang : {rupiah(totalBarang)}</p>
-              <p>MDR : {rupiah(payment.nominalMdr)}</p>
+
               <p>DP User : {rupiah(payment.dpUser)}</p>
               <p>Voucher : {rupiah(payment.voucher)}</p>
 
@@ -189,9 +191,6 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
                 <b>Sisa Hutang :</b> {rupiah(payment.grandTotal)}
               </p>
               <p>Tenor : {payment.tenor}</p>
-              <p>
-                Cicilan / bulan : <b>{rupiah(cicilan)}</b>
-              </p>
             </div>
           )}
 
@@ -217,6 +216,7 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
                   <span>
                     {p.metode}
                     {p.bankNama ? ` - ${p.bankNama}` : ""}
+                    {p.metode === "TUKAR TAMBAH" ? " (TUKAR TAMBAH)" : ""}
                   </span>
                   <span>
                     Rp {Number(p.nominal || 0).toLocaleString("id-ID")}
@@ -224,6 +224,12 @@ export default function CetakInvoicePenjualan({ transaksi, onClose }) {
                 </div>
               ))}
             </>
+          )}
+
+          {payment.splitPayment?.some((p) => p.metode === "TUKAR TAMBAH") && (
+            <div className="mt-2 text-red-600 font-semibold">
+              ⚠️ TRANSAKSI DENGAN TUKAR TAMBAH
+            </div>
           )}
 
           {/* KEMBALIAN */}

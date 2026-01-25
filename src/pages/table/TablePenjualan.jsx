@@ -126,6 +126,7 @@ export default function TablePenjualan() {
           tanggal: trx.tanggal || trx.createdAt,
           invoice: trx.invoice,
           toko: trx.toko || "-",
+          keterangan: trx.payment?.keterangan || "-",
 
           pelanggan: trx.user?.namaPelanggan || "-",
           telp: trx.user?.noTlpPelanggan || "-",
@@ -401,10 +402,15 @@ export default function TablePenjualan() {
       HargaReseller: r.hargaReseller || 0, // ✅ FIX
 
       StatusBayar: r.statusBayar,
+      TukarTambah: r.payment?.splitPayment?.some(
+        (p) => p.metode === "TUKAR TAMBAH"
+      )
+        ? "YA"
+        : "-",
       MDR: r.namaMdr,
       NominalMDR: r.nominalMdr,
       Tenor: r.tenor,
-      Cicilan: r.cicilan,
+      Keterangan: r.keterangan,
       GrandTotal: r.grandTotal,
       Status: r.status,
     }));
@@ -501,10 +507,11 @@ export default function TablePenjualan() {
               <th>Harga Reseller</th>
 
               <th>Status Bayar</th>
+              <th>Tukar Tambah</th>
               <th>Nama MDR</th>
               <th>Nominal MDR</th>
               <th>Tenor</th>
-              <th>Nilai Cicilan</th>
+              <th>Keterangan</th>
               <th>Grand Total</th>
 
               <th>Status</th>
@@ -540,10 +547,18 @@ export default function TablePenjualan() {
                 <td className="text-right">{rupiah(row.hargaGrosir)}</td>
                 <td className="text-right">{rupiah(row.hargaReseller)}</td>
                 <td className="text-center">{row.statusBayar}</td>
+                <td className="text-center">
+                  {row.payment?.splitPayment?.some(
+                    (p) => p.metode === "TUKAR TAMBAH"
+                  )
+                    ? "YA"
+                    : "-"}
+                </td>
                 <td>{row.namaMdr}</td>
                 <td className="text-right">{rupiah(row.nominalMdr)}</td>
                 <td className="text-center">{row.tenor}</td>
-                <td className="text-right">{rupiah(row.cicilan)}</td>
+                <td className="max-w-[200px] break-words">{row.keterangan}</td>
+
                 <td className="text-right font-bold">
                   {rupiah(row.grandTotal)}
                 </td>

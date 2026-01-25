@@ -79,6 +79,8 @@ export default function FormPaymentSection({
       voucher: Number(value.voucher || 0),
 
       tenor: value.tenor || "",
+      // 🔥 KETERANGAN BARU
+      keterangan: value.keterangan || "",
     }),
     [value]
   );
@@ -114,15 +116,14 @@ export default function FormPaymentSection({
   const cicilanPerBulan = useMemo(() => {
     if (paymentSafe.status !== "PIUTANG") return 0;
     if (!paymentSafe.tenor) return 0;
-  
+
     // ambil angka dari "6 BULAN"
     const tenorAngka = parseInt(paymentSafe.tenor);
-  
+
     if (!tenorAngka || tenorAngka <= 0) return 0;
-  
+
     return Math.ceil(grandTotal / tenorAngka);
   }, [grandTotal, paymentSafe.status, paymentSafe.tenor]);
-  
 
   /* ================= CASH ================= */
   const kembalian = useMemo(() => {
@@ -251,6 +252,7 @@ export default function FormPaymentSection({
                 }}
               >
                 <option>CASH</option>
+                <option>TUKAR TAMBAH</option>
                 <option>DEBIT</option>
                 <option>QRIS</option>
               </select>
@@ -338,7 +340,7 @@ export default function FormPaymentSection({
         {/* CASH NORMAL */}
         {!paymentSplit.enabled && paymentSafe.paymentMethod === "CASH" && (
           <div>
-            <label className="font-semibold">Uang Dibayarkan</label>
+            <label className="font-semibold">Payment User</label>
             <input
               type="number"
               className="w-full border rounded px-2 py-1"
@@ -386,6 +388,15 @@ export default function FormPaymentSection({
                 readOnly
                 className="w-full border rounded px-2 py-1 bg-gray-100"
                 value={nominalMdr.toLocaleString("id-ID")}
+              />
+            </div>
+
+            <div>
+              <label className="font-semibold">Persen MDR (%)</label>
+              <input
+                readOnly
+                className="w-full border rounded px-2 py-1 bg-gray-100"
+                value={paymentSafe.persenMdr}
               />
             </div>
 
@@ -439,29 +450,13 @@ export default function FormPaymentSection({
                 ))}
               </select>
             </div>
-
-            {paymentSafe.tenor && (
-              <div className="mt-2 p-2 bg-blue-50 rounded">
-                <div className="font-semibold text-blue-700">
-                  SIMULASI CICILAN
-                </div>
-                <div>Tenor: {paymentSafe.tenor} bulan</div>
-                <div>
-                  Cicilan / bulan:
-                  <b className="text-green-700">
-                    {" "}
-                    Rp {cicilanPerBulan.toLocaleString("id-ID")}
-                  </b>
-                </div>
-              </div>
-            )}
           </>
         )}
 
         {/* CASH NORMAL */}
         {!paymentSplit.enabled && paymentSafe.paymentMethod === "CASH" && (
           <div>
-            <label className="font-semibold">Uang Dibayarkan</label>
+            <label className="font-semibold">Payment User</label>
             <input
               type="number"
               className="w-full border rounded px-2 py-1"
@@ -474,11 +469,27 @@ export default function FormPaymentSection({
         {paymentSafe.status === "PIUTANG" && (
           <div className="text-xs bg-gray-50 p-2 rounded">
             <div>Harga Barang: Rp {totalBarang.toLocaleString("id-ID")}</div>
-            <div>MDR: Rp {nominalMdr.toLocaleString("id-ID")}</div>
             <div>DP User: Rp {paymentSafe.dpUser.toLocaleString("id-ID")}</div>
             <div>Voucher: Rp {paymentSafe.voucher.toLocaleString("id-ID")}</div>
           </div>
         )}
+
+        {/* KETERANGAN */}
+        <div>
+          <label className="font-semibold">Keterangan</label>
+          <textarea
+            rows={2}
+            className="w-full border rounded px-2 py-1"
+            placeholder="Input keterangan manual..."
+            value={paymentSafe.keterangan}
+            onChange={(e) =>
+              onChange({
+                ...paymentSafe,
+                keterangan: e.target.value,
+              })
+            }
+          />
+        </div>
 
         {/* GRAND TOTAL */}
         <div className="mt-4 text-right">
