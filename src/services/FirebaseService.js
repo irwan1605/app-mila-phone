@@ -2757,6 +2757,49 @@ export const voidTransaksiPenjualan = async (penjualanId) => {
 };
 
 
+/* ===========================
+   MASTER SALES
+   Path: dataManagement/masterSales
+=========================== */
+
+/* ================= MASTER SALES ================= */
+
+export const listenMasterSales = (callback) => {
+  const r = ref(db, "dataManagement/masterSales");
+  return onValue(r, (snap) => {
+    const raw = snap.val() || {};
+    const arr = Object.entries(raw).map(([id, v]) => ({
+      id,
+      ...v,
+    }));
+    callback(arr);
+  });
+};
+
+export const addMasterSales = async (data) => {
+  const r = push(ref(db, "dataManagement/masterSales"));
+  await set(r, {
+    ...data,
+    id: r.key,
+    createdAt: new Date().toISOString(),
+  });
+  return r.key;
+};
+
+export const updateMasterSales = async (id, data) => {
+  return update(ref(db, `dataManagement/masterSales/${id}`), {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  });
+};
+
+export const deleteMasterSales = async (id) => {
+  return remove(ref(db, `dataManagement/masterSales/${id}`));
+};
+
+
+
+
 
 /* =========================
    INIT MASTER HELPERS
@@ -2771,10 +2814,10 @@ export const voidTransaksiPenjualan = async (penjualanId) => {
 
 // MASTER SALES
 const masterSales = createMasterHelpers("masterSales");
-export const listenMasterSales = masterSales.listen;
-export const addMasterSales = masterSales.add;
-export const updateMasterSales = masterSales.update;
-export const deleteMasterSales = masterSales.delete;
+// export const listenMasterSales = masterSales.listen;
+// export const addMasterSales = masterSales.add;
+// export const updateMasterSales = masterSales.update;
+// export const deleteMasterSales = masterSales.delete;
 
 // MASTER STORE HEAD (SH)
 const masterStoreHead = createMasterHelpers("masterStoreHead");

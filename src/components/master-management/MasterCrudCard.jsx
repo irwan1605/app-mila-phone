@@ -1,4 +1,3 @@
-// src/components/master-management/MasterCrudCard.jsx
 import React, { useEffect, useState } from "react";
 import * as FirebaseService from "../../services/FirebaseService";
 import { FaPlus, FaSave, FaEdit, FaTrash, FaTimes } from "react-icons/fa";
@@ -28,33 +27,16 @@ export default function MasterCrudCard({
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = FirebaseService[listenFnName]((data) => {
-      setRows(data); // state internal table
-
-      if (onDataChange) {
-        onDataChange(data); // 🔥 KIRIM KE PARENT
-      }
-    });
-
-    return () => unsubscribe && unsubscribe();
-  }, [listenFnName]);
-
-  // ===============================
-  // LISTENER REALTIME
-  // ===============================
-  useEffect(() => {
     if (typeof listenFn !== "function") return;
 
     const unsub = listenFn((data = []) => {
       setRows(data);
+      if (onDataChange) onDataChange(data);
     });
 
     return () => unsub && unsub();
   }, [listenFn]);
 
-  // ===============================
-  // HANDLER
-  // ===============================
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
@@ -107,21 +89,19 @@ export default function MasterCrudCard({
       <h2 className="text-lg font-bold">{title}</h2>
       <p className="text-sm text-slate-500 mb-4">{subtitle}</p>
 
-      {/* ACTION */}
-      {!disableCreate && addFn && (
-        <button
-          onClick={() => {
-            setShowForm(true);
-            setEditId(null);
-            setForm({});
-          }}
-          className="mb-3 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded text-sm"
-        >
-          <FaPlus /> Tambah Data
-        </button>
-      )}
+      {!disableCreate && (
+  <button
+    onClick={() => {
+      setShowForm(true);
+      setEditId(null);
+      setForm({});
+    }}
+    className="mb-3 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded text-sm"
+  >
+    <FaPlus /> Tambah Data
+  </button>
+)}
 
-      {/* FORM */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white w-full max-w-xl rounded-xl shadow-lg p-5 relative">
@@ -133,6 +113,7 @@ export default function MasterCrudCard({
               {fields.map((f) => (
                 <div key={f.name}>
                   <label className="text-xs text-slate-600">{f.label}</label>
+
                   {f.type === "textarea" ? (
                     <textarea
                       name={f.name}
@@ -185,7 +166,6 @@ export default function MasterCrudCard({
         </div>
       )}
 
-      {/* TABLE */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm border">
           <thead className="bg-slate-200">
