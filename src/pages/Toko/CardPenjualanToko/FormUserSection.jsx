@@ -19,12 +19,12 @@ export default function FormUserSection({ value = {}, onChange }) {
   const [masterSales, setMasterSales] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
   const [masterStoreHead, setMasterStoreHead] = useState([]);
-  const user = JSON.parse(localStorage.getItem("userLogin") || "{}");
+  // ambil dari localStorage yang benar
+  const roleUser = localStorage.getItem("ROLE_USER") || "";
+  const tokoLogin = localStorage.getItem("TOKO_LOGIN") || "";
 
-  // role bisa: pic_toko2, pic_toko3, dst
-  const isPicToko = String(user?.role || "").startsWith("pic_toko");
-  const picTokoId = isPicToko ? String(user.role).replace("pic_toko", "") : null;
-  
+  // PIC TOKO jika role diawali pic_toko
+  const isPicToko = roleUser.toLowerCase().startsWith("pic_toko");
 
   /* ================= LISTENER REALTIME ================= */
 
@@ -57,12 +57,16 @@ export default function FormUserSection({ value = {}, onChange }) {
     };
   }, []);
 
+  /* ================= AUTO SET TOKO JIKA PIC TOKO ================= */
   useEffect(() => {
-    if (!isPicToko || !picTokoId) return;
+    if (!isPicToko) return;
+    if (!tokoLogin) return;
     if (!masterToko.length) return;
-  
-    const toko = masterToko.find((t) => String(t.id) === picTokoId);
-  
+
+    const toko = masterToko.find(
+      (t) => String(t.nama).toUpperCase() === String(tokoLogin).toUpperCase()
+    );
+
     if (toko) {
       onChange({
         ...value,
@@ -70,8 +74,7 @@ export default function FormUserSection({ value = {}, onChange }) {
         namaToko: toko.nama,
       });
     }
-  }, [isPicToko, picTokoId, masterToko]);
-  
+  }, [isPicToko, tokoLogin, masterToko]);
 
   // =================================================
   // SAFE FORM
@@ -123,6 +126,11 @@ export default function FormUserSection({ value = {}, onChange }) {
     return masterSales;
   }, [masterSales]);
 
+  // Store Head → sesuai Master Store Head + sesuai Toko
+  const storeHeadByToko = useMemo(() => {
+    if (!form.namaToko) return [];
+    return masterStoreHead.filter((s) => s?.namaToko === form.namaToko);
+  }, [masterStoreHead, form.namaToko]);
   /* ================= RENDER ================= */
 
   return (
@@ -192,7 +200,7 @@ export default function FormUserSection({ value = {}, onChange }) {
         <select
           className="w-full border rounded px-2 py-1 bg-gray-100"
           value={form.namaTokoId}
-          disabled={isPicToko} // 🔒 terkunci jika PIC TOKO
+          disabled={isPicToko} // 🔒 KUNCI
           onChange={(e) => {
             const tokoId = e.target.value;
             const toko = masterToko.find((t) => t.id === tokoId);
@@ -202,6 +210,7 @@ export default function FormUserSection({ value = {}, onChange }) {
               namaToko: toko?.nama || "",
               namaSales: "",
               salesHandle: "",
+              storeHead: "",
             });
           }}
         >
@@ -214,10 +223,9 @@ export default function FormUserSection({ value = {}, onChange }) {
         </select>
       </div>
 
-      {/* ================= STORE HEAD ================= */}
+      {/* STORE HEAD */}
       <div>
         <label className="text-xs font-semibold">Store Head</label>
-
         <input
           list="list-store-head"
           className="w-full border rounded px-2 py-1"
@@ -225,21 +233,16 @@ export default function FormUserSection({ value = {}, onChange }) {
           value={form.storeHead}
           onChange={(e) => update({ storeHead: e.target.value })}
         />
-
         <datalist id="list-store-head">
-          {masterStoreHead
-            .filter((s) => s.namaToko === form.namaToko)
-            .map((s) => (
-              <option key={s.id} value={s.namaSH} />
-            ))}
+          {storeHeadByToko.map((s) => (
+            <option key={s.id} value={s.namaSH} />
+          ))}
         </datalist>
       </div>
 
-      {/* ================= NAMA SALES ================= */}
-      {/* ================= NAMA SALES ================= */}
+      {/* NAMA SALES */}
       <div>
         <label className="text-xs font-semibold">Nama Sales</label>
-
         <input
           list="list-sales"
           className="w-full border rounded px-2 py-1"
@@ -248,7 +251,6 @@ export default function FormUserSection({ value = {}, onChange }) {
           value={form.namaSales}
           onChange={(e) => update({ namaSales: e.target.value })}
         />
-
         <datalist id="list-sales">
           {salesByToko.map((s) => (
             <option key={s.id} value={s.namaSales} />
@@ -256,10 +258,9 @@ export default function FormUserSection({ value = {}, onChange }) {
         </datalist>
       </div>
 
-      {/* ================= SALES HANDLE ================= */}
+      {/* SALES HANDLE */}
       <div>
         <label className="text-xs font-semibold">Sales Handle</label>
-
         <input
           list="list-handle"
           className="w-full border rounded px-2 py-1"
@@ -267,7 +268,6 @@ export default function FormUserSection({ value = {}, onChange }) {
           value={form.salesHandle}
           onChange={(e) => update({ salesHandle: e.target.value })}
         />
-
         <datalist id="list-handle">
           {salesHandleList.map((s) => (
             <option key={s.id} value={s.namaSales} />

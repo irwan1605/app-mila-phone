@@ -55,61 +55,82 @@ export default function Login({ onLogin, users: usersProp }) {
   // ✅ HANDLE LOGIN
   const handleSubmit = (e) => {
     e.preventDefault();
-
+  
     const u = users.find(
       (x) =>
         (x.username || "").trim().toLowerCase() ===
           username.trim().toLowerCase() &&
         (x.password || "") === password
     );
-
+  
     if (!u) {
       alert("❌ Username atau password salah.");
       return;
     }
-
+  
     let role = u.role;
     let tokoId = u.toko;
-
+  
     // ✅ NORMALISASI ROLE PIC TOKO
     if (String(role).startsWith("pic_toko")) {
       const parsedId = Number(String(role).replace("pic_toko", ""));
       const finalId = parsedId || Number(tokoId);
-
+  
       if (Number.isFinite(finalId)) {
         role = `pic_toko${finalId}`;
         tokoId = finalId;
       }
     }
-
+  
     const logged = {
-      username: u.username,   // IRWAN
+      username: u.username,
       name: u.name,
-      role: u.role,           // superadmin
+      role: role,
       status: u.status,
-      toko: u.toko || null,
+      toko: tokoId || null,
     };
-    
+  
+    // ================= SIMPAN KE LOCALSTORAGE =================
     localStorage.setItem("userLogin", JSON.stringify(logged));
-    
-    
-    
-    
+    localStorage.setItem("ROLE_USER", role);
+  
+    // 🔥 JIKA PIC TOKO → SIMPAN TOKO LOGIN
+    if (String(role).startsWith("pic_toko") && tokoId) {
+      const TOKO_MAP = {
+        "1": "CILANGKAP PUSAT",
+        "2": "CIBINONG",
+        "3": "GAS ALAM",
+        "4": "CITEUREUP",
+        "5": "CIRACAS",
+        "6": "METLAND 1",
+        "7": "METLAND 2",
+        "8": "PITARA",
+        "9": "KOTA WISATA",
+        "10": "SAWANGAN",
+      };
+  
+      const namaToko = TOKO_MAP[String(tokoId)];
+      localStorage.setItem("TOKO_LOGIN", namaToko || "");
+    } else {
+      localStorage.removeItem("TOKO_LOGIN");
+    }
+  
     if (typeof onLogin === "function") onLogin(logged);
-
-    // ✅ REDIRECT OTOMATIS BERDASARKAN ROLE
+  
+    // ================= REDIRECT =================
     if (role === "superadmin" || role === "admin") {
       navigate("/dashboard", { replace: true });
       return;
     }
-
+  
     if (role.startsWith("pic_toko") && Number(tokoId)) {
       navigate(`/toko/${tokoId}`, { replace: true });
       return;
     }
-
+  
     navigate("/dashboard", { replace: true });
   };
+  
 
   return (
     <div
