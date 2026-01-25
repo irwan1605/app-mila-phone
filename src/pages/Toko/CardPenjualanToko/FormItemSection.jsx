@@ -79,7 +79,6 @@ export default function FormItemSection({
         skemaHarga: "srp",
         hargaAktif: d.hargaMap?.srp || 0,
         isImei: true,
-      
       },
     ]);
   }, [location, safeOnChange]);
@@ -109,7 +108,6 @@ export default function FormItemSection({
         skemaHarga: "srp",
         hargaAktif: d.hargaMap?.srp || 0,
         isImei: true,
-       
       },
     ]);
   }, [location, safeOnChange]);
@@ -138,7 +136,6 @@ export default function FormItemSection({
         skemaHarga: "srp",
         hargaAktif: d.hargaMap?.srp || 0,
         isImei: true,
-     
       },
     ]);
   }, [location, safeOnChange]);
@@ -257,6 +254,16 @@ export default function FormItemSection({
     }
   }, [tahap1Valid, allowManual, items, safeOnChange]);
 
+  // list master barang (hasil listener)
+
+  // ambil dari firebase
+  useEffect(() => {
+    const unsub = listenMasterBarang((rows) => {
+      setMasterBarang(Array.isArray(rows) ? rows : []);
+    });
+    return () => unsub && unsub();
+  }, []);
+
   // ===============================
   // HELPER: Cari toko asal IMEI
   // ===============================
@@ -309,8 +316,6 @@ export default function FormItemSection({
         ? {
             ...item,
             ...updated,
-
-          
           }
         : item
     );
@@ -341,21 +346,23 @@ export default function FormItemSection({
   const imeiByBarang = useMemo(() => {
     if (!tokoLogin) return [];
 
-    return allTransaksi
-      .filter(
-        (t) =>
-          String(t.NAMA_TOKO || "").toUpperCase() ===
-            String(tokoLogin || "").toUpperCase() &&
-          String(t.STATUS || "").toUpperCase() === "APPROVED" &&
-          (t.PAYMENT_METODE === "PEMBELIAN" ||
-            t.tipe === "PEMBELIAN" ||
-            t.jenis === "PEMBELIAN") &&
-          t.IMEI &&
-          String(t.NAMA_BARANG || "").toUpperCase() ===
-            String(items[0]?.namaBarang || "").toUpperCase() // 🔥 filter barang
-      )
-      .map((t) => String(t.IMEI).trim());
-  }, [allTransaksi, tokoLogin, items]);
+    return (
+      allTransaksi
+        .filter(
+          (t) =>
+            String(t.NAMA_TOKO || "").toUpperCase() ===
+              String(tokoLogin || "").toUpperCase() &&
+            String(t.STATUS || "").toUpperCase() === "APPROVED" &&
+            String(t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
+            t.IMEI &&
+            String(t.NAMA_BARANG || "").toUpperCase() ===
+              String(items[0]?.namaBarang || "").toUpperCase()
+        )
+        .map((t) => String(t.IMEI).trim())
+        // 🔥 HILANGKAN IMEI YANG SUDAH TERJUAL
+        .filter((imei) => !stockRealtime?.soldImei?.[imei])
+    );
+  }, [allTransaksi, tokoLogin, items, stockRealtime]);
 
   const handleTambahBarang = () => {
     // validasi minimal
@@ -445,6 +452,12 @@ export default function FormItemSection({
 
         const hargaAktif = isImeiValid ? Number(item.hargaAktif || 0) : 0;
 
+        const barangByKategori = masterBarang.filter(
+          (b) =>
+            String(b.kategoriBarang || "").toUpperCase() ===
+            String(item.kategoriBarang || "").toUpperCase()
+        );
+
         return (
           <div
             key={item.id}
@@ -491,8 +504,8 @@ export default function FormItemSection({
               ))}
             </select>
 
-              {/* BARANG */}
-              <input
+            {/* BARANG */}
+            <input
               list={`barang-${idx}`}
               className="w-full border rounded-lg p-2"
               disabled={!item.namaBrand}
@@ -501,15 +514,10 @@ export default function FormItemSection({
               onChange={(e) => {
                 const val = e.target.value;
 
-                const b = masterBarang.find(
-                  (x) => x.namaBarang === val
-                );
+                // 🔥 ambil dari master sesuai kategori (ACCESSORIES, dll)
+                const b = barangByKategori.find((x) => x.namaBarang === val);
 
-                if (!b) {
-                  return;
-                }
-
-             
+                if (!b) return;
 
                 safeOnChange(
                   items.map((it, i) =>
@@ -523,7 +531,6 @@ export default function FormItemSection({
                           skemaHarga: "srp",
                           hargaAktif: Number(b.harga?.srp || 0),
                           qty: isImeiKategori(b.kategoriBarang) ? 0 : 1,
-                        
                         }
                       : it
                   )
@@ -531,7 +538,12 @@ export default function FormItemSection({
               }}
             />
 
-        
+            {/* 🔥 DATA LIST SESUAI KATEGORI (ACCESSORIES) */}
+            <datalist id={`barang-${idx}`}>
+              {barangByKategori.map((b) => (
+                <option key={b.id} value={b.namaBarang} />
+              ))}
+            </datalist>
 
             {/* SKEMA */}
             <select
@@ -597,9 +609,29 @@ export default function FormItemSection({
                 const imei = (item.imei || "").trim();
                 if (!imei) return;
 
+                // 🔥 CEK DUPLIKAT DI FORM
+                const imeiDipakai = value
+                  .filter((_, i) => i !== idx)
+                  .flatMap((it) => it.imeiList || [])
+                  .map((x) => String(x).trim());
+
+                if (imeiDipakai.includes(imei)) {
+                  alert("❌ IMEI sudah dipakai di item lain!");
+                  updateItem(idx, {
+                    imei: "",
+                    imeiList: [],
+                    qty: 0,
+                  });
+                  return;
+                }
+
                 // 1️⃣ CEK STOK
-                if (!imeiAvailableList.includes(imei)) {
-                  alert("❌ IMEI tidak ada di stok toko ini");
+                // 1️⃣ CEK STOK & BELUM TERJUAL
+                if (
+                  !imeiAvailableList.includes(imei) ||
+                  stockRealtime?.soldImei?.[imei]
+                ) {
+                  alert("❌ IMEI sudah terjual / tidak tersedia");
                   updateItem(idx, {
                     imei: "",
                     imeiList: [],

@@ -314,8 +314,18 @@ export default function CardPenjualanToko() {
         if (item.isImei) {
           if (!imei) throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
 
+          // 🔥 CEK DARI FIREBASE (SERVICE)
           const sold = await cekImeiSudahTerjual(imei);
           if (sold) throw new Error(`IMEI ${imei} sudah pernah terjual`);
+
+          // 🔥 CEK DARI DATA TABLE YANG SUDAH ADA (DOUBLE SAFETY)
+          const sudahAdaDiTable = penjualanList.some(
+            (trx) => String(trx.IMEI || "").trim() === String(imei).trim()
+          );
+
+          if (sudahAdaDiTable) {
+            throw new Error(`IMEI ${imei} sudah pernah terjual (DATA LAMA)`);
+          }
 
           await lockImeiRealtime(
             imei,
@@ -325,10 +335,9 @@ export default function CardPenjualanToko() {
 
           imeiLocked.push(imei);
         } else {
-          if (!item.sku)
-            throw new Error(`SKU tidak ditemukan (${item.namaBarang})`);
-
+          // 🔥 NON IMEI (ACCESSORIES, BATERAI, DLL)
           if (qty <= 0) throw new Error(`QTY tidak valid (${item.namaBarang})`);
+          // ❌ JANGAN CEK SKU LAGI
         }
       }
 
