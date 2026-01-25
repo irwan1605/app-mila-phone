@@ -630,60 +630,261 @@ export default function TablePenjualan() {
       </div>
       {showEdit && editData && (
         <div className="fixed inset-0 bg-black/40 z-50 flex justify-center items-center">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-xl p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl p-6 overflow-auto max-h-[90vh]">
             <h3 className="text-lg font-bold mb-4">✏️ Edit Transaksi</h3>
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm">Nama Pelanggan</label>
-                <input
-                  value={editData.user?.namaPelanggan || ""}
-                  onChange={(e) =>
-                    setEditData({
-                      ...editData,
-                      user: {
-                        ...editData.user,
-                        namaPelanggan: e.target.value,
-                      },
-                    })
-                  }
-                  className="w-full border rounded px-3 py-1"
-                />
-              </div>
+            <div className="grid grid-cols-3 gap-4">
+              {/* HEADER */}
+              <input
+                type="date"
+                value={editData.tanggal || ""}
+                onChange={(e) =>
+                  setEditData({ ...editData, tanggal: e.target.value })
+                }
+                className="border p-2"
+                placeholder="Tanggal"
+              />
+              <input
+                value={editData.invoice || ""}
+                onChange={(e) =>
+                  setEditData({ ...editData, invoice: e.target.value })
+                }
+                className="border p-2"
+                placeholder="No Invoice"
+              />
+              <input
+                value={editData.toko || ""}
+                onChange={(e) =>
+                  setEditData({ ...editData, toko: e.target.value })
+                }
+                className="border p-2"
+                placeholder="Nama Toko"
+              />
 
-              <div>
-                <label className="text-sm">No Telepon</label>
-                <input
-                  value={editData.user?.noTlpPelanggan || ""}
-                  onChange={(e) =>
-                    setEditData({
-                      ...editData,
-                      user: {
-                        ...editData.user,
-                        noTlpPelanggan: e.target.value,
-                      },
-                    })
-                  }
-                  className="w-full border rounded px-3 py-1"
-                />
-              </div>
+              {/* USER */}
+              <input
+                value={editData.user?.namaPelanggan || ""}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    user: { ...editData.user, namaPelanggan: e.target.value },
+                  })
+                }
+                className="border p-2"
+                placeholder="Nama Pelanggan"
+              />
+              <input
+                value={editData.user?.noTlpPelanggan || ""}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    user: { ...editData.user, noTlpPelanggan: e.target.value },
+                  })
+                }
+                className="border p-2"
+                placeholder="No TLP"
+              />
+              <input
+                value={editData.user?.storeHead || ""}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    user: { ...editData.user, storeHead: e.target.value },
+                  })
+                }
+                className="border p-2"
+                placeholder="Nama Store Head"
+              />
+              <input
+                value={editData.user?.namaSales || ""}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    user: { ...editData.user, namaSales: e.target.value },
+                  })
+                }
+                className="border p-2"
+                placeholder="Nama Sales"
+              />
 
-              <div>
-                <label className="text-sm">Nama Sales</label>
-                <input
-                  value={editData.user?.namaSales || ""}
-                  onChange={(e) =>
-                    setEditData({
-                      ...editData,
-                      user: {
-                        ...editData.user,
-                        namaSales: e.target.value,
-                      },
-                    })
-                  }
-                  className="w-full border rounded px-3 py-1"
-                />
-              </div>
+              {/* ITEM */}
+              <input
+                value={editData.items?.[0]?.kategoriBarang || ""}
+                onChange={(e) => {
+                  const items = [...editData.items];
+                  items[0].kategoriBarang = e.target.value;
+                  setEditData({ ...editData, items });
+                }}
+                className="border p-2"
+                placeholder="Kategori"
+              />
+              <input
+                value={editData.items?.[0]?.namaBrand || ""}
+                onChange={(e) => {
+                  const items = [...editData.items];
+                  items[0].namaBrand = e.target.value;
+                  setEditData({ ...editData, items });
+                }}
+                className="border p-2"
+                placeholder="Brand"
+              />
+              <input
+                value={editData.items?.[0]?.namaBarang || ""}
+                onChange={(e) => {
+                  const items = [...editData.items];
+                  items[0].namaBarang = e.target.value;
+                  setEditData({ ...editData, items });
+                }}
+                className="border p-2"
+                placeholder="Nama Barang"
+              />
+              <input
+                value={editData.items?.[0]?.imeiList?.join(",") || ""}
+                onChange={(e) => {
+                  const items = [...editData.items];
+                  items[0].imeiList = e.target.value.split(",");
+                  setEditData({ ...editData, items });
+                }}
+                className="border p-2"
+                placeholder="IMEI"
+              />
+              <input
+                type="number"
+                value={editData.items?.[0]?.qty || 0}
+                onChange={(e) => {
+                  const items = [...editData.items];
+                  items[0].qty = Number(e.target.value);
+                  setEditData({ ...editData, items });
+                }}
+                className="border p-2"
+                placeholder="QTY"
+              />
+
+              {/* HARGA */}
+              <input
+                type="number"
+                value={editData.items?.[0]?.hargaSRP || 0}
+                onChange={(e) => {
+                  const items = [...editData.items];
+                  items[0].hargaSRP = Number(e.target.value);
+                  setEditData({ ...editData, items });
+                }}
+                className="border p-2"
+                placeholder="Harga SRP"
+              />
+
+              <input
+                type="number"
+                value={editData.items?.[0]?.hargaGrosir || 0}
+                onChange={(e) => {
+                  const items = [...editData.items];
+                  items[0].hargaGrosir = Number(e.target.value);
+                  setEditData({ ...editData, items });
+                }}
+                className="border p-2"
+                placeholder="Harga Grosir"
+              />
+
+              <input
+                type="number"
+                value={editData.items?.[0]?.hargaReseller || 0}
+                onChange={(e) => {
+                  const items = [...editData.items];
+                  items[0].hargaReseller = Number(e.target.value);
+                  setEditData({ ...editData, items });
+                }}
+                className="border p-2"
+                placeholder="Harga Reseller"
+              />
+
+              {/* PAYMENT */}
+              <input
+                value={editData.payment?.status || ""}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    payment: { ...editData.payment, status: e.target.value },
+                  })
+                }
+                className="border p-2"
+                placeholder="Status Bayar"
+              />
+              <input
+                value={editData.payment?.namaMdr || ""}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    payment: { ...editData.payment, namaMdr: e.target.value },
+                  })
+                }
+                className="border p-2"
+                placeholder="Nama MDR"
+              />
+              <input
+                type="number"
+                value={editData.payment?.nominalMdr || 0}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    payment: {
+                      ...editData.payment,
+                      nominalMdr: Number(e.target.value),
+                    },
+                  })
+                }
+                className="border p-2"
+                placeholder="Nominal MDR"
+              />
+              <input
+                value={editData.payment?.tenor || ""}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    payment: { ...editData.payment, tenor: e.target.value },
+                  })
+                }
+                className="border p-2"
+                placeholder="Tenor"
+              />
+              <input
+                type="number"
+                value={editData.payment?.cicilan || 0}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    payment: {
+                      ...editData.payment,
+                      cicilan: Number(e.target.value),
+                    },
+                  })
+                }
+                className="border p-2"
+                placeholder="Nilai Cicilan"
+              />
+              <input
+                type="number"
+                value={editData.payment?.grandTotal || 0}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    payment: {
+                      ...editData.payment,
+                      grandTotal: Number(e.target.value),
+                    },
+                  })
+                }
+                className="border p-2"
+                placeholder="Grand Total"
+              />
+
+              <input
+                value={editData.statusPembayaran || ""}
+                onChange={(e) =>
+                  setEditData({ ...editData, statusPembayaran: e.target.value })
+                }
+                className="border p-2"
+                placeholder="Status"
+              />
             </div>
 
             <div className="flex justify-end gap-2 mt-5">
@@ -693,7 +894,6 @@ export default function TablePenjualan() {
               >
                 Batal
               </button>
-
               <button
                 onClick={handleSaveEdit}
                 className="px-3 py-1 bg-blue-600 text-white rounded"

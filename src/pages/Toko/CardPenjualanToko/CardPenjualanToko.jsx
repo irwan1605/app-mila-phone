@@ -319,21 +319,21 @@ export default function CardPenjualanToko() {
           if (sold) throw new Error(`IMEI ${imei} sudah pernah terjual`);
 
           // 🔥 CEK DARI DATA TABLE YANG SUDAH ADA (DOUBLE SAFETY)
-          const sudahAdaDiTable = penjualanList.some((trx) =>
-            Array.isArray(trx.items) &&
-            trx.items.some(
-              (it) =>
-                Array.isArray(it.imeiList) &&
-                it.imeiList.some(
-                  (im) => String(im).trim() === String(imei).trim()
-                )
-            )
+          const sudahAdaDiTable = penjualanList.some(
+            (trx) =>
+              Array.isArray(trx.items) &&
+              trx.items.some(
+                (it) =>
+                  Array.isArray(it.imeiList) &&
+                  it.imeiList.some(
+                    (im) => String(im).trim() === String(imei).trim()
+                  )
+              )
           );
-          
+
           if (sudahAdaDiTable) {
             throw new Error(`IMEI ${imei} sudah pernah terjual`);
           }
-          
 
           await lockImeiRealtime(
             imei,
@@ -513,16 +513,28 @@ export default function CardPenjualanToko() {
   // ================= VALIDASI TAHAP 2 =================
   const isTahap2Valid = useMemo(() => {
     if (!Array.isArray(items) || items.length === 0) return false;
-
+  
     return items.every((item) => {
       if (!item.namaBarang) return false;
+  
+      // IMEI wajib kalau barang IMEI
       if (item.isImei && (!item.imeiList || item.imeiList.length === 0))
         return false;
+  
+      // QTY wajib
       if (!item.qty || item.qty <= 0) return false;
-      if (!item.hargaAktif || item.hargaAktif <= 0) return false;
+  
+      // 🔥 HARGA:
+      // - IMEI → wajib > 0
+      // - NON IMEI (ACCESSORIES) → BOLEH 0
+      if (item.isImei && (!item.hargaAktif || item.hargaAktif <= 0))
+        return false;
+  
       return true;
     });
   }, [items]);
+  
+  
 
   // ================= TOTAL =================
   const totalPenjualan = useMemo(() => {

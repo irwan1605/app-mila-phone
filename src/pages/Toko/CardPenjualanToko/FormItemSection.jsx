@@ -579,131 +579,117 @@ export default function FormItemSection({
               />
             )}
 
-            {/* IMEI */}
-            <input
-              list={`imei-${idx}`}
-              className="border rounded px-2 py-1 w-full"
-              placeholder="Cari / ketik IMEI"
-              value={item.imei || ""}
-              onChange={async (e) => {
-                const val = e.target.value;
+            {/* IMEI — HANYA MUNCUL JIKA BARANG IMEI */}
+            {item.isImei && (
+              <>
+                <input
+                  list={`imei-${idx}`}
+                  className="border rounded px-2 py-1 w-full"
+                  placeholder="Cari / ketik IMEI"
+                  value={item.imei || ""}
+                  onChange={async (e) => {
+                    const val = e.target.value;
 
-                // 🔓 unlock jika user hapus imei
-                if (!val && item.imeiList?.length) {
-                  for (const im of item.imeiList) {
-                    await unlockImeiRealtime(
-                      im,
-                      userLogin.uid || userLogin.username
-                    );
-                  }
-                }
+                    if (!val && item.imeiList?.length) {
+                      for (const im of item.imeiList) {
+                        await unlockImeiRealtime(
+                          im,
+                          userLogin.uid || userLogin.username
+                        );
+                      }
+                    }
 
-                setImeiKeyword(val);
-                updateItem(idx, {
-                  imei: val,
-                  imeiList: [],
-                  qty: 0,
-                });
-              }}
-              onBlur={async () => {
-                const imei = (item.imei || "").trim();
-                if (!imei) return;
+                    setImeiKeyword(val);
+                    updateItem(idx, {
+                      imei: val,
+                      imeiList: [],
+                      qty: 0,
+                    });
+                  }}
+                  onBlur={async () => {
+                    const imei = (item.imei || "").trim();
+                    if (!imei) return;
 
-                // 🔥 CEK DUPLIKAT DI FORM
-                const imeiDipakai = value
-                  .filter((_, i) => i !== idx)
-                  .flatMap((it) => it.imeiList || [])
-                  .map((x) => String(x).trim());
+                    const imeiDipakai = value
+                      .filter((_, i) => i !== idx)
+                      .flatMap((it) => it.imeiList || [])
+                      .map((x) => String(x).trim());
 
-                if (imeiDipakai.includes(imei)) {
-                  alert("❌ IMEI sudah dipakai di item lain!");
-                  updateItem(idx, {
-                    imei: "",
-                    imeiList: [],
-                    qty: 0,
-                  });
-                  return;
-                }
+                    if (imeiDipakai.includes(imei)) {
+                      alert("❌ IMEI sudah dipakai di item lain!");
+                      updateItem(idx, {
+                        imei: "",
+                        imeiList: [],
+                        qty: 0,
+                      });
+                      return;
+                    }
 
-                // 1️⃣ CEK STOK
-                // 1️⃣ CEK STOK & BELUM TERJUAL
-                if (
-                  !imeiAvailableList.includes(imei) ||
-                  stockRealtime?.soldImei?.[imei]
-                ) {
-                  alert("❌ IMEI sudah terjual / tidak tersedia");
-                  updateItem(idx, {
-                    imei: "",
-                    imeiList: [],
-                    qty: 0,
-                  });
-                  return;
-                }
+                    if (
+                      !imeiAvailableList.includes(imei) ||
+                      stockRealtime?.soldImei?.[imei]
+                    ) {
+                      alert("❌ IMEI sudah terjual / tidak tersedia");
+                      updateItem(idx, {
+                        imei: "",
+                        imeiList: [],
+                        qty: 0,
+                      });
+                      return;
+                    }
 
-                // 2️⃣ VALIDASI TOKO
-                const tokoImei = findTokoByImei(imei, allTransaksi);
-                if (
-                  tokoImei &&
-                  String(tokoImei).toUpperCase() !==
-                    String(tokoLogin).toUpperCase()
-                ) {
-                  alert(`❌ IMEI milik toko ${tokoImei}`);
-                  updateItem(idx, {
-                    imei: "",
-                    imeiList: [],
-                    qty: 0,
-                  });
-                  return;
-                }
+                    const tokoImei = findTokoByImei(imei, allTransaksi);
+                    if (
+                      tokoImei &&
+                      String(tokoImei).toUpperCase() !==
+                        String(tokoLogin).toUpperCase()
+                    ) {
+                      alert(`❌ IMEI milik toko ${tokoImei}`);
+                      updateItem(idx, {
+                        imei: "",
+                        imeiList: [],
+                        qty: 0,
+                      });
+                      return;
+                    }
 
-                // 3️⃣ AUTO FILL BARANG
-                const autoBarang = findBarangByImei(imei);
-                if (!autoBarang) {
-                  alert("❌ Data barang IMEI tidak ditemukan");
-                  return;
-                }
+                    const autoBarang = findBarangByImei(imei);
+                    if (!autoBarang) {
+                      alert("❌ Data barang IMEI tidak ditemukan");
+                      return;
+                    }
 
-                // 4️⃣ SET DATA
-                updateItem(idx, {
-                  imei,
-                  imeiList: [imei],
-                  qty: 1,
+                    updateItem(idx, {
+                      imei,
+                      imeiList: [imei],
+                      qty: 1,
+                      kategoriBarang: autoBarang.kategoriBarang,
+                      namaBrand: autoBarang.namaBrand,
+                      namaBarang: autoBarang.namaBarang,
+                      hargaMap: autoBarang.hargaMap,
+                      skemaHarga: "srp",
+                      hargaAktif: Number(autoBarang.hargaMap?.srp || 0),
+                      isImei: true,
+                    });
+                  }}
+                />
 
-                  kategoriBarang: autoBarang.kategoriBarang,
-                  namaBrand: autoBarang.namaBrand,
-                  namaBarang: autoBarang.namaBarang,
-
-                  hargaMap: autoBarang.hargaMap,
-                  skemaHarga: "srp",
-                  hargaAktif: Number(autoBarang.hargaMap?.srp || 0),
-                  isImei: true,
-                });
-              }}
-            />
-
-            {/* ====== INI YANG SUDAH DI FILTER BARANG ====== */}
-            <datalist id={`imei-${idx}`}>
-              {imeiByBarang
-                .filter((im) =>
-                  im.toLowerCase().includes(imeiKeyword.toLowerCase())
-                )
-                .map((im) => (
-                  <option key={im} value={im} />
-                ))}
-            </datalist>
+                <datalist id={`imei-${idx}`}>
+                  {imeiByBarang
+                    .filter((im) =>
+                      im.toLowerCase().includes(imeiKeyword.toLowerCase())
+                    )
+                    .map((im) => (
+                      <option key={im} value={im} />
+                    ))}
+                </datalist>
+              </>
+            )}
 
             {!item.isImei && (
-              <input
-                type="number"
-                min={1}
-                value={item.qty || 1}
-                onChange={(e) =>
-                  updateItem(idx, {
-                    qty: Number(e.target.value || 1),
-                  })
-                }
-                className="w-full border rounded-lg px-2 py-1 text-sm"
-              />
+              <div className="text-xs text-gray-500">
+                ℹ️ Harga Accessories Bundling
+              </div>
             )}
 
             <div className="text-right font-bold text-green-700">
