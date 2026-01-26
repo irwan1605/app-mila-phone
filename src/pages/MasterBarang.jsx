@@ -22,7 +22,7 @@ const KATEGORI_OPTIONS = [
   "SEPEDA LISTRIK",
   "MOTOR LISTRIK",
   "HANDPHONE",
-  "ACCESORIES",
+  "ACCESSORIES",
 ];
 
 const fmt = (n) => Number(n || 0).toLocaleString("id-ID");
@@ -151,6 +151,10 @@ export default function MasterBarang() {
         x.namaBarang?.toUpperCase().startsWith(form.brand.toUpperCase())
     );
   }, [masterBarang, form.brand, form.kategori]);
+
+  const namaBarangAccessories = useMemo(() => {
+    return masterBarang.filter((x) => x.kategoriBarang === "ACCESSORIES");
+  }, [masterBarang]);
 
   const brandList = useMemo(() => {
     if (!form.kategori) return [];
@@ -512,7 +516,9 @@ export default function MasterBarang() {
                   placeholder={
                     form.kategori ? "Pilih Nama Brand" : "Pilih Kategori dulu"
                   }
-                  disabled={!form.kategori}
+                  disabled={
+                    form.kategori !== "ACCESSORIES" ? !form.brand : false
+                  }
                   value={form.brand}
                   onChange={(e) =>
                     setForm({
@@ -538,21 +544,29 @@ export default function MasterBarang() {
                   list="nama-barang-brand-list"
                   className="input"
                   placeholder={
-                    form.brand ? "Pilih Nama Barang" : "Pilih Brand dulu"
+                    form.kategori === "ACCESSORIES"
+                      ? "Pilih Nama Accessories"
+                      : form.brand
+                      ? "Pilih Nama Barang"
+                      : "Pilih Brand dulu"
                   }
-                  disabled={!form.brand}
+                  disabled={
+                    form.kategori !== "ACCESSORIES" ? !form.brand : false
+                  }
                   value={form.barang}
                   onChange={(e) => {
                     const val = e.target.value;
-                    const found = namaBarangByBrand.find(
-                      (x) => x.namaBarang === val
-                    );
+
+                    const sourceList =
+                      form.kategori === "ACCESSORIES"
+                        ? namaBarangAccessories
+                        : namaBarangByBrand;
+
+                    const found = sourceList.find((x) => x.namaBarang === val);
 
                     setForm({
                       ...form,
                       barang: val,
-
-                      // 🔥 AUTO ISI HARGA
                       hargaSRP: found?.harga?.srp || "",
                       hargaGrosir: found?.harga?.grosir || "",
                       hargaReseller: found?.harga?.reseller || "",
@@ -561,9 +575,13 @@ export default function MasterBarang() {
                 />
 
                 <datalist id="nama-barang-brand-list">
-                  {namaBarangByBrand.map((x) => (
-                    <option key={x.id} value={x.namaBarang} />
-                  ))}
+                  {form.kategori === "ACCESSORIES"
+                    ? namaBarangAccessories.map((x) => (
+                        <option key={x.id} value={x.namaBarang} />
+                      ))
+                    : namaBarangByBrand.map((x) => (
+                        <option key={x.id} value={x.namaBarang} />
+                      ))}
                 </datalist>
               </div>
 
@@ -879,28 +897,28 @@ export default function MasterBarang() {
         </div>
       )}
 
-      <style jsx>{`
-        .input {
-          width: 100%;
-          border: 1px solid #ccc;
-          padding: 8px;
-          border-radius: 8px;
-          font-size: 14px;
-        }
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0px);
-          }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.3s ease-out;
-        }
-      `}</style>
+      <style>{`
+  .input {
+    width: 100%;
+    border: 1px solid #ccc;
+    padding: 8px;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0px);
+    }
+  }
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+  }
+`}</style>
     </div>
   );
 }
