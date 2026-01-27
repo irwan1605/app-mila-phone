@@ -1,6 +1,6 @@
 // src/pages/table/TableTransferBarang.jsx
 import React, { useEffect, useState } from "react";
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, update, push  } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase/FirebaseInit";
 import FirebaseService from "../../services/FirebaseService";
@@ -36,6 +36,53 @@ export default function TableTransferBarang({ currentRole }) {
       setRows(arr);
     });
   }, []);
+
+ const handleRejectAndRollback = async (r) => {
+  if (!window.confirm("Yakin REJECT & kembalikan stok ke toko pengirim?"))
+    return;
+
+  try {
+    const now = Date.now();
+
+    // 🔁 1. BALIKKAN IMEI KE TOKO PENGIRIM (inventory)
+    if (Array.isArray(r.imeis)) {
+      for (const imei of r.imeis) {
+        await update(ref(db, `inventory/${r.tokoPengirim}/${imei}`), {
+          STATUS: "AVAILABLE",
+          TRANSFER_ID: null,
+          UPDATED_AT: now,
+        });
+      }
+    }
+
+    // 🔁 2. CATAT TRANSAKSI BALIK (TRANSFER_MASUK KE PENGIRIM)
+    await push(ref(db, "transaksi"), {
+      TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+      NO_INVOICE: r.noDo || r.id,
+      NAMA_TOKO: r.tokoPengirim,
+      NAMA_BRAND: r.brand,
+      NAMA_BARANG: r.barang,
+      IMEI: Array.isArray(r.imeis) ? r.imeis.join(",") : "",
+      QTY: r.qty || 1,
+      PAYMENT_METODE: "TRANSFER_MASUK",
+      STATUS: "Approved",
+      SOURCE: "REJECT_TRANSFER",
+      CREATED_AT: now,
+    });
+
+    // 🔁 3. UPDATE STATUS TRANSFER
+    await update(ref(db, `transfer_barang/${r.id}`), {
+      status: "Rejected",
+      rejectedAt: now,
+    });
+
+    alert("✅ Transfer di-Reject, stok kembali ke toko pengirim");
+  } catch (err) {
+    console.error(err);
+    alert("❌ Gagal reject & rollback stok");
+  }
+};
+
 
   const handleExportExcel = () => {
     const filteredData = rows.filter(
@@ -96,15 +143,15 @@ export default function TableTransferBarang({ currentRole }) {
         </select>
 
         <button
-        onClick={handleExportExcel}
-        className="
+          onClick={handleExportExcel}
+          className="
       px-4 py-2 rounded-xl text-sm font-bold text-white
       bg-gradient-to-r from-emerald-500 to-green-600
       hover:scale-105 transition
     "
-      >
-        ⬇ EXPORT EXCEL
-      </button>
+        >
+          ⬇ EXPORT EXCEL
+        </button>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-300 p-2">
@@ -223,26 +270,38 @@ export default function TableTransferBarang({ currentRole }) {
                     )}
 
                     {isSuperAdmin && (
-                      <button
-                        onClick={() => {
-                          // PRIORITAS:
-                          // 1. Jika sudah Approved → pakai suratJalanId
-                          // 2. Jika belum Approved → pakai transfer.id (antisipasi cetak ulang)
-                          const sjId = r.suratJalanId || r.id;
-
-                          navigate(`/surat-jalan/${sjId}`);
-                        }}
-                        className="
+                      <>
+                        <button
+                          onClick={() => {
+                            const sjId = r.suratJalanId || r.id;
+                            navigate(`/surat-jalan/${sjId}`);
+                          }}
+                          className="
         w-full flex items-center justify-center gap-2
         px-3 py-2 rounded-xl
         text-xs font-bold text-white
         bg-gradient-to-r from-indigo-500 to-purple-600
         hover:scale-105 transition
       "
-                        title="Cetak ulang Surat Jalan (Superadmin)"
-                      >
-                        <FaPrint /> PRINT SURAT JALAN
-                      </button>
+                        >
+                          <FaPrint /> PRINT SURAT JALAN
+                        </button>
+
+                        {(r.status === "Pending" || r.status === "Approved") && (
+                          <button
+                            onClick={() => handleRejectAndRollback(r)}
+                            className="
+          w-full flex items-center justify-center gap-2
+          px-3 py-2 rounded-xl
+          text-xs font-bold text-white
+          bg-gradient-to-r from-red-500 to-rose-600
+          hover:scale-105 transition
+        "
+                          >
+                            ✖ REJECT & ROLLBACK
+                          </button>
+                        )}
+                      </>
                     )}
                   </td>
                 </tr>

@@ -39,12 +39,30 @@ const Navbar = ({ user, onLogout }) => {
     }
   }, [user]);
 
+  const TOKO_LOGIN = useMemo(() => {
+    try {
+      const u = activeUser || JSON.parse(localStorage.getItem("user"));
+      return String(u?.tokoNama || u?.toko || "").toUpperCase();
+    } catch {
+      return "";
+    }
+  }, [activeUser]);
+
   useEffect(() => {
     return FirebaseService.listenTransferRequests((rows) => {
-      const pending = (rows || []).filter((t) => t.status === "Pending");
-      setPendingTransfer(pending);
+      const relevant = (rows || []).filter((t) => {
+        if (t.status !== "Pending") return false;
+  
+        const dari = String(t.dari || t.tokoPengirim || "").toUpperCase();
+        const ke = String(t.ke || "").toUpperCase();
+  
+        return dari === TOKO_LOGIN || ke === TOKO_LOGIN;
+      });
+  
+      setPendingTransfer(relevant);
     });
-  }, []);
+  }, [TOKO_LOGIN]);
+  
 
   useEffect(() => {
     if (notifTransfer.length > 0) {
@@ -118,6 +136,9 @@ const Navbar = ({ user, onLogout }) => {
       alert("❌ Gagal update akun");
     }
   };
+
+  
+  
 
   // ✅ SINKRONKAN NAMA DARI USER MANAGEMENT
   const finalUser = useMemo(() => {
