@@ -13,11 +13,11 @@ const rupiah = (n) =>
     maximumFractionDigits: 0,
   });
 
-  export default function CetakInvoicePenjualan({
-    transaksi,
-    onClose,
-    mode = "print", // 🔥 default = print
-  }) {
+export default function CetakInvoicePenjualan({
+  transaksi,
+  onClose,
+  mode = "print", // 🔥 default = print
+}) {
   const printRef = useRef(null);
 
   const handlePrint = useReactToPrint({
@@ -36,7 +36,8 @@ const rupiah = (n) =>
 
   // HITUNG TOTAL BARANG DARI ITEMS
   const totalBarang = items.reduce(
-    (s, it) => s + Number(it.qty || 0) * Number(it.hargaUnit || 0),
+    (s, it) =>
+      s + Number(it.qty || 0) * Number(it.hargaUnit || it.hargaAktif || 0),
     0
   );
 
@@ -135,22 +136,29 @@ const rupiah = (n) =>
             </tr>
           </thead>
           <tbody>
-            {items.map((it, idx) => (
-              <tr key={idx}>
-                <td className="border p-2 text-center">{idx + 1}</td>
-                <td className="border p-2">{it.namaBarang}</td>
-                <td className="border p-2">{(it.imeiList || []).join(", ")}</td>
-                <td className="border p-2 text-center">{it.qty}</td>
-                <td className="border p-2 text-right">
-                  {rupiah(it.hargaUnit)}
-                </td>
-                <td className="border p-2 text-right">
-                  {rupiah(it.hargaUnit * it.qty)}
-                </td>
-              </tr>
-            ))}
+            {items.map((it, idx) => {
+              const harga = Number(it.hargaUnit || it.hargaAktif || 0);
+              const qty = Number(it.qty || 0);
+              const total = harga * qty; // 🔥 RUMUS TOTAL BARANG
+
+              return (
+                <tr key={idx}>
+                  <td className="border p-2 text-center">{idx + 1}</td>
+                  <td className="border p-2">{it.namaBarang}</td>
+                  <td className="border p-2">
+                    {(it.imeiList || []).join(", ")}
+                  </td>
+                  <td className="border p-2 text-center">{qty}</td>
+                  <td className="border p-2 text-right">{rupiah(harga)}</td>
+                  <td className="border p-2 text-right">{rupiah(total)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        <div className="mt-2 text-right font-bold">
+          TOTAL BARANG : {rupiah(totalBarang)}
+        </div>
 
         {isKredit && (
           <div className="mt-3 text-right text-sm">
@@ -160,16 +168,17 @@ const rupiah = (n) =>
 
             <hr className="my-1" />
 
-            <p className="text-base font-bold text-indigo-700">
+            {/* <p className="text-base font-bold text-indigo-700">
               TOTAL KREDIT : {rupiah(totalKredit)}
-            </p>
+            </p> */}
           </div>
         )}
 
         {/* TOTAL */}
         <div className="mt-4 text-right">
           <p>
-            Total Penjualan : <b>{rupiah(totalBarang)}</b>
+            Total Penjualan :{" "}
+            <b>{isKredit ? rupiah(totalKredit) : rupiah(totalBarang)}</b>
           </p>
           <p>
             Status Bayar : <b>{payment?.status}</b>
@@ -187,9 +196,9 @@ const rupiah = (n) =>
 
               <hr />
 
-              <p>
+              {/* <p>
                 <b>Sisa Hutang :</b> {rupiah(payment.grandTotal)}
-              </p>
+              </p> */}
               <p>Tenor : {payment.tenor}</p>
             </div>
           )}

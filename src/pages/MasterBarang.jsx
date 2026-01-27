@@ -143,14 +143,14 @@ export default function MasterBarang() {
 
   const namaBarangByBrand = useMemo(() => {
     if (!form.brand || !form.kategori) return [];
-
+  
     return masterBarang.filter(
       (x) =>
         x.kategoriBarang === form.kategori &&
-        x.brand === form.brand &&
-        x.namaBarang?.toUpperCase().startsWith(form.brand.toUpperCase())
+        x.brand === form.brand
     );
   }, [masterBarang, form.brand, form.kategori]);
+  
 
   const namaBarangAccessories = useMemo(() => {
     return masterBarang.filter((x) => x.kategoriBarang === "ACCESSORIES");
@@ -516,9 +516,7 @@ export default function MasterBarang() {
                   placeholder={
                     form.kategori ? "Pilih Nama Brand" : "Pilih Kategori dulu"
                   }
-                  disabled={
-                    form.kategori !== "ACCESSORIES" ? !form.brand : false
-                  }
+                  disabled={!form.kategori} // ✅ BENAR
                   value={form.brand}
                   onChange={(e) =>
                     setForm({
