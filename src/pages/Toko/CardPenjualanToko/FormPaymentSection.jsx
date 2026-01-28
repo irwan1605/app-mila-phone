@@ -92,22 +92,29 @@ export default function FormPaymentSection({
   }, [totalBarang, paymentSafe.paymentMethod, paymentSafe.persenMdr]);
 
   /* ================= GRAND TOTAL ================= */
+  /* ================= GRAND TOTAL ================= */
   const grandTotal = useMemo(() => {
-    // KREDIT / PIUTANG
+    // ✅ KREDIT + SPLIT PAYMENT
+    if (paymentSafe.status === "PIUTANG" && paymentSplit.enabled) {
+      return Number(totalBarang) + Number(nominalMdr);
+    }
+
+    // ✅ KREDIT NORMAL (tanpa split)
     if (paymentSafe.status === "PIUTANG") {
       return (
         Number(totalBarang) +
-        Number(nominalMdr) +
+        Number(nominalMdr) -
         (Number(paymentSafe.dpUser) + Number(paymentSafe.voucher))
       );
     }
 
-    // LUNAS (CASH / SPLIT)
+    // ✅ CASH (termasuk split cash)
     return Number(totalBarang);
   }, [
     totalBarang,
     nominalMdr,
     paymentSafe.status,
+    paymentSplit.enabled,
     paymentSafe.dpUser,
     paymentSafe.voucher,
   ]);
@@ -144,17 +151,23 @@ export default function FormPaymentSection({
 
   const sisaBayar = useMemo(() => {
     if (!paymentSplit.enabled) return 0;
+
+    // 👉 KREDIT + SPLIT
+    if (paymentSafe.status === "PIUTANG") {
+      return grandTotal - totalSplit - Number(paymentSafe.dpUser || 0);
+    }
+
     return grandTotal - totalSplit;
-  }, [grandTotal, totalSplit, paymentSplit.enabled]);
+  }, [
+    grandTotal,
+    totalSplit,
+    paymentSplit.enabled,
+    paymentSafe.status,
+    paymentSafe.dpUser,
+  ]);
 
-  /* ================= VALIDASI SPLIT ================= */
-  const isSplitValid = useMemo(() => {
-    if (!paymentSplit.enabled) return true;
-    if (totalSplit < grandTotal) return false;
 
-    return paymentSplit.detail.every((p) => p.metode === "CASH" || p.bankId);
-  }, [paymentSplit, totalSplit, grandTotal]);
-
+  
   /* ================= SYNC KE PARENT ================= */
   useEffect(() => {
     onChange({
@@ -180,6 +193,29 @@ export default function FormPaymentSection({
     kembalian,
     kembalianSplit,
   ]);
+
+    /* ================= VALIDASI SPLIT ================= */
+    const isSplitValid = useMemo(() => {
+      if (!paymentSplit.enabled) return true;
+    
+      // 👉 KREDIT: split + DP Talangan harus nutup grand total
+      if (paymentSafe.status === "PIUTANG") {
+        if (totalSplit + Number(paymentSafe.dpUser || 0) < grandTotal) {
+          return false;
+        }
+      } else {
+        // 👉 CASH: split saja harus nutup grand total
+        if (totalSplit < grandTotal) {
+          return false;
+        }
+      }
+    
+      return paymentSplit.detail.every((p) => {
+        if (p.metode === "CASH") return true;
+        if (p.metode === "TUKAR TAMBAH") return true; // bebas bank
+        return !!p.bankId; // DEBIT / QRIS wajib bank
+      });
+    }, [paymentSplit, totalSplit, grandTotal, paymentSafe.status, paymentSafe.dpUser]);
 
   /* ================= RENDER ================= */
   return (
@@ -257,7 +293,8 @@ export default function FormPaymentSection({
                 <option>QRIS</option>
               </select>
 
-              {p.metode !== "CASH" && (
+              {/* BANK */}
+              {p.metode !== "CASH" && p.metode !== "TUKAR TAMBAH" && (
                 <select
                   value={p.bankId}
                   className="w-full border rounded px-2 py-1"
@@ -268,8 +305,8 @@ export default function FormPaymentSection({
                     const next = [...paymentSplit.detail];
                     next[i] = {
                       ...next[i],
-                      bankId: bank?.id,
-                      bankNama: bank?.namaBank,
+                      bankId: bank?.id || "",
+                      bankNama: bank?.namaBank || "",
                     };
                     setPaymentSplit({ ...paymentSplit, detail: next });
                   }}
@@ -281,6 +318,24 @@ export default function FormPaymentSection({
                     </option>
                   ))}
                 </select>
+              )}
+
+              {p.metode === "TUKAR TAMBAH" && (
+                <input
+                  type="text"
+                  placeholder="Nama barang tukar tambah"
+                  className="w-full border rounded px-2 py-1"
+                  value={p.bankNama || ""}
+                  onChange={(e) => {
+                    const next = [...paymentSplit.detail];
+                    next[i] = {
+                      ...next[i],
+                      bankId: "TUKAR_TAMBAH",
+                      bankNama: e.target.value,
+                    };
+                    setPaymentSplit({ ...paymentSplit, detail: next });
+                  }}
+                />
               )}
 
               <input
@@ -453,23 +508,12 @@ export default function FormPaymentSection({
           </>
         )}
 
-        {/* CASH NORMAL */}
-        {!paymentSplit.enabled && paymentSafe.paymentMethod === "CASH" && (
-          <div>
-            <label className="font-semibold">Payment User</label>
-            <input
-              type="number"
-              className="w-full border rounded px-2 py-1"
-              value={uangDibayar}
-              onChange={(e) => setUangDibayar(Number(e.target.value || 0))}
-            />
-          </div>
-        )}
-
         {paymentSafe.status === "PIUTANG" && (
           <div className="text-xs bg-gray-50 p-2 rounded">
             <div>Harga Barang: Rp {totalBarang.toLocaleString("id-ID")}</div>
-            <div>DP Talangan: Rp {paymentSafe.dpUser.toLocaleString("id-ID")}</div>
+            <div>
+              DP Talangan: Rp {paymentSafe.dpUser.toLocaleString("id-ID")}
+            </div>
             <div>Voucher: Rp {paymentSafe.voucher.toLocaleString("id-ID")}</div>
           </div>
         )}

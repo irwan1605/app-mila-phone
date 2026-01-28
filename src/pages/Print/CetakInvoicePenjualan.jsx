@@ -13,6 +13,8 @@ const rupiah = (n) =>
     maximumFractionDigits: 0,
   });
 
+const safeNumber = (n) => Number(n || 0);
+
 export default function CetakInvoicePenjualan({
   transaksi,
   onClose,
@@ -34,12 +36,31 @@ export default function CetakInvoicePenjualan({
 
   const { invoice, toko, user = {}, items = [], payment = {} } = transaksi;
 
+  const safePayment = {
+    status: payment?.status || "LUNAS",
+    paymentMethod: payment?.paymentMethod || "CASH",
+    grandTotal: Number(payment?.grandTotal || 0),
+    nominalMdr: Number(payment?.nominalMdr || 0),
+    dpUser: Number(payment?.dpUser || 0),
+    tenor: payment?.tenor || "",
+    splitPayment: Array.isArray(payment?.splitPayment)
+      ? payment.splitPayment
+      : [],
+    kembalian: Number(payment?.kembalian || 0),
+  };
+
   // HITUNG TOTAL BARANG DARI ITEMS
   const totalBarang = items.reduce(
     (s, it) =>
       s + Number(it.qty || 0) * Number(it.hargaUnit || it.hargaAktif || 0),
     0
   );
+
+  // 🔥 FALLBACK GRAND TOTAL JIKA DATA 0
+  const finalGrandTotal =
+    payment?.status === "PIUTANG"
+      ? totalBarang + safePayment.nominalMdr
+      : safePayment.grandTotal || totalBarang;
 
   const isKredit = payment?.status === "PIUTANG";
 
@@ -49,10 +70,6 @@ export default function CetakInvoicePenjualan({
     tenorAngka > 0
       ? Math.ceil(Number(payment.grandTotal || 0) / tenorAngka)
       : 0;
-
-  // TOTAL KREDIT = total barang + MDR
-  const totalKredit =
-    Number(totalBarang || 0) + Number(payment?.nominalMdr || 0);
 
   // TANGGAL CETAK (HARI INI)
   const tanggalCetak = new Date().toLocaleDateString("id-ID", {
@@ -177,10 +194,6 @@ export default function CetakInvoicePenjualan({
         {/* TOTAL */}
         <div className="mt-4 text-right">
           <p>
-            Total Penjualan :{" "}
-            <b>{isKredit ? rupiah(totalKredit) : rupiah(totalBarang)}</b>
-          </p>
-          <p>
             Status Bayar : <b>{payment?.status}</b>
           </p>
           <p>
@@ -204,7 +217,7 @@ export default function CetakInvoicePenjualan({
           )}
 
           <p className="text-lg font-bold mt-2">
-            GRAND TOTAL : {rupiah(payment?.grandTotal)}
+            GRAND TOTAL : {rupiah(finalGrandTotal)}
           </p>
         </div>
 
@@ -212,23 +225,24 @@ export default function CetakInvoicePenjualan({
 
         <div className="text-sm space-y-1">
           <div className="flex justify-between">
-            <span>Grand Total</span>
-            <span>Rp {payment.grandTotal.toLocaleString("id-ID")}</span>
+            <p>
+              Total Penjualan : <b>{rupiah(finalGrandTotal)}</b>
+            </p>
           </div>
 
           {/* SPLIT PAYMENT */}
-          {payment.splitPayment && (
+          {safePayment.splitPayment.length > 0 && (
             <>
               <div className="font-semibold mt-2">Detail Pembayaran</div>
-              {payment.splitPayment.map((p, i) => (
+              {safePayment.splitPayment.map((p, i) => (
                 <div key={i} className="flex justify-between text-xs">
                   <span>
-                    {p.metode}
+                    {p.metode || "-"}
                     {p.bankNama ? ` - ${p.bankNama}` : ""}
                     {p.metode === "TUKAR TAMBAH" ? " (TUKAR TAMBAH)" : ""}
                   </span>
                   <span>
-                    Rp {Number(p.nominal || 0).toLocaleString("id-ID")}
+                    Rp {safeNumber(p.nominal).toLocaleString("id-ID")}
                   </span>
                 </div>
               ))}
@@ -242,14 +256,15 @@ export default function CetakInvoicePenjualan({
           )}
 
           {/* KEMBALIAN */}
-          {payment.kembalian > 0 && (
-            <div className="flex justify-between font-bold text-green-700 mt-2">
-              <span>Uang Kembalian</span>
+
+          <div className="flex justify-between font-bold text-green-700 mt-2">
+            <span>Uang Kembalian</span>
+            {safeNumber(safePayment.kembalian) > 0 && (
               <span>
-                Rp {Number(payment.kembalian).toLocaleString("id-ID")}
+                Rp {safeNumber(safePayment.kembalian).toLocaleString("id-ID")}
               </span>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* FOOTER */}
