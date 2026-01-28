@@ -191,8 +191,8 @@ export default function CetakInvoicePenjualan({
             <div className="mt-2 text-xs space-y-1">
               <p>Harga Barang : {rupiah(totalBarang)}</p>
 
-              <p>DP User : {rupiah(payment.dpUser)}</p>
-              <p>Voucher : {rupiah(payment.voucher)}</p>
+              <p>DP Talangan : {rupiah(payment.dpUser)}</p>
+              {/* <p>Voucher : {rupiah(payment.voucher)}</p> */}
 
               <hr />
 

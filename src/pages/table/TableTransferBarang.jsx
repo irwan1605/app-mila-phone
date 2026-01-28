@@ -48,12 +48,14 @@ export default function TableTransferBarang({ currentRole }) {
     if (Array.isArray(r.imeis)) {
       for (const imei of r.imeis) {
         await update(ref(db, `inventory/${r.tokoPengirim}/${imei}`), {
-          STATUS: "AVAILABLE",
+          STATUS: "REFUND",
           TRANSFER_ID: null,
           UPDATED_AT: now,
         });
       }
     }
+
+    
 
     // 🔁 2. CATAT TRANSAKSI BALIK (TRANSFER_MASUK KE PENGIRIM)
     await push(ref(db, "transaksi"), {
@@ -69,6 +71,8 @@ export default function TableTransferBarang({ currentRole }) {
       SOURCE: "REJECT_TRANSFER",
       CREATED_AT: now,
     });
+
+    
 
     // 🔁 3. UPDATE STATUS TRANSFER
     await update(ref(db, `transfer_barang/${r.id}`), {

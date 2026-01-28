@@ -89,6 +89,15 @@ export default function DetailStockAllToko() {
           totalSRP: master.hargaSRP * qty,
           totalGrosir: master.hargaGrosir * qty,
           totalReseller: master.hargaReseller * qty,
+
+          statusBarang:
+            t.PAYMENT_METODE === "PENJUALAN"
+              ? "TERJUAL"
+              : t.PAYMENT_METODE === "REFUND"
+              ? "REFUND"
+              : t.PAYMENT_METODE === "REJECT"
+              ? "REJECT"
+              : "TERSEDIA",
         };
       });
   }, [transaksi, masterMap]);
@@ -204,7 +213,7 @@ export default function DetailStockAllToko() {
               <th className="px-3 py-2 text-left whitespace-nowrap">
                 Total Reseller
               </th>
-
+              <th className="px-3 py-2">STATUS</th>
               <th className="px-3 py-2 text-left whitespace-nowrap">Aksi</th>
             </tr>
           </thead>
@@ -242,6 +251,10 @@ export default function DetailStockAllToko() {
                 </td>
                 <td className="px-3 py-2 text-right font-mono">
                   {rupiah(r.totalReseller)}
+                </td>
+
+                <td className="px-3 py-2 text-center font-bold">
+                  {r.statusBarang}
                 </td>
 
                 <td className="px-3 py-2 text-right font-mono">

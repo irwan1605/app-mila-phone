@@ -2473,48 +2473,64 @@ export const listenPenjualanRealtime = (callback) => {
 };
 
 export const refundRestorePenjualan = async (row) => {
-  const { id, toko, userLogin, imei } = row;
+  const { id, toko, userLogin, imei, invoice } = row;
 
   if (!id) throw new Error("ID transaksi tidak ditemukan");
 
-  // 🔥 NORMALISASI TOKO
+  // 🔥 NORMALISASI TOKO (sesuai struktur DB kamu)
   const tokoId = String(toko || "")
     .trim()
     .replace(/\s+/g, " ");
 
   // ============================
-  // 1. UPDATE STATUS TRANSAKSI
+  // 1. UPDATE STATUS PENJUALAN
   // ============================
   await update(ref(db, `toko/${tokoId}/penjualan/${id}`), {
-    statusPembayaran: "VOID",
+    statusPembayaran: "REFUND",   // 🔥 dari OK → REFUND
     refundedAt: Date.now(),
     refundedBy: userLogin?.username || userLogin?.email || "system",
+    keterangan: `REFUND dari ${invoice || id}`,
   });
 
   // ============================
-  // 2. RESTORE STOK IMEI
+  // 2. RESTORE STOK / IMEI
   // ============================
   if (imei && imei !== "-") {
     const imeiArr = imei.split(",");
 
     for (const im of imeiArr) {
-      const snap = await get(ref(db, `toko/${tokoId}/transaksi`));
+      const imeiTrim = im.trim();
 
-      snap.forEach((c) => {
-        if (c.val().IMEI === im.trim()) {
-          update(ref(db, `toko/${tokoId}/transaksi/${c.key}`), {
-            STATUS: "APPROVED",
-          });
-        }
-      });
+      // 🔍 Cari IMEI di stok toko
+      const stokSnap = await get(ref(db, `toko/${tokoId}/stok`));
 
-      // UNLOCK realtime
-      await remove(ref(db, `imeiLock/${im.trim()}`));
+      if (stokSnap.exists()) {
+        stokSnap.forEach((c) => {
+          const val = c.val();
+
+          if (String(val.IMEI || val.imei || "") === imeiTrim) {
+            // 🔥 Kembalikan stok
+            update(ref(db, `toko/${tokoId}/stok/${c.key}`), {
+              QTY: 1,                 // stok balik 1
+              qty: 1,
+              STATUS: "TERSEDIA",     // hilangkan SOLD
+              statusBarang: "TERSEDIA",
+              keterangan: `REFUND dari ${invoice || id}`,
+            });
+          }
+        });
+      }
+
+      // ============================
+      // 3. HAPUS IMEI LOCK (kalau ada)
+      // ============================
+      await remove(ref(db, `imeiLock/${imeiTrim}`));
     }
   }
 
   return true;
 };
+
 
 /* =========================================================
    LIST IMEI TOKO (AUTOCOMPLETE SAAT KETIK)

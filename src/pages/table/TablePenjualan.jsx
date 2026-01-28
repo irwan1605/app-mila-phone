@@ -12,6 +12,8 @@ import {
   getUserRole,
   addTransaksi,
 } from "../../services/FirebaseService";
+import { ref, get, update, remove } from "firebase/database";
+import { db } from "../../services/FirebaseInit"; 
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
@@ -315,8 +317,12 @@ export default function TablePenjualan() {
   };
 
   const handleRefund = async (row) => {
-    if (!window.confirm("Yakin ingin RETUR barang ini?")) return;
-
+    if (row.status === "REFUND") {
+      return alert("❌ Transaksi ini sudah direfund");
+    }
+  
+    if (!window.confirm("Yakin ingin RETUR / REFUND barang ini?")) return;
+  
     try {
       /* ================= TOKO ID ================= */
       const TOKO_REFUND_MAP = {
@@ -331,52 +337,84 @@ export default function TablePenjualan() {
         "KOTA WISATA": "9",
         SAWANGAN: "10",
       };
-
-      const tokoName = String(row.toko || "")
-        .trim()
-        .toUpperCase();
-
+  
+      const tokoName = String(row.toko || "").trim().toUpperCase();
       const tokoIdFix = TOKO_REFUND_MAP[tokoName];
       if (!tokoIdFix) throw new Error("ID TOKO INVALID");
-
-      /* ================= DATA BARANG (FINAL FIX) ================= */
+  
+      /* ================= DATA BARANG ================= */
       const brand = row.namaBrand || "-";
       const barang = row.namaBarang || "-";
-
-      // kalau multiple IMEI → ambil satu2
-      const imei = row.imei && row.imei !== "-" ? row.imei.split(",")[0] : "";
-
+  
+      const imei =
+        row.imei && row.imei !== "-" ? row.imei.split(",")[0].trim() : "";
+  
       const qty = Number(row.qty || 1);
-
-      /* ================= PAYLOAD ================= */
+  
+      /* ================= PAYLOAD LAPORAN RETUR ================= */
       const payload = {
         TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
         NO_INVOICE: `RET-${Date.now()}`,
         NAMA_TOKO: tokoName,
         NAMA_SUPPLIER: "-",
-
+  
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
-
+  
         QTY: qty,
         IMEI: imei,
         NOMOR_UNIK: imei || `${brand}|${barang}`,
-
+  
         PAYMENT_METODE: "RETUR",
         STATUS: "Approved",
         KETERANGAN: `REFUND dari invoice ${row.invoice}`,
+        INVOICE_ASAL: row.invoice,
       };
-
+  
       console.log("🔥 PAYLOAD REFUND FINAL:", payload);
-
+  
+      /* ================= 1. SIMPAN KE LAPORAN RETUR ================= */
       await addTransaksi(tokoIdFix, payload);
-
-      alert("✅ Refund berhasil, stok kembali");
+  
+      /* ================= 2. UPDATE STATUS PENJUALAN ================= */
+      await updateTransaksiPenjualan(tokoIdFix, row.trxKey || row.id, {
+        statusPembayaran: "REFUND", // 🔥 OK → REFUND
+        refundedAt: Date.now(),
+      });
+  
+      /* ================= 3. RESTORE STOK / IMEI ================= */
+      if (imei) {
+        const stokSnap = await get(ref(db, `toko/${tokoIdFix}/stok`));
+  
+        if (stokSnap.exists()) {
+          stokSnap.forEach((c) => {
+            const val = c.val();
+            const dbImei = String(val.IMEI || val.imei || "").trim();
+  
+            if (dbImei === imei) {
+              // 🔥 BALIKKAN STOK
+              update(ref(db, `toko/${tokoIdFix}/stok/${c.key}`), {
+                qty: 1,
+                QTY: 1,
+                statusBarang: "TERSEDIA",
+                STATUS: "TERSEDIA",
+                keterangan: `REFUND dari ${row.invoice}`,
+              });
+            }
+          });
+        }
+  
+        // 🔓 HAPUS LOCK IMEI (kalau ada)
+        await remove(ref(db, `imeiLock/${imei}`));
+      }
+  
+      alert("✅ Refund berhasil, status diubah & stok dikembalikan");
     } catch (e) {
       console.error(e);
       alert("❌ Refund gagal: " + e.message);
     }
   };
+  
 
   /* ================= EXPORT EXCEL ================= */
   /* ================= EXPORT EXCEL ================= */

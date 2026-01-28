@@ -97,7 +97,7 @@ export default function FormPaymentSection({
     if (paymentSafe.status === "PIUTANG") {
       return (
         Number(totalBarang) +
-        Number(nominalMdr) -
+        Number(nominalMdr) +
         (Number(paymentSafe.dpUser) + Number(paymentSafe.voucher))
       );
     }
@@ -401,7 +401,7 @@ export default function FormPaymentSection({
             </div>
 
             <div>
-              <label className="font-semibold">DP User</label>
+              <label className="font-semibold">DP Talangan</label>
               <input
                 type="number"
                 className="w-full border rounded px-2 py-1"
@@ -415,7 +415,7 @@ export default function FormPaymentSection({
               />
             </div>
 
-            <div>
+            {/* <div>
               <label className="font-semibold">Voucher</label>
               <input
                 type="number"
@@ -428,7 +428,7 @@ export default function FormPaymentSection({
                   })
                 }
               />
-            </div>
+            </div> */}
 
             <div>
               <label className="font-semibold">Tenor</label>
@@ -469,7 +469,7 @@ export default function FormPaymentSection({
         {paymentSafe.status === "PIUTANG" && (
           <div className="text-xs bg-gray-50 p-2 rounded">
             <div>Harga Barang: Rp {totalBarang.toLocaleString("id-ID")}</div>
-            <div>DP User: Rp {paymentSafe.dpUser.toLocaleString("id-ID")}</div>
+            <div>DP Talangan: Rp {paymentSafe.dpUser.toLocaleString("id-ID")}</div>
             <div>Voucher: Rp {paymentSafe.voucher.toLocaleString("id-ID")}</div>
           </div>
         )}

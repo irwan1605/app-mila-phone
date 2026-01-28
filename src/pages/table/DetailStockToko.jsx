@@ -147,6 +147,13 @@ export default function DetailStockToko() {
             hargaReseller:
               masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller ||
               0,
+
+            statusBarang:
+              t.PAYMENT_METODE === "PENJUALAN"
+                ? "TERJUAL"
+                : t.PAYMENT_METODE === "TRANSFER_KELUAR"
+                ? "REFUND"
+                : "TERSEDIA",
           };
         }
 
@@ -293,6 +300,7 @@ export default function DetailStockToko() {
                   <th className="px-3 py-2 text-left whitespace-nowrap">
                     Harga Reseller
                   </th>
+                  <th className="px-3 py-2">STATUS</th>
                   <th className="px-3 py-2 text-left whitespace-nowrap">
                     Total Reseller
                   </th>
@@ -344,6 +352,9 @@ export default function DetailStockToko() {
                     </td>
                     <td className="px-3 py-2 text-right font-mono">
                       {rupiah(r.hargaReseller)}
+                    </td>
+                    <td className="px-3 py-2 text-center font-semibold">
+                      {r.statusBarang}
                     </td>
                     <td className="px-3 py-2 text-right font-mono">
                       {rupiah(r.totalReseller)}
