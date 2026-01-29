@@ -158,7 +158,18 @@ export default function TablePenjualan() {
           nominalMdr: trx.payment?.nominalMdr || 0,
           tenor: trx.payment?.tenor || "-",
           cicilan: trx.payment?.cicilan || 0,
-          grandTotal: trx.payment?.grandTotal || 0,
+          grandTotal:
+          Number(trx.payment?.grandTotal || 0) > 0
+            ? Number(trx.payment.grandTotal)
+            : (trx.items || []).reduce(
+                (s, it) =>
+                  s +
+                  Number(it.qty || 0) *
+                    Number(it.hargaAktif || 0),
+                0
+              ) +
+              Number(trx.payment?.nominalMdr || 0),
+        
 
           status: trx.statusPembayaran || "OK",
         });
@@ -223,10 +234,17 @@ export default function TablePenjualan() {
 
   /* ================= TOTAL PENJUALAN FILTERED ================= */
   const totalPenjualanFiltered = useMemo(() => {
-    return filteredRows.reduce((sum, r) => {
-      return sum + Number(r.grandTotal || 0);
-    }, 0);
+    const mapInvoice = {};
+  
+    filteredRows.forEach((r) => {
+      if (!mapInvoice[r.invoice]) {
+        mapInvoice[r.invoice] = Number(r.grandTotal || 0);
+      }
+    });
+  
+    return Object.values(mapInvoice).reduce((s, v) => s + v, 0);
   }, [filteredRows]);
+  
 
   const handlePrint = (row) => {
     const trx = rows.find((x) => x.id === row.id);
