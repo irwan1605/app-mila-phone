@@ -168,31 +168,7 @@ export default function FormPaymentSection({
 
 
   
-  /* ================= SYNC KE PARENT ================= */
-  useEffect(() => {
-    onChange({
-      ...paymentSafe,
-      nominalMdr,
-      grandTotal,
-      cicilan: cicilanPerBulan,
-
-      // SPLIT PAYMENT
-      splitPayment: paymentSplit.enabled ? paymentSplit.detail : null,
-
-      // CASH NORMAL
-      uangDibayar: paymentSplit.enabled ? 0 : uangDibayar,
-      kembalian: paymentSplit.enabled ? kembalianSplit : kembalian,
-    });
-    // eslint-disable-next-line
-  }, [
-    nominalMdr,
-    grandTotal,
-    cicilanPerBulan,
-    paymentSplit,
-    uangDibayar,
-    kembalian,
-    kembalianSplit,
-  ]);
+  
 
     /* ================= VALIDASI SPLIT ================= */
     const isSplitValid = useMemo(() => {
@@ -216,6 +192,36 @@ export default function FormPaymentSection({
         return !!p.bankId; // DEBIT / QRIS wajib bank
       });
     }, [paymentSplit, totalSplit, grandTotal, paymentSafe.status, paymentSafe.dpUser]);
+
+    /* ================= SYNC KE PARENT ================= */
+    useEffect(() => {
+      onChange({
+        ...paymentSafe,
+        nominalMdr,
+        grandTotal,
+        cicilan: cicilanPerBulan,
+    
+        splitPayment: paymentSplit.enabled ? paymentSplit.detail : null,
+        uangDibayar: paymentSplit.enabled ? 0 : uangDibayar,
+        kembalian: paymentSplit.enabled ? kembalianSplit : kembalian,
+    
+        // 🔥 INI WAJIB
+        sisaBayar,
+        totalSplit,
+      });
+    }, [
+      nominalMdr,
+      grandTotal,
+      cicilanPerBulan,
+      paymentSplit,
+      uangDibayar,
+      kembalian,
+      kembalianSplit,
+      sisaBayar,
+      totalSplit,
+    ]);
+    
+    
 
   /* ================= RENDER ================= */
   return (

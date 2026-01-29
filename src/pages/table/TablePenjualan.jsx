@@ -13,7 +13,7 @@ import {
   addTransaksi,
 } from "../../services/FirebaseService";
 import { ref, get, update, remove } from "firebase/database";
-import { db } from "../../services/FirebaseInit"; 
+import { db } from "../../services/FirebaseInit";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
@@ -221,6 +221,13 @@ export default function TablePenjualan() {
     return filteredRows.slice(start, start + pageSize);
   }, [filteredRows, page]);
 
+  /* ================= TOTAL PENJUALAN FILTERED ================= */
+  const totalPenjualanFiltered = useMemo(() => {
+    return filteredRows.reduce((sum, r) => {
+      return sum + Number(r.grandTotal || 0);
+    }, 0);
+  }, [filteredRows]);
+
   const handlePrint = (row) => {
     const trx = rows.find((x) => x.id === row.id);
     if (!trx) return alert("Data transaksi tidak ditemukan");
@@ -320,9 +327,9 @@ export default function TablePenjualan() {
     if (row.status === "REFUND") {
       return alert("❌ Transaksi ini sudah direfund");
     }
-  
+
     if (!window.confirm("Yakin ingin RETUR / REFUND barang ini?")) return;
-  
+
     try {
       /* ================= TOKO ID ================= */
       const TOKO_REFUND_MAP = {
@@ -337,60 +344,62 @@ export default function TablePenjualan() {
         "KOTA WISATA": "9",
         SAWANGAN: "10",
       };
-  
-      const tokoName = String(row.toko || "").trim().toUpperCase();
+
+      const tokoName = String(row.toko || "")
+        .trim()
+        .toUpperCase();
       const tokoIdFix = TOKO_REFUND_MAP[tokoName];
       if (!tokoIdFix) throw new Error("ID TOKO INVALID");
-  
+
       /* ================= DATA BARANG ================= */
       const brand = row.namaBrand || "-";
       const barang = row.namaBarang || "-";
-  
+
       const imei =
         row.imei && row.imei !== "-" ? row.imei.split(",")[0].trim() : "";
-  
+
       const qty = Number(row.qty || 1);
-  
+
       /* ================= PAYLOAD LAPORAN RETUR ================= */
       const payload = {
         TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
         NO_INVOICE: `RET-${Date.now()}`,
         NAMA_TOKO: tokoName,
         NAMA_SUPPLIER: "-",
-  
+
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
-  
+
         QTY: qty,
         IMEI: imei,
         NOMOR_UNIK: imei || `${brand}|${barang}`,
-  
+
         PAYMENT_METODE: "RETUR",
         STATUS: "Approved",
         KETERANGAN: `REFUND dari invoice ${row.invoice}`,
         INVOICE_ASAL: row.invoice,
       };
-  
+
       console.log("🔥 PAYLOAD REFUND FINAL:", payload);
-  
+
       /* ================= 1. SIMPAN KE LAPORAN RETUR ================= */
       await addTransaksi(tokoIdFix, payload);
-  
+
       /* ================= 2. UPDATE STATUS PENJUALAN ================= */
       await updateTransaksiPenjualan(tokoIdFix, row.trxKey || row.id, {
         statusPembayaran: "REFUND", // 🔥 OK → REFUND
         refundedAt: Date.now(),
       });
-  
+
       /* ================= 3. RESTORE STOK / IMEI ================= */
       if (imei) {
         const stokSnap = await get(ref(db, `toko/${tokoIdFix}/stok`));
-  
+
         if (stokSnap.exists()) {
           stokSnap.forEach((c) => {
             const val = c.val();
             const dbImei = String(val.IMEI || val.imei || "").trim();
-  
+
             if (dbImei === imei) {
               // 🔥 BALIKKAN STOK
               update(ref(db, `toko/${tokoIdFix}/stok/${c.key}`), {
@@ -403,18 +412,17 @@ export default function TablePenjualan() {
             }
           });
         }
-  
+
         // 🔓 HAPUS LOCK IMEI (kalau ada)
         await remove(ref(db, `imeiLock/${imei}`));
       }
-  
+
       alert("✅ Refund berhasil, status diubah & stok dikembalikan");
     } catch (e) {
       console.error(e);
       alert("❌ Refund gagal: " + e.message);
     }
   };
-  
 
   /* ================= EXPORT EXCEL ================= */
   /* ================= EXPORT EXCEL ================= */
@@ -520,40 +528,41 @@ export default function TablePenjualan() {
       </div>
 
       {/* SCROLL HORIZONTAL */}
-      <div className="overflow-x-auto">
-        <table className="min-w-[2400px] text-sm">
-          <thead className="bg-gray-100">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+      <table className="min-w-[2400px] text-sm border-collapse">
+      <thead className="bg-gradient-to-r from-gray-100 to-gray-200 sticky top-0 z-10">
+
             <tr>
-              <th>No</th>
-              <th>Tanggal</th>
-              <th>No Invoice</th>
-              <th>Nama Toko</th>
-              <th>Nama Pelanggan</th>
-              <th>No TLP</th>
-              <th>Nama Store Head</th>
-              <th>Nama Sales</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">No</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Tanggal</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">No Invoice</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Nama Toko</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Nama Pelanggan</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">No TLP</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Nama Store Head</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Nama Sales</th>
 
-              <th>Kategori</th>
-              <th>Brand</th>
-              <th>Nama Barang</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Kategori</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Brand</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Nama Barang</th>
 
-              <th>No IMEI</th>
-              <th>QTY</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">No IMEI</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">QTY</th>
 
-              <th>Harga SRP</th>
-              <th>Harga Grosir</th>
-              <th>Harga Reseller</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Harga SRP</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Harga Grosir</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Harga Reseller</th>
 
-              <th>Status Bayar</th>
-              <th>Tukar Tambah</th>
-              <th>Nama MDR</th>
-              <th>Nominal MDR</th>
-              <th>Tenor</th>
-              <th>Keterangan</th>
-              <th>Grand Total</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Status Bayar</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Tukar Tambah</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Nama MDR</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Nominal MDR</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Tenor</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Keterangan</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Grand Total</th>
 
-              <th>Status</th>
-              <th>Aksi</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Status</th>
+              <th className="px-2 py-2 text-left font-semibold text-gray-700">Aksi</th>
             </tr>
           </thead>
 
@@ -561,7 +570,7 @@ export default function TablePenjualan() {
             {pagedData.map((row, i) => (
               <tr
                 key={`${row.invoice}-${i}`}
-                className="border-t hover:bg-gray-50"
+                className="border-b hover:bg-blue-50 transition"
               >
                 <td>{(page - 1) * pageSize + i + 1}</td>
                 <td>
@@ -597,7 +606,7 @@ export default function TablePenjualan() {
                 <td className="text-center">{row.tenor}</td>
                 <td className="max-w-[200px] break-words">{row.keterangan}</td>
 
-                <td className="text-right font-bold">
+                <td className="text-right font-semibold text-blue-700">
                   {rupiah(row.grandTotal)}
                 </td>
 
@@ -657,6 +666,16 @@ export default function TablePenjualan() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* TOTAL PENJUALAN */}
+      <div className="flex justify-end mt-4">
+        <div className="bg-green-50 border border-green-200 rounded-xl px-6 py-3 shadow-sm">
+          <p className="text-sm text-gray-600">TOTAL PENJUALAN</p>
+          <p className="text-xl font-bold text-green-700">
+            {rupiah(totalPenjualanFiltered)}
+          </p>
+        </div>
       </div>
 
       {/* PAGINATION */}

@@ -520,7 +520,7 @@ export default function Dashboard() {
         >
           <div className="flex items-center gap-2">
             <FaMoneyBillWave className="text-green-600" />
-            <span className="text-xs text-gray-500">Informasi Keuangan</span>
+            <span className="text-xs text-gray-500">Informasi Omset Keuangan</span>
           </div>
 
           <div className="text-xl font-bold text-green-600">
