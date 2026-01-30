@@ -73,14 +73,85 @@ export default function Dashboard() {
   const [transaksi, setTransaksi] = useState([]);
   const [penjualan, setPenjualan] = useState([]);
 
+  const [penjualanList, setPenjualanList] = useState([]);
+
+  console.log("DATA PENJUALAN:", penjualanList);
+
+  // ================== DASHBOARD PENJUALAN (SUMBER: TABLE PENJUALAN) ==================
+  // ================= DASHBOARD DARI DATA TRANSAKSI PENJUALAN =================
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // 1️⃣ INFORMASI PENJUALAN (INVOICE UNIK)
+  const totalTransaksi = useMemo(() => {
+    const map = {};
+
+    penjualanList.forEach((trx) => {
+      if (
+        String(trx.PAYMENT_METODE || "").toUpperCase() !== "PENJUALAN" ||
+        trx.STATUS !== "Approved"
+      )
+        return;
+
+      const inv = String(trx.NO_INVOICE || "").trim();
+      if (inv) map[inv] = true;
+    });
+
+    return Object.keys(map).length;
+  }, [penjualanList]);
+
+  // 2️⃣ PENJUALAN HARI INI (TOTAL NOMINAL UNIK PER INVOICE)
+  const totalPenjualanHariIni = useMemo(() => {
+    const mapInvoice = {};
+    const today = new Date().toISOString().slice(0, 10);
+  
+    penjualanList.forEach((trx) => {
+      // hanya penjualan approved
+      if (
+        String(trx.PAYMENT_METODE || "").toUpperCase() !== "PENJUALAN" ||
+        trx.STATUS !== "Approved"
+      )
+        return;
+  
+      // normalisasi tanggal
+      const tanggalRaw =
+        trx.TANGGAL_TRANSAKSI || trx.TANGGAL || trx.tanggal || "";
+  
+      if (!tanggalRaw) return;
+  
+      const tanggal = new Date(tanggalRaw).toISOString().slice(0, 10);
+      if (tanggal !== today) return;
+  
+      const inv = String(trx.NO_INVOICE || "").trim();
+      if (!inv) return;
+  
+      if (!mapInvoice[inv]) {
+        mapInvoice[inv] = 0;
+      }
+  
+      // 🔥 JUMLAHKAN TOTAL PER BARIS
+      mapInvoice[inv] += Number(trx.TOTAL || 0);
+    });
+    console.log(
+      penjualanList.map((x) => ({
+        inv: x.NO_INVOICE,
+        tgl: x.TANGGAL_TRANSAKSI,
+        total: x.TOTAL,
+      }))
+    );
+  
+    return Object.values(mapInvoice).reduce((s, v) => s + v, 0);
+  }, [penjualanList]);
+  
+
   /* ================= LISTENER ================= */
 
   useEffect(() => {
-    const unsub = listenPenjualanRealtime((rows) => {
-      setPenjualan(Array.isArray(rows) ? rows : []);
-    });
-    return () => unsub && unsub();
-  }, []);
+    const list = dataTransaksi.filter(
+      (x) => String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
+    );
+
+    setPenjualanList(list);
+  }, [dataTransaksi]);
 
   useEffect(() => {
     const u1 = listenStockAll((s) => setStockData(s || {}));
@@ -242,24 +313,12 @@ export default function Dashboard() {
     return f;
   }, [dataTransaksi, filterType, filterValue, filterToko, filterSales]);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-
   const dataHariIni = useMemo(() => {
     return filteredData.filter(
       (x) =>
         x.TANGGAL_TRANSAKSI && x.TANGGAL_TRANSAKSI.slice(0, 10) === todayStr
     );
   }, [filteredData, todayStr]);
-
-  const penjualanHariIni = useMemo(() => {
-    return dataHariIni.filter((x) => x.STATUS === "Approved").length;
-  }, [dataHariIni]);
-
-  const omzetHariIni = useMemo(() => {
-    return dataHariIni
-      .filter((x) => x.STATUS === "Approved")
-      .reduce((a, b) => a + Number(b.TOTAL || 0), 0);
-  }, [dataHariIni]);
 
   // =======================================================
   // METRIK DASHBOARD PUSAT
@@ -340,6 +399,9 @@ export default function Dashboard() {
     });
     return Object.entries(map).map(([sales, omzet]) => ({ sales, omzet }));
   }, [filteredData]);
+
+  // ================= TOTAL PENJUALAN HARI INI =================
+  const today = new Date().toISOString().slice(0, 10);
 
   const omzetPerHari = useMemo(() => {
     const map = {};
@@ -520,7 +582,9 @@ export default function Dashboard() {
         >
           <div className="flex items-center gap-2">
             <FaMoneyBillWave className="text-green-600" />
-            <span className="text-xs text-gray-500">Informasi Omset Keuangan</span>
+            <span className="text-xs text-gray-500">
+              Informasi Omset Keuangan
+            </span>
           </div>
 
           <div className="text-xl font-bold text-green-600">
@@ -550,21 +614,7 @@ export default function Dashboard() {
           </div>
 
           <div className="text-xl font-bold text-blue-600">
-            {dataTransaksi
-              .filter(
-                (x) =>
-                  String(x.PAYMENT_METODE || "").toUpperCase() ===
-                    "PENJUALAN" &&
-                  x.STATUS === "Approved" &&
-                  String(
-                    x.STATUS_BAYAR || x.SYSTEM_PAYMENT || ""
-                  ).toUpperCase() === "LUNAS"
-              )
-              .reduce(
-                (total, x) => total + (x.IMEI ? 1 : Number(x.QTY || 0)),
-                0
-              )}{" "}
-            Transaksi
+            {totalTransaksi} Transaksi
           </div>
 
           <p className="text-[11px] text-gray-500">Jumlah Transaksi berhasil</p>
@@ -601,7 +651,7 @@ export default function Dashboard() {
         <div
           onClick={() =>
             navigate("/toko/:tokoId/penjualan", {
-              state: { status: "Approved", tanggal: todayStr },
+              state: { tanggal: todayStr },
             })
           }
           className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-indigo-50"
@@ -612,7 +662,7 @@ export default function Dashboard() {
           </div>
 
           <div className="text-xl font-bold text-indigo-600">
-            Rp {omzetHariIni.toLocaleString("id-ID")}
+            Rp {totalPenjualanHariIni.toLocaleString("id-ID")}
           </div>
 
           <p className="text-[11px] text-gray-500">

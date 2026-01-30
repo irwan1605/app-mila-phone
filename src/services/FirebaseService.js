@@ -2460,17 +2460,25 @@ export const kurangiStokImei = async ({ tokoNama, imei }) => {
 };
 
 export const listenPenjualanRealtime = (callback) => {
-  return onValue(ref(db, "penjualan"), (snap) => {
+  return onValue(ref(db, "toko"), (snap) => {
     if (!snap.exists()) return callback([]);
+
     const data = [];
+
     snap.forEach((toko) => {
-      toko.forEach((trx) => {
+      const penjualanSnap = toko.child("penjualan");
+      if (!penjualanSnap.exists()) return;
+
+      penjualanSnap.forEach((trx) => {
         data.push(trx.val());
       });
     });
+
     callback(data);
   });
 };
+
+
 
 export const refundRestorePenjualan = async (row) => {
   const { id, toko, userLogin, imei, invoice } = row;
