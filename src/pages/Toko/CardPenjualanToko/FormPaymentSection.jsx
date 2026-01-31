@@ -377,26 +377,7 @@ export default function FormPaymentSection({
           </button>
         )}
 
-        {/* SISA */}
-        {paymentSplit.enabled && sisaBayar !== 0 && (
-          <div
-            className={`text-right font-bold ${
-              sisaBayar > 0 ? "text-red-600" : "text-green-600"
-            }`}
-          >
-            {sisaBayar > 0
-              ? `KURANG BAYAR: Rp ${sisaBayar.toLocaleString("id-ID")}`
-              : `LEBIH BAYAR: Rp ${Math.abs(sisaBayar).toLocaleString(
-                  "id-ID"
-                )}`}
-          </div>
-        )}
-
-        {paymentSplit.enabled && kembalianSplit > 0 && (
-          <div className="text-right font-bold text-green-700">
-            UANG KEMBALIAN: Rp {kembalianSplit.toLocaleString("id-ID")}
-          </div>
-        )}
+     
 
         {/* CASH NORMAL */}
         {!paymentSplit.enabled && paymentSafe.paymentMethod === "CASH" && (
@@ -461,6 +442,7 @@ export default function FormPaymentSection({
               />
             </div>
 
+
             <div>
               <label className="font-semibold">DP Talangan</label>
               <input
@@ -471,6 +453,53 @@ export default function FormPaymentSection({
                   onChange({
                     ...paymentSafe,
                     dpUser: Number(e.target.value || 0),
+                  })
+                }
+              />
+            </div>
+
+            <div>
+              <label className="font-semibold">DP User ke PT</label>
+              <input
+                type="number"
+                className="w-full border rounded px-2 py-1"
+                value={paymentSafe.dpUserPT}
+                onChange={(e) =>
+                  onChange({
+                    ...paymentSafe,
+                    dpUserPT: Number(e.target.value || 0),
+                  })
+                }
+              />
+            </div>
+
+            <div>
+              <label className="font-semibold">DP Merchant</label>
+              <input
+                type="number"
+                className="w-full border rounded px-2 py-1"
+                value={paymentSafe.dpMerchant}
+                onChange={(e) =>
+                  onChange({
+                    ...paymentSafe,
+                    dpMerchant: Number(e.target.value || 0),
+                  })
+                }
+              />
+            </div>
+
+            <div>
+              <label className="font-semibold">
+                Voucher / Kupon / Cashback
+              </label>
+              <input
+                type="number"
+                className="w-full border rounded px-2 py-1"
+                value={paymentSafe.voucher}
+                onChange={(e) =>
+                  onChange({
+                    ...paymentSafe,
+                    voucher: Number(e.target.value || 0),
                   })
                 }
               />
@@ -540,6 +569,27 @@ export default function FormPaymentSection({
             }
           />
         </div>
+
+           {/* SISA */}
+           {paymentSplit.enabled && sisaBayar !== 0 && (
+          <div
+            className={`text-right font-bold ${
+              sisaBayar > 0 ? "text-red-600" : "text-green-600"
+            }`}
+          >
+            {sisaBayar > 0
+              ? `KURANG BAYAR: Rp ${sisaBayar.toLocaleString("id-ID")}`
+              : `LEBIH BAYAR: Rp ${Math.abs(sisaBayar).toLocaleString(
+                  "id-ID"
+                )}`}
+          </div>
+        )}
+
+        {paymentSplit.enabled && kembalianSplit > 0 && (
+          <div className="text-right font-bold text-green-700">
+            UANG KEMBALIAN: Rp {kembalianSplit.toLocaleString("id-ID")}
+          </div>
+        )}
 
         {/* GRAND TOTAL */}
         <div className="mt-4 text-right">
