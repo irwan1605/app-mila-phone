@@ -42,6 +42,9 @@ export default function CetakInvoicePenjualan({
     grandTotal: Number(payment?.grandTotal || 0),
     nominalMdr: Number(payment?.nominalMdr || 0),
     dpUser: Number(payment?.dpUser || 0),
+    dpUserPT: Number(payment?.dpUserPT || 0),
+    dpMerchant: Number(payment?.dpMerchant || 0),
+    voucher: Number(payment?.voucher || 0),
     tenor: payment?.tenor || "",
     splitPayment: Array.isArray(payment?.splitPayment)
       ? payment.splitPayment
@@ -204,14 +207,13 @@ export default function CetakInvoicePenjualan({
             <div className="mt-2 text-xs space-y-1">
               <p>Harga Barang : {rupiah(totalBarang)}</p>
 
-              <p>DP Talangan : {rupiah(payment.dpUser)}</p>
-              {/* <p>Voucher : {rupiah(payment.voucher)}</p> */}
+              <p>DP Talangan : {rupiah(safePayment.dpUser)}</p>
+              <p>DP User ke PT : {rupiah(safePayment.dpUserPT)}</p>
+              <p>DP Merchant : {rupiah(safePayment.dpMerchant)}</p>
+              <p>Voucher / Kupon / Cashback : {rupiah(safePayment.voucher)}</p>
 
               <hr />
 
-              {/* <p>
-                <b>Sisa Hutang :</b> {rupiah(payment.grandTotal)}
-              </p> */}
               <p>Tenor : {payment.tenor}</p>
             </div>
           )}
@@ -229,6 +231,23 @@ export default function CetakInvoicePenjualan({
               Total Penjualan : <b>{rupiah(finalGrandTotal)}</b>
             </p>
           </div>
+
+          {isKredit && (
+            <div className="text-xs mt-1 space-y-1">
+              <div className="flex justify-between">
+                <span>DP User ke PT</span>
+                <span>{rupiah(safePayment.dpUserPT)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>DP Merchant</span>
+                <span>{rupiah(safePayment.dpMerchant)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Voucher / Cashback</span>
+                <span>{rupiah(safePayment.voucher)}</span>
+              </div>
+            </div>
+          )}
 
           {/* SPLIT PAYMENT */}
           {safePayment.splitPayment.length > 0 && (

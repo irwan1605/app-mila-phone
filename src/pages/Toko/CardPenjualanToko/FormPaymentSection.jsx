@@ -49,6 +49,7 @@ export default function FormPaymentSection({
   };
 
   const [uangDibayar, setUangDibayar] = useState(0);
+  const [dashboardPayment, setDashboardPayment] = useState(0);
 
   /* ================= LOAD MASTER ================= */
   useEffect(() => {
@@ -77,6 +78,8 @@ export default function FormPaymentSection({
       dpUser: Number(value.dpUser || 0),
       dpTalangan: Number(value.dpTalangan || 0),
       voucher: Number(value.voucher || 0),
+      dpUserPT: Number(value.dpUserPT || 0),
+      dpMerchant: Number(value.dpMerchant || 0),
 
       tenor: value.tenor || "",
       // 🔥 KETERANGAN BARU
@@ -101,11 +104,7 @@ export default function FormPaymentSection({
 
     // ✅ KREDIT NORMAL (tanpa split)
     if (paymentSafe.status === "PIUTANG") {
-      return (
-        Number(totalBarang) +
-        Number(nominalMdr) -
-        (Number(paymentSafe.dpUser) + Number(paymentSafe.voucher))
-      );
+      return Number(totalBarang) + Number(nominalMdr);
     }
 
     // ✅ CASH (termasuk split cash)
@@ -166,62 +165,105 @@ export default function FormPaymentSection({
     paymentSafe.dpUser,
   ]);
 
+  /* ================= KURANG BAYAR ================= */
+  const kurangBayar = useMemo(() => {
+    if (paymentSplit.enabled) return grandTotal - totalSplit;
+    return grandTotal - dashboardPayment;
+  }, [grandTotal, totalSplit, dashboardPayment, paymentSplit.enabled]);
 
-  
-  
+  const nominalKurangBayarKredit = useMemo(() => {
+    if (paymentSafe.paymentMethod !== "KREDIT") return 0;
 
-    /* ================= VALIDASI SPLIT ================= */
-    const isSplitValid = useMemo(() => {
-      if (!paymentSplit.enabled) return true;
-    
-      // 👉 KREDIT: split + DP Talangan harus nutup grand total
-      if (paymentSafe.status === "PIUTANG") {
-        if (totalSplit + Number(paymentSafe.dpUser || 0) < grandTotal) {
-          return false;
-        }
-      } else {
-        // 👉 CASH: split saja harus nutup grand total
-        if (totalSplit < grandTotal) {
-          return false;
-        }
+    const nominalBayar = paymentSplit.enabled ? totalSplit : dashboardPayment;
+
+    return (
+      Number(nominalBayar || 0) -
+      Number(paymentSafe.dpTalangan || 0) -
+      Number(paymentSafe.dpUserPT || 0) -
+      Number(paymentSafe.dpMerchant || 0)
+    );
+  }, [
+    paymentSafe.paymentMethod,
+    paymentSplit.enabled,
+    totalSplit,
+    dashboardPayment,
+    paymentSafe.dpTalangan,
+    paymentSafe.dpUserPT,
+    paymentSafe.dpMerchant,
+  ]);
+
+  /* ================= RUMUS KREDIT ================= */
+  const rumusDpTalangan = useMemo(() => {
+    return kurangBayar + paymentSafe.dpTalangan;
+  }, [kurangBayar, paymentSafe.dpTalangan]);
+
+  const rumusDpMerchant = useMemo(() => {
+    return rumusDpTalangan + paymentSafe.dpMerchant;
+  }, [rumusDpTalangan, paymentSafe.dpMerchant]);
+
+  const rumusVoucher = useMemo(() => {
+    return rumusDpMerchant + paymentSafe.voucher;
+  }, [rumusDpMerchant, paymentSafe.voucher]);
+
+  /* ================= VALIDASI SPLIT ================= */
+  const isSplitValid = useMemo(() => {
+    if (!paymentSplit.enabled) return true;
+
+    // 👉 KREDIT: split + DP Talangan harus nutup grand total
+    if (paymentSafe.status === "PIUTANG") {
+      if (totalSplit + Number(paymentSafe.dpUser || 0) < grandTotal) {
+        return false;
       }
-    
-      return paymentSplit.detail.every((p) => {
-        if (p.metode === "CASH") return true;
-        if (p.metode === "TUKAR TAMBAH") return true; // bebas bank
-        return !!p.bankId; // DEBIT / QRIS wajib bank
-      });
-    }, [paymentSplit, totalSplit, grandTotal, paymentSafe.status, paymentSafe.dpUser]);
+    } else {
+      // 👉 CASH: split saja harus nutup grand total
+      if (totalSplit < grandTotal) {
+        return false;
+      }
+    }
 
-    /* ================= SYNC KE PARENT ================= */
-    useEffect(() => {
-      onChange({
-        ...paymentSafe,
-        nominalMdr,
-        grandTotal,
-        cicilan: cicilanPerBulan,
-    
-        splitPayment: paymentSplit.enabled ? paymentSplit.detail : null,
-        uangDibayar: paymentSplit.enabled ? 0 : uangDibayar,
-        kembalian: paymentSplit.enabled ? kembalianSplit : kembalian,
-    
-        // 🔥 INI WAJIB
-        sisaBayar,
-        totalSplit,
-      });
-    }, [
+    return paymentSplit.detail.every((p) => {
+      if (p.metode === "CASH") return true;
+      if (p.metode === "TUKAR TAMBAH") return true; // bebas bank
+      return !!p.bankId; // DEBIT / QRIS wajib bank
+    });
+  }, [
+    paymentSplit,
+    totalSplit,
+    grandTotal,
+    paymentSafe.status,
+    paymentSafe.dpUser,
+  ]);
+
+  /* ================= SYNC KE PARENT ================= */
+  useEffect(() => {
+    onChange({
+      ...paymentSafe,
       nominalMdr,
       grandTotal,
-      cicilanPerBulan,
-      paymentSplit,
-      uangDibayar,
-      kembalian,
-      kembalianSplit,
-      sisaBayar,
+      dashboardPayment,
+
+      splitPayment: paymentSplit.enabled ? paymentSplit.detail : null,
       totalSplit,
-    ]);
-    
-    
+      kurangBayar,
+
+      rumusDpTalangan,
+      rumusDpMerchant,
+      rumusVoucher,
+
+      nominalKurangBayarKredit,
+    });
+  }, [
+    paymentSafe,
+    nominalMdr,
+    grandTotal,
+    dashboardPayment,
+    paymentSplit,
+    totalSplit,
+    kurangBayar,
+    rumusDpTalangan,
+    rumusDpMerchant,
+    rumusVoucher,
+  ]);
 
   /* ================= RENDER ================= */
   return (
@@ -377,8 +419,6 @@ export default function FormPaymentSection({
           </button>
         )}
 
-     
-
         {/* CASH NORMAL */}
         {!paymentSplit.enabled && paymentSafe.paymentMethod === "CASH" && (
           <div>
@@ -442,7 +482,6 @@ export default function FormPaymentSection({
               />
             </div>
 
-
             <div>
               <label className="font-semibold">DP Talangan</label>
               <input
@@ -504,6 +543,13 @@ export default function FormPaymentSection({
                 }
               />
             </div>
+
+            {/* <div className="bg-red-50 border border-red-200 rounded p-2">
+              <div className="text-xs text-gray-600">Nominal Kurang Bayar</div>
+              <div className="text-lg font-bold text-red-600">
+                Rp {nominalKurangBayarKredit.toLocaleString("id-ID")}
+              </div>
+            </div> */}
 
             {/* <div>
               <label className="font-semibold">Voucher</label>
@@ -570,8 +616,8 @@ export default function FormPaymentSection({
           />
         </div>
 
-           {/* SISA */}
-           {paymentSplit.enabled && sisaBayar !== 0 && (
+        {/* SISA */}
+        {paymentSplit.enabled && sisaBayar !== 0 && (
           <div
             className={`text-right font-bold ${
               sisaBayar > 0 ? "text-red-600" : "text-green-600"
