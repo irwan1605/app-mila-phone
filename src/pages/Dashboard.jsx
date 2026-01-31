@@ -35,7 +35,7 @@ import {
   listenAllTransaksi,
   listenStockAll,
   forceDeleteTransaksi,
-  listenPenjualanRealtime,
+  listenPenjualan ,
 } from "../services/FirebaseService";
 
 // 🔥 TAMBAHKAN DISINI
@@ -75,6 +75,17 @@ export default function Dashboard() {
 
   const [penjualanList, setPenjualanList] = useState([]);
 
+  useEffect(() => {
+    const unsub = listenPenjualan((data) => {
+      console.log("🔥 DATA PENJUALAN DARI listenPenjualan:", data);
+      setPenjualanList(Array.isArray(data) ? data : []);
+    });
+  
+    return () => unsub && unsub();
+  }, []);
+  
+  
+
   console.log("DATA PENJUALAN:", penjualanList);
 
   // ================== DASHBOARD PENJUALAN (SUMBER: TABLE PENJUALAN) ==================
@@ -105,53 +116,50 @@ export default function Dashboard() {
     const today = new Date().toISOString().slice(0, 10);
   
     penjualanList.forEach((trx) => {
-      // hanya penjualan approved
-      if (
-        String(trx.PAYMENT_METODE || "").toUpperCase() !== "PENJUALAN" ||
-        trx.STATUS !== "Approved"
-      )
-        return;
-  
-      // normalisasi tanggal
-      const tanggalRaw =
-        trx.TANGGAL_TRANSAKSI || trx.TANGGAL || trx.tanggal || "";
-  
+      const tanggalRaw = trx.tanggal || trx.createdAt;
       if (!tanggalRaw) return;
   
       const tanggal = new Date(tanggalRaw).toISOString().slice(0, 10);
       if (tanggal !== today) return;
   
-      const inv = String(trx.NO_INVOICE || "").trim();
+      const inv = String(trx.invoice || "").trim();
       if (!inv) return;
   
       if (!mapInvoice[inv]) {
-        mapInvoice[inv] = 0;
-      }
+        let total = 0;
   
-      // 🔥 JUMLAHKAN TOTAL PER BARIS
-      mapInvoice[inv] += Number(trx.TOTAL || 0);
+        // 🔥 PERSIS seperti TablePenjualan
+        if (Number(trx.payment?.grandTotal || 0) > 0) {
+          total = Number(trx.payment.grandTotal);
+        } else if (Array.isArray(trx.items)) {
+          total =
+            trx.items.reduce(
+              (s, it) =>
+                s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+              0
+            ) + Number(trx.payment?.nominalMdr || 0);
+        }
+  
+        mapInvoice[inv] = total;
+      }
     });
-    console.log(
-      penjualanList.map((x) => ({
-        inv: x.NO_INVOICE,
-        tgl: x.TANGGAL_TRANSAKSI,
-        total: x.TOTAL,
-      }))
-    );
   
     return Object.values(mapInvoice).reduce((s, v) => s + v, 0);
   }, [penjualanList]);
+  
+  
+  
   
 
   /* ================= LISTENER ================= */
 
   useEffect(() => {
-    const list = dataTransaksi.filter(
-      (x) => String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
-    );
-
-    setPenjualanList(list);
-  }, [dataTransaksi]);
+    const unsub = listenPenjualan((data) => {
+      console.log("🔥 PENJUALAN ASLI:", data);
+      setPenjualanList(Array.isArray(data) ? data : []);
+    });
+    return () => unsub && unsub();
+  }, []);
 
   useEffect(() => {
     const u1 = listenStockAll((s) => setStockData(s || {}));
@@ -763,7 +771,9 @@ export default function Dashboard() {
         >
           <div className="flex items-center gap-2">
             <FaStore className="text-sky-600" />
-            <span className="text-xs text-gray-500">TOTAL PENJUALAN</span>
+            <span className="text-xs text-gray-500">
+              TOTAL PENJUALAN BARANG
+            </span>
           </div>
 
           <div className="text-xl font-bold text-sky-600">
@@ -773,10 +783,12 @@ export default function Dashboard() {
                   String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
               ).length
             }{" "}
-            Transaksi
+            Unit
           </div>
 
-          <p className="text-[11px] text-gray-500">Semua status transaksi</p>
+          <p className="text-[11px] text-gray-500">
+            Semua status transaksi Barang
+          </p>
         </div>
       </div>
 
