@@ -1,6 +1,6 @@
 // src/pages/table/TableTransferBarang.jsx
 import React, { useEffect, useState } from "react";
-import { ref, onValue, update, push  } from "firebase/database";
+import { ref, onValue, update, push } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase/FirebaseInit";
 import FirebaseService from "../../services/FirebaseService";
@@ -9,7 +9,10 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 export default function TableTransferBarang({ currentRole }) {
-  const isSuperAdmin = currentRole === "superadmin";
+  const isSuperAdmin =
+  String(currentRole || "").toLowerCase() === "superadmin";
+  console.log("ROLE USER:", currentRole);
+console.log("IS SUPERADMIN:", isSuperAdmin);
   const [rows, setRows] = useState([]);
   const navigate = useNavigate();
   const [filterStatus, setFilterStatus] = useState("ALL");
@@ -37,56 +40,51 @@ export default function TableTransferBarang({ currentRole }) {
     });
   }, []);
 
- const handleRejectAndRollback = async (r) => {
-  if (!window.confirm("Yakin REJECT & kembalikan stok ke toko pengirim?"))
-    return;
+  const handleRejectAndRollback = async (r) => {
+    if (!window.confirm("Yakin REJECT & kembalikan stok ke toko pengirim?"))
+      return;
 
-  try {
-    const now = Date.now();
+    try {
+      const now = Date.now();
 
-    // 🔁 1. BALIKKAN IMEI KE TOKO PENGIRIM (inventory)
-    if (Array.isArray(r.imeis)) {
-      for (const imei of r.imeis) {
-        await update(ref(db, `inventory/${r.tokoPengirim}/${imei}`), {
-          STATUS: "REFUND",
-          TRANSFER_ID: null,
-          UPDATED_AT: now,
-        });
+      // 🔁 1. BALIKKAN IMEI KE TOKO PENGIRIM (inventory)
+      if (Array.isArray(r.imeis)) {
+        for (const imei of r.imeis) {
+          await update(ref(db, `inventory/${r.tokoPengirim}/${imei}`), {
+            STATUS: "REFUND",
+            TRANSFER_ID: null,
+            UPDATED_AT: now,
+          });
+        }
       }
+
+      // 🔁 2. CATAT TRANSAKSI BALIK (TRANSFER_MASUK KE PENGIRIM)
+      await push(ref(db, "transaksi"), {
+        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+        NO_INVOICE: r.noDo || r.id,
+        NAMA_TOKO: r.tokoPengirim,
+        NAMA_BRAND: r.brand,
+        NAMA_BARANG: r.barang,
+        IMEI: Array.isArray(r.imeis) ? r.imeis.join(",") : "",
+        QTY: r.qty || 1,
+        PAYMENT_METODE: "TRANSFER_MASUK",
+        STATUS: "Approved",
+        SOURCE: "REJECT_TRANSFER",
+        CREATED_AT: now,
+      });
+
+      // 🔁 3. UPDATE STATUS TRANSFER
+      await update(ref(db, `transfer_barang/${r.id}`), {
+        status: "Rejected",
+        rejectedAt: now,
+      });
+
+      alert("✅ Transfer di-Reject, stok kembali ke toko pengirim");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Gagal reject & rollback stok");
     }
-
-    
-
-    // 🔁 2. CATAT TRANSAKSI BALIK (TRANSFER_MASUK KE PENGIRIM)
-    await push(ref(db, "transaksi"), {
-      TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
-      NO_INVOICE: r.noDo || r.id,
-      NAMA_TOKO: r.tokoPengirim,
-      NAMA_BRAND: r.brand,
-      NAMA_BARANG: r.barang,
-      IMEI: Array.isArray(r.imeis) ? r.imeis.join(",") : "",
-      QTY: r.qty || 1,
-      PAYMENT_METODE: "TRANSFER_MASUK",
-      STATUS: "Approved",
-      SOURCE: "REJECT_TRANSFER",
-      CREATED_AT: now,
-    });
-
-    
-
-    // 🔁 3. UPDATE STATUS TRANSFER
-    await update(ref(db, `transfer_barang/${r.id}`), {
-      status: "Rejected",
-      rejectedAt: now,
-    });
-
-    alert("✅ Transfer di-Reject, stok kembali ke toko pengirim");
-  } catch (err) {
-    console.error(err);
-    alert("❌ Gagal reject & rollback stok");
-  }
-};
-
+  };
 
   const handleExportExcel = () => {
     const filteredData = rows.filter(
@@ -130,7 +128,7 @@ export default function TableTransferBarang({ currentRole }) {
       className="mt-8 bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-6"
     >
       <h3 className="text-xl font-extrabold mb-4 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-        📦 TABEL TRANSFER BARANG SANMOTO
+        📦 TABEL TRANSFER BARANG
       </h3>
 
       <div className="hover:bg-indigo-50 transition-colors p-2 flex gap-3">
@@ -212,8 +210,33 @@ export default function TableTransferBarang({ currentRole }) {
                   <td className="border px-3 py-2 text-center font-semibold">
                     {r.qty || 0}
                   </td>
-                  <td className="border px-3 py-2 font-semibold text-indigo-600">
-                    {r.status || "Pending"}
+                  <td className="border px-3 py-2 text-center">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-bold
+                         ${
+                           r.status === "Approved"
+                             ? "bg-green-100 text-green-700"
+                             : ""
+                         }
+                         ${
+                           r.status === "Pending"
+                             ? "bg-yellow-100 text-yellow-700"
+                             : ""
+                         }
+                         ${
+                           r.status === "Rejected"
+                             ? "bg-red-100 text-red-700"
+                             : ""
+                         }
+                         ${
+                           r.status === "Voided"
+                             ? "bg-gray-200 text-gray-700"
+                             : ""
+                         }
+                      `}
+                    >
+                      {r.status || "Pending"}
+                    </span>
                   </td>
 
                   {preview && (
@@ -241,13 +264,23 @@ export default function TableTransferBarang({ currentRole }) {
                   )}
 
                   <td className="border px-3 py-2 space-y-1">
-                    {/* APPROVE / REJECT */}
-                    {isSuperAdmin && r.status === "Pending" && (
-                      <div className="flex gap-2">
+                    {/* SEMUA TOMBOL SELALU ADA */}
+                    {/* AUTO HIDE JIKA REJECTED */}
+                    {r.status !== "Rejected" && (
+                      <>
+                        {/* APPROVE */}
                         <button
-                          className="px-3 py-2 rounded-xl text-xs font-bold text-white
-                   bg-gradient-to-r from-green-500 to-emerald-600"
+                          disabled={!isSuperAdmin || r.status !== "Pending"}
+                          className={`
+          w-full px-3 py-2 rounded-xl text-xs font-bold
+          ${
+            !isSuperAdmin || r.status !== "Pending"
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:scale-105"
+          }
+        `}
                           onClick={async () => {
+                            if (!isSuperAdmin || r.status !== "Pending") return;
                             const sjId =
                               await FirebaseService.approveTransferFINAL({
                                 transfer: r,
@@ -258,10 +291,19 @@ export default function TableTransferBarang({ currentRole }) {
                           ✔ APPROVE
                         </button>
 
+                        {/* REJECT */}
                         <button
-                          className="px-3 py-2 rounded-xl text-xs font-bold text-white
-                   bg-gradient-to-r from-red-500 to-rose-600"
+                          disabled={!isSuperAdmin || r.status !== "Pending"}
+                          className={`
+          w-full px-3 py-2 rounded-xl text-xs font-bold
+          ${
+            !isSuperAdmin || r.status !== "Pending"
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-red-500 to-rose-600 text-white hover:scale-105"
+          }
+        `}
                           onClick={async () => {
+                            if (!isSuperAdmin || r.status !== "Pending") return;
                             await FirebaseService.rejectTransferFINAL({
                               transfer: r,
                             });
@@ -270,42 +312,58 @@ export default function TableTransferBarang({ currentRole }) {
                         >
                           ✖ REJECT
                         </button>
-                      </div>
-                    )}
 
-                    {isSuperAdmin && (
-                      <>
+                        {/* PRINT SURAT JALAN */}
                         <button
+                          disabled={!isSuperAdmin}
                           onClick={() => {
+                            if (!isSuperAdmin) return;
                             const sjId = r.suratJalanId || r.id;
                             navigate(`/surat-jalan/${sjId}`);
                           }}
-                          className="
-        w-full flex items-center justify-center gap-2
-        px-3 py-2 rounded-xl
-        text-xs font-bold text-white
-        bg-gradient-to-r from-indigo-500 to-purple-600
-        hover:scale-105 transition
-      "
+                          className={`
+          w-full flex items-center justify-center gap-2
+          px-3 py-2 rounded-xl text-xs font-bold
+          ${
+            !isSuperAdmin
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:scale-105"
+          }
+        `}
                         >
                           <FaPrint /> PRINT SURAT JALAN
                         </button>
 
-                        {(r.status === "Pending" || r.status === "Approved") && (
-                          <button
-                            onClick={() => handleRejectAndRollback(r)}
-                            className="
+                        {/* REJECT & ROLLBACK */}
+                        <button
+                          disabled={
+                            !isSuperAdmin ||
+                            (r.status !== "Pending" && r.status !== "Approved")
+                          }
+                          onClick={() => {
+                            if (!isSuperAdmin) return;
+                            handleRejectAndRollback(r);
+                          }}
+                          className={`
           w-full flex items-center justify-center gap-2
-          px-3 py-2 rounded-xl
-          text-xs font-bold text-white
-          bg-gradient-to-r from-red-500 to-rose-600
-          hover:scale-105 transition
-        "
-                          >
-                            ✖ REJECT & ROLLBACK
-                          </button>
-                        )}
+          px-3 py-2 rounded-xl text-xs font-bold
+          ${
+            !isSuperAdmin || (r.status !== "Pending" && r.status !== "Approved")
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-red-600 to-pink-600 text-white hover:scale-105"
+          }
+        `}
+                        >
+                          ✖ REJECT & ROLLBACK
+                        </button>
                       </>
+                    )}
+
+                    {/* JIKA SUDAH REJECTED */}
+                    {r.status === "Rejected" && (
+                      <div className="text-center text-xs font-bold text-red-600">
+                        ❌ TRANSFER DITOLAK
+                      </div>
                     )}
                   </td>
                 </tr>

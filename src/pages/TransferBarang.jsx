@@ -91,6 +91,9 @@ export default function TransferBarang() {
   const [masterBarang, setMasterBarang] = useState([]);
   const [users, setUsers] = useState([]);
   const [currentRole, setCurrentRole] = useState("user");
+  const isSuperAdmin =
+  String(currentRole || "").toLowerCase() === "superadmin";
+
   const [masterSales, setMasterSales] = useState([]);
 
   /* ================= UI ================= */
@@ -177,16 +180,18 @@ export default function TransferBarang() {
 
   /* ================= ROLE ================= */
   useEffect(() => {
-    const local = JSON.parse(localStorage.getItem("user") || "{}");
-    const me = users.find(
-      (u) =>
-        String(u.username || "").toLowerCase() ===
-        String(local.username || "").toLowerCase()
-    );
-    if (me?.role) setCurrentRole(me.role.toLowerCase());
-  }, [users]);
-
-  const isSuperAdmin = currentRole === "superadmin";
+    const login = JSON.parse(localStorage.getItem("user") || "{}");
+  
+    const roleFromLogin =
+      login.role ||
+      login.roleDb ||
+      login.level ||
+      login.tipe ||
+      "user";
+  
+    setCurrentRole(String(roleFromLogin).toLowerCase());
+  }, []);
+  
 
   /* ================= OPTIONS ================= */
   const TOKO_OPTIONS = useMemo(() => {
