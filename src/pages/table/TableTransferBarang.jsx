@@ -130,7 +130,7 @@ export default function TableTransferBarang({ currentRole }) {
       className="mt-8 bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-6"
     >
       <h3 className="text-xl font-extrabold mb-4 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-        📦 TABEL TRANSFER BARANG
+        📦 TABEL TRANSFER BARANG SANMOTO
       </h3>
 
       <div className="hover:bg-indigo-50 transition-colors p-2 flex gap-3">

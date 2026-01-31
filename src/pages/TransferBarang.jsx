@@ -7,6 +7,7 @@ import {
   listenMasterKategoriBarang,
   listenMasterBarang,
   lockImeiTransfer,
+  listenMasterSales,
   addTransferBarang,
 } from "../services/FirebaseService";
 import { hitungStokBarang } from "../utils/stockUtils";
@@ -90,6 +91,7 @@ export default function TransferBarang() {
   const [masterBarang, setMasterBarang] = useState([]);
   const [users, setUsers] = useState([]);
   const [currentRole, setCurrentRole] = useState("user");
+  const [masterSales, setMasterSales] = useState([]);
 
   /* ================= UI ================= */
   const [imeiInput, setImeiInput] = useState("");
@@ -167,7 +169,10 @@ export default function TransferBarang() {
     listenMasterKategoriBarang(setMasterKategori);
     listenMasterBarang(setMasterBarang);
     FirebaseService.listenTransferRequests(setHistory);
-    FirebaseService.listenUsers(setUsers);
+
+    listenMasterSales((data) => {
+      setMasterSales(Array.isArray(data) ? data : []);
+    });
   }, []);
 
   /* ================= ROLE ================= */
@@ -189,6 +194,15 @@ export default function TransferBarang() {
       .map((t) => String(t.namaToko || t.nama || "").trim())
       .filter(Boolean);
   }, [masterToko]);
+
+  const salesPengirimOptions = useMemo(() => {
+    if (!form.tokoPengirim) return [];
+
+    return masterSales
+      .filter((s) => s.namaToko === form.tokoPengirim)
+      .map((s) => s.namaSales)
+      .filter(Boolean);
+  }, [masterSales, form.tokoPengirim]);
 
   // ================= BRAND OPTIONS (DARI STOK TOKO) =================
   // ================= BRAND OPTIONS (REAL STOK) =================
@@ -397,16 +411,14 @@ export default function TransferBarang() {
     if (!form.kategori) return "Kategori wajib diisi";
     if (!form.brand) return "Brand wajib diisi";
     if (!form.barang) return "Nama barang wajib diisi";
-  
+
     if (isKategoriImei && form.imeis.length === 0)
       return "Minimal 1 IMEI harus dimasukkan";
-  
-    if (!isKategoriImei && form.qty <= 0)
-      return "Qty wajib diisi";
-  
+
+    if (!isKategoriImei && form.qty <= 0) return "Qty wajib diisi";
+
     return null;
   };
-  
 
   // ================= SUBMIT TRANSFER (FINAL 100%) =================
   const submitTransfer = async () => {
@@ -415,14 +427,13 @@ export default function TransferBarang() {
       alert("❌ " + error);
       return;
     }
-    
+
     try {
       const payload = {
         ...form,
         status: "Pending",
         createdAt: Date.now(),
       };
-      
 
       // 🔥 SIMPAN KE NODE YANG DIBACA TABLE
       const transferRef = push(ref(db, "transfer_barang"));
@@ -519,11 +530,8 @@ export default function TransferBarang() {
               placeholder="Nama Pengirim"
             />
             <datalist id="pengirim-list">
-              {users.map((u) => (
-                <option
-                  key={u.id || u.username}
-                  value={u.name || u.username || ""}
-                />
+              {salesPengirimOptions.map((nama) => (
+                <option key={nama} value={nama} />
               ))}
             </datalist>
           </div>
