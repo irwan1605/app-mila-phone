@@ -117,13 +117,23 @@ export default function FormPaymentSection({
     );
   }, [totalBarang, nominalMdr, paymentSafe.dpTalangan]);
 
-  /* ================= PAYMENT KREDIT ================= */
-  /* Payment KREDIT = Dashboard KREDIT - Nominal MDR */
-  const paymentKredit = useMemo(() => {
-    if (paymentSafe.paymentMethod !== "KREDIT") return 0;
+/* ================= PAYMENT KREDIT (BARU) ================= */
+/* Payment KREDIT = Dashboard KREDIT - Nominal MDR - DP Talangan */
+const paymentKredit = useMemo(() => {
+  if (paymentSafe.paymentMethod !== "KREDIT") return 0;
 
-    return Number(dashboardPayment || 0) - Number(nominalMdr || 0);
-  }, [dashboardPayment, nominalMdr, paymentSafe.paymentMethod]);
+  return (
+    Number(dashboardPayment || 0) -
+    Number(nominalMdr || 0) -
+    Number(paymentSafe.dpUser || 0)
+  );
+}, [
+  dashboardPayment,
+  nominalMdr,
+  paymentSafe.dpUser,
+  paymentSafe.paymentMethod,
+]);
+
 
   /* ================= CICILAN ================= */
   const cicilanPerBulan = useMemo(() => {

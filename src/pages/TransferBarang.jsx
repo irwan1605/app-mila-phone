@@ -584,7 +584,7 @@ export default function TransferBarang() {
 
           {/* NAMA PENGIRIM */}
           <div>
-            <label className="text-xs font-semibold">Nama Sales Pengirim</label>
+            <label className="text-xs font-semibold">Nama Pengirim</label>
             <input
               list="pengirim-list"
               value={form.pengirim}
