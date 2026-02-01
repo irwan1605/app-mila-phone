@@ -130,7 +130,7 @@ const paymentKredit = useMemo(() => {
 }, [
   dashboardPayment,
   nominalMdr,
-  paymentSafe.dpUser,
+  paymentSafe.dpTalangan,
   paymentSafe.paymentMethod,
 ]);
 
