@@ -13,7 +13,7 @@ import {
 import { hitungStokBarang } from "../utils/stockUtils";
 
 import FirebaseService from "../services/FirebaseService";
-import { ref, onValue, update, push } from "firebase/database";
+import { ref, onValue, update, push, off  } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
 import TableTransferBarang from "./table/TableTransferBarang";
 import PrintSuratJalan from "./Print/PrintSuratJalan";
@@ -152,6 +152,23 @@ export default function TransferBarang() {
     });
   }, []);
 
+
+  useEffect(() => {
+    const barangRef = ref(db, "dataManagement/masterBarang");
+  
+    onValue(barangRef, (snap) => {
+      const data = snap.val() || {};
+      const arr = Object.entries(data).map(([id, v]) => ({
+        id,
+        ...v,
+      }));
+      setMasterBarang(arr);
+    });
+  
+    return () => off(barangRef);
+  }, []);
+  
+
   // ================= DARI NOTIFIKASI NAVBAR =================
   useEffect(() => {
     if (location.state?.fromNotif) {
@@ -209,11 +226,29 @@ export default function TransferBarang() {
       .filter(Boolean);
   }, [masterSales, form.tokoPengirim]);
 
-  // ================= BRAND OPTIONS (DARI STOK TOKO) =================
-  // ================= BRAND OPTIONS (REAL STOK) =================
   const brandOptions = useMemo(() => {
-    if (!form.tokoPengirim || !form.kategori) return [];
-
+    if (!form.kategori) return [];
+  
+    // ✅ KHUSUS ACCESSORIES → dari MASTER BARANG
+    if (form.kategori === "ACCESSORIES") {
+      return [
+        ...new Set(
+          masterBarang
+            .filter(
+              (b) =>
+                String(b.kategoriBarang || "")
+                  .toUpperCase()
+                  .trim() === "ACCESSORIES"
+            )
+            .map((b) => b.brand)
+            .filter(Boolean)
+        ),
+      ];
+    }
+  
+    // 🔁 selain accessories → pakai inventory lama
+    if (!form.tokoPengirim) return [];
+  
     return [
       ...new Set(
         inventory
@@ -227,12 +262,35 @@ export default function TransferBarang() {
           .filter(Boolean)
       ),
     ];
-  }, [inventory, form.tokoPengirim, form.kategori]);
+  }, [inventory, masterBarang, form.tokoPengirim, form.kategori]);
+  
+
 
   // ================= BARANG OPTIONS (DARI STOK TOKO) =================
   const barangOptions = useMemo(() => {
-    if (!form.tokoPengirim || !form.kategori || !form.brand) return [];
-
+    if (!form.kategori || !form.brand) return [];
+  
+    // ✅ KHUSUS ACCESSORIES → dari MASTER BARANG
+    if (form.kategori === "ACCESSORIES") {
+      return [
+        ...new Set(
+          masterBarang
+            .filter(
+              (b) =>
+                String(b.kategoriBarang || "")
+                  .toUpperCase()
+                  .trim() === "ACCESSORIES" &&
+                b.brand === form.brand
+            )
+            .map((b) => b.namaBarang)
+            .filter(Boolean)
+        ),
+      ];
+    }
+  
+    // 🔁 selain accessories → pakai inventory lama
+    if (!form.tokoPengirim) return [];
+  
     return [
       ...new Set(
         inventory
@@ -247,8 +305,8 @@ export default function TransferBarang() {
           .filter(Boolean)
       ),
     ];
-  }, [inventory, form.tokoPengirim, form.kategori, form.brand]);
-
+  }, [inventory, masterBarang, form.tokoPengirim, form.kategori, form.brand]);
+  
   // ================= CEK FORM SUDAH LENGKAP =================
   const isFormComplete =
     form.tokoPengirim &&

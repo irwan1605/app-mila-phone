@@ -6,7 +6,6 @@ import { db } from "../../firebase/FirebaseInit";
 import { useNavigate } from "react-router-dom";
 import { FaPrint } from "react-icons/fa";
 
-
 /* ================= UTIL ================= */
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString("id-ID") : "-");
 
@@ -111,32 +110,32 @@ export default function SummaryTransferReport() {
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4">
         <input
           type="date"
-           className="input"
+          className="input"
           onChange={(e) => setFilter({ ...filter, tanggal: e.target.value })}
         />
         <input
           placeholder="No DO"
-           className="input"
+          className="input"
           onChange={(e) => setFilter({ ...filter, noDO: e.target.value })}
         />
         <input
           placeholder="Nama Toko"
-           className="input"
+          className="input"
           onChange={(e) => setFilter({ ...filter, toko: e.target.value })}
         />
         <input
           placeholder="Nama Barang"
-           className="input"
+          className="input"
           onChange={(e) => setFilter({ ...filter, barang: e.target.value })}
         />
         <input
           placeholder="IMEI"
-           className="input"
+          className="input"
           onChange={(e) => setFilter({ ...filter, imei: e.target.value })}
         />
         <input
           placeholder="Status"
-           className="input"
+          className="input"
           onChange={(e) => setFilter({ ...filter, status: e.target.value })}
         />
       </div>
@@ -197,27 +196,21 @@ export default function SummaryTransferReport() {
                 </td>
 
                 {/* CETAK */}
-                <td className="text-center">
-                <button
-                        onClick={() => {
-                          // PRIORITAS:
-                          // 1. Jika sudah Approved → pakai suratJalanId
-                          // 2. Jika belum Approved → pakai transfer.id (antisipasi cetak ulang)
-                          const sjId = r.suratJalanId || r.id;
-
-                          navigate(`/surat-jalan/${sjId}`);
-                        }}
-                        className="
-        w-full flex items-center justify-center gap-2
-        px-3 py-2 rounded-xl
-        text-xs font-bold text-white
-        bg-gradient-to-r from-indigo-500 to-purple-600
-        hover:scale-105 transition
-      "
-                        title="Cetak ulang Surat Jalan (Superadmin)"
-                      >
-                        <FaPrint /> PRINT SURAT JALAN
-                      </button>
+                <td className="border px-3 py-2">
+                  {r.status === "Rejected" ? (
+                    <span className="px-3 py-2 rounded bg-red-100 text-red-700 font-bold text-xs">
+                      TRANSFER DI TOLAK
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() =>
+                        navigate(`/surat-jalan/${r.suratJalanId || r.id}`)
+                      }
+                      className="px-3 py-2 rounded bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700"
+                    >
+                      PRINT SURAT JALAN
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
