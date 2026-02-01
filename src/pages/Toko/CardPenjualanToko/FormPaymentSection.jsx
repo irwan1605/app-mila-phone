@@ -290,32 +290,7 @@ export default function FormPaymentSection({
             <option value="PIUTANG">KREDIT</option>
           </select>
         </div>
-        {/* SPLIT PAYMENT */}
-        {paymentSafe.status === "LUNAS" && (
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={paymentSplit.enabled}
-              onChange={(e) => {
-                const active = e.target.checked;
-
-                setPaymentSplit({
-                  ...paymentSplit,
-                  enabled: active,
-                });
-
-                if (active) {
-                  setUangDibayar(0);
-                  onChange({
-                    ...paymentSafe,
-                    paymentMethod: "CASH",
-                  });
-                }
-              }}
-            />
-            Split Payment
-          </label>
-        )}
+      
 
         {/* SPLIT DETAIL */}
         {paymentSplit.enabled &&
@@ -430,6 +405,33 @@ export default function FormPaymentSection({
               onChange={(e) => setUangDibayar(Number(e.target.value || 0))}
             />
           </div>
+        )}
+
+          {/* SPLIT PAYMENT */}
+          {paymentSafe.status === "LUNAS" && (
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={paymentSplit.enabled}
+              onChange={(e) => {
+                const active = e.target.checked;
+
+                setPaymentSplit({
+                  ...paymentSplit,
+                  enabled: active,
+                });
+
+                if (active) {
+                  setUangDibayar(0);
+                  onChange({
+                    ...paymentSafe,
+                    paymentMethod: "CASH",
+                  });
+                }
+              }}
+            />
+            Split Payment
+          </label>
         )}
 
         {kembalian > 0 && (
