@@ -21,6 +21,7 @@ export default function FormPaymentSection({
   const [masterMdr, setMasterMdr] = useState([]);
   const [masterTenor, setMasterTenor] = useState([]);
   const [masterBank, setMasterBank] = useState([]);
+  const [dashboardPayment, setDashboardPayment] = useState(0);
 
   /* ================= SPLIT STATE ================= */
   const [paymentSplit, setPaymentSplit] = useState({
@@ -49,7 +50,14 @@ export default function FormPaymentSection({
   };
 
   const [uangDibayar, setUangDibayar] = useState(0);
-  const [dashboardPayment, setDashboardPayment] = useState(0);
+
+  /* ================= CASH PAYMENT (NON SPLIT) ================= */
+  const [cashPayment, setCashPayment] = useState({
+    metode: "CASH",
+    bankId: "",
+    bankNama: "",
+    nominal: 0,
+  });
 
   /* ================= LOAD MASTER ================= */
   useEffect(() => {
@@ -75,10 +83,9 @@ export default function FormPaymentSection({
       namaMdr: value.namaMdr || "",
       persenMdr: Number(value.persenMdr || 0),
 
-      dpUser: Number(value.dpUser || 0),
       dpTalangan: Number(value.dpTalangan || 0),
       voucher: Number(value.voucher || 0),
-      dpUserPT: Number(value.dpUserPT || 0),
+
       dpMerchant: Number(value.dpMerchant || 0),
 
       tenor: value.tenor || "",
@@ -87,36 +94,36 @@ export default function FormPaymentSection({
     }),
     [value]
   );
-
-  /* ================= HITUNG MDR ================= */
+  /* ================= HITUNG MDR (BARU) ================= */
+  /* Nominal MDR = Nominal Dashboard KREDIT × Persen MDR (%) */
   const nominalMdr = useMemo(() => {
     if (paymentSafe.paymentMethod !== "KREDIT") return 0;
-    return Math.round((totalBarang * paymentSafe.persenMdr) / 100);
-  }, [totalBarang, paymentSafe.paymentMethod, paymentSafe.persenMdr]);
+
+    return Math.round(
+      (Number(dashboardPayment || 0) * Number(paymentSafe.persenMdr || 0)) / 100
+    );
+  }, [dashboardPayment, paymentSafe.paymentMethod, paymentSafe.persenMdr]);
 
   /* ================= GRAND TOTAL ================= */
   /* ================= GRAND TOTAL ================= */
+  /* ================= GRAND TOTAL ================= */
+  /* ================= GRAND TOTAL (BARU) ================= */
+  /* GRAND TOTAL = Total Harga Barang + Nominal MDR + DP Talangan */
   const grandTotal = useMemo(() => {
-    // ✅ KREDIT + SPLIT PAYMENT
-    if (paymentSafe.status === "PIUTANG" && paymentSplit.enabled) {
-      return Number(totalBarang) + Number(nominalMdr);
-    }
+    return (
+      Number(totalBarang || 0) +
+      Number(nominalMdr || 0) +
+      Number(paymentSafe.dpTalangan || 0)
+    );
+  }, [totalBarang, nominalMdr, paymentSafe.dpTalangan]);
 
-    // ✅ KREDIT NORMAL (tanpa split)
-    if (paymentSafe.status === "PIUTANG") {
-      return Number(totalBarang) + Number(nominalMdr);
-    }
+  /* ================= PAYMENT KREDIT ================= */
+  /* Payment KREDIT = Dashboard KREDIT - Nominal MDR */
+  const paymentKredit = useMemo(() => {
+    if (paymentSafe.paymentMethod !== "KREDIT") return 0;
 
-    // ✅ CASH (termasuk split cash)
-    return Number(totalBarang);
-  }, [
-    totalBarang,
-    nominalMdr,
-    paymentSafe.status,
-    paymentSplit.enabled,
-    paymentSafe.dpUser,
-    paymentSafe.voucher,
-  ]);
+    return Number(dashboardPayment || 0) - Number(nominalMdr || 0);
+  }, [dashboardPayment, nominalMdr, paymentSafe.paymentMethod]);
 
   /* ================= CICILAN ================= */
   const cicilanPerBulan = useMemo(() => {
@@ -153,7 +160,7 @@ export default function FormPaymentSection({
 
     // 👉 KREDIT + SPLIT
     if (paymentSafe.status === "PIUTANG") {
-      return grandTotal - totalSplit - Number(paymentSafe.dpUser || 0);
+      return grandTotal - totalSplit - Number(paymentSafe.dpTalangan || 0);
     }
 
     return grandTotal - totalSplit;
@@ -162,31 +169,33 @@ export default function FormPaymentSection({
     totalSplit,
     paymentSplit.enabled,
     paymentSafe.status,
-    paymentSafe.dpUser,
+    paymentSafe.dpTalangan,
   ]);
 
   /* ================= KURANG BAYAR ================= */
+  /* ================= KURANG BAYAR (BARU) ================= */
+  const nominalPaymentMetode = useMemo(() => {
+    return paymentSplit.enabled ? totalSplit : dashboardPayment;
+  }, [paymentSplit.enabled, totalSplit, dashboardPayment]);
+
   const kurangBayar = useMemo(() => {
-    if (paymentSplit.enabled) return grandTotal - totalSplit;
-    return grandTotal - dashboardPayment;
-  }, [grandTotal, totalSplit, dashboardPayment, paymentSplit.enabled]);
+    return Number(grandTotal || 0) - Number(nominalPaymentMetode || 0);
+  }, [grandTotal, nominalPaymentMetode]);
 
   const nominalKurangBayarKredit = useMemo(() => {
     if (paymentSafe.paymentMethod !== "KREDIT") return 0;
 
-    const nominalBayar = paymentSplit.enabled ? totalSplit : dashboardPayment;
-
     return (
-      Number(nominalBayar || 0) -
+      Number(grandTotal || 0) -
+      Number(nominalPaymentMetode || 0) -
       Number(paymentSafe.dpTalangan || 0) -
       Number(paymentSafe.dpUserPT || 0) -
       Number(paymentSafe.dpMerchant || 0)
     );
   }, [
     paymentSafe.paymentMethod,
-    paymentSplit.enabled,
-    totalSplit,
-    dashboardPayment,
+    grandTotal,
+    nominalPaymentMetode,
     paymentSafe.dpTalangan,
     paymentSafe.dpUserPT,
     paymentSafe.dpMerchant,
@@ -211,7 +220,7 @@ export default function FormPaymentSection({
 
     // 👉 KREDIT: split + DP Talangan harus nutup grand total
     if (paymentSafe.status === "PIUTANG") {
-      if (totalSplit + Number(paymentSafe.dpUser || 0) < grandTotal) {
+      if (totalSplit + Number(paymentSafe.dpTalangan || 0) < grandTotal) {
         return false;
       }
     } else {
@@ -231,7 +240,7 @@ export default function FormPaymentSection({
     totalSplit,
     grandTotal,
     paymentSafe.status,
-    paymentSafe.dpUser,
+    paymentSafe.dpTalangan,
   ]);
 
   /* ================= SYNC KE PARENT ================= */
@@ -247,8 +256,6 @@ export default function FormPaymentSection({
       kurangBayar,
 
       rumusDpTalangan,
-      rumusDpMerchant,
-      rumusVoucher,
 
       nominalKurangBayarKredit,
     });
@@ -261,8 +268,6 @@ export default function FormPaymentSection({
     totalSplit,
     kurangBayar,
     rumusDpTalangan,
-    rumusDpMerchant,
-    rumusVoucher,
   ]);
 
   /* ================= RENDER ================= */
@@ -290,7 +295,6 @@ export default function FormPaymentSection({
             <option value="PIUTANG">KREDIT</option>
           </select>
         </div>
-      
 
         {/* SPLIT DETAIL */}
         {paymentSplit.enabled &&
@@ -311,9 +315,10 @@ export default function FormPaymentSection({
                 }}
               >
                 <option>CASH</option>
-                <option>TUKAR TAMBAH</option>
                 <option>DEBIT</option>
                 <option>QRIS</option>
+                <option>VHOCHER</option>
+                <option>TUKAR TAMBAH</option>
               </select>
 
               {/* BANK */}
@@ -394,21 +399,77 @@ export default function FormPaymentSection({
           </button>
         )}
 
-        {/* CASH NORMAL */}
+        {/* CASH NORMAL → PAYMENT METODE */}
         {!paymentSplit.enabled && paymentSafe.paymentMethod === "CASH" && (
-          <div>
-            <label className="font-semibold">Payment User</label>
-            <input
-              type="number"
-              className="w-full border rounded px-2 py-1"
-              value={uangDibayar}
-              onChange={(e) => setUangDibayar(Number(e.target.value || 0))}
-            />
+          <div className="space-y-2">
+            <label className="font-semibold">Payment Metode</label>
+
+            <div className="grid grid-cols-3 gap-2">
+              {/* METODE */}
+              <select
+                className="w-full border rounded px-2 py-1"
+                value={cashPayment.metode}
+                onChange={(e) =>
+                  setCashPayment({
+                    metode: e.target.value,
+                    bankId: "",
+                    bankNama: "",
+                    nominal: cashPayment.nominal,
+                  })
+                }
+              >
+                <option>CASH</option>
+                <option>DEBIT</option>
+                <option>QRIS</option>
+                <option>VHOCHER</option>
+                <option>TUKAR TAMBAH</option>
+              </select>
+
+              {/* BANK (khusus DEBIT / QRIS) */}
+              {cashPayment.metode !== "CASH" &&
+                cashPayment.metode !== "TUKAR TAMBAH" && (
+                  <select
+                    className="w-full border rounded px-2 py-1"
+                    value={cashPayment.bankId}
+                    onChange={(e) => {
+                      const bank = masterBank.find(
+                        (b) => b.id === e.target.value
+                      );
+                      setCashPayment({
+                        ...cashPayment,
+                        bankId: bank?.id || "",
+                        bankNama: bank?.namaBank || "",
+                      });
+                    }}
+                  >
+                    <option value="">-- Bank --</option>
+                    {getBankByMetode(cashPayment.metode).map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.namaBank}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+              {/* NOMINAL */}
+              <input
+                type="number"
+                className="w-full border rounded px-2 py-1"
+                placeholder="Nominal bayar"
+                value={cashPayment.nominal}
+                onChange={(e) =>
+                  setCashPayment({
+                    ...cashPayment,
+                    nominal: Number(e.target.value || 0),
+                  })
+                }
+              />
+            </div>
           </div>
         )}
 
-          {/* SPLIT PAYMENT */}
-          {paymentSafe.status === "LUNAS" && (
+        {/* SPLIT PAYMENT */}
+        {paymentSafe.status === "LUNAS" && (
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -443,6 +504,22 @@ export default function FormPaymentSection({
         {/* KREDIT */}
         {paymentSafe.paymentMethod === "KREDIT" && (
           <>
+            {/* 🔥 DASHBOARD KREDIT (MANUAL INPUT) — HARUS DI PALING ATAS */}
+            <div>
+              <label className="font-semibold">
+                Dashboard KREDIT (Manual Input)
+              </label>
+              <input
+                type="number"
+                className="w-full border rounded px-2 py-1"
+                placeholder="Input nominal manual..."
+                value={dashboardPayment}
+                onChange={(e) =>
+                  setDashboardPayment(Number(e.target.value || 0))
+                }
+              />
+            </div>
+
             <div>
               <label className="font-semibold">Payment MDR (%)</label>
               <select
@@ -489,58 +566,11 @@ export default function FormPaymentSection({
               <input
                 type="number"
                 className="w-full border rounded px-2 py-1"
-                value={paymentSafe.dpUser}
+                value={paymentSafe.dpTalangan}
                 onChange={(e) =>
                   onChange({
                     ...paymentSafe,
-                    dpUser: Number(e.target.value || 0),
-                  })
-                }
-              />
-            </div>
-
-            <div>
-              <label className="font-semibold">DP User ke PT</label>
-              <input
-                type="number"
-                className="w-full border rounded px-2 py-1"
-                value={paymentSafe.dpUserPT}
-                onChange={(e) =>
-                  onChange({
-                    ...paymentSafe,
-                    dpUserPT: Number(e.target.value || 0),
-                  })
-                }
-              />
-            </div>
-
-            <div>
-              <label className="font-semibold">DP Merchant</label>
-              <input
-                type="number"
-                className="w-full border rounded px-2 py-1"
-                value={paymentSafe.dpMerchant}
-                onChange={(e) =>
-                  onChange({
-                    ...paymentSafe,
-                    dpMerchant: Number(e.target.value || 0),
-                  })
-                }
-              />
-            </div>
-
-            <div>
-              <label className="font-semibold">
-                Voucher / Kupon / Cashback
-              </label>
-              <input
-                type="number"
-                className="w-full border rounded px-2 py-1"
-                value={paymentSafe.voucher}
-                onChange={(e) =>
-                  onChange({
-                    ...paymentSafe,
-                    voucher: Number(e.target.value || 0),
+                    dpTalangan: Number(e.target.value || 0),
                   })
                 }
               />
@@ -591,11 +621,21 @@ export default function FormPaymentSection({
           </>
         )}
 
+        {/* PAYMENT KREDIT (AUTO HITUNG) */}
+        <div>
+          <label className="font-semibold">Payment KREDIT</label>
+          <input
+            readOnly
+            className="w-full border rounded px-2 py-1 bg-gray-100"
+            value={paymentKredit.toLocaleString("id-ID")}
+          />
+        </div>
+
         {paymentSafe.status === "PIUTANG" && (
           <div className="text-xs bg-gray-50 p-2 rounded">
             <div>Harga Barang: Rp {totalBarang.toLocaleString("id-ID")}</div>
             <div>
-              DP Talangan: Rp {paymentSafe.dpUser.toLocaleString("id-ID")}
+              DP Talangan: Rp {paymentSafe.dpTalangan.toLocaleString("id-ID")}
             </div>
             <div>Voucher: Rp {paymentSafe.voucher.toLocaleString("id-ID")}</div>
           </div>
