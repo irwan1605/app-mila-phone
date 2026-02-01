@@ -60,10 +60,7 @@ export default function CetakInvoicePenjualan({
   );
 
   // 🔥 FALLBACK GRAND TOTAL JIKA DATA 0
-  const finalGrandTotal =
-    payment?.status === "PIUTANG"
-      ? totalBarang + safePayment.nominalMdr
-      : safePayment.grandTotal || totalBarang;
+  const finalGrandTotal = Number(totalBarang || 0);
 
   const isKredit = payment?.status === "PIUTANG";
 
@@ -206,7 +203,7 @@ export default function CetakInvoicePenjualan({
           {isKredit && (
             <div className="mt-2 text-xs space-y-1">
               <p>Harga Barang : {rupiah(totalBarang)}</p>
-{/* 
+              {/* 
               <p>DP Talangan : {rupiah(safePayment.dpUser)}</p>
               <p>DP User ke PT : {rupiah(safePayment.dpUserPT)}</p>
               <p>DP Merchant : {rupiah(safePayment.dpMerchant)}</p>
@@ -276,14 +273,14 @@ export default function CetakInvoicePenjualan({
 
           {/* KEMBALIAN */}
 
-          <div className="flex justify-between font-bold text-green-700 mt-2">
+          {/* <div className="flex justify-between font-bold text-green-700 mt-2">
             <span>Uang Kembalian</span>
             {safeNumber(safePayment.kembalian) > 0 && (
               <span>
                 Rp {safeNumber(safePayment.kembalian).toLocaleString("id-ID")}
               </span>
             )}
-          </div>
+          </div> */}
         </div>
 
         {/* FOOTER */}
@@ -305,7 +302,27 @@ export default function CetakInvoicePenjualan({
         <p className="text-center mt-6 text-xs">
           Terima kasih telah berbelanja di tempat kami
         </p>
+         {/* NOTE / PERHATIAN */}
+      <div className="mt-2 border border-red-500 p-2 text-red-600 text-[10px] leading-tight">
+        <div className="font-bold text-center mb-1">PERHATIAN !!!</div>
+
+        <ul className="list-disc pl-4 space-y-0.5">
+          <li>Mohon diperiksa kembali kelengkapan dan kelayakan unit</li>
+          <li>Barang yang sudah dibeli tidak dapat ditukar / dikembalikan</li>
+          <li>
+            Garansi Toko:
+            <br />- Garansi Tukar Unit 1 × 24 jam
+            <br />- Garansi Home Service 1 Hari
+            <br />- Lebih dari 1 Hari dikenakan Biaya Transport Teknisi / Driver
+          </li>
+          <li>
+            Ketentuan & regulasi garansi pabrik mengikuti buku garansi yang
+            tersedia di setiap unit sepeda atau motor
+          </li>
+        </ul>
       </div>
+      </div>
+     
     </div>
   );
 }
