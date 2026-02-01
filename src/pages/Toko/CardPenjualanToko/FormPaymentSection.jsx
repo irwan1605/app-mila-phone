@@ -125,7 +125,7 @@ const paymentKredit = useMemo(() => {
   return (
     Number(dashboardPayment || 0) -
     Number(nominalMdr || 0) -
-    Number(paymentSafe.dpUser || 0)
+    Number(paymentSafe.dpTalangan || 0)
   );
 }, [
   dashboardPayment,
