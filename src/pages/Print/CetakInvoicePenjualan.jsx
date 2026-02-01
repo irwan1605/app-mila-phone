@@ -196,9 +196,9 @@ export default function CetakInvoicePenjualan({
 
         {/* TOTAL */}
         <div className="mt-4 text-right">
-          <p>
+          {/* <p>
             Status Bayar : <b>{payment?.status}</b>
-          </p>
+          </p> */}
           <p>
             Metode Bayar : <b>{payment?.paymentMethod}</b>
           </p>
@@ -206,11 +206,11 @@ export default function CetakInvoicePenjualan({
           {isKredit && (
             <div className="mt-2 text-xs space-y-1">
               <p>Harga Barang : {rupiah(totalBarang)}</p>
-
+{/* 
               <p>DP Talangan : {rupiah(safePayment.dpUser)}</p>
               <p>DP User ke PT : {rupiah(safePayment.dpUserPT)}</p>
               <p>DP Merchant : {rupiah(safePayment.dpMerchant)}</p>
-              <p>Voucher / Kupon / Cashback : {rupiah(safePayment.voucher)}</p>
+              <p>Voucher / Kupon / Cashback : {rupiah(safePayment.voucher)}</p> */}
 
               <hr />
 
@@ -226,13 +226,13 @@ export default function CetakInvoicePenjualan({
         <hr className="my-3" />
 
         <div className="text-sm space-y-1">
-          <div className="flex justify-between">
+          {/* <div className="flex justify-between">
             <p>
               Total Penjualan : <b>{rupiah(finalGrandTotal)}</b>
             </p>
-          </div>
+          </div> */}
 
-          {isKredit && (
+          {/* {isKredit && (
             <div className="text-xs mt-1 space-y-1">
               <div className="flex justify-between">
                 <span>DP User ke PT</span>
@@ -247,7 +247,7 @@ export default function CetakInvoicePenjualan({
                 <span>{rupiah(safePayment.voucher)}</span>
               </div>
             </div>
-          )}
+          )} */}
 
           {/* SPLIT PAYMENT */}
           {safePayment.splitPayment.length > 0 && (

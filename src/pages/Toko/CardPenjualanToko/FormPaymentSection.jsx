@@ -155,22 +155,17 @@ export default function FormPaymentSection({
     return Math.max(totalSplit - grandTotal, 0);
   }, [totalSplit, grandTotal, paymentSplit.enabled]);
 
-  const sisaBayar = useMemo(() => {
-    if (!paymentSplit.enabled) return 0;
+ /* ================= KURANG BAYAR (SPLIT PAYMENT - BARU) ================= */
+/* KURANG BAYAR = GRAND TOTAL - Payment Metode - Payment KREDIT */
+const sisaBayar = useMemo(() => {
+  if (!paymentSplit.enabled) return 0;
 
-    // 👉 KREDIT + SPLIT
-    if (paymentSafe.status === "PIUTANG") {
-      return grandTotal - totalSplit - Number(paymentSafe.dpTalangan || 0);
-    }
-
-    return grandTotal - totalSplit;
-  }, [
-    grandTotal,
-    totalSplit,
-    paymentSplit.enabled,
-    paymentSafe.status,
-    paymentSafe.dpTalangan,
-  ]);
+  return (
+    Number(grandTotal || 0) -
+    Number(totalSplit || 0) -
+    Number(paymentKredit || 0)
+  );
+}, [grandTotal, totalSplit, paymentKredit, paymentSplit.enabled]);
 
   /* ================= KURANG BAYAR ================= */
   /* ================= KURANG BAYAR (BARU) ================= */
@@ -300,6 +295,7 @@ export default function FormPaymentSection({
         {paymentSplit.enabled &&
           paymentSplit.detail.map((p, i) => (
             <div key={i} className="grid grid-cols-4 gap-2">
+               <label className="font-semibold">Payment Metode</label>
               <select
                 value={p.metode}
                 className="w-full border rounded px-2 py-1"
@@ -618,9 +614,8 @@ export default function FormPaymentSection({
                 ))}
               </select>
             </div>
-          </>
-        )}
 
+            
         {/* PAYMENT KREDIT (AUTO HITUNG) */}
         <div>
           <label className="font-semibold">Payment KREDIT</label>
@@ -630,6 +625,9 @@ export default function FormPaymentSection({
             value={paymentKredit.toLocaleString("id-ID")}
           />
         </div>
+          </>
+        )}
+
 
         {paymentSafe.status === "PIUTANG" && (
           <div className="text-xs bg-gray-50 p-2 rounded">
