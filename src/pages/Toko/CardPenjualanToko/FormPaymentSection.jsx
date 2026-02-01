@@ -113,23 +113,22 @@ export default function FormPaymentSection({
     return Number(totalBarang || 0);
   }, [totalBarang]);
 
-/* ================= PAYMENT KREDIT (BARU) ================= */
-/* Payment KREDIT = Dashboard KREDIT - Nominal MDR - DP Talangan */
-const paymentKredit = useMemo(() => {
-  if (paymentSafe.paymentMethod !== "KREDIT") return 0;
+  /* ================= PAYMENT KREDIT (BARU) ================= */
+  /* Payment KREDIT = Dashboard KREDIT - Nominal MDR - DP Talangan */
+  const paymentKredit = useMemo(() => {
+    if (paymentSafe.paymentMethod !== "KREDIT") return 0;
 
-  return (
-    Number(dashboardPayment || 0) -
-    Number(nominalMdr || 0) -
-    Number(paymentSafe.dpTalangan || 0)
-  );
-}, [
-  dashboardPayment,
-  nominalMdr,
-  paymentSafe.dpTalangan,
-  paymentSafe.paymentMethod,
-]);
-
+    return (
+      Number(dashboardPayment || 0) -
+      Number(nominalMdr || 0) -
+      Number(paymentSafe.dpTalangan || 0)
+    );
+  }, [
+    dashboardPayment,
+    nominalMdr,
+    paymentSafe.dpTalangan,
+    paymentSafe.paymentMethod,
+  ]);
 
   /* ================= CICILAN ================= */
   const cicilanPerBulan = useMemo(() => {
@@ -161,17 +160,17 @@ const paymentKredit = useMemo(() => {
     return Math.max(totalSplit - grandTotal, 0);
   }, [totalSplit, grandTotal, paymentSplit.enabled]);
 
- /* ================= KURANG BAYAR (SPLIT PAYMENT - BARU) ================= */
-/* KURANG BAYAR = GRAND TOTAL - Payment Metode - Payment KREDIT */
-const sisaBayar = useMemo(() => {
-  if (!paymentSplit.enabled) return 0;
+  /* ================= KURANG BAYAR (SPLIT PAYMENT - BARU) ================= */
+  /* KURANG BAYAR = GRAND TOTAL - Payment Metode - Payment KREDIT */
+  const sisaBayar = useMemo(() => {
+    if (!paymentSplit.enabled) return 0;
 
-  return (
-    Number(grandTotal || 0) -
-    Number(totalSplit || 0) -
-    Number(paymentKredit || 0)
-  );
-}, [grandTotal, totalSplit, paymentKredit, paymentSplit.enabled]);
+    return (
+      Number(grandTotal || 0) -
+      Number(totalSplit || 0) -
+      Number(paymentKredit || 0)
+    );
+  }, [grandTotal, totalSplit, paymentKredit, paymentSplit.enabled]);
 
   /* ================= KURANG BAYAR ================= */
   /* ================= KURANG BAYAR (BARU) ================= */
@@ -201,6 +200,19 @@ const sisaBayar = useMemo(() => {
     paymentSafe.dpUserPT,
     paymentSafe.dpMerchant,
   ]);
+
+  /* ================= KURANG BAYAR & KEMBALIAN (KHUSUS KREDIT) ================= */
+  const kurangBayarKredit = useMemo(() => {
+    if (paymentSafe.paymentMethod !== "KREDIT") return 0;
+
+    return Number(grandTotal || 0) - Number(paymentKredit || 0);
+  }, [grandTotal, paymentKredit, paymentSafe.paymentMethod]);
+
+  const kembalianKredit = useMemo(() => {
+    if (paymentSafe.paymentMethod !== "KREDIT") return 0;
+
+    return Number(paymentKredit || 0) - Number(grandTotal || 0);
+  }, [grandTotal, paymentKredit, paymentSafe.paymentMethod]);
 
   /* ================= RUMUS KREDIT ================= */
   const rumusDpTalangan = useMemo(() => {
@@ -301,7 +313,7 @@ const sisaBayar = useMemo(() => {
         {paymentSplit.enabled &&
           paymentSplit.detail.map((p, i) => (
             <div key={i} className="grid grid-cols-4 gap-2">
-               <label className="font-semibold">Payment Metode</label>
+              <label className="font-semibold">Payment Metode</label>
               <select
                 value={p.metode}
                 className="w-full border rounded px-2 py-1"
@@ -621,19 +633,32 @@ const sisaBayar = useMemo(() => {
               </select>
             </div>
 
-            
-        {/* PAYMENT KREDIT (AUTO HITUNG) */}
-        <div>
-          <label className="font-semibold">Payment KREDIT</label>
-          <input
-            readOnly
-            className="w-full border rounded px-2 py-1 bg-gray-100"
-            value={paymentKredit.toLocaleString("id-ID")}
-          />
-        </div>
+            {/* PAYMENT KREDIT (AUTO HITUNG) */}
+            <div>
+              <label className="font-semibold">Payment KREDIT</label>
+              <input
+                readOnly
+                className="w-full border rounded px-2 py-1 bg-gray-100"
+                value={paymentKredit.toLocaleString("id-ID")}
+              />
+            </div>
           </>
         )}
 
+        {/* KURANG BAYAR / SISA KEMBALIAN (KHUSUS KREDIT) */}
+        {paymentSafe.paymentMethod === "KREDIT" && (
+          <div
+            className={`text-right font-bold ${
+              kurangBayarKredit > 0 ? "text-red-600" : "text-green-700"
+            }`}
+          >
+            {kurangBayarKredit > 0
+              ? `KURANG BAYAR: Rp ${kurangBayarKredit.toLocaleString("id-ID")}`
+              : `SISA KEMBALIAN: Rp ${Math.abs(kembalianKredit).toLocaleString(
+                  "id-ID"
+                )}`}
+          </div>
+        )}
 
         {paymentSafe.status === "PIUTANG" && (
           <div className="text-xs bg-gray-50 p-2 rounded">
