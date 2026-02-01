@@ -110,12 +110,8 @@ export default function FormPaymentSection({
   /* ================= GRAND TOTAL (BARU) ================= */
   /* GRAND TOTAL = Total Harga Barang + Nominal MDR + DP Talangan */
   const grandTotal = useMemo(() => {
-    return (
-      Number(totalBarang || 0) +
-      Number(nominalMdr || 0) +
-      Number(paymentSafe.dpTalangan || 0)
-    );
-  }, [totalBarang, nominalMdr, paymentSafe.dpTalangan]);
+    return Number(totalBarang || 0);
+  }, [totalBarang]);
 
 /* ================= PAYMENT KREDIT (BARU) ================= */
 /* Payment KREDIT = Dashboard KREDIT - Nominal MDR - DP Talangan */
