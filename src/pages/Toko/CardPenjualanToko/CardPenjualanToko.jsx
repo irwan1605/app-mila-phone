@@ -393,6 +393,7 @@ export default function CardPenjualanToko() {
           noTlpPelanggan: formUser.noTlpPelanggan,
           storeHead: formUser.storeHead,
           namaSales: formUser.namaSales,
+          salesHandle: formUser.salesHandle,
         },
 
         payment: { ...payment },

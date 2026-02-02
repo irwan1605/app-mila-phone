@@ -135,6 +135,19 @@ export default function TablePenjualan() {
           storeHead: trx.user?.storeHead || "-",
           sales: trx.user?.namaSales || "-",
 
+          salesHandle: trx.user?.salesHandle || "-",
+
+          namaBank: trx.payment?.bankNama || trx.payment?.namaBank || "-",
+          
+          nominalPaymentMetode:
+            Number(trx.payment?.nominalPayment || 0) ||
+            Number(trx.payment?.nominal || 0) ||
+            0,
+
+          namaMdr: trx.payment?.namaMdr || "-",
+          dpTalangan: Number(trx.payment?.dpTalangan || trx.dpTalangan || 0),
+          paymentKredit: trx.payment?.status === "PIUTANG" ? "KREDIT" : "LUNAS",
+
           kategoriBarang: item.kategoriBarang || "-",
           namaBrand: item.namaBrand || "-",
           namaBarang: item.namaBarang || "-",
@@ -154,7 +167,7 @@ export default function TablePenjualan() {
             item.skemaHarga === "reseller" ? Number(item.hargaAktif || 0) : 0,
 
           statusBayar: trx.payment?.status || "-",
-          namaMdr: trx.payment?.namaMdr || "-",
+
           nominalMdr: trx.payment?.nominalMdr || 0,
           tenor: trx.payment?.tenor || "-",
           cicilan: trx.payment?.cicilan || 0,
@@ -538,90 +551,59 @@ export default function TablePenjualan() {
       </div>
 
       {/* SCROLL HORIZONTAL */}
-      <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-        <table className="min-w-[2400px] text-sm border-collapse">
-          <thead className="bg-gradient-to-r from-gray-100 to-gray-200 sticky top-0 z-10">
+      <div className="relative overflow-x-auto rounded-xl border border-gray-300 shadow-md">
+        <table className="min-w-[2600px] w-full text-sm text-gray-700 border-collapse">
+          <thead className="sticky top-0 z-20 bg-gradient-to-r from-slate-100 to-slate-200 text-xs uppercase text-gray-700">
             <tr>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
+              <th className="px-3 py-2 border border-gray-400 text-center">
                 No
               </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Tanggal
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                No Invoice
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Nama Toko
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
+              <th className="px-3 py-2 border border-gray-400">Tanggal</th>
+              <th className="px-3 py-2 border border-gray-400">No Invoice</th>
+              <th className="px-3 py-2 border border-gray-400">Nama Toko</th>
+              <th className="px-3 py-2 border border-gray-400">
                 Nama Pelanggan
               </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                No TLP
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
+              <th className="px-3 py-2 border border-gray-400">No TLP</th>
+              <th className="px-3 py-2 border border-gray-400">
                 Nama Store Head
               </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Nama Sales
-              </th>
+              <th className="px-3 py-2 border border-gray-400">Nama Sales</th>
+              <th className="px-3 py-2 border border-gray-400">Sales Handel</th>
 
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Kategori
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Brand
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Nama Barang
-              </th>
+              <th className="px-3 py-2 border border-gray-400">Kategori</th>
+              <th className="px-3 py-2 border border-gray-400">Brand</th>
+              <th className="px-3 py-2 border border-gray-400">Nama Barang</th>
 
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                No IMEI
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                QTY
-              </th>
+              <th className="px-3 py-2 border border-gray-400">No IMEI</th>
+              <th className="px-3 py-2 border border-gray-400">QTY</th>
 
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Harga SRP
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Harga Grosir
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
+              <th className="px-3 py-2 border border-gray-400">Harga SRP</th>
+              <th className="px-3 py-2 border border-gray-400">Harga Grosir</th>
+              <th className="px-3 py-2 border border-gray-400">
                 Harga Reseller
               </th>
 
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Status Bayar
+              <th className="px-3 py-2 border border-gray-400">Status Bayar</th>
+              <th className="px-3 py-2 border border-gray-400">
+                Payment Metode
               </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Tukar Tambah
+              <th className="px-3 py-2 border border-gray-400">Nama Bank</th>
+              <th className="px-3 py-2 border border-gray-400">
+                Nominal Payment
               </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Nama MDR
+              <th className="px-3 py-2 border border-gray-400">DP Talangan</th>
+              <th className="px-3 py-2 border border-gray-400">Nama MDR</th>
+              <th className="px-3 py-2 border border-gray-400">Nominal MDR</th>
+              <th className="px-3 py-2 border border-gray-400">
+                Payment Kredit
               </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Nominal MDR
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Tenor
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Keterangan
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Grand Total
-              </th>
+              <th className="px-3 py-2 border border-gray-400">Tenor</th>
+              <th className="px-3 py-2 border border-gray-400">Keterangan</th>
+              <th className="px-3 py-2 border border-gray-400">Grand Total</th>
 
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Status
-              </th>
-              <th className="px-2 py-2 text-left font-semibold text-gray-700">
-                Aksi
-              </th>
+              <th className="px-3 py-2 border border-gray-400">Status</th>
+              <th className="px-3 py-2 border border-gray-400">Aksi</th>
             </tr>
           </thead>
 
@@ -629,47 +611,64 @@ export default function TablePenjualan() {
             {pagedData.map((row, i) => (
               <tr
                 key={`${row.invoice}-${i}`}
-                className="border-b hover:bg-blue-50 transition"
+                className={`${
+                  i % 2 === 0 ? "bg-white" : "bg-gray-50"
+                } hover:bg-blue-50 transition`}
               >
-                <td>{(page - 1) * pageSize + i + 1}</td>
-                <td>
+                <td className="px-3 py-2 border border-gray-300 text-center">
+                  {(page - 1) * pageSize + i + 1}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
                   {row.tanggal
                     ? new Date(row.tanggal).toLocaleDateString("id-ID")
                     : "-"}
                 </td>
-                <td className="font-semibold">{row.invoice}</td>
-                <td>{row.toko}</td>
-                <td>{row.pelanggan}</td>
-                <td>{row.telp}</td>
-                <td>{row.storeHead} </td>
-                <td>{row.sales}</td>
-
-                <td>{row.kategoriBarang}</td>
-                <td>{row.namaBrand}</td>
-                <td>{row.namaBarang}</td>
-                <td className="max-w-[200px] break-all">{row.imei}</td>
-                <td className="text-center">{row.qty}</td>
-                <td className="text-right">{rupiah(row.hargaSRP)}</td>
-                <td className="text-right">{rupiah(row.hargaGrosir)}</td>
-                <td className="text-right">{rupiah(row.hargaReseller)}</td>
-                <td className="text-center">{row.statusBayar}</td>
-                <td className="text-center">
-                  {row.payment?.splitPayment?.some(
-                    (p) => p.metode === "TUKAR TAMBAH"
-                  )
-                    ? "YA"
-                    : "-"}
+                <td className="px-3 py-2 border border-gray-300 font-semibold">
+                  {row.invoice}
                 </td>
-                <td>{row.namaMdr}</td>
-                <td className="text-right">{rupiah(row.nominalMdr)}</td>
-                <td className="text-center">{row.tenor}</td>
-                <td className="max-w-[200px] break-words">{row.keterangan}</td>
+                <td className="px-3 py-2 border border-gray-300">{row.toko}</td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.pelanggan}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">{row.telp}</td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.storeHead}{" "}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">{row.sales}</td>
+                {/* 🔥 SALES HANDEL */}
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.salesHandle || "-"}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">{row.kategoriBarang}</td>
+                <td className="px-3 py-2 border border-gray-300">{row.namaBrand}</td>
+                <td className="px-3 py-2 border border-gray-300">{row.namaBarang}</td>
+                <td className="px-3 py-2 border border-gray-300">{row.imei}</td>
+                <td className="px-3 py-2 border border-gray-300">{row.qty}</td>
+                <td className="px-3 py-2 border border-gray-300">{rupiah(row.hargaSRP)}</td>
+                <td className="px-3 py-2 border border-gray-300">{rupiah(row.hargaGrosir)}</td>
+                <td className="px-3 py-2 border border-gray-300">{rupiah(row.hargaReseller)}</td>
+                <td className="px-3 py-2 border border-gray-300">{row.statusBayar}</td>
+                <td className="px-3 py-2 border border-gray-300">{row.paymentMetode}</td>
+                {/* 🔥 NAMA BANK */}
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.namaBank || "-"}
+                </td>
+                {/* 🔥 NOMINAL PAYMENT */}
+                <td className="px-3 py-2 border border-gray-300 text-right font-medium">
+                  {rupiah(row.nominalPaymentMetode || 0)}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">{rupiah(row.dpTalangan)}</td>
+                <td className="px-3 py-2 border border-gray-300">{row.namaMdr}</td>
+                <td className="px-3 py-2 border border-gray-300">{rupiah(row.nominalMdr)}</td>
+                <td className="px-3 py-2 border border-gray-300">{row.paymentKredit}</td>
+                <td className="px-3 py-2 border border-gray-300">{row.tenor}</td>
+                <td className="px-3 py-2 border border-gray-300">{row.keterangan}</td>
 
-                <td className="text-right font-semibold text-blue-700">
+                <td className="px-3 py-2 border border-gray-300 text-right font-medium">
                   {rupiah(row.grandTotal)}
                 </td>
 
-                <td className="text-center">
+                <td className="px-3 py-2 border border-gray-300">
                   <span
                     className={`px-2 py-1 rounded text-xs font-semibold ${
                       row.status === "VOID"
@@ -681,7 +680,7 @@ export default function TablePenjualan() {
                   </span>
                 </td>
 
-                <td className="text-center">
+                <td className="px-3 py-2 border border-gray-300">
                   <div className="flex gap-2 justify-center">
                     {/* PRINT - SEMUA ROLE */}
                     {row.status !== "REFUND" && (
