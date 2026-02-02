@@ -29,6 +29,34 @@ const Navbar = ({ user, onLogout }) => {
   const [editPassword, setEditPassword] = useState("");
   const [editPassword2, setEditPassword2] = useState("");
   const [showEditAccount, setShowEditAccount] = useState(false);
+  const [inventory, setInventory] = useState([]);
+
+  useEffect(() => {
+    return onValue(ref(db, "toko"), (snap) => {
+      const rows = [];
+  
+      snap.forEach((tokoSnap) => {
+        const trxSnap = tokoSnap.child("transaksi");
+        if (!trxSnap.exists()) return;
+  
+        trxSnap.forEach((trx) => {
+          const v = trx.val();
+          if (!v.IMEI) return;
+  
+          const metode = String(v.PAYMENT_METODE || "").toUpperCase();
+          let status = "AVAILABLE";
+          if (metode === "PENJUALAN") status = "OUT";
+  
+          rows.push({ imei: String(v.IMEI).trim(), status });
+        });
+      });
+  
+      setInventory(rows);
+    });
+  }, []);
+  
+  
+
 
   // ✅ SAFE USER DARI LOCALSTORAGE
   const activeUser = useMemo(() => {
@@ -62,35 +90,68 @@ const Navbar = ({ user, onLogout }) => {
       setPendingTransfer(relevant);
     });
   }, [TOKO_LOGIN]);
+
+  useEffect(() => {
+    if (!pendingTransfer.length) return;
+  
+    const validPending = pendingTransfer.filter((t) => {
+      if (!Array.isArray(t.imeis)) return false;
+  
+      return t.imeis.every((im) => {
+        const found = inventory.find((i) => i.imei === im);
+        return found && found.status === "AVAILABLE";
+      });
+    });
+  
+    if (validPending.length > 0) {
+      bellAudio.current?.play().catch(() => {});
+    }
+  }, [pendingTransfer, inventory]);
+  
   
 
-  useEffect(() => {
-    if (notifTransfer.length > 0) {
-      console.log("🔔 Ada transfer menunggu approval");
-    }
-  }, [notifTransfer]);
 
-  useEffect(() => {
-    return onValue(ref(db, "transfer_barang"), (snap) => {
-      const pending = [];
-      snap.forEach((c) => {
-        if (c.val().status === "Pending") pending.push(c.val());
-      });
-      setPendingTransfer(pending);
-    });
-  }, []);
 
   const bellAudio = useRef(null);
 
   useEffect(() => {
-    bellAudio.current = new Audio("/bell.mp3");
+    return onValue(ref(db, "toko"), (snap) => {
+      const map = {}; // key = imei
+  
+      snap.forEach((tokoSnap) => {
+        const trxSnap = tokoSnap.child("transaksi");
+        if (!trxSnap.exists()) return;
+  
+        trxSnap.forEach((trx) => {
+          const v = trx.val();
+          if (!v.IMEI) return;
+  
+          const imei = String(v.IMEI).trim();
+          const metode = String(v.PAYMENT_METODE || "").toUpperCase();
+  
+          // DEFAULT
+          if (!map[imei]) {
+            map[imei] = { imei, status: "AVAILABLE" };
+          }
+  
+          // RULE MUTLAK
+          if (metode === "PENJUALAN") {
+            map[imei].status = "SOLD";   // 🔥 PALING KUAT
+          } else if (metode === "TRANSFER_KELUAR") {
+            if (map[imei].status !== "SOLD") map[imei].status = "OUT";
+          } else if (metode === "TRANSFER_MASUK") {
+            if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
+          }
+        });
+      });
+  
+      setInventory(Object.values(map));
+    });
   }, []);
-
-  useEffect(() => {
-    if (pendingTransfer.length > 0) {
-      bellAudio.current?.play().catch(() => {});
-    }
-  }, [pendingTransfer.length]);
+  
+  
+  
+  
 
   // useEffect(() => {
   //   const unsub = listenTransferRequests((list) => {

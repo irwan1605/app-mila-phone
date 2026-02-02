@@ -1,5 +1,5 @@
 // src/pages/table/TableTransferBarang.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo  } from "react";
 import { ref, onValue, update, push } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase/FirebaseInit";
@@ -9,14 +9,107 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 export default function TableTransferBarang({ currentRole }) {
-  const isSuperAdmin =
-  String(currentRole || "").toLowerCase() === "superadmin";
+  const isSuperAdmin = String(currentRole || "").toLowerCase() === "superadmin";
   console.log("ROLE USER:", currentRole);
-console.log("IS SUPERADMIN:", isSuperAdmin);
+  console.log("IS SUPERADMIN:", isSuperAdmin);
   const [rows, setRows] = useState([]);
+
+  
+  const [inventory, setInventory] = useState([]);
   const navigate = useNavigate();
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [preview, setPreview] = useState(null);
+
+  const [soldImeis, setSoldImeis] = useState([]);
+
+  
+
+  useEffect(() => {
+    return onValue(ref(db, "toko"), (snap) => {
+      const map = {}; // key = imei
+  
+      snap.forEach((tokoSnap) => {
+        const trxSnap = tokoSnap.child("transaksi");
+        if (!trxSnap.exists()) return;
+  
+        trxSnap.forEach((trx) => {
+          const v = trx.val();
+          if (!v.IMEI) return;
+  
+          const imei = String(v.IMEI).trim();
+          const metode = String(v.PAYMENT_METODE || "").toUpperCase();
+  
+          // DEFAULT
+          if (!map[imei]) {
+            map[imei] = { imei, status: "AVAILABLE" };
+          }
+  
+          // RULE MUTLAK
+          if (metode === "PENJUALAN") {
+            map[imei].status = "SOLD";   // 🔥 PALING KUAT
+          } else if (metode === "TRANSFER_KELUAR") {
+            if (map[imei].status !== "SOLD") map[imei].status = "OUT";
+          } else if (metode === "TRANSFER_MASUK") {
+            if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
+          }
+        });
+      });
+  
+      setInventory(Object.values(map));
+    });
+  }, []);
+  
+
+// ================= FILTER TRANSFER: TOLAK IMEI TERJUAL =================
+const safeRows = useMemo(() => {
+  return rows.filter((r) => {
+    if (!Array.isArray(r.imeis)) return false;
+
+    return r.imeis.every((im) => {
+      const found = inventory.find((i) => i.imei === im);
+      return found && found.status === "AVAILABLE";
+    });
+  });
+}, [rows, inventory]);
+
+
+
+useEffect(() => {
+  return onValue(ref(db, "toko"), (snap) => {
+    const map = {}; // key = imei
+
+    snap.forEach((tokoSnap) => {
+      const trxSnap = tokoSnap.child("transaksi");
+      if (!trxSnap.exists()) return;
+
+      trxSnap.forEach((trx) => {
+        const v = trx.val();
+        if (!v.IMEI) return;
+
+        const imei = String(v.IMEI).trim();
+        const metode = String(v.PAYMENT_METODE || "").toUpperCase();
+
+        // DEFAULT
+        if (!map[imei]) {
+          map[imei] = { imei, status: "AVAILABLE" };
+        }
+
+        // RULE MUTLAK
+        if (metode === "PENJUALAN") {
+          map[imei].status = "SOLD";   // 🔥 PALING KUAT
+        } else if (metode === "TRANSFER_KELUAR") {
+          if (map[imei].status !== "SOLD") map[imei].status = "OUT";
+        } else if (metode === "TRANSFER_MASUK") {
+          if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
+        }
+      });
+    });
+
+    setInventory(Object.values(map));
+  });
+}, []);
+
+
 
   useEffect(() => {
     return onValue(ref(db, "transfer_barang"), (snap) => {
@@ -39,6 +132,8 @@ console.log("IS SUPERADMIN:", isSuperAdmin);
       setRows(arr);
     });
   }, []);
+
+ 
 
   const handleRejectAndRollback = async (r) => {
     if (!window.confirm("Yakin REJECT & kembalikan stok ke toko pengirim?"))
@@ -186,7 +281,7 @@ console.log("IS SUPERADMIN:", isSuperAdmin);
           </thead>
 
           <tbody>
-            {rows
+            {safeRows
               .filter(
                 (r) => filterStatus === "ALL" || r.status === filterStatus
               )

@@ -329,7 +329,19 @@ const Sidebar = ({ role, toko, onLogout }) => {
               </ul>
             )}
 
-<button
+             {/* PEMBELIAN (EX MASTER PEMBELIAN) */}
+             <Link
+              to="/master-pembelian"
+              className={`flex items-center p-3 hover:bg-blue-500 ${
+                activePath === "/master-pembelian" ? "bg-blue-600" : ""
+              }${highlightIfMatch("pembelian")}`}
+            >
+              <FaShoppingCart className="text-xl" />
+              <span className="ml-2">PEMBELIAN</span>
+            </Link>
+
+
+            <button
               onClick={() => setShowSubMenuMasterData((s) => !s)}
               className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${
                 activePath.includes("/data-management") ||
@@ -353,19 +365,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
                   >
                     <AiOutlineDatabase className="text-sm" />
                     <span className="ml-2">Master Barang</span>
-                  </Link>
-                </li>
-
-                <li>
-                  <Link
-                    to="/master-pembelian"
-                    onClick={() => setMobileOpen(false)}
-                    className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/master-pembelian" ? "bg-blue-600" : ""
-                    }`}
-                  >
-                    <AiOutlineDatabase className="text-sm" />
-                    <span className="ml-2">Master Pembelian</span>
                   </Link>
                 </li>
 
@@ -583,8 +582,6 @@ const Sidebar = ({ role, toko, onLogout }) => {
               <FaUsers className="text-xl" />
               <span className="ml-2">USER MANAGEMENT</span>
             </Link>
-
-           
           </>
         ) : (
           <>

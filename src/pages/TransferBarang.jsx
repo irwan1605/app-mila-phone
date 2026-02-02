@@ -7,13 +7,12 @@ import {
   listenMasterKategoriBarang,
   listenMasterBarang,
   lockImeiTransfer,
-  listenMasterSales,
-  addTransferBarang,
+  listenKaryawan,
 } from "../services/FirebaseService";
 import { hitungStokBarang } from "../utils/stockUtils";
 
 import FirebaseService from "../services/FirebaseService";
-import { ref, onValue, update, push, off  } from "firebase/database";
+import { ref, onValue, update, push, off } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
 import TableTransferBarang from "./table/TableTransferBarang";
 import PrintSuratJalan from "./Print/PrintSuratJalan";
@@ -91,10 +90,17 @@ export default function TransferBarang() {
   const [masterBarang, setMasterBarang] = useState([]);
   const [users, setUsers] = useState([]);
   const [currentRole, setCurrentRole] = useState("user");
-  const isSuperAdmin =
-  String(currentRole || "").toLowerCase() === "superadmin";
+  const isSuperAdmin = String(currentRole || "").toLowerCase() === "superadmin";
 
-  const [masterSales, setMasterSales] = useState([]);
+  const [masterKaryawan, setMasterKaryawan] = useState([]);
+
+  useEffect(() => {
+    const unsub = listenKaryawan((data) => {
+      setMasterKaryawan(Array.isArray(data) ? data : []);
+    });
+
+    return () => unsub && unsub();
+  }, []);
 
   /* ================= UI ================= */
   const [imeiInput, setImeiInput] = useState("");
@@ -112,50 +118,45 @@ export default function TransferBarang() {
       .toUpperCase();
 
   // ================= INVENTORY NORMALIZATION (FINAL) =================
-  // ================= INVENTORY DARI TOKO/TRANSAKSI (FINAL) =================
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {
       const rows = [];
-
+  
       snap.forEach((tokoSnap) => {
         const transaksiSnap = tokoSnap.child("transaksi");
         if (!transaksiSnap.exists()) return;
-
+  
         transaksiSnap.forEach((trx) => {
           const v = trx.val();
-
-          // HANYA STOK YANG VALID
           if (!v.IMEI) return;
-
+  
           const metode = String(v.PAYMENT_METODE || "").toUpperCase();
-
+  
           let status = "AVAILABLE";
-
           if (metode === "TRANSFER_KELUAR") status = "OUT";
           if (metode === "TRANSFER_MASUK") status = "AVAILABLE";
           if (metode === "PENJUALAN") status = "OUT";
-
+  
           rows.push({
-            id: trx.key,
             imei: String(v.IMEI).trim(),
-            toko: String(v.NAMA_TOKO).trim(),
+            status,
+            toko: String(v.NAMA_TOKO || "").trim(),
             namaBrand: String(v.NAMA_BRAND || "").trim(),
             namaBarang: String(v.NAMA_BARANG || "").trim(),
             kategori: String(v.KATEGORI_BRAND || "").trim(),
-            status,
           });
         });
       });
-
-      console.log("🔥 STOK DARI TOKO/TRANSAKSI:", rows);
+  
       setInventory(rows);
     });
   }, []);
-
+  
+  
 
   useEffect(() => {
     const barangRef = ref(db, "dataManagement/masterBarang");
-  
+
     onValue(barangRef, (snap) => {
       const data = snap.val() || {};
       const arr = Object.entries(data).map(([id, v]) => ({
@@ -164,10 +165,9 @@ export default function TransferBarang() {
       }));
       setMasterBarang(arr);
     });
-  
+
     return () => off(barangRef);
   }, []);
-  
 
   // ================= DARI NOTIFIKASI NAVBAR =================
   useEffect(() => {
@@ -184,31 +184,32 @@ export default function TransferBarang() {
   }, [location.state]);
 
   /* ================= MASTER DATA ================= */
+  /* ================= MASTER DATA ================= */
   useEffect(() => {
     listenMasterToko(setMasterToko);
     listenMasterKategoriBarang(setMasterKategori);
     listenMasterBarang(setMasterBarang);
     FirebaseService.listenTransferRequests(setHistory);
 
-    listenMasterSales((data) => {
-      setMasterSales(Array.isArray(data) ? data : []);
+    // 🔥 MASTER KARYAWAN (NAMA PENGIRIM)
+    const unsubKaryawan = listenKaryawan((data) => {
+      setMasterKaryawan(Array.isArray(data) ? data : []);
     });
+
+    return () => {
+      unsubKaryawan && unsubKaryawan();
+    };
   }, []);
 
   /* ================= ROLE ================= */
   useEffect(() => {
     const login = JSON.parse(localStorage.getItem("user") || "{}");
-  
+
     const roleFromLogin =
-      login.role ||
-      login.roleDb ||
-      login.level ||
-      login.tipe ||
-      "user";
-  
+      login.role || login.roleDb || login.level || login.tipe || "user";
+
     setCurrentRole(String(roleFromLogin).toLowerCase());
   }, []);
-  
 
   /* ================= OPTIONS ================= */
   const TOKO_OPTIONS = useMemo(() => {
@@ -217,18 +218,9 @@ export default function TransferBarang() {
       .filter(Boolean);
   }, [masterToko]);
 
-  const salesPengirimOptions = useMemo(() => {
-    if (!form.tokoPengirim) return [];
-
-    return masterSales
-      .filter((s) => s.namaToko === form.tokoPengirim)
-      .map((s) => s.namaSales)
-      .filter(Boolean);
-  }, [masterSales, form.tokoPengirim]);
-
   const brandOptions = useMemo(() => {
     if (!form.kategori) return [];
-  
+
     // ✅ KHUSUS ACCESSORIES → dari MASTER BARANG
     if (form.kategori === "ACCESSORIES") {
       return [
@@ -245,10 +237,10 @@ export default function TransferBarang() {
         ),
       ];
     }
-  
+
     // 🔁 selain accessories → pakai inventory lama
     if (!form.tokoPengirim) return [];
-  
+
     return [
       ...new Set(
         inventory
@@ -263,13 +255,11 @@ export default function TransferBarang() {
       ),
     ];
   }, [inventory, masterBarang, form.tokoPengirim, form.kategori]);
-  
-
 
   // ================= BARANG OPTIONS (DARI STOK TOKO) =================
   const barangOptions = useMemo(() => {
     if (!form.kategori || !form.brand) return [];
-  
+
     // ✅ KHUSUS ACCESSORIES → dari MASTER BARANG
     if (form.kategori === "ACCESSORIES") {
       return [
@@ -279,18 +269,17 @@ export default function TransferBarang() {
               (b) =>
                 String(b.kategoriBarang || "")
                   .toUpperCase()
-                  .trim() === "ACCESSORIES" &&
-                b.brand === form.brand
+                  .trim() === "ACCESSORIES" && b.brand === form.brand
             )
             .map((b) => b.namaBarang)
             .filter(Boolean)
         ),
       ];
     }
-  
+
     // 🔁 selain accessories → pakai inventory lama
     if (!form.tokoPengirim) return [];
-  
+
     return [
       ...new Set(
         inventory
@@ -306,7 +295,7 @@ export default function TransferBarang() {
       ),
     ];
   }, [inventory, masterBarang, form.tokoPengirim, form.kategori, form.brand]);
-  
+
   // ================= CEK FORM SUDAH LENGKAP =================
   const isFormComplete =
     form.tokoPengirim &&
@@ -322,40 +311,12 @@ export default function TransferBarang() {
     return inventory
       .filter(
         (i) =>
-          i.status === "AVAILABLE" &&
+          i.status === "AVAILABLE" && // 🔥 hanya yang belum terjual
           i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
           i.namaBarang.toUpperCase() === form.barang.toUpperCase()
       )
       .map((i) => i.imei);
   }, [inventory, form.tokoPengirim, form.barang]);
-
-  // ================= SEARCH IMEI (ENTER → AUTO ISI FORM) =================
-  const handleSearchByImei = () => {
-    const im = imeiSearch?.trim();
-    if (!im) return;
-
-    // Cari IMEI di inventory (sumber stok dari toko/transaksi)
-    const found = inventory.find((i) => String(i.imei) === String(im));
-
-    if (!found) {
-      alert("❌ IMEI tidak tersedia di stok");
-      return;
-    }
-
-    // Auto isi form berdasarkan IMEI
-    setForm((f) => ({
-      ...f,
-      tokoPengirim: found.toko,
-      dari: found.toko,
-      brand: found.namaBrand,
-      barang: found.namaBarang,
-      kategori: found.kategori,
-      imeis: f.imeis.includes(found.imei) ? f.imeis : [...f.imeis, found.imei],
-      qty: (f.imeis?.length || 0) + 1,
-    }));
-
-    setImeiSearch("");
-  };
 
   /* ================= IMEI ================= */
   const addImei = () => {
@@ -415,18 +376,38 @@ export default function TransferBarang() {
     setForm((f) => ({ ...f, imeis: next, qty: next.length }));
   };
 
+  const transferValidList = history.filter((item) => item.status !== "TERJUAL");
+
+  // ================= VALIDASI IMEI SEBELUM MASUK FORM =================
+  const validateImeiBeforeAdd = (im) => {
+    if (!im) return false;
+
+    const found = inventory.find(
+      (i) => String(i.imei).trim() === String(im).trim()
+    );
+
+    console.log("IMEI dicari:", im, "FOUND:", found);
+
+    if (!found) {
+      alert("❌ No IMEI tidak ditemukan di stok");
+      return false;
+    }
+
+    if (found.status !== "AVAILABLE") {
+      alert("❌ No IMEI sudah TERJUAL dan STOCK TIDAK TERSEDIA");
+      return false;
+    }
+
+    return true;
+  };
+
   const handleAddImeiAuto = () => {
     const im = imeiSearch.trim();
     if (!im) return;
 
-    const found = inventory.find(
-      (i) => i.imei === im && i.status === "AVAILABLE"
-    );
+    if (!validateImeiBeforeAdd(im)) return;
 
-    if (!found) {
-      alert("❌ IMEI tidak tersedia di stok");
-      return;
-    }
+    const found = inventory.find((i) => i.imei === im);
 
     setForm((f) => {
       if (f.imeis.includes(found.imei)) return f;
@@ -443,9 +424,58 @@ export default function TransferBarang() {
       };
     });
 
+    console.log("IMEI SEARCH:", imeiSearch);
+    console.log("INVENTORY:", inventory);
     setImeiSearch("");
   };
 
+  const handleSearchByImei = () => {
+    const im = String(imeiSearch || "").trim();
+    if (!im) return;
+  
+    const found = inventory.find(
+      (i) => String(i.imei).trim() === im
+    );
+  
+    console.log("IMEI dicari:", im, "FOUND:", found);
+  
+    // ❌ tidak ada di stok
+    if (!found) {
+      alert("❌ No IMEI tidak ditemukan di stok");
+      return;
+    }
+  
+    // ❌ SOLD permanen
+    if (found.status === "SOLD") {
+      alert("❌ No IMEI sudah TERJUAL dan STOCK TIDAK TERSEDIA");
+      return;
+    }
+  
+    // ❌ bukan AVAILABLE
+    if (found.status !== "AVAILABLE") {
+      alert("❌ No IMEI tidak tersedia untuk transfer");
+      return;
+    }
+  
+    // ✅ otomatis isi form
+    setForm((f) => {
+      if (f.imeis.includes(found.imei)) return f;
+  
+      return {
+        ...f,
+        tokoPengirim: found.toko,
+        dari: found.toko,
+        brand: found.namaBrand,
+        barang: found.namaBarang,
+        kategori: found.kategori,
+        imeis: [...f.imeis, found.imei],
+        qty: (f.imeis?.length || 0) + 1,
+      };
+    });
+  
+    setImeiSearch("");
+  };
+  
   // ================= FILTER HISTORY (FIX ERROR) =================
   const filteredHistory = useMemo(() => {
     if (!Array.isArray(history)) return [];
@@ -484,6 +514,7 @@ export default function TransferBarang() {
   };
 
   // ================= SUBMIT TRANSFER (FINAL 100%) =================
+  // ================= SUBMIT TRANSFER (FIX 100%) =================
   const submitTransfer = async () => {
     const error = validateForm();
     if (error) {
@@ -491,6 +522,33 @@ export default function TransferBarang() {
       return;
     }
 
+    // ❌ CEK BARANG ADA STOK ATAU TIDAK
+    const stokBarang = inventory.filter(
+      (i) =>
+        i.status === "AVAILABLE" &&
+        i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
+        i.namaBarang.toUpperCase() === form.barang.toUpperCase()
+    );
+
+    if (stokBarang.length === 0) {
+      alert("❌ Barang tidak tersedia di stok");
+      return; // ⛔ STOP SUBMIT
+    }
+
+    // 🔥 CEK IMEI TERJUAL / TIDAK TERSEDIA
+    const invalidImeis = form.imeis.filter((im) => {
+      const found = inventory.find((i) => i.imei === im);
+      if (!found) return true;
+      if (found.status === "SOLD") return true;
+      if (found.status !== "AVAILABLE") return true;
+      return false;
+    });
+    
+    if (invalidImeis.length > 0) {
+      alert("❌ No IMEI sudah TERJUAL dan STOCK TIDAK TERSEDIA:\n\n" + invalidImeis.join(", "));
+      return;
+    }
+    
     try {
       const payload = {
         ...form,
@@ -498,7 +556,7 @@ export default function TransferBarang() {
         createdAt: Date.now(),
       };
 
-      // 🔥 SIMPAN KE NODE YANG DIBACA TABLE
+      // 🚫 BARU BOLEH PUSH SETELAH VALIDASI LOLOS
       const transferRef = push(ref(db, "transfer_barang"));
       const newTransferId = transferRef.key;
 
@@ -516,9 +574,8 @@ export default function TransferBarang() {
         });
       }
 
-      // 🔥 KURANGI STOK TOKO PENGIRIM (LANGSUNG HILANG)
+      // 🔥 UPDATE INVENTORY → OUT
       for (const imei of form.imeis) {
-        // tandai IMEI keluar dari toko pengirim
         await update(ref(db, `inventory/${form.tokoPengirim}/${imei}`), {
           STATUS: "OUT",
           TRANSFER_ID: newTransferId,
@@ -530,7 +587,7 @@ export default function TransferBarang() {
       setForm(initialForm);
     } catch (err) {
       console.error(err);
-      alert("❌ Gagal membuat transfer");
+      alert("❌ Gagal transfer barang");
     }
   };
 
@@ -548,7 +605,12 @@ export default function TransferBarang() {
             placeholder="🔍 Cari / Input IMEI lalu Enter..."
             value={imeiSearch}
             onChange={(e) => setImeiSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearchByImei()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSearchByImei(); // 🔥 pakai function di atas
+              }
+            }}
             className="
         w-full px-4 py-2 rounded-xl
         bg-white/90 backdrop-blur
@@ -582,7 +644,7 @@ export default function TransferBarang() {
             <input className="input" value={form.noSuratJalan} readOnly />{" "}
           </div>
 
-          {/* NAMA PENGIRIM */}
+          {/* NAMA PENGIRIM (DARI MASTER KARYAWAN) */}
           <div>
             <label className="text-xs font-semibold">Nama Pengirim</label>
             <input
@@ -590,11 +652,11 @@ export default function TransferBarang() {
               value={form.pengirim}
               onChange={(e) => setForm({ ...form, pengirim: e.target.value })}
               className="input"
-              placeholder="Nama Pengirim"
+              placeholder="Pilih Karyawan"
             />
             <datalist id="pengirim-list">
-              {salesPengirimOptions.map((nama) => (
-                <option key={nama} value={nama} />
+              {masterKaryawan.map((k) => (
+                <option key={k.id} value={k.NAMA || ""} />
               ))}
             </datalist>
           </div>

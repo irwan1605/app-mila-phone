@@ -22,46 +22,105 @@ export default function SummaryTransferReport() {
     status: "",
   });
 
+  const [inventory, setInventory] = useState([]);
+  
+
   /* PAGINATION */
   const [page, setPage] = useState(1);
   const limit = 10;
 
   /* ================= LOAD DATA REALTIME ================= */
   useEffect(() => {
-    return onValue(ref(db, "transfer_barang"), (snap) => {
-      const arr = [];
-
-      snap.forEach((c) => {
-        const val = c.val();
-        if (val && typeof val === "object") {
-          arr.push({
-            id: c.key,
-            ...val,
-          });
-        }
+    return onValue(ref(db, "toko"), (snap) => {
+      const map = {}; // key = imei
+  
+      snap.forEach((tokoSnap) => {
+        const trxSnap = tokoSnap.child("transaksi");
+        if (!trxSnap.exists()) return;
+  
+        trxSnap.forEach((trx) => {
+          const v = trx.val();
+          if (!v.IMEI) return;
+  
+          const imei = String(v.IMEI).trim();
+          const metode = String(v.PAYMENT_METODE || "").toUpperCase();
+  
+          // DEFAULT
+          if (!map[imei]) {
+            map[imei] = { imei, status: "AVAILABLE" };
+          }
+  
+          // RULE MUTLAK
+          if (metode === "PENJUALAN") {
+            map[imei].status = "SOLD";   // 🔥 PALING KUAT
+          } else if (metode === "TRANSFER_KELUAR") {
+            if (map[imei].status !== "SOLD") map[imei].status = "OUT";
+          } else if (metode === "TRANSFER_MASUK") {
+            if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
+          }
+        });
       });
-
-      setRows(arr.reverse()); // terbaru di atas
+  
+      setInventory(Object.values(map));
     });
   }, []);
+  
+
+  // ================= LOAD INVENTORY =================
+  useEffect(() => {
+    return onValue(ref(db, "toko"), (snap) => {
+      const rows = [];
+  
+      snap.forEach((tokoSnap) => {
+        const trxSnap = tokoSnap.child("transaksi");
+        if (!trxSnap.exists()) return;
+  
+        trxSnap.forEach((trx) => {
+          const v = trx.val();
+          if (!v.IMEI) return;
+  
+          const metode = String(v.PAYMENT_METODE || "").toUpperCase();
+          let status = "AVAILABLE";
+          if (metode === "PENJUALAN") status = "OUT";
+  
+          rows.push({ imei: String(v.IMEI).trim(), status });
+        });
+      });
+  
+      setInventory(rows);
+    });
+  }, []);
+  
+
 
   /* ================= FLATTEN ================= */
   const tableRows = useMemo(() => {
-    return rows.map((trx) => ({
-      id: trx.id,
-      tanggal: trx.tanggal || trx.createdAt,
-      noDO: trx.noDo || "-",
-      noSuratJalan: trx.noSuratJalan || "-",
-      tokoAsal: trx.tokoPengirim || "-",
-      tokoTujuan: trx.ke || "-",
-      kategori: trx.kategori || "-",
-      brand: trx.brand || "-",
-      barang: trx.barang || "-",
-      imei: Array.isArray(trx.imeis) ? trx.imeis.join(", ") : "-",
-      qty: trx.qty || 0,
-      status: trx.status || "Pending",
-    }));
-  }, [rows]);
+    return rows
+      .filter((trx) => {
+        if (!Array.isArray(trx.imeis)) return false;
+  
+        return trx.imeis.every((im) => {
+          const found = inventory.find((i) => i.imei === im);
+          return found && found.status === "AVAILABLE";
+        });
+      })
+      .map((trx) => ({
+        id: trx.id,
+        tanggal: trx.tanggal || trx.createdAt,
+        noDO: trx.noDo || "-",
+        noSuratJalan: trx.noSuratJalan || "-",
+        tokoAsal: trx.tokoPengirim || "-",
+        tokoTujuan: trx.ke || "-",
+        brand: trx.brand || "-",
+        barang: trx.barang || "-",
+        imei: trx.imeis.join(", "),
+        qty: trx.qty || 0,
+        status: trx.status || "Pending",
+      }));
+  }, [rows, inventory]);
+  
+  
+  
 
   /* ================= FILTER ================= */
   const filtered = useMemo(() => {
