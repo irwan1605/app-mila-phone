@@ -471,56 +471,65 @@ export default function TablePenjualan() {
   };
 
   /* ================= EXPORT EXCEL ================= */
-  /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {
     const data = tableRows.map((r, i) => ({
       No: i + 1,
-      Tanggal: new Date(r.tanggal).toLocaleDateString("id-ID"),
+      Tanggal: r.tanggal
+        ? new Date(r.tanggal).toLocaleDateString("id-ID")
+        : "-",
       Invoice: r.invoice,
       Toko: r.toko,
       Pelanggan: r.pelanggan,
       Telp: r.telp,
       StoreHead: r.storeHead,
       Sales: r.sales,
-      salesHandle: r.salesHandle,
+      SalesHandle: r.salesHandle,
+  
       Kategori: r.kategoriBarang,
       Brand: r.namaBrand,
       Barang: r.namaBarang,
-
       IMEI: r.imei,
       QTY: r.qty,
-
-      HargaSRP: r.hargaSRP || 0, // ✅ FIX
-      HargaGrosir: r.hargaGrosir || 0, // ✅ FIX
-      HargaReseller: r.hargaReseller || 0, // ✅ FIX
-
+  
+      HargaSRP: r.hargaSRP || 0,
+      HargaGrosir: r.hargaGrosir || 0,
+      HargaReseller: r.hargaReseller || 0,
+  
       StatusBayar: r.statusBayar,
-      namaBank : r.namaBank,
-      nominalPaymentMetode : r.nominalPaymentMetode,
-      TukarTambah: r.payment?.splitPayment?.some(
-        (p) => p.metode === "TUKAR TAMBAH"
-      )
-        ? "YA"
-        : "-",
-      MDR: r.namaMdr,
-      NominalMDR: r.nominalMdr,
-      Tenor: r.tenor,
-      Keterangan: r.keterangan,
-      GrandTotal: r.grandTotal,
+  
+      // 🔥 PAYMENT
+      PaymentMetode: r.paymentMetode || "-",
+      NamaBank: r.namaBank || "-",
+      NominalPayment: r.nominalPaymentMetode || 0,
+  
+      // 🔥 MDR & DP
+      NamaMDR: r.namaMdr || "-",
+      NominalMDR: r.nominalMdr || 0,
+      DPTalangan: r.dpTalangan || 0,
+  
+      PaymentKredit: r.paymentKredit || "-",
+      Tenor: r.tenor || "-",
+  
+      Keterangan: r.keterangan || "-",
+      GrandTotal: r.grandTotal || 0,
       Status: r.status,
     }));
-
+  
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Penjualan");
-
+  
     const excelBuffer = XLSX.write(wb, {
       bookType: "xlsx",
       type: "array",
     });
-
-    saveAs(new Blob([excelBuffer]), `Laporan_Penjualan_${Date.now()}.xlsx`);
+  
+    saveAs(
+      new Blob([excelBuffer]),
+      `Laporan_Penjualan_${Date.now()}.xlsx`
+    );
   };
+  
 
   /* ================= RENDER ================= */
   return (
