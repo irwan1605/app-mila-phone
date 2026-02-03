@@ -118,59 +118,78 @@ export default function TablePenjualan() {
   /* ================= FLATTEN DATA ================= */
   const tableRows = useMemo(() => {
     const result = [];
-
+  
     (rows || []).forEach((trx) => {
       if (!Array.isArray(trx.items)) return;
-
+  
       trx.items.forEach((item) => {
+        /* ================= PAYMENT METODE ================= */
+        let paymentMetode = "-";
+        let namaBank = "-";
+        let nominalPaymentMetode = 0;
+  
+        // ✅ PRIORITAS: splitPayment
+        if (Array.isArray(trx.payment?.splitPayment) && trx.payment.splitPayment.length) {
+          paymentMetode = trx.payment.splitPayment
+            .map((p) => p.metode)
+            .join(" + ");
+  
+          namaBank = trx.payment.splitPayment
+            .map((p) => p.bankNama || "-")
+            .join(" + ");
+  
+          nominalPaymentMetode = trx.payment.splitPayment.reduce(
+            (s, p) => s + Number(p.nominal || 0),
+            0
+          );
+        } else {
+          // ✅ FALLBACK: single payment
+          paymentMetode = trx.payment?.metode || trx.payment?.status || "-";
+          namaBank = trx.payment?.bankNama || trx.payment?.namaBank || "-";
+          nominalPaymentMetode =
+            Number(trx.payment?.nominalPayment || 0) ||
+            Number(trx.payment?.nominal || 0) ||
+            0;
+        }
+  
         result.push({
           id: trx.id,
           tanggal: trx.tanggal || trx.createdAt,
           invoice: trx.invoice,
           toko: trx.toko || "-",
           keterangan: trx.payment?.keterangan || "-",
-
+  
           pelanggan: trx.user?.namaPelanggan || "-",
           telp: trx.user?.noTlpPelanggan || "-",
           storeHead: trx.user?.storeHead || "-",
           sales: trx.user?.namaSales || "-",
-
           salesHandle: trx.user?.salesHandle || "-",
-
-          namaBank: trx.payment?.bankNama || trx.payment?.namaBank || "-",
-          
-          nominalPaymentMetode:
-            Number(trx.payment?.nominalPayment || 0) ||
-            Number(trx.payment?.nominal || 0) ||
-            0,
-
+  
+          /* 🔥 FIXED PAYMENT FIELD */
+          paymentMetode,
+          namaBank,
+          nominalPaymentMetode,
+  
           namaMdr: trx.payment?.namaMdr || "-",
-          dpTalangan: Number(trx.payment?.dpTalangan || trx.dpTalangan || 0),
+          dpTalangan: Number(trx.payment?.dpTalangan || 0),
           paymentKredit: trx.payment?.status === "PIUTANG" ? "KREDIT" : "LUNAS",
-
+  
           kategoriBarang: item.kategoriBarang || "-",
           namaBrand: item.namaBrand || "-",
           namaBarang: item.namaBarang || "-",
-
+  
           imei: Array.isArray(item.imeiList) ? item.imeiList.join(", ") : "-",
-
           qty: Number(item.qty || 0),
-
-          // 🔥 HARGA SESUAI SKEMA PILIHAN
-          hargaSRP:
-            item.skemaHarga === "srp" ? Number(item.hargaAktif || 0) : 0,
-
-          hargaGrosir:
-            item.skemaHarga === "grosir" ? Number(item.hargaAktif || 0) : 0,
-
-          hargaReseller:
-            item.skemaHarga === "reseller" ? Number(item.hargaAktif || 0) : 0,
-
+  
+          hargaSRP: item.skemaHarga === "srp" ? Number(item.hargaAktif || 0) : 0,
+          hargaGrosir: item.skemaHarga === "grosir" ? Number(item.hargaAktif || 0) : 0,
+          hargaReseller: item.skemaHarga === "reseller" ? Number(item.hargaAktif || 0) : 0,
+  
           statusBayar: trx.payment?.status || "-",
-
           nominalMdr: trx.payment?.nominalMdr || 0,
           tenor: trx.payment?.tenor || "-",
           cicilan: trx.payment?.cicilan || 0,
+  
           grandTotal:
             Number(trx.payment?.grandTotal || 0) > 0
               ? Number(trx.payment.grandTotal)
@@ -179,14 +198,15 @@ export default function TablePenjualan() {
                     s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
                   0
                 ) + Number(trx.payment?.nominalMdr || 0),
-
+  
           status: trx.statusPembayaran || "OK",
         });
       });
     });
-
+  
     return result;
   }, [rows]);
+  
 
   /* ================= FILTER ================= */
   const filteredRows = useMemo(() => {
@@ -211,10 +231,13 @@ export default function TablePenjualan() {
       ${r.toko}
       ${r.pelanggan}
       ${r.sales}
+      ${r.salesHandle}
       ${r.kategoriBarang}
       ${r.namaBrand}
       ${r.namaBarang}
       ${r.imei}
+      ${r.namaBank}
+      ${r.nominalPaymentMetode}
     `.toLowerCase();
 
       const matchText = text.includes(keyword.toLowerCase());
@@ -459,6 +482,7 @@ export default function TablePenjualan() {
       Telp: r.telp,
       StoreHead: r.storeHead,
       Sales: r.sales,
+      salesHandle: r.salesHandle,
       Kategori: r.kategoriBarang,
       Brand: r.namaBrand,
       Barang: r.namaBarang,
@@ -471,6 +495,8 @@ export default function TablePenjualan() {
       HargaReseller: r.hargaReseller || 0, // ✅ FIX
 
       StatusBayar: r.statusBayar,
+      namaBank : r.namaBank,
+      nominalPaymentMetode : r.nominalPaymentMetode,
       TukarTambah: r.payment?.splitPayment?.some(
         (p) => p.metode === "TUKAR TAMBAH"
       )
@@ -569,7 +595,7 @@ export default function TablePenjualan() {
                 Nama Store Head
               </th>
               <th className="px-3 py-2 border border-gray-400">Nama Sales</th>
-              <th className="px-3 py-2 border border-gray-400">Sales Handel</th>
+              <th className="px-3 py-2 border border-gray-400">Sales Handle</th>
 
               <th className="px-3 py-2 border border-gray-400">Kategori</th>
               <th className="px-3 py-2 border border-gray-400">Brand</th>
@@ -634,21 +660,39 @@ export default function TablePenjualan() {
                 <td className="px-3 py-2 border border-gray-300">
                   {row.storeHead}{" "}
                 </td>
-                <td className="px-3 py-2 border border-gray-300">{row.sales}</td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.sales}
+                </td>
                 {/* 🔥 SALES HANDEL */}
                 <td className="px-3 py-2 border border-gray-300">
                   {row.salesHandle || "-"}
                 </td>
-                <td className="px-3 py-2 border border-gray-300">{row.kategoriBarang}</td>
-                <td className="px-3 py-2 border border-gray-300">{row.namaBrand}</td>
-                <td className="px-3 py-2 border border-gray-300">{row.namaBarang}</td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.kategoriBarang}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.namaBrand}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.namaBarang}
+                </td>
                 <td className="px-3 py-2 border border-gray-300">{row.imei}</td>
                 <td className="px-3 py-2 border border-gray-300">{row.qty}</td>
-                <td className="px-3 py-2 border border-gray-300">{rupiah(row.hargaSRP)}</td>
-                <td className="px-3 py-2 border border-gray-300">{rupiah(row.hargaGrosir)}</td>
-                <td className="px-3 py-2 border border-gray-300">{rupiah(row.hargaReseller)}</td>
-                <td className="px-3 py-2 border border-gray-300">{row.statusBayar}</td>
-                <td className="px-3 py-2 border border-gray-300">{row.paymentMetode}</td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {rupiah(row.hargaSRP)}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {rupiah(row.hargaGrosir)}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {rupiah(row.hargaReseller)}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.statusBayar}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.paymentMetode}
+                </td>
                 {/* 🔥 NAMA BANK */}
                 <td className="px-3 py-2 border border-gray-300">
                   {row.namaBank || "-"}
@@ -657,12 +701,24 @@ export default function TablePenjualan() {
                 <td className="px-3 py-2 border border-gray-300 text-right font-medium">
                   {rupiah(row.nominalPaymentMetode || 0)}
                 </td>
-                <td className="px-3 py-2 border border-gray-300">{rupiah(row.dpTalangan)}</td>
-                <td className="px-3 py-2 border border-gray-300">{row.namaMdr}</td>
-                <td className="px-3 py-2 border border-gray-300">{rupiah(row.nominalMdr)}</td>
-                <td className="px-3 py-2 border border-gray-300">{row.paymentKredit}</td>
-                <td className="px-3 py-2 border border-gray-300">{row.tenor}</td>
-                <td className="px-3 py-2 border border-gray-300">{row.keterangan}</td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {rupiah(row.dpTalangan)}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.namaMdr}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {rupiah(row.nominalMdr)}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.paymentKredit}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.tenor}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.keterangan}
+                </td>
 
                 <td className="px-3 py-2 border border-gray-300 text-right font-medium">
                   {rupiah(row.grandTotal)}
@@ -833,6 +889,18 @@ export default function TablePenjualan() {
                   setEditData({
                     ...editData,
                     user: { ...editData.user, namaSales: e.target.value },
+                  })
+                }
+                className="border p-2"
+                placeholder="Nama Sales"
+              />
+
+              <salesHandle
+                value={editData.user?.namaSales || ""}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    user: { ...editData.user, salesHandle: e.target.value },
                   })
                 }
                 className="border p-2"
