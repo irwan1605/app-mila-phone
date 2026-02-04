@@ -401,13 +401,43 @@ export default function TransferBarang() {
     return true;
   };
 
+  const isImeiAlreadyTransferred = (imei) => {
+    const found = inventory.find((i) => i.imei === imei);
+    if (!found) return true; // tidak ada di stok
+  
+    return found.status !== "AVAILABLE"; // kalau bukan AVAILABLE = sudah keluar
+  };
+  
+  
+
   const handleAddImeiAuto = () => {
     const im = imeiSearch.trim();
     if (!im) return;
 
+    
+  if (isImeiAlreadyTransferred(im)) {
+    alert("❌ IMEI ini sudah pernah ditransfer / terjual!");
+    setImeiSearch("");
+    return;
+  }
+
     if (!validateImeiBeforeAdd(im)) return;
 
-    const found = inventory.find((i) => i.imei === im);
+    const found = inventory.find(
+      (i) => i.imei === im && i.status === "AVAILABLE"
+    );
+  
+    if (!found) {
+      alert("❌ IMEI tidak tersedia di stok");
+      return;
+    }
+  
+    // 🚫 CEGAH DUPLIKAT DI FORM
+    if (form.imeis.includes(found.imei)) {
+      alert("⚠️ IMEI ini sudah ditambahkan!");
+      setImeiSearch("");
+      return;
+    }
 
     setForm((f) => {
       if (f.imeis.includes(found.imei)) return f;

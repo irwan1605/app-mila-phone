@@ -1936,6 +1936,9 @@ export const approveTransferFINAL = async ({ transfer }) => {
   // ✅ pastikan imeis selalu array
   const safeImeis = Array.isArray(transfer.imeis) ? transfer.imeis : [];
 
+  // ===============================
+  // 1. SIMPAN SURAT JALAN
+  // ===============================
   await update(sjRef, {
     noSuratJalan: transfer.noSuratJalan,
     tanggal: transfer.tanggal,
@@ -1944,8 +1947,6 @@ export const approveTransferFINAL = async ({ transfer }) => {
     pengirim: transfer.pengirim,
     barang: transfer.barang,
     qty: Number(transfer.qty || safeImeis.length || 1),
-
-    // 🔥 FIX UTAMA
     imeis: safeImeis,
   });
 
@@ -1965,22 +1966,14 @@ export const approveTransferFINAL = async ({ transfer }) => {
   const approvedAt = Date.now();
 
   // ===============================
-  // 1. UPDATE STATUS TRANSFER
-  // ===============================
-  await update(ref(db, `transfer_barang/${id}`), {
-    status: "Approved",
-    suratJalanId: sjRef.key,
-    approvedAt,
-  });
-
-  // ===============================
   // 2. TRANSAKSI STOK
   // ===============================
 
   // 🔹 KASUS BARANG PAKAI IMEI
   if (safeImeis.length > 0) {
     for (const imei of safeImeis) {
-      // 🔻 STOK KELUAR (PENGIRIM)
+
+      // 🔻 TRANSFER KELUAR (TOKO ASAL)
       await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
         NO_INVOICE: noDo,
@@ -2000,10 +1993,10 @@ export const approveTransferFINAL = async ({ transfer }) => {
         CREATED_AT: approvedAt,
       });
 
-      // 🔺 STOK MASUK (TUJUAN)
+      // 🔺 TRANSFER MASUK (TOKO TUJUAN)  ⭐ INI YANG PENTING
       await push(ref(db, `toko/${ke}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
-        NO_INVOICE: noDo,
+        NO_INVOICE: noSuratJalan, // pakai SJ agar unik
         NO_SURAT_JALAN: noSuratJalan,
         NAMA_TOKO: ke,
 
@@ -2024,7 +2017,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
     // 🔹 KASUS BARANG NON-IMEI (ACCESSORIES / QTY)
     const safeQty = Number(qty || 1);
 
-    // 🔻 STOK KELUAR
+    // 🔻 TRANSFER KELUAR
     await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
       TANGGAL_TRANSAKSI: tanggal,
       NO_INVOICE: noDo,
@@ -2044,10 +2037,10 @@ export const approveTransferFINAL = async ({ transfer }) => {
       CREATED_AT: approvedAt,
     });
 
-    // 🔺 STOK MASUK
+    // 🔺 TRANSFER MASUK
     await push(ref(db, `toko/${ke}/transaksi`), {
       TANGGAL_TRANSAKSI: tanggal,
-      NO_INVOICE: noDo,
+      NO_INVOICE: noSuratJalan,
       NO_SURAT_JALAN: noSuratJalan,
       NAMA_TOKO: ke,
 
@@ -2065,8 +2058,18 @@ export const approveTransferFINAL = async ({ transfer }) => {
     });
   }
 
+  // ===============================
+  // 3. UPDATE STATUS TRANSFER
+  // ===============================
+  await update(ref(db, `transfer_barang/${id}`), {
+    status: "Approved",
+    suratJalanId: sjRef.key,
+    approvedAt,
+  });
+
   return noSuratJalan;
 };
+
 
 
 export const editTransferFINAL = async (id, data) => {

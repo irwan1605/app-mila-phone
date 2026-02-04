@@ -23,90 +23,117 @@ export default function SummaryTransferReport() {
   });
 
   const [inventory, setInventory] = useState([]);
-  
 
   /* PAGINATION */
   const [page, setPage] = useState(1);
   const limit = 10;
 
-  /* ================= LOAD DATA REALTIME ================= */
+  /* ================= LOAD TRANSFER ================= */
   useEffect(() => {
     return onValue(ref(db, "transfer_barang"), (snap) => {
       const arr = [];
 
       snap.forEach((c) => {
         const val = c.val();
-        if (val && typeof val === "object") {
-          arr.push({
-            id: c.key,
-            ...val,
-          });
-        }
+        if (!val || typeof val !== "object") return;
+
+        const imeis = Array.isArray(val.imeis) ? val.imeis : [];
+
+        // 🚫 HAPUS DUPLIKAT IMEI DALAM 1 TRANSFER
+        const uniqueImeis = [...new Set(imeis.map((i) => String(i).trim()))];
+
+        arr.push({
+          id: c.key,
+          ...val,
+          imeis: uniqueImeis,
+          qty: uniqueImeis.length,
+        });
       });
 
-      setRows(arr.reverse()); // terbaru di atas
+      setRows(arr.reverse());
     });
   }, []);
 
-  // ================= LOAD INVENTORY =================
+  /* ================= LOAD INVENTORY (SAMA DENGAN TableTransferBarang.jsx) ================= */
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {
-      const rows = [];
-  
+      const map = {}; // key = imei
+
       snap.forEach((tokoSnap) => {
         const trxSnap = tokoSnap.child("transaksi");
         if (!trxSnap.exists()) return;
-  
+
         trxSnap.forEach((trx) => {
           const v = trx.val();
           if (!v.IMEI) return;
-  
+
+          const imei = String(v.IMEI).trim();
           const metode = String(v.PAYMENT_METODE || "").toUpperCase();
-          let status = "AVAILABLE";
-          if (metode === "PENJUALAN") status = "OUT";
-  
-          rows.push({ imei: String(v.IMEI).trim(), status });
+
+          if (!map[imei]) {
+            map[imei] = { imei, status: "AVAILABLE" };
+          }
+
+          // 🔥 RULE MUTLAK (sinkron dengan TableTransferBarang.jsx)
+          if (metode === "PENJUALAN") {
+            map[imei].status = "SOLD"; // PALING KUAT
+          } else if (metode === "TRANSFER_KELUAR") {
+            if (map[imei].status !== "SOLD") map[imei].status = "OUT";
+          } else if (metode === "TRANSFER_MASUK") {
+            if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
+          }
         });
       });
-  
-      setInventory(rows);
+
+      setInventory(Object.values(map));
     });
   }, []);
-  
 
+  /* ================= BUILD TABLE ROWS ================= */
+  const tableRows = useMemo(() => {
+    const usedImeis = new Set(); // 🔥 blok duplikat global
 
-  /* ================= FLATTEN ================= */
- const tableRows = useMemo(() => {
-  return rows
-    .filter((trx) => {
-      if (!Array.isArray(trx.imeis)) return false;
+    return rows
+      .filter((trx) => {
+        if (!Array.isArray(trx.imeis)) return false;
 
-      return trx.imeis.every((im) => {
-        const found = inventory.find(
-          (i) => String(i.imei).trim() === String(im).trim()
-        );
-        if (!found) return false;
-        if (found.status !== "AVAILABLE") return false;
+        // 🚫 BLOK DUPLIKAT GLOBAL
+        for (const im of trx.imeis) {
+          const norm = String(im).trim();
+          if (usedImeis.has(norm)) return false;
+        }
+
+        // 🚫 BLOK IMEI SOLD / OUT (hanya AVAILABLE boleh lolos)
+        const allValid = trx.imeis.every((im) => {
+          const found = inventory.find(
+            (i) => String(i.imei).trim() === String(im).trim()
+          );
+          if (!found) return false;
+          return found.status === "AVAILABLE";
+        });
+
+        if (!allValid) return false;
+
+        // ✔ TANDAI SEBAGAI SUDAH DIPAKAI
+        trx.imeis.forEach((im) => usedImeis.add(String(im).trim()));
+
         return true;
-      });
-    })
-    .map((trx) => ({
-      id: trx.id,
-      tanggal: trx.tanggal || trx.createdAt,
-      noDO: trx.noDo || "-",
-      noSuratJalan: trx.noSuratJalan || "-",
-      tokoAsal: trx.tokoPengirim || "-",
-      tokoTujuan: trx.ke || "-",
-      brand: trx.brand || "-",
-      barang: trx.barang || "-",
-      imei: trx.imeis.join(", "),
-      qty: trx.qty || 0,
-      status: trx.status || "Pending",
-    }));
-}, [rows, inventory]);
-
-  
-  
+      })
+      .map((trx) => ({
+        id: trx.id,
+        tanggal: trx.tanggal || trx.createdAt,
+        noDO: trx.noDo || "-",
+        noSuratJalan: trx.noSuratJalan || "-",
+        tokoAsal: trx.tokoPengirim || "-",
+        tokoTujuan: trx.ke || "-",
+        brand: trx.brand || "-",
+        barang: trx.barang || "-",
+        imei: trx.imeis.join(", "),
+        qty: trx.qty || trx.imeis.length,
+        status: trx.status || "Pending",
+        suratJalanId: trx.suratJalanId,
+      }));
+  }, [rows, inventory]);
 
   /* ================= FILTER ================= */
   const filtered = useMemo(() => {
@@ -240,8 +267,7 @@ export default function SummaryTransferReport() {
                   </span>
                 </td>
 
-                {/* CETAK */}
-                <td className="border px-3 py-2">
+                <td>
                   {r.status === "Rejected" ? (
                     <span className="px-3 py-2 rounded bg-red-100 text-red-700 font-bold text-xs">
                       TRANSFER DI TOLAK
@@ -253,7 +279,7 @@ export default function SummaryTransferReport() {
                       }
                       className="px-3 py-2 rounded bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700"
                     >
-                      PRINT SURAT JALAN
+                      <FaPrint /> PRINT
                     </button>
                   )}
                 </td>

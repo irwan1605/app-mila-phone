@@ -1,5 +1,5 @@
 // src/pages/table/TableTransferBarang.jsx
-import React, { useEffect, useState, useMemo  } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { ref, onValue, update, push } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase/FirebaseInit";
@@ -14,7 +14,6 @@ export default function TableTransferBarang({ currentRole }) {
   console.log("IS SUPERADMIN:", isSuperAdmin);
   const [rows, setRows] = useState([]);
 
-  
   const [inventory, setInventory] = useState([]);
   const navigate = useNavigate();
   const [filterStatus, setFilterStatus] = useState("ALL");
@@ -22,31 +21,29 @@ export default function TableTransferBarang({ currentRole }) {
 
   const [soldImeis, setSoldImeis] = useState([]);
 
-  
-
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {
       const map = {}; // key = imei
-  
+
       snap.forEach((tokoSnap) => {
         const trxSnap = tokoSnap.child("transaksi");
         if (!trxSnap.exists()) return;
-  
+
         trxSnap.forEach((trx) => {
           const v = trx.val();
           if (!v.IMEI) return;
-  
+
           const imei = String(v.IMEI).trim();
           const metode = String(v.PAYMENT_METODE || "").toUpperCase();
-  
+
           // DEFAULT
           if (!map[imei]) {
             map[imei] = { imei, status: "AVAILABLE" };
           }
-  
+
           // RULE MUTLAK
           if (metode === "PENJUALAN") {
-            map[imei].status = "SOLD";   // 🔥 PALING KUAT
+            map[imei].status = "SOLD"; // 🔥 PALING KUAT
           } else if (metode === "TRANSFER_KELUAR") {
             if (map[imei].status !== "SOLD") map[imei].status = "OUT";
           } else if (metode === "TRANSFER_MASUK") {
@@ -54,62 +51,57 @@ export default function TableTransferBarang({ currentRole }) {
           }
         });
       });
-  
+
       setInventory(Object.values(map));
     });
   }, []);
-  
 
-// ================= FILTER TRANSFER: TOLAK IMEI TERJUAL =================
-const safeRows = useMemo(() => {
-  return rows.filter((r) => {
-    if (!Array.isArray(r.imeis)) return false;
+  // ================= FILTER TRANSFER: TOLAK IMEI TERJUAL =================
+  const safeRows = useMemo(() => {
+    return rows.filter((r) => {
+      if (!Array.isArray(r.imeis)) return false;
 
-    return r.imeis.every((im) => {
-      const found = inventory.find((i) => i.imei === im);
-      return found && found.status === "AVAILABLE";
-    });
-  });
-}, [rows, inventory]);
-
-
-
-useEffect(() => {
-  return onValue(ref(db, "toko"), (snap) => {
-    const map = {}; // key = imei
-
-    snap.forEach((tokoSnap) => {
-      const trxSnap = tokoSnap.child("transaksi");
-      if (!trxSnap.exists()) return;
-
-      trxSnap.forEach((trx) => {
-        const v = trx.val();
-        if (!v.IMEI) return;
-
-        const imei = String(v.IMEI).trim();
-        const metode = String(v.PAYMENT_METODE || "").toUpperCase();
-
-        // DEFAULT
-        if (!map[imei]) {
-          map[imei] = { imei, status: "AVAILABLE" };
-        }
-
-        // RULE MUTLAK
-        if (metode === "PENJUALAN") {
-          map[imei].status = "SOLD";   // 🔥 PALING KUAT
-        } else if (metode === "TRANSFER_KELUAR") {
-          if (map[imei].status !== "SOLD") map[imei].status = "OUT";
-        } else if (metode === "TRANSFER_MASUK") {
-          if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
-        }
+      return r.imeis.every((im) => {
+        const found = inventory.find((i) => i.imei === im);
+        return found && found.status === "AVAILABLE";
       });
     });
+  }, [rows, inventory]);
 
-    setInventory(Object.values(map));
-  });
-}, []);
+  useEffect(() => {
+    return onValue(ref(db, "toko"), (snap) => {
+      const map = {}; // key = imei
 
+      snap.forEach((tokoSnap) => {
+        const trxSnap = tokoSnap.child("transaksi");
+        if (!trxSnap.exists()) return;
 
+        trxSnap.forEach((trx) => {
+          const v = trx.val();
+          if (!v.IMEI) return;
+
+          const imei = String(v.IMEI).trim();
+          const metode = String(v.PAYMENT_METODE || "").toUpperCase();
+
+          // DEFAULT
+          if (!map[imei]) {
+            map[imei] = { imei, status: "AVAILABLE" };
+          }
+
+          // RULE MUTLAK
+          if (metode === "PENJUALAN") {
+            map[imei].status = "SOLD"; // 🔥 PALING KUAT
+          } else if (metode === "TRANSFER_KELUAR") {
+            if (map[imei].status !== "SOLD") map[imei].status = "OUT";
+          } else if (metode === "TRANSFER_MASUK") {
+            if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
+          }
+        });
+      });
+
+      setInventory(Object.values(map));
+    });
+  }, []);
 
   useEffect(() => {
     return onValue(ref(db, "transfer_barang"), (snap) => {
@@ -117,23 +109,26 @@ useEffect(() => {
 
       snap.forEach((c) => {
         const val = c.val();
+        if (!val || typeof val !== "object") return;
 
-        // 🔥 JIKA DATA VALID OBJECT
-        if (val && typeof val === "object" && !Array.isArray(val)) {
-          arr.push({
-            id: c.key,
-            ...val,
-            status: String(val.status || "Pending"),
-          });
-        }
+        const imeis = Array.isArray(val.imeis) ? val.imeis : [];
+
+        // 🚫 FILTER DUPLIKAT IMEI DALAM 1 TRANSFER
+        const uniqueImeis = [...new Set(imeis.map((i) => String(i).trim()))];
+
+        arr.push({
+          id: c.key,
+          ...val,
+          imeis: uniqueImeis, // pakai yg sudah unik
+          qty: uniqueImeis.length,
+          status: String(val.status || "Pending"),
+        });
       });
 
       console.log("🔥 DATA TRANSFER TABLE:", arr);
       setRows(arr);
     });
   }, []);
-
- 
 
   const handleRejectAndRollback = async (r) => {
     if (!window.confirm("Yakin REJECT & kembalikan stok ke toko pengirim?"))
@@ -215,6 +210,16 @@ useEffect(() => {
     });
 
     saveAs(fileData, `Transfer_Barang_${Date.now()}.xlsx`);
+  };
+
+  const isImeiAlreadyUsed = (imei) => {
+    const found = inventory.find((i) => i.imei === imei);
+
+    // tidak ada di stok = sudah keluar
+    if (!found) return true;
+
+    // SOLD / OUT tidak boleh dipakai lagi
+    return found.status !== "AVAILABLE";
   };
 
   return (
@@ -301,6 +306,11 @@ useEffect(() => {
                   <td className="border px-3 py-2">{r.barang || "-"}</td>
                   <td className="border px-3 py-2 text-xs">
                     {Array.isArray(r.imeis) ? r.imeis.join(", ") : "-"}
+                    {r.imeis.length !== new Set(r.imeis).size && (
+                      <span className="text-red-600 text-xs">
+                        ⚠ IMEI DUPLIKAT
+                      </span>
+                    )}
                   </td>
                   <td className="border px-3 py-2 text-center font-semibold">
                     {r.qty || 0}
@@ -376,10 +386,22 @@ useEffect(() => {
         `}
                           onClick={async () => {
                             if (!isSuperAdmin || r.status !== "Pending") return;
+
+                            // 🚫 CEK GLOBAL IMEI
+                            for (const imei of r.imeis || []) {
+                              if (isImeiAlreadyUsed(imei)) {
+                                alert(
+                                  `❌ IMEI ${imei} sudah pernah dipakai (transfer / jual)!`
+                                );
+                                return;
+                              }
+                            }
+
                             const sjId =
                               await FirebaseService.approveTransferFINAL({
                                 transfer: r,
                               });
+
                             navigate(`/surat-jalan/${sjId}`);
                           }}
                         >

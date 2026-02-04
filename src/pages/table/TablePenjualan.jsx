@@ -553,13 +553,6 @@ export default function TablePenjualan() {
         >
           Export Excel
         </button>
-
-        <button
-          onClick={exportPDF}
-          className="px-3 py-1 bg-red-600 text-white rounded"
-        >
-          Export PDF
-        </button>
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-4">
