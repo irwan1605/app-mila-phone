@@ -91,33 +91,22 @@ export default function SummaryTransferReport() {
 
   /* ================= BUILD TABLE ROWS ================= */
   const tableRows = useMemo(() => {
-    const usedImeis = new Set(); // 🔥 blok duplikat global
-
+    const usedImeis = new Set();
+  
     return rows
       .filter((trx) => {
+        // ✅ TRANSFER BERHASIL / SELESAI → TAMPIL SELALU
+        if (trx.status !== "Pending") return true;
+  
+        // ⛔ FILTER HANYA UNTUK PENDING
         if (!Array.isArray(trx.imeis)) return false;
-
-        // 🚫 BLOK DUPLIKAT GLOBAL
-        for (const im of trx.imeis) {
-          const norm = String(im).trim();
-          if (usedImeis.has(norm)) return false;
-        }
-
-        // 🚫 BLOK IMEI SOLD / OUT (hanya AVAILABLE boleh lolos)
-        const allValid = trx.imeis.every((im) => {
+  
+        return trx.imeis.every((im) => {
           const found = inventory.find(
             (i) => String(i.imei).trim() === String(im).trim()
           );
-          if (!found) return false;
-          return found.status === "AVAILABLE";
+          return found && found.status === "AVAILABLE";
         });
-
-        if (!allValid) return false;
-
-        // ✔ TANDAI SEBAGAI SUDAH DIPAKAI
-        trx.imeis.forEach((im) => usedImeis.add(String(im).trim()));
-
-        return true;
       })
       .map((trx) => ({
         id: trx.id,
@@ -128,12 +117,13 @@ export default function SummaryTransferReport() {
         tokoTujuan: trx.ke || "-",
         brand: trx.brand || "-",
         barang: trx.barang || "-",
-        imei: trx.imeis.join(", "),
-        qty: trx.qty || trx.imeis.length,
+        imei: Array.isArray(trx.imeis) ? trx.imeis.join(", ") : "",
+        qty: trx.qty || 0,
         status: trx.status || "Pending",
         suratJalanId: trx.suratJalanId,
       }));
   }, [rows, inventory]);
+  
 
   /* ================= FILTER ================= */
   const filtered = useMemo(() => {

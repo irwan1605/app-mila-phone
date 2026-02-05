@@ -59,14 +59,19 @@ export default function TableTransferBarang({ currentRole }) {
   // ================= FILTER TRANSFER: TOLAK IMEI TERJUAL =================
   const safeRows = useMemo(() => {
     return rows.filter((r) => {
+      // ✅ TRANSFER SUDAH APPROVED / REJECTED → TAMPIL SELALU
+      if (r.status !== "Pending") return true;
+  
+      // ⛔ FILTER HANYA UNTUK PENDING
       if (!Array.isArray(r.imeis)) return false;
-
+  
       return r.imeis.every((im) => {
         const found = inventory.find((i) => i.imei === im);
         return found && found.status === "AVAILABLE";
       });
     });
   }, [rows, inventory]);
+  
 
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {
