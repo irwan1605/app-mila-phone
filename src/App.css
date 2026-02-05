@@ -95,3 +95,38 @@
   scrollbar-color: rgba(255,255,255,0.35) transparent;
 }
 
+/* ================= MODE CETAK ================= */
+@media print {
+
+  /* ❌ HILANGKAN LAYOUT DASHBOARD */
+  .app-navbar,
+  .app-sidebar,
+  .no-print {
+    display: none !important;
+  }
+
+  /* ❌ HILANGKAN BACKGROUND */
+  body {
+    background: white !important;
+  }
+
+  /* ✅ HANYA CETAK SURAT JALAN */
+  .print-area {
+    display: block !important;
+    width: 100%;
+  }
+
+  /* 📄 UKURAN KERTAS */
+  @page {
+    size: A4;
+    margin: 18mm;
+  }
+
+  /* 🧾 FONT & WARNA SEPERTI INVOICE */
+  * {
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+}
+
+

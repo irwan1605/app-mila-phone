@@ -61,17 +61,16 @@ export default function TableTransferBarang({ currentRole }) {
     return rows.filter((r) => {
       // ✅ TRANSFER SUDAH APPROVED / REJECTED → TAMPIL SELALU
       if (r.status !== "Pending") return true;
-  
+
       // ⛔ FILTER HANYA UNTUK PENDING
       if (!Array.isArray(r.imeis)) return false;
-  
+
       return r.imeis.every((im) => {
         const found = inventory.find((i) => i.imei === im);
         return found && found.status === "AVAILABLE";
       });
     });
   }, [rows, inventory]);
-  
 
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {
@@ -373,121 +372,117 @@ export default function TableTransferBarang({ currentRole }) {
                     </div>
                   )}
 
-                  <td className="border px-3 py-2 space-y-1">
-                    {/* SEMUA TOMBOL SELALU ADA */}
-                    {/* AUTO HIDE JIKA REJECTED */}
-                    {r.status !== "Rejected" && (
-                      <>
-                        {/* APPROVE */}
-                        <button
-                          disabled={!isSuperAdmin || r.status !== "Pending"}
-                          className={`
-          w-full px-3 py-2 rounded-xl text-xs font-bold
-          ${
-            !isSuperAdmin || r.status !== "Pending"
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:scale-105"
-          }
-        `}
-                          onClick={async () => {
-                            if (!isSuperAdmin || r.status !== "Pending") return;
+<td className="border px-3 py-2">
+  <div className="flex flex-nowrap gap-3 justify-center items-center">
+    {r.status !== "Rejected" && (
+      <>
+        {/* APPROVE */}
+        <button
+          title="Approve Transfer"
+          disabled={!isSuperAdmin || r.status !== "Pending"}
+          onClick={async () => {
+            if (!isSuperAdmin || r.status !== "Pending") return;
 
-                            // 🚫 CEK GLOBAL IMEI
-                            for (const imei of r.imeis || []) {
-                              if (isImeiAlreadyUsed(imei)) {
-                                alert(
-                                  `❌ IMEI ${imei} sudah pernah dipakai (transfer / jual)!`
-                                );
-                                return;
-                              }
-                            }
+            for (const imei of r.imeis || []) {
+              if (isImeiAlreadyUsed(imei)) {
+                alert(`❌ IMEI ${imei} sudah pernah dipakai (transfer / jual)!`);
+                return;
+              }
+            }
 
-                            const sjId =
-                              await FirebaseService.approveTransferFINAL({
-                                transfer: r,
-                              });
+            const sjId = await FirebaseService.approveTransferFINAL({ transfer: r });
+            navigate(`/surat-jalan/${sjId}`);
+          }}
+          className={`
+            flex flex-col items-center justify-center gap-1
+            px-3 py-2 rounded-lg text-[11px] font-bold
+            ${
+              !isSuperAdmin || r.status !== "Pending"
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-green-500 text-white hover:bg-green-600"
+            }
+          `}
+        >
+          <span className="text-sm">✔</span>
+          <span>Approve</span>
+        </button>
 
-                            navigate(`/surat-jalan/${sjId}`);
-                          }}
-                        >
-                          ✔ APPROVE
-                        </button>
+        {/* REJECT */}
+        <button
+          title="Reject Transfer"
+          disabled={!isSuperAdmin || r.status !== "Pending"}
+          onClick={async () => {
+            if (!isSuperAdmin || r.status !== "Pending") return;
+            await FirebaseService.rejectTransferFINAL({ transfer: r });
+            alert("Transfer ditolak & IMEI dikembalikan");
+          }}
+          className={`
+            flex flex-col items-center justify-center gap-1
+            px-3 py-2 rounded-lg text-[11px] font-bold
+            ${
+              !isSuperAdmin || r.status !== "Pending"
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-red-500 text-white hover:bg-red-600"
+            }
+          `}
+        >
+          <span className="text-sm">✖</span>
+          <span>Reject</span>
+        </button>
 
-                        {/* REJECT */}
-                        <button
-                          disabled={!isSuperAdmin || r.status !== "Pending"}
-                          className={`
-          w-full px-3 py-2 rounded-xl text-xs font-bold
-          ${
-            !isSuperAdmin || r.status !== "Pending"
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-gradient-to-r from-red-500 to-rose-600 text-white hover:scale-105"
-          }
-        `}
-                          onClick={async () => {
-                            if (!isSuperAdmin || r.status !== "Pending") return;
-                            await FirebaseService.rejectTransferFINAL({
-                              transfer: r,
-                            });
-                            alert("Transfer ditolak & IMEI dikembalikan");
-                          }}
-                        >
-                          ✖ REJECT
-                        </button>
+        {/* PRINT SURAT JALAN */}
+        <button
+          title="Print Surat Jalan"
+          disabled={!isSuperAdmin}
+          onClick={() => {
+            if (!isSuperAdmin) return;
+            const sjId = r.suratJalanId || r.id;
+            navigate(`/surat-jalan/${sjId}`);
+          }}
+          className={`
+            flex flex-col items-center justify-center gap-1
+            px-3 py-2 rounded-lg text-[11px] font-bold
+            ${
+              !isSuperAdmin
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-indigo-500 text-white hover:bg-indigo-600"
+            }
+          `}
+        >
+          <FaPrint className="text-sm" />
+          <span>Print</span>
+        </button>
 
-                        {/* PRINT SURAT JALAN */}
-                        <button
-                          disabled={!isSuperAdmin}
-                          onClick={() => {
-                            if (!isSuperAdmin) return;
-                            const sjId = r.suratJalanId || r.id;
-                            navigate(`/surat-jalan/${sjId}`);
-                          }}
-                          className={`
-          w-full flex items-center justify-center gap-2
-          px-3 py-2 rounded-xl text-xs font-bold
-          ${
-            !isSuperAdmin
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:scale-105"
-          }
-        `}
-                        >
-                          <FaPrint /> PRINT SURAT JALAN
-                        </button>
+        {/* REJECT & ROLLBACK */}
+        <button
+          title="Reject & Rollback Stok"
+          disabled={!isSuperAdmin || (r.status !== "Pending" && r.status !== "Approved")}
+          onClick={() => {
+            if (!isSuperAdmin) return;
+            handleRejectAndRollback(r);
+          }}
+          className={`
+            flex flex-col items-center justify-center gap-1
+            px-3 py-2 rounded-lg text-[11px] font-bold
+            ${
+              !isSuperAdmin || (r.status !== "Pending" && r.status !== "Approved")
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-rose-600 text-white hover:bg-rose-700"
+            }
+          `}
+        >
+          <span className="text-sm">↩</span>
+          <span>Rollback</span>
+        </button>
+      </>
+    )}
 
-                        {/* REJECT & ROLLBACK */}
-                        <button
-                          disabled={
-                            !isSuperAdmin ||
-                            (r.status !== "Pending" && r.status !== "Approved")
-                          }
-                          onClick={() => {
-                            if (!isSuperAdmin) return;
-                            handleRejectAndRollback(r);
-                          }}
-                          className={`
-          w-full flex items-center justify-center gap-2
-          px-3 py-2 rounded-xl text-xs font-bold
-          ${
-            !isSuperAdmin || (r.status !== "Pending" && r.status !== "Approved")
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-gradient-to-r from-red-600 to-pink-600 text-white hover:scale-105"
-          }
-        `}
-                        >
-                          ✖ REJECT & ROLLBACK
-                        </button>
-                      </>
-                    )}
+    {r.status === "Rejected" && (
+      <span className="text-xs font-bold text-red-600">❌ DITOLAK</span>
+    )}
+  </div>
+</td>
 
-                    {/* JIKA SUDAH REJECTED */}
-                    {r.status === "Rejected" && (
-                      <div className="text-center text-xs font-bold text-red-600">
-                        ❌ TRANSFER DITOLAK
-                      </div>
-                    )}
-                  </td>
                 </tr>
               ))}
           </tbody>

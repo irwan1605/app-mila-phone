@@ -1,180 +1,180 @@
-// src/pages/PrintSuratJalan.jsx
-import React, { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { ref, get } from "firebase/database";
 import { db } from "../../firebase/FirebaseInit";
-import Logo from "../../assets/logoMMT.png";
 
 export default function PrintSuratJalan() {
   const { id } = useParams();
+  const navigate = useNavigate();
+
   const [data, setData] = useState(null);
-  const printRef = useRef(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Sembunyikan navbar aplikasi
-    const navbar = document.querySelector("nav");
-    const header = document.querySelector("header");
+    if (!id) return;
 
-    if (navbar) navbar.style.display = "none";
-    if (header) header.style.display = "none";
-
-    return () => {
-      // Kembalikan saat keluar halaman print
-      if (navbar) navbar.style.display = "";
-      if (header) header.style.display = "";
-    };
-  }, []);
-
-  useEffect(() => {
     const load = async () => {
-      // 1️⃣ Coba dari surat_jalan
-      const sjSnap = await get(ref(db, `surat_jalan/${id}`));
-      if (sjSnap.exists()) {
-        setData(sjSnap.val());
-        return;
-      }
-
-      // 2️⃣ Fallback: ambil dari transfer_barang (PENDING / ANTISIPASI)
-      const trSnap = await get(ref(db, `transfer_barang/${id}`));
-      if (trSnap.exists()) {
-        const t = trSnap.val();
-
-        setData({
-          noSuratJalan: t.noSuratJalan,
-          tanggal: t.tanggal,
-          tokoPengirim: t.tokoPengirim,
-          tokoTujuan: t.ke,
-          pengirim: t.pengirim,
-          barang: t.barang,
-          qty: t.qty,
-          imeis: t.imeis || [],
-        });
+      try {
+        const snap = await get(ref(db, `surat_jalan/${id}`));
+        if (snap.exists()) {
+          setData(snap.val());
+        } else {
+          alert("❌ Surat Jalan tidak ditemukan");
+        }
+      } catch (e) {
+        console.error(e);
+        alert("❌ Gagal memuat Surat Jalan");
+      } finally {
+        setLoading(false);
       }
     };
 
     load();
   }, [id]);
 
-  return (
-    <div className="print-only  p-6">
-      <div ref={printRef} className="bg-white p-6 w-[210mm] mx-auto">
-        <div className="text-center mb-4">
-          <img src={Logo} alt="Logo" className="logo" />
+  if (loading) {
+    return <div className="p-6 text-center">Loading Surat Jalan...</div>;
+  }
 
-          <div className="company">
-            <h1>MILA PHONE</h1>
-            <p>Distribusi & Retail Elektronik</p>
+  if (!data) {
+    return (
+      <div className="p-6 text-center text-red-600 font-bold">
+        ❌ Surat Jalan Tidak Ditemukan
+      </div>
+    );
+  }
+
+  const handlePrint = () => {
+    const printArea = document.querySelector(".print-area");
+    if (!printArea) {
+      alert("Area Surat Jalan tidak ditemukan");
+      return;
+    }
+
+    // simpan tampilan awal
+    const originalContents = document.body.innerHTML;
+
+    // ganti body dengan surat jalan saja
+    document.body.innerHTML = printArea.innerHTML;
+
+    // cetak
+    window.print();
+
+    // kembalikan tampilan semula
+    document.body.innerHTML = originalContents;
+
+    // reload react supaya event & state normal
+    window.location.reload();
+  };
+
+  return (
+    <div className="bg-gray-100 min-h-screen py-6">
+      {/* ================= BUTTON ACTION ================= */}
+      <div className="max-w-[900px] mx-auto mb-4 flex justify-end gap-3 no-print">
+        <button
+          onClick={() => navigate(-1)}
+          className="px-4 py-2 rounded-lg bg-gray-500 text-white font-bold hover:bg-gray-600"
+        >
+          ⬅ CANCEL
+        </button>
+
+        <button
+          onClick={handlePrint}
+          className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 no-print"
+        >
+          🖨 CETAK
+        </button>
+      </div>
+
+      {/* ================= DOCUMENT ================= */}
+      {/* ================= DOCUMENT ================= */}
+      <div className="print-area w-[800px] mx-auto bg-white text-black p-6 shadow print:shadow-none">
+        {/* HEADER */}
+        <div className="flex justify-between items-center border-b pb-3 mb-4">
+          <div className="flex items-center gap-3">
+            <img src="/logoMMT.png" alt="MMT" className="h-14 object-contain" />
+            <div>
+              <h1 className="text-xl font-extrabold">
+                PT. MILA MEDIA TELEKOMUNIKASI
+              </h1>
+              <p className="text-xs text-gray-600">
+                Monitoring & Report Management
+              </p>
+            </div>
           </div>
 
-          <div className="doc-title">
-            <h2>SURAT JALAN</h2>
-            <p>No: {data?.noSuratJalan}</p>
+          <div className="text-sm text-right">
+            <p>
+              <b>SURAT JALAN</b>
+            </p>
+            <p>No: {data.noSuratJalan}</p>
+            <p>Tanggal: {new Date(data.tanggal).toLocaleDateString("id-ID")}</p>
           </div>
         </div>
 
-        <table className="w-full text-sm border mb-4">
-          <tbody>
-            <tr>
-              <td>Tanggal</td>
-              <td>{data?.tanggal}</td>
-            </tr>
-            <tr>
-              <td>Dari</td>
-              <td>{data?.tokoPengirim}</td>
-            </tr>
-            <tr>
-              <td>Ke</td>
-              <td>{data?.tokoTujuan}</td>
-            </tr>
-            <tr>
-              <td>Pengirim</td>
-              <td>{data?.pengirim}</td>
-            </tr>
-          </tbody>
-        </table>
+        {/* INFO TOKO */}
+        <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+          <div className="border rounded p-3">
+            <p className="font-bold mb-1">Toko Pengirim</p>
+            <p>{data.tokoPengirim}</p>
+            <p className="mt-1 text-xs">
+              Pengirim: <b>{data.pengirim || "-"}</b>
+            </p>
+          </div>
 
-        <table className="w-full text-sm border">
+          <div className="border rounded p-3">
+            <p className="font-bold mb-1">Toko Tujuan</p>
+            <p>{data.tokoTujuan}</p>
+          </div>
+        </div>
+
+        {/* TABLE BARANG */}
+        <table className="w-full border-collapse text-sm mb-6">
           <thead>
-            <tr>
-              <th className="border px-2">No</th>
-              <th className="border px-2">Barang</th>
-              <th className="border px-2">Qty</th>
-              <th className="border px-2">IMEI</th>
+            <tr className="bg-gray-100">
+              <th className="border px-2 py-2 w-10">No</th>
+              <th className="border px-2 py-2 text-left">Nama Barang</th>
+              <th className="border px-2 py-2 text-left">IMEI</th>
+              <th className="border px-2 py-2 w-16 text-center">Qty</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td className="border px-2 text-center">1</td>
-              <td className="border px-2">{data?.barang}</td>
-              <td className="border px-2 text-center">{data?.qty}</td>
-              <td className="border px-2 text-xs">
-                {(data?.imeis || []).join(", ")}
-              </td>
-            </tr>
+            {(data.imeis || []).map((im, i) => (
+              <tr key={i}>
+                <td className="border px-2 py-2 text-center">{i + 1}</td>
+                <td className="border px-2 py-2">{data.barang}</td>
+                <td className="border px-2 py-2 text-xs">{im}</td>
+                <td className="border px-2 py-2 text-center">1</td>
+              </tr>
+            ))}
           </tbody>
         </table>
 
-        {/* ================= CATATAN ================= */}
-        <div className="note">
-          <p>
-            Barang telah diterima dalam kondisi baik dan lengkap sesuai dengan
-            surat jalan ini.
-          </p>
-        </div>
+        {/* CATATAN */}
+        <p className="text-xs text-gray-600 mb-10">
+          Barang di atas telah diserahkan dalam kondisi baik dan sesuai.
+        </p>
 
-        {/* ================= TTD ================= */}
-        <div className="signature">
+        {/* TTD */}
+        <div className="grid grid-cols-3 gap-6 text-center text-sm mt-14">
           <div>
-            <tr>
-              <td className="border px-2">Pengirim</td>
-              <td className="border px-2">{data?.pengirim}</td>
-            </tr>
+            <p className="mb-14 font-semibold">Menyerahkan</p>
+            <div className="border-t pt-1">( ......................... )</div>
           </div>
 
           <div>
-            <p>Penerima</p>
-            <div className="sign-box" />
-            <p className="name">_________________</p>
+            <p className="mb-14 font-semibold">Pengirim</p>
+            <div className="border-t pt-1">
+              ( {data.pengirim || "........................."} )
+            </div>
           </div>
 
-          <div className="flex justify-center mt-6 gap-4">
-            <button onClick={() => window.print()} className="btn-indigo">
-              🖨️ PRINT
-            </button>
+          <div>
+            <p className="mb-14 font-semibold">Penerima</p>
+            <div className="border-t pt-1">( ......................... )</div>
           </div>
         </div>
       </div>
-
-      {/* ================= STYLE ================= */}
-      <style>{`
-      @media print {
-  /* SEMBUNYIKAN SEMUA KECUALI SURAT JALAN */
-  body * {
-    visibility: hidden;
-  }
-
-  /* TAMPILKAN HANYA AREA PRINT */
-  .print-only,
-  .print-only * {
-    visibility: visible;
-  }
-
-  .print-only {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-  }
-
-  /* HILANGKAN MARGIN BROWSER */
-  body {
-    margin: 0;
-    padding: 0;
-    background: #fff;
-  }
-}
-
-      `}</style>
     </div>
   );
 }
