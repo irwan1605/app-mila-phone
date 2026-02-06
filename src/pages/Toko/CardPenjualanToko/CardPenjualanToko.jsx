@@ -311,14 +311,25 @@ export default function CardPenjualanToko() {
   const handleSubmitPenjualan = useCallback(async () => {
     if (loading || submitting) return;
     if (!validate()) return;
-  
+
     const sisa = Number(payment?.sisaBayar || 0);
     if (sisa > 0) {
       alert("❌ Pembayaran belum lengkap");
       return;
     }
 
-  console.log("PAYMENT:", payment);
+    /* =====================================================
+   VALIDASI CASH WAJIB LUNAS (PATCH BARU)
+===================================================== */
+    if (
+      payment?.paymentMethod === "CASH" &&
+      Number(payment?.kurangBayar || 0) > 0
+    ) {
+      alert("❌ Pembayaran CASH belum lunas");
+      return;
+    }
+
+    console.log("PAYMENT:", payment);
 
     const tokoIdFix = normalizeTokoId(tokoAktifId);
 

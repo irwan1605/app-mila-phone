@@ -49,6 +49,62 @@ import {
    HELPERS
 ============================================================ */
 
+export const listenTransferBarangMasuk = (namaToko, callback) => {
+  if (!namaToko) return () => {};
+
+  const tfRef = ref(db, "transfer_barang");
+
+  const unsub = onValue(tfRef, (snap) => {
+    const rows = [];
+
+    snap.forEach((child) => {
+      const v = child.val();
+
+      if (
+        String(v.status).toUpperCase() === "APPROVED" &&
+        String(v.ke).toUpperCase() === String(namaToko).toUpperCase()
+      ) {
+        (v.imeis || []).forEach((im) => {
+          rows.push({
+            imei: String(im).trim(),
+            namaBarang: v.barang,
+            namaBrand: v.brand,
+            kategoriBarang: v.kategori,
+            toko: v.ke,
+            sumber: "TRANSFER",
+          });
+        });
+      }
+    });
+
+    callback(rows);
+  });
+
+  return () => unsub();
+};
+
+
+export const listenDetailStokToko = (namaToko, callback) => {
+  if (!namaToko) return () => {};
+
+  const stokRef = ref(db, `detail_stok_toko/${namaToko}`);
+
+  const unsub = onValue(stokRef, (snap) => {
+    const rows = [];
+
+    snap.forEach((child) => {
+      rows.push({
+        id: child.key,
+        ...child.val(),
+      });
+    });
+
+    callback(rows);
+  });
+
+  return () => unsub();
+};
+
 export const submitPenjualanAtomic = async (data) => {
   const { tokoId, tokoNama, invoice, items, payment, user } = data;
 

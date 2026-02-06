@@ -8,6 +8,7 @@ import {
   listenMasterBarang,
   listenMasterKategoriBarang,
   unlockImeiRealtime,
+  listenTransferBarangMasuk ,
   lockImeiRealtime,
 } from "../../../services/FirebaseService";
 import { ref, get } from "firebase/database";
@@ -19,6 +20,8 @@ import { useLocation } from "react-router-dom";
 const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
 const isImeiKategori = (kat) =>
   KATEGORI_IMEI.includes((kat || "").toUpperCase());
+
+
 
 export default function FormItemSection({
   value = [],
@@ -38,6 +41,39 @@ export default function FormItemSection({
   const [masterKategori, setMasterKategori] = useState([]);
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [imeiKeyword, setImeiKeyword] = useState("");
+  const [stokToko, setStokToko] = useState([]);
+
+/* ================= HELPER CEK TOKO DARI TRANSFER ================= */
+const findTokoByTransfer = (imei) => {
+  const tf = stokToko.find(
+    (s) => String(s.imei).trim() === String(imei).trim()
+  );
+
+  return tf?.toko || null;
+};
+
+
+/* ================= HELPER CEK TOKO DARI PEMBELIAN ================= */
+const findTokoByImei = (imei, transaksiList = []) => {
+  if (!imei) return null;
+
+  const trx = transaksiList.find(
+    (t) =>
+      String(t.IMEI || "").trim() === String(imei).trim() &&
+      String(t.STATUS || "").toUpperCase() === "APPROVED" &&
+      (
+        String(t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" ||
+        String(t.tipe || "").toUpperCase() === "PEMBELIAN" ||
+        String(t.jenis || "").toUpperCase() === "PEMBELIAN"
+      )
+  );
+
+  return trx?.NAMA_TOKO || null;
+};
+
+
+
+
   const location = useLocation();
 
   const userLogin = JSON.parse(localStorage.getItem("userLogin") || "{}");
@@ -50,6 +86,8 @@ export default function FormItemSection({
       : userLogin.toko === "1"
       ? "CILANGKAP PUSAT"
       : "";
+
+      
 
   useEffect(() => {
     if (!location?.state?.fastSale) return;
@@ -150,6 +188,19 @@ export default function FormItemSection({
     };
   }, []);
 
+  /* ================= LOAD DETAIL STOK TOKO ================= */
+/* ================= LOAD IMEI HASIL TRANSFER ================= */
+useEffect(() => {
+  if (!tokoLogin) return;
+
+  const unsub = listenTransferBarangMasuk(tokoLogin, (rows) => {
+    setStokToko(Array.isArray(rows) ? rows : []);
+  });
+
+  return () => unsub && unsub();
+}, [tokoLogin]);
+
+
   useEffect(() => {
     const handleLeave = () => {
       items.forEach((it) => {
@@ -179,15 +230,6 @@ export default function FormItemSection({
     return () => clearTimeout(timer);
   }, [items, tokoLogin]);
 
-  /* ================= LOAD MASTER ================= */
-  useEffect(() => {
-    const u1 = listenMasterBarang(setMasterBarang);
-    const u2 = listenMasterKategoriBarang(setMasterKategori);
-    return () => {
-      u1 && u1();
-      u2 && u2();
-    };
-  }, []);
 
   /* ================= LOAD TRANSAKSI ================= */
   useEffect(() => {
@@ -267,18 +309,9 @@ export default function FormItemSection({
   // ===============================
   // HELPER: Cari toko asal IMEI
   // ===============================
-  const findTokoByImei = (imei, allTransaksi = []) => {
-    if (!imei) return null;
+ // 🔥 PRIORITAS 1: CEK TRANSFER DULU
 
-    const trx = allTransaksi.find(
-      (t) =>
-        String(t.IMEI || "").trim() === String(imei).trim() &&
-        String(t.STATUS || "").toUpperCase() === "APPROVED" &&
-        String(t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN"
-    );
 
-    return trx?.NAMA_TOKO || null;
-  };
 
   /* ================= IMEI AVAILABLE ================= */
   const imeiAvailableList = useMemo(() => {
@@ -425,6 +458,62 @@ export default function FormItemSection({
       hargaMap: barang.harga || {},
     };
   };
+
+  /* ================= IMEI DARI TRANSFER BARANG ================= */
+const findBarangByTransfer = (imei) => {
+  const row = stokToko.find(
+    (s) => String(s.imei).trim() === String(imei).trim()
+  );
+
+  if (!row) return null;
+
+  const barang = masterBarang.find(
+    (b) =>
+      String(b.namaBarang || "").toUpperCase() ===
+      String(row.namaBarang || "").toUpperCase()
+  );
+
+  if (!barang) return null;
+
+  return {
+    kategoriBarang: barang.kategoriBarang,
+    namaBrand: barang.namaBrand || barang.brand,
+    namaBarang: barang.namaBarang,
+    hargaMap: barang.harga || {},
+    fromTransfer: true,
+  };
+};
+
+
+  /* ================= IMEI DARI DETAIL STOK TOKO ================= */
+const findBarangByDetailStok = (imei) => {
+  if (!imei) return null;
+
+  const stok = stokToko.find(
+    (s) =>
+      String(s.imei || "").trim() === String(imei).trim() &&
+      String(s.status || "").toUpperCase() === "AVAILABLE"
+  );
+
+  if (!stok) return null;
+
+  const barang = masterBarang.find(
+    (b) =>
+      String(b.namaBarang || "").toUpperCase() ===
+      String(stok.namaBarang || "").toUpperCase()
+  );
+
+  if (!barang) return null;
+
+  return {
+    kategoriBarang: barang.kategoriBarang,
+    namaBrand: barang.namaBrand || barang.brand,
+    namaBarang: barang.namaBarang,
+    hargaMap: barang.harga || {},
+    fromTransfer: true,
+  };
+};
+
 
   /* ================= RENDER ================= */
   return (
@@ -630,12 +719,15 @@ export default function FormItemSection({
                   onBlur={async () => {
                     const imei = (item.imei || "").trim();
                     if (!imei) return;
-
+                  
+                    /* ===============================
+                       1. CEK IMEI DOUBLE DI FORM
+                    =============================== */
                     const imeiDipakai = value
                       .filter((_, i) => i !== idx)
                       .flatMap((it) => it.imeiList || [])
                       .map((x) => String(x).trim());
-
+                  
                     if (imeiDipakai.includes(imei)) {
                       alert("❌ IMEI sudah dipakai di item lain!");
                       updateItem(idx, {
@@ -645,9 +737,21 @@ export default function FormItemSection({
                       });
                       return;
                     }
-
+                  
+                    /* ===============================
+                       2. CEK IMEI DARI TRANSFER
+                       (TAMBAHAN - TIDAK MERUBAH LOGIC LAMA)
+                    =============================== */
+                    const imeiFromTransfer = stokToko.some(
+                      (s) => String(s.imei).trim() === imei
+                    );
+                  
+                    /* ===============================
+                       3. VALIDASI AVAILABLE
+                       (LOGIC LAMA + TRANSFER)
+                    =============================== */
                     if (
-                      !imeiAvailableList.includes(imei) ||
+                      (!imeiAvailableList.includes(imei) && !imeiFromTransfer) ||
                       stockRealtime?.soldImei?.[imei]
                     ) {
                       alert("❌ IMEI sudah terjual / tidak tersedia");
@@ -658,28 +762,71 @@ export default function FormItemSection({
                       });
                       return;
                     }
-
-                    const tokoImei = findTokoByImei(imei, allTransaksi);
-                    if (
-                      tokoImei &&
-                      String(tokoImei).toUpperCase() !==
+                  
+                    /* ===============================
+                       4. VALIDASI TOKO OWNER
+                       PRIORITAS:
+                       1. TRANSFER
+                       2. PEMBELIAN (LOGIC LAMA)
+                    =============================== */
+                  
+                    // 🔥 CEK TRANSFER DULU
+                    const tokoTransfer = findTokoByTransfer(imei);
+                  
+                    if (tokoTransfer) {
+                      if (
+                        String(tokoTransfer).toUpperCase() !==
                         String(tokoLogin).toUpperCase()
-                    ) {
-                      alert(`❌ IMEI milik toko ${tokoImei}`);
-                      updateItem(idx, {
-                        imei: "",
-                        imeiList: [],
-                        qty: 0,
-                      });
-                      return;
+                      ) {
+                        alert(`❌ IMEI milik toko ${tokoTransfer}`);
+                        updateItem(idx, {
+                          imei: "",
+                          imeiList: [],
+                          qty: 0,
+                        });
+                        return;
+                      }
+                    } else {
+                      // 🔥 FALLBACK KE LOGIC LAMA
+                      const tokoImei = findTokoByImei(imei, allTransaksi);
+                  
+                      if (
+                        tokoImei &&
+                        String(tokoImei).toUpperCase() !==
+                          String(tokoLogin).toUpperCase()
+                      ) {
+                        alert(`❌ IMEI milik toko ${tokoImei}`);
+                        updateItem(idx, {
+                          imei: "",
+                          imeiList: [],
+                          qty: 0,
+                        });
+                        return;
+                      }
                     }
-
-                    const autoBarang = findBarangByImei(imei);
+                  
+                    /* ===============================
+                       5. AUTO DETECT BARANG
+                       PRIORITAS:
+                       1. PEMBELIAN (LOGIC LAMA)
+                       2. TRANSFER
+                    =============================== */
+                  
+                    let autoBarang = findBarangByImei(imei);
+                  
+                    // fallback transfer
+                    if (!autoBarang) {
+                      autoBarang = findBarangByTransfer(imei);
+                    }
+                  
                     if (!autoBarang) {
                       alert("❌ Data barang IMEI tidak ditemukan");
                       return;
                     }
-
+                  
+                    /* ===============================
+                       6. UPDATE ITEM
+                    =============================== */
                     updateItem(idx, {
                       imei,
                       imeiList: [imei],
@@ -693,6 +840,7 @@ export default function FormItemSection({
                       isImei: true,
                     });
                   }}
+                  
                 />
 
                 <datalist id={`imei-${idx}`}>

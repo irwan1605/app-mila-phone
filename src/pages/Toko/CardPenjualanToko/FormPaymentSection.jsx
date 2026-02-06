@@ -104,14 +104,18 @@ export default function FormPaymentSection({
     );
   }, [dashboardPayment, paymentSafe.paymentMethod, paymentSafe.persenMdr]);
 
-  /* ================= GRAND TOTAL ================= */
-  /* ================= GRAND TOTAL ================= */
-  /* ================= GRAND TOTAL ================= */
-  /* ================= GRAND TOTAL (BARU) ================= */
   /* GRAND TOTAL = Total Harga Barang + Nominal MDR + DP Talangan */
   const grandTotal = useMemo(() => {
     return Number(totalBarang || 0);
   }, [totalBarang]);
+
+  const totalNominalPayment = useMemo(() => {
+    if (!Array.isArray(paymentSafe.splitPayment)) return 0;
+
+    return paymentSafe.splitPayment.reduce((total, p) => {
+      return total + Number(p.nominal || 0);
+    }, 0);
+  }, [paymentSafe.splitPayment]);
 
   /* ================= PAYMENT KREDIT (BARU) ================= */
   /* Payment KREDIT = Dashboard KREDIT - Nominal MDR - DP Talangan */
@@ -149,6 +153,42 @@ export default function FormPaymentSection({
     return Math.max(Number(uangDibayar) - grandTotal, 0);
   }, [uangDibayar, grandTotal, paymentSafe.paymentMethod]);
 
+  /* =====================================================
+   SELISIH CASH (BARU - TIDAK MENGUBAH LOGIC LAMA)
+===================================================== */
+  const selisihCash = useMemo(() => {
+    if (paymentSafe.paymentMethod !== "CASH") return 0;
+
+    return Number(cashPayment.nominal || 0) - Number(grandTotal || 0);
+  }, [cashPayment.nominal, grandTotal, paymentSafe.paymentMethod]);
+
+  /* =====================================================
+   STATUS PEMBAYARAN CASH (BARU - TIDAK MERUBAH LOGIC)
+   ===================================================== */
+
+  /* ================= VALIDASI CASH BARU ================= */
+  const kurangBayarCash = useMemo(() => {
+    if (paymentSafe.paymentMethod !== "CASH") return 0;
+
+    return Number(grandTotal || 0) - Number(cashPayment.nominal || 0);
+  }, [grandTotal, cashPayment.nominal, paymentSafe.paymentMethod]);
+
+  const kembalianCash = useMemo(() => {
+    if (paymentSafe.paymentMethod !== "CASH") return 0;
+
+    return Math.max(
+      Number(cashPayment.nominal || 0) - Number(grandTotal || 0),
+      0
+    );
+  }, [grandTotal, cashPayment.nominal, paymentSafe.paymentMethod]);
+
+  /* CASH VALID = lunas atau ada kembalian */
+  const isCashValid = useMemo(() => {
+    if (paymentSafe.paymentMethod !== "CASH") return true;
+
+    return Number(cashPayment.nominal || 0) >= Number(grandTotal || 0);
+  }, [cashPayment.nominal, grandTotal, paymentSafe.paymentMethod]);
+
   /* ================= TOTAL SPLIT ================= */
   const totalSplit = useMemo(() => {
     if (!paymentSplit.enabled) return 0;
@@ -181,6 +221,25 @@ export default function FormPaymentSection({
   const kurangBayar = useMemo(() => {
     return Number(grandTotal || 0) - Number(nominalPaymentMetode || 0);
   }, [grandTotal, nominalPaymentMetode]);
+
+  /* =====================================================
+   AUTO NOMINAL CASH (PATCH BARU - TIDAK MERUBAH LOGIC LAMA)
+===================================================== */
+  useEffect(() => {
+    // hanya berlaku CASH NON SPLIT
+    if (paymentSplit.enabled) return;
+    if (paymentSafe.paymentMethod !== "CASH") return;
+
+    const nominalBaru = Number(grandTotal || 0);
+
+    // hindari render loop
+    if (Number(cashPayment.nominal || 0) === nominalBaru) return;
+
+    setCashPayment((prev) => ({
+      ...prev,
+      nominal: nominalBaru,
+    }));
+  }, [grandTotal, paymentSafe.paymentMethod, paymentSplit.enabled]);
 
   const nominalKurangBayarKredit = useMemo(() => {
     if (paymentSafe.paymentMethod !== "KREDIT") return 0;
@@ -479,6 +538,22 @@ export default function FormPaymentSection({
                 }
               />
             </div>
+            {/* ===== INFO KURANG BAYAR / KEMBALIAN CASH ===== */}
+            {paymentSafe.paymentMethod === "CASH" && (
+              <>
+                {kurangBayarCash > 0 && (
+                  <div className="text-right font-bold text-red-600">
+                    KURANG BAYAR: Rp {kurangBayarCash.toLocaleString("id-ID")}
+                  </div>
+                )}
+
+                {kembalianCash > 0 && (
+                  <div className="text-right font-bold text-green-600">
+                    KEMBALIAN: Rp {kembalianCash.toLocaleString("id-ID")}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
