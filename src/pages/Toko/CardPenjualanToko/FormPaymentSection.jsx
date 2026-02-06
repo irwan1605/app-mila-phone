@@ -156,31 +156,16 @@ export default function FormPaymentSection({
   /* =====================================================
    SELISIH CASH (BARU - TIDAK MENGUBAH LOGIC LAMA)
 ===================================================== */
-  const selisihCash = useMemo(() => {
-    if (paymentSafe.paymentMethod !== "CASH") return 0;
-
-    return Number(cashPayment.nominal || 0) - Number(grandTotal || 0);
-  }, [cashPayment.nominal, grandTotal, paymentSafe.paymentMethod]);
+  const selisihCash =
+    Number(cashPayment.nominal || 0) - Number(grandTotal || 0);
 
   /* =====================================================
    STATUS PEMBAYARAN CASH (BARU - TIDAK MERUBAH LOGIC)
    ===================================================== */
 
-  /* ================= VALIDASI CASH BARU ================= */
-  const kurangBayarCash = useMemo(() => {
-    if (paymentSafe.paymentMethod !== "CASH") return 0;
-
-    return Number(grandTotal || 0) - Number(cashPayment.nominal || 0);
-  }, [grandTotal, cashPayment.nominal, paymentSafe.paymentMethod]);
-
-  const kembalianCash = useMemo(() => {
-    if (paymentSafe.paymentMethod !== "CASH") return 0;
-
-    return Math.max(
-      Number(cashPayment.nominal || 0) - Number(grandTotal || 0),
-      0
-    );
-  }, [grandTotal, cashPayment.nominal, paymentSafe.paymentMethod]);
+  const kurangBayarCash = selisihCash < 0 ? Math.abs(selisihCash) : 0;
+  const kembalianCash = selisihCash > 0 ? selisihCash : 0;
+  const isCashLunas = selisihCash >= 0;
 
   /* CASH VALID = lunas atau ada kembalian */
   const isCashValid = useMemo(() => {
@@ -540,19 +525,19 @@ export default function FormPaymentSection({
             </div>
             {/* ===== INFO KURANG BAYAR / KEMBALIAN CASH ===== */}
             {paymentSafe.paymentMethod === "CASH" && (
-              <>
-                {kurangBayarCash > 0 && (
-                  <div className="text-right font-bold text-red-600">
-                    KURANG BAYAR: Rp {kurangBayarCash.toLocaleString("id-ID")}
-                  </div>
-                )}
-
-                {kembalianCash > 0 && (
-                  <div className="text-right font-bold text-green-600">
-                    KEMBALIAN: Rp {kembalianCash.toLocaleString("id-ID")}
-                  </div>
-                )}
-              </>
+              <div
+                className={`text-right font-bold ${
+                  selisihCash < 0 ? "text-red-600" : "text-green-700"
+                }`}
+              >
+                {selisihCash < 0
+                  ? `KURANG BAYAR: Rp ${kurangBayarCash.toLocaleString(
+                      "id-ID"
+                    )}`
+                  : kembalianCash > 0
+                  ? `KEMBALIAN: Rp ${kembalianCash.toLocaleString("id-ID")}`
+                  : "PEMBAYARAN PAS"}
+              </div>
             )}
           </div>
         )}
