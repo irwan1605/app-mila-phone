@@ -189,17 +189,34 @@ export default function App() {
 
               <main className="flex-1 overflow-y-auto p-4">
                 <Routes>
-                  <Route path="/" element={<Navigate to="/dashboard" />} />
+                  <Route
+                    path="/"
+                    element={
+                      user?.role?.startsWith("pic_toko") ? (
+                        <Navigate
+                          to={`/toko/${getAllowedTokoIdFromUser(user)}`}
+                          replace
+                        />
+                      ) : (
+                        <Navigate to="/dashboard" replace />
+                      )
+                    }
+                  />
 
                   {/* Dashboard pusat realtime */}
                   <Route
                     path="/dashboard"
                     element={
-                      <ProtectedRoute
-                        allowedRoles={["superadmin", "admin", "pic_toko"]}
-                      >
-                        <Dashboard user={user} />
-                      </ProtectedRoute>
+                      user?.role?.startsWith("pic_toko") ? (
+                        <Navigate
+                          to={`/toko/${getAllowedTokoIdFromUser(user)}`}
+                          replace
+                        />
+                      ) : (
+                        <ProtectedRoute allowedRoles={["superadmin", "admin"]}>
+                          <Dashboard user={user} />
+                        </ProtectedRoute>
+                      )
                     }
                   />
 

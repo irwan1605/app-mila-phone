@@ -117,18 +117,23 @@ export default function Login({ onLogin, users: usersProp }) {
   
     if (typeof onLogin === "function") onLogin(logged);
   
-    // ================= REDIRECT =================
-    if (role === "superadmin" || role === "admin") {
-      navigate("/dashboard", { replace: true });
-      return;
-    }
-  
-    if (role.startsWith("pic_toko") && Number(tokoId)) {
-      navigate(`/toko/${tokoId}`, { replace: true });
-      return;
-    }
-  
-    navigate("/dashboard", { replace: true });
+  // ================= REDIRECT =================
+
+// ADMIN & SUPERADMIN
+if (role === "superadmin" || role === "admin") {
+  navigate("/dashboard", { replace: true });
+  return;
+}
+
+// PIC TOKO
+if (String(role).startsWith("pic_toko") && Number(tokoId)) {
+  navigate(`/dashboard-toko/${tokoId}`, { replace: true });
+  return;
+}
+
+// default
+navigate("/dashboard", { replace: true });
+
   };
   
 
