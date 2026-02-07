@@ -581,6 +581,10 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-slate-800">
+        Informasi Semua Transaksi
+      </h2>
+
       {/* ================= CARD SUMMARY DASHBOARD ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {/* 1. INFORMASI KEUANGAN */}
@@ -792,7 +796,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* FILTER (UNTUK CHART & ANALYTIC) */}
+      {/* FILTER (UNTUK CHART & ANALYTIC)
       <div className="bg-white rounded-2xl shadow p-4 mb-4">
         <div className="flex flex-wrap gap-2 items-center mb-3">
           <FaFilter className="text-gray-500" />
@@ -848,7 +852,7 @@ export default function Dashboard() {
             <FaFileExcel /> Export Excel
           </button>
         </div>
-      </div>
+      </div> */}
 
       {/* CHARTS (TETAP, TANPA TABLE) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">

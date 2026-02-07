@@ -1,6 +1,6 @@
 // src/pages/DashboardToko.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   FaStore,
   FaShoppingCart,
@@ -17,6 +17,8 @@ import { db } from "../firebase";
 import {
   listenPenjualanHemat,
   listenTransaksiByTokoHemat,
+  listenAllTransaksi,
+  listenMasterBarang,
 } from "../services/FirebaseService";
 
 import * as XLSX from "xlsx";
@@ -47,6 +49,16 @@ const fmt = (n) => {
 
 // ✅ KEY UNTUK SIMPAN TEMA
 const THEME_KEY = "DASHBOARD_TOKO_THEME";
+
+/* ======================
+   HELPER RUPIAH
+====================== */
+const rupiah = (n) =>
+  Number(n || 0).toLocaleString("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  });
 
 export default function DashboardToko(props) {
   const params = useParams();
@@ -96,6 +108,32 @@ export default function DashboardToko(props) {
   const [transaksiToko, setTransaksiToko] = useState([]);
   const [stockToko, setStockToko] = useState([]);
   const [loadingStock, setLoadingStock] = useState(true);
+  const [searchStock, setSearchStock] = useState("");
+  const { state } = useLocation();
+  const tableRef = useRef(null);
+  const namaToko = TOKO_AKTIF;
+
+  /* ======================
+     STATE
+  ====================== */
+  const [transaksi, setTransaksi] = useState([]);
+  const [masterBarang, setMasterBarang] = useState([]);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+
+  /* ======================
+     REALTIME LISTENER
+  ====================== */
+  useEffect(() => {
+    const unsub1 = listenAllTransaksi((rows) => setTransaksi(rows || []));
+    const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
+
+    return () => {
+      unsub1 && unsub1();
+      unsub2 && unsub2();
+    };
+  }, []);
 
   useEffect(() => {
     if (!firebaseTokoId) return;
@@ -135,15 +173,6 @@ export default function DashboardToko(props) {
   const [searchImei, setSearchImei] = useState("");
   const [quickItems, setQuickItems] = useState([]);
 
-  // ✅ PAGINATION TABLE PENJUALAN
-  const [page, setPage] = useState(1);
-  const perPage = 10;
-
-  const totalPage = useMemo(
-    () => Math.max(1, Math.ceil((quickItems || []).length / perPage)),
-    [quickItems, perPage]
-  );
-
   // ======================= CHART VOID & RETURN PER TOKO =======================
   // eslint-disable-next-line no-unused-vars
   const dataChartVoidReturn = useMemo(() => {
@@ -174,80 +203,10 @@ export default function DashboardToko(props) {
     }));
   }, [allTransaksi]);
 
-  const exportVoidExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(laporanVoidExport);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Laporan VOID");
-    XLSX.writeFile(wb, `Laporan_VOID_${toko?.tokoName}.xlsx`);
-  };
-
-  const exportReturnExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(laporanReturnExport);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Laporan RETURN");
-    XLSX.writeFile(wb, `Laporan_RETURN_${toko?.tokoName}.xlsx`);
-  };
-
-  useEffect(() => {
-    // kalau jumlah data berubah & page jadi kebesaran, turunkan ke max
-    if (page > totalPage) setPage(totalPage);
-  }, [totalPage, page]);
-
-  const [paymentType, setPaymentType] = useState(""); // "CASH" | "TRANSFER" | "KREDIT"
-  const [creditForm, setCreditForm] = useState({
-    paymentMethod: "",
-    mdr: "",
-    kategoriHarga: "",
-    mpProtec: "",
-    tenor: "",
-  });
-
   // ======================= DRAFT STORAGE (ANTI HILANG SAAT REFRESH) =======================
   const DRAFT_KEY = `DASHBOARD_DRAFT_TOKO_${tokoId}`;
 
   // Load draft saat pertama render
-  useEffect(() => {
-    const saved = localStorage.getItem(DRAFT_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setQuickItems(parsed.quickItems || []);
-        setPaymentType(parsed.paymentType || "");
-        setCreditForm(
-          parsed.creditForm || {
-            paymentMethod: "",
-            mdr: "",
-            kategoriHarga: "",
-            mpProtec: "",
-            tenor: "",
-          }
-        );
-      } catch {}
-    }
-  }, [DRAFT_KEY]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      DRAFT_KEY,
-      JSON.stringify({
-        quickItems,
-        paymentType,
-        creditForm,
-      })
-    );
-  }, [DRAFT_KEY, quickItems, paymentType, creditForm]);
-
-  // Simpan draft setiap ada perubahan
-  useEffect(() => {
-    localStorage.setItem(
-      DRAFT_KEY,
-      JSON.stringify({
-        quickItems,
-        paymentType,
-        creditForm,
-      })
-    );
-  }, [DRAFT_KEY, quickItems, paymentType, creditForm]);
 
   // ======================= THEME PERSIST (TIDAK BERUBAH SAAT REFRESH) =======================
   useEffect(() => {
@@ -296,75 +255,242 @@ export default function DashboardToko(props) {
     };
   }, [tokoId]);
 
-  // ======================= FILTER REALTIME VOID & RETURN (KHUSUS TOKO INI) =======================
-  const dataVoidRealtime = useMemo(() => {
+  // ======================= SUMMARY DASHBOARD TOKO =======================
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // 🔥 FILTER HANYA PENJUALAN TOKO INI
+  const penjualanToko = useMemo(() => {
     return (transaksiToko || []).filter(
+      (x) => String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
+    );
+  }, [transaksiToko]);
+
+  // 1️⃣ INFORMASI OMSET PEMBELIAN STOK
+  const totalOmsetPembelian = useMemo(() => {
+    return (transaksiToko || [])
+      .filter(
+        (x) =>
+          String(x.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
+          String(x.STATUS || "").toUpperCase() === "APPROVED"
+      )
+      .reduce((s, x) => s + Number(x.TOTAL || x.HARGA_UNIT || 0), 0);
+  }, [transaksiToko]);
+
+  // 2️⃣ TOTAL TRANSAKSI BERHASIL (INVOICE UNIK)
+  const totalTransaksiBerhasil = useMemo(() => {
+    const map = {};
+    penjualanToko.forEach((trx) => {
+      if (String(trx.STATUS).toUpperCase() !== "APPROVED") return;
+      const inv = String(trx.NO_INVOICE || "").trim();
+      if (inv) map[inv] = true;
+    });
+    return Object.keys(map).length;
+  }, [penjualanToko]);
+
+  // 3️⃣ TRANSAKSI PENDING
+  const totalPending = useMemo(() => {
+    return penjualanToko.filter(
+      (x) => String(x.STATUS).toUpperCase() === "PENDING"
+    ).length;
+  }, [penjualanToko]);
+
+  // 4️⃣ PENJUALAN HARI INI
+  const totalPenjualanHariIni = useMemo(() => {
+    return penjualanToko
+      .filter((x) => {
+        if (!x.TANGGAL_TRANSAKSI) return false;
+        return x.TANGGAL_TRANSAKSI.slice(0, 10) === todayStr;
+      })
+      .filter((x) => String(x.STATUS).toUpperCase() === "APPROVED")
+      .reduce((s, x) => s + Number(x.TOTAL || 0), 0);
+  }, [penjualanToko, todayStr]);
+
+  // 5️⃣ TOTAL UNIT TERJUAL
+  const totalUnitTerjual = useMemo(() => {
+    return penjualanToko.length;
+  }, [penjualanToko]);
+
+  // 6️⃣ INFORMASI PIUTANG
+  const totalPiutang = useMemo(() => {
+    return penjualanToko.filter(
       (x) =>
-        (x.STATUS || "").toUpperCase() === "VOID" &&
-        (x.PAYMENT_METODE || "").toUpperCase().includes("PENJUALAN") &&
-        x.NAMA_TOKO === (toko ? toko.tokoName : "")
+        String(x.SYSTEM_PAYMENT || "").toUpperCase() === "PIUTANG" &&
+        String(x.STATUS || "").toUpperCase() === "APPROVED"
+    ).length;
+  }, [penjualanToko]);
+
+  /* ======================
+     MAP MASTER BARANG
+  ====================== */
+  const masterMap = useMemo(() => {
+    const map = {};
+    masterBarang.forEach((b) => {
+      if (!b.brand || !b.namaBarang) return;
+      const key = `${b.brand}|${b.namaBarang}`;
+      map[key] = {
+        hargaSRP: Number(b.harga?.srp ?? b.hargaSRP ?? 0),
+        hargaGrosir: Number(b.harga?.grosir ?? b.hargaGrosir ?? 0),
+        hargaReseller: Number(b.harga?.reseller ?? b.hargaReseller ?? 0),
+      };
+    });
+    return map;
+  }, [masterBarang]);
+
+  const imeiFinalMap = useMemo(() => {
+    const map = {};
+
+    transaksi.forEach((t) => {
+      if (!t || t.STATUS !== "Approved" || !t.IMEI) return;
+
+      const imei = String(t.IMEI).trim();
+      const toko = String(t.NAMA_TOKO || "").trim();
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+      if (!map[imei]) {
+        map[imei] = {
+          imei,
+          toko: null,
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
+          noDo: t.NO_INVOICE || "-",
+          supplier: t.NAMA_SUPPLIER || "-",
+          brand: t.NAMA_BRAND || "-",
+          barang: t.NAMA_BARANG || "-",
+          keterangan: "",
+        };
+      }
+
+      if (metode === "PEMBELIAN") {
+        map[imei].toko = toko;
+      }
+
+      if (metode === "TRANSFER_MASUK") {
+        map[imei].toko = toko;
+        map[imei].keterangan = `Transfer masuk ke Toko ${toko}`;
+      }
+
+      if (metode === "PENJUALAN") {
+        delete map[imei];
+      }
+    });
+
+    return map;
+  }, [transaksi]);
+
+  /* ======================
+     BUILD ROWS
+  ====================== */
+  /* ======================
+   BUILD ROWS (FIX FINAL)
+====================== */
+  /* ======================
+   BUILD ROWS (FINAL FIX)
+====================== */
+  const rows = useMemo(() => {
+    if (!namaToko) return [];
+
+    const map = {};
+
+    transaksi.forEach((t) => {
+      if (!t) return;
+
+      const status = String(t.STATUS || "").toUpperCase();
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+      const tokoData = String(t.NAMA_TOKO || "").trim();
+
+      // ✅ hanya transaksi approved & toko ini
+      if (status !== "APPROVED") return;
+      if (tokoData !== namaToko) return;
+
+      // ======================
+      // KEY ITEM
+      // ======================
+      const key = t.IMEI
+        ? `IMEI-${t.IMEI}`
+        : `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+      // ======================
+      // HITUNG QTY
+      // ======================
+      let qty = 0;
+
+      if (["PEMBELIAN", "TRANSFER_MASUK"].includes(metode)) qty = 1;
+      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) qty = -1;
+
+      if (!map[key]) {
+        const harga = masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`] || {};
+
+        map[key] = {
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
+          noDo: t.NO_INVOICE || "-",
+          supplier: t.NAMA_SUPPLIER || "-",
+          namaToko: tokoData,
+          brand: t.NAMA_BRAND || "-",
+          barang: t.NAMA_BARANG || "-",
+          imei: t.IMEI || "",
+          qty: 0,
+
+          hargaSRP: harga.hargaSRP || 0,
+          hargaGrosir: harga.hargaGrosir || 0,
+          hargaReseller: harga.hargaReseller || 0,
+
+          statusBarang: "TERSEDIA",
+          keterangan: "",
+        };
+      }
+
+      map[key].qty += qty;
+    });
+
+    // ✅ hanya stok yang masih ada
+    return Object.values(map).filter((r) => r.qty > 0);
+  }, [transaksi, masterMap, namaToko]);
+
+  /* ======================
+   SEARCH FILTER
+====================== */
+  const filtered = useMemo(() => {
+    if (!search) return rows;
+    const q = search.toLowerCase();
+    return rows.filter(
+      (r) =>
+        r.brand.toLowerCase().includes(q) ||
+        r.barang.toLowerCase().includes(q) ||
+        r.imei.toLowerCase().includes(q) ||
+        r.noDo.toLowerCase().includes(q)
     );
-  }, [transaksiToko, toko]);
+  }, [rows, search]);
 
-  const dataReturnRealtime = useMemo(() => {
-    return (transaksiToko || []).filter(
-      (x) =>
-        (x.STATUS || "").toUpperCase() === "RETURN" &&
-        (x.PAYMENT_METODE || "").toUpperCase().includes("PENJUALAN") &&
-        x.NAMA_TOKO === (toko ? toko.tokoName : "")
+  // ======================= DETAIL STOK TOKO =======================
+
+  const detailStockToko = useMemo(() => {
+    const map = {};
+
+    (stockToko || []).forEach((x) => {
+      const key =
+        (x.NAMA_BRAND || "") +
+        "|" +
+        (x.NAMA_BARANG || "") +
+        "|" +
+        (x.KATEGORI_BRAND || "");
+
+      if (!map[key]) {
+        map[key] = {
+          brand: x.NAMA_BRAND,
+          barang: x.NAMA_BARANG,
+          kategori: x.KATEGORI_BRAND,
+          qty: 0,
+        };
+      }
+
+      // IMEI = 1 unit
+      map[key].qty += 1;
+    });
+
+    return Object.values(map).sort((a, b) =>
+      String(a.brand).localeCompare(String(b.brand))
     );
-  }, [transaksiToko, toko]);
-
-  useEffect(() => {
-    setLaporanVoid(dataVoidRealtime);
-    setLaporanReturn(dataReturnRealtime);
-  }, [dataVoidRealtime, dataReturnRealtime]);
-
-  // eslint-disable-next-line no-unused-vars
-  const totalVoid = useMemo(() => {
-    return laporanVoid.reduce(
-      (sum, x) => sum + Number(x.TOTAL || x.HARGA_UNIT || 0),
-      0
-    );
-  }, [laporanVoid]);
-
-  // eslint-disable-next-line no-unused-vars
-  const totalReturn = useMemo(() => {
-    return laporanReturn.reduce(
-      (sum, x) => sum + Number(x.TOTAL || x.HARGA_UNIT || 0),
-      0
-    );
-  }, [laporanReturn]);
-
-  // eslint-disable-next-line no-unused-vars
-  const laporanVoidExport = useMemo(() => {
-    return (laporanVoid || []).map((x, i) => ({
-      No: i + 1,
-      Tanggal: x.TANGGAL_TRANSAKSI,
-      Invoice: x.NO_INVOICE,
-      Brand: x.NAMA_BRAND,
-      Barang: x.NAMA_BARANG,
-      IMEI: x.IMEI,
-      Harga: x.HARGA_UNIT,
-      Status: x.STATUS,
-      Toko: x.NAMA_TOKO,
-    }));
-  }, [laporanVoid]);
-
-  // eslint-disable-next-line no-unused-vars
-  const laporanReturnExport = useMemo(() => {
-    return (laporanReturn || []).map((x, i) => ({
-      No: i + 1,
-      Tanggal: x.TANGGAL_TRANSAKSI,
-      Invoice: x.NO_INVOICE,
-      Brand: x.NAMA_BRAND,
-      Barang: x.NAMA_BARANG,
-      IMEI: x.IMEI,
-      Harga: x.HARGA_UNIT,
-      Status: x.STATUS,
-      Toko: x.NAMA_TOKO,
-    }));
-  }, [laporanReturn]);
+  }, [stockToko]);
 
   // ======================= HANDLER =======================
 
@@ -400,16 +526,16 @@ export default function DashboardToko(props) {
     const input = String(searchImei).trim();
     if (!input) return alert("Masukan IMEI");
     if (loadingStock) return alert("⏳ Loading data...");
-  
+
     const imeiFound = stockToko.find(
       (x) => String(x.IMEI || "").trim() === input
     );
-  
+
     if (!imeiFound) {
       alert(`❌ IMEI ${input} tidak ditemukan`);
       return;
     }
-  
+
     navigate(`/toko/${toko.code}/penjualan`, {
       state: {
         fastSale: true,
@@ -419,7 +545,7 @@ export default function DashboardToko(props) {
           namaBrand: imeiFound.NAMA_BRAND,
           namaBarang: imeiFound.NAMA_BARANG,
           imei: imeiFound.IMEI,
-  
+
           hargaMap: {
             srp: Number(imeiFound.HARGA_SRP || imeiFound.HARGA_UNIT || 0),
             grosir: Number(imeiFound.HARGA_GROSIR || 0),
@@ -429,7 +555,46 @@ export default function DashboardToko(props) {
       },
     });
   };
-  
+
+  // ======================= FILTER STOCK TABLE =======================
+  const filteredStockToko = useMemo(() => {
+    const keyword = String(searchStock || "").toLowerCase();
+
+    if (!keyword) return stockToko;
+
+    return stockToko.filter((x) => {
+      return (
+        String(x.NO_DO || "")
+          .toLowerCase()
+          .includes(keyword) ||
+        String(x.NAMA_BRAND || "")
+          .toLowerCase()
+          .includes(keyword) ||
+        String(x.NAMA_BARANG || "")
+          .toLowerCase()
+          .includes(keyword) ||
+        String(x.IMEI || "")
+          .toLowerCase()
+          .includes(keyword)
+      );
+    });
+  }, [stockToko, searchStock]);
+
+  /* ======================
+     PAGINATION
+  ====================== */
+  const pageCount = Math.ceil(filtered.length / pageSize) || 1;
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  /* ======================
+     EXPORT EXCEL
+  ====================== */
+  const exportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filtered);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "DetailStock");
+    XLSX.writeFile(wb, "Detail_Stock_Semua_Toko.xlsx");
+  };
 
   // ======================= HANDLE TIDAK ADA TOKO =======================
   if (!toko) {
@@ -600,110 +765,264 @@ export default function DashboardToko(props) {
         </div>
       </div>
 
-      {/* ===================== TABEL LAPORAN VOID & RETURN ===================== */}
-      <div
-        className={`${cardBgClass} rounded-2xl shadow-xl p-4 sm:p-5 backdrop-blur-xl mt-10`}
-      >
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
-          <h2 className="font-semibold text-base sm:text-lg">
-            Laporan VOID & RETURN Realtime
+      {/* ===================== DETAIL STOK TOKO ===================== */}
+      <div className={`${cardBgClass} rounded-2xl shadow-xl mt-10`}>
+        {/* HEADER */}
+        <div className="p-4 border-b border-slate-700 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+          <h2 className="font-semibold text-lg">
+            Detail Stok Toko : {toko.tokoName}
           </h2>
-          <div className="flex gap-2">
+
+          <div className="flex gap-2 w-full md:w-auto">
+            <input
+              value={searchStock}
+              onChange={(e) => setSearchStock(e.target.value)}
+              placeholder="Cari NO DO / Brand / Barang / IMEI"
+              className="flex-1 md:w-80 px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-sm outline-none"
+            />
+
             <button
-              onClick={exportVoidExcel}
-              className="px-3 py-1 rounded-lg bg-red-600 text-white text-xs"
+              onClick={() => handleOpen("penjualan")}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-green-500 text-white text-sm font-semibold"
             >
-              Export VOID
+              🛒 PENJUALAN
             </button>
+
             <button
-              onClick={exportReturnExcel}
-              className="px-3 py-1 rounded-lg bg-amber-600 text-white text-xs"
+              onClick={() => {
+                const ws = XLSX.utils.json_to_sheet(filteredStockToko);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Stock Toko");
+                XLSX.writeFile(wb, `STOK_${toko.tokoName}.xlsx`);
+              }}
+              className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm"
             >
-              Export RETURN
+              Export
             </button>
           </div>
         </div>
 
-        {/* ===== TABLE VOID ===== */}
-        <div className="mb-6">
-          <h3 className="font-semibold text-sm mb-2 text-red-400">
-            Tabel VOID
-          </h3>
-          <div className="overflow-x-auto border rounded-lg">
-            <table className="min-w-full text-xs">
-              <thead className={isDark ? "bg-slate-900" : "bg-slate-100"}>
-                <tr>
-                  <th className="p-2">Tanggal</th>
-                  <th className="p-2">Invoice</th>
-                  <th className="p-2">Brand</th>
-                  <th className="p-2">Barang</th>
-                  <th className="p-2">IMEI</th>
-                  <th className="p-2">Harga</th>
-                </tr>
-              </thead>
-              <tbody>
-                {laporanVoid.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="text-center p-3">
-                      Tidak ada data VOID
-                    </td>
-                  </tr>
-                ) : (
-                  laporanVoid.map((x, i) => (
-                    <tr key={i}>
-                      <td className="p-2">{x.TANGGAL_TRANSAKSI}</td>
-                      <td className="p-2">{x.NO_INVOICE}</td>
-                      <td className="p-2">{x.NAMA_BRAND}</td>
-                      <td className="p-2">{x.NAMA_BARANG}</td>
-                      <td className="p-2 font-mono">{x.IMEI}</td>
-                      <td className="p-2 text-right">Rp {fmt(x.HARGA_UNIT)}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* TABLE */}
+        <div className="p-4 min-h-screen bg-slate-900 text-white">
+          {!namaToko ? (
+            <div className="text-red-400 font-semibold">
+              ❌ Nama toko tidak ditemukan
+            </div>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold mb-4">
+                Detail Stok Toko : {namaToko}
+              </h2>
 
-        {/* ===== TABLE RETURN ===== */}
-        <div>
-          <h3 className="font-semibold text-sm mb-2 text-amber-400">
-            Tabel RETURN
-          </h3>
-          <div className="overflow-x-auto border rounded-lg">
-            <table className="min-w-full text-xs">
-              <thead className={isDark ? "bg-slate-900" : "bg-slate-100"}>
-                <tr>
-                  <th className="p-2">Tanggal</th>
-                  <th className="p-2">Invoice</th>
-                  <th className="p-2">Brand</th>
-                  <th className="p-2">Barang</th>
-                  <th className="p-2">IMEI</th>
-                  <th className="p-2">Harga</th>
-                </tr>
-              </thead>
-              <tbody>
-                {laporanReturn.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="text-center p-3">
-                      Tidak ada data RETURN
-                    </td>
-                  </tr>
-                ) : (
-                  laporanReturn.map((x, i) => (
-                    <tr key={i}>
-                      <td className="p-2">{x.TANGGAL_TRANSAKSI}</td>
-                      <td className="p-2">{x.NO_INVOICE}</td>
-                      <td className="p-2">{x.NAMA_BRAND}</td>
-                      <td className="p-2">{x.NAMA_BARANG}</td>
-                      <td className="p-2 font-mono">{x.IMEI}</td>
-                      <td className="p-2 text-right">Rp {fmt(x.HARGA_UNIT)}</td>
+              <div
+                ref={tableRef}
+                className="bg-white/10 p-4 rounded-xl mb-4 flex items-center"
+              >
+                <FaSearch />
+                <input
+                  className="ml-3 flex-1 bg-transparent outline-none"
+                  placeholder="Cari NO DO / Brand / Barang / IMEI"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                />
+                <button
+                  onClick={() =>
+                    navigate("/toko/:tokoId/penjualan", {
+                      state: {
+                        namaToko: namaToko,
+                        source: "DETAIL_STOCK_TOKO",
+                      },
+                    })
+                  }
+                  className="
+    flex items-center gap-2
+    px-5 py-2 rounded-xl
+    bg-gradient-to-r from-red-500 to-emerald-600
+    hover:from-emerald-600 hover:to-blue-500
+    text-white font-semibold
+    shadow-lg hover:shadow-green-400/50
+    transition-all duration-200
+  "
+                >
+                  🛒 PENJUALAN
+                </button>
+                <button
+                  onClick={exportExcel}
+                  className="ml-4 bg-green-600 px-4 py-2 rounded   bg-gradient-to-r from-green-500 to-emerald-600
+    hover:from-emerald-600 hover:to-blue-500
+    text-white font-semibold
+    shadow-lg hover:shadow-blue-400/50
+    transition-all duration-200"
+                >
+                  Export
+                </button>
+              </div>
+
+              <div className="bg-white text-slate-800 rounded-2xl shadow-xl overflow-x-auto scrollbar-dark">
+                <table className="w-full min-w-[2200px] text-sm">
+                  <thead className="bg-blue-100 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        No
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Tanggal
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        NO DO
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Supplier
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Toko
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Brand
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Barang
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        IMEI
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Qty
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Harga SRP
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Total SRP
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Harga Grosir
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Total Grosir
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Harga Reseller
+                      </th>
+                      <th className="px-3 py-2">STATUS</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Total Reseller
+                      </th>
+
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Keterangan
+                      </th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap">
+                        Aksi
+                      </th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+
+                  <tbody>
+                    {paginated.map((r, i) => {
+                      // ✅ WAJIB ADA DI SINI (DALAM MAP)
+                      const totalSRP = r.qty * r.hargaSRP;
+                      const totalGrosir = r.qty * r.hargaGrosir;
+                      const totalReseller = r.qty * r.hargaReseller;
+
+                      return (
+                        <tr key={i} className="border-b border-blue-700">
+                          <td className="px-3 py-2 text-center font-mono">
+                            {(page - 1) * pageSize + i + 1}
+                          </td>
+
+                          <td className="px-3 py-2">{r.tanggal}</td>
+                          <td className="px-3 py-2">{r.noDo}</td>
+                          <td className="px-3 py-2">{r.supplier}</td>
+                          <td className="px-3 py-2">{r.namaToko}</td>
+                          <td className="px-3 py-2">{r.brand}</td>
+                          <td className="px-3 py-2">{r.barang}</td>
+                          <td className="px-3 py-2 font-mono">{r.imei}</td>
+
+                          <td className="px-3 py-2 text-right font-semibold">
+                            {r.qty}
+                          </td>
+
+                          {/* HARGA SRP */}
+                          <td className="px-3 py-2 text-right">
+                            {rupiah(r.hargaSRP)}
+                          </td>
+
+                          {/* TOTAL SRP */}
+                          <td className="px-3 py-2 text-right font-semibold">
+                            {rupiah(totalSRP)}
+                          </td>
+
+                          {/* HARGA GROSIR */}
+                          <td className="px-3 py-2 text-right">
+                            {rupiah(r.hargaGrosir)}
+                          </td>
+
+                          {/* TOTAL GROSIR */}
+                          <td className="px-3 py-2 text-right font-semibold">
+                            {rupiah(totalGrosir)}
+                          </td>
+
+                          {/* HARGA RESELLER */}
+                          <td className="px-3 py-2 text-right">
+                            {rupiah(r.hargaReseller)}
+                          </td>
+
+                          {/* STATUS */}
+                          <td className="px-3 py-2 text-center font-semibold">
+                            {r.statusBarang}
+                          </td>
+
+                          {/* TOTAL RESELLER */}
+                          <td className="px-3 py-2 text-right font-semibold">
+                            {rupiah(totalReseller)}
+                          </td>
+
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {r.keterangan || "-"}
+                          </td>
+
+                          <td className="px-3 py-2 text-center">
+                            <button
+                              onClick={() =>
+                                navigate("/transfer-barang", {
+                                  state: { tokoPengirim: namaToko },
+                                })
+                              }
+                              className="px-3 py-1 rounded bg-orange-500 hover:bg-orange-600 text-white text-xs"
+                            >
+                              Transfer
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                <div className="flex justify-between p-4 text-sm">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => setPage(page - 1)}
+                  >
+                    Prev
+                  </button>
+                  <span>
+                    Page {page} / {pageCount}
+                  </span>
+                  <button
+                    disabled={page === pageCount}
+                    onClick={() => setPage(page + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
