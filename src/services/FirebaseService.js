@@ -2809,6 +2809,32 @@ export const deleteMasterSales = async (id) => {
   return remove(ref(db, `dataManagement/masterSales/${id}`));
 };
 
+
+export const listenMasterPaymentMetode = (callback) => {
+  const dbRef = ref(db, "master_payment_metode");
+
+  return onValue(dbRef, (snap) => {
+    const arr = [];
+
+    snap.forEach((child) => {
+      arr.push({
+        id: child.key,
+        ...child.val(),
+      });
+    });
+
+    callback(arr); // ✅ HARUS ARRAY
+  });
+};
+
+export const addMasterPaymentMetode = async (payload) => {
+  const dbRef = ref(db, "master_payment_metode");
+  await push(dbRef, payload);
+};
+
+
+
+
 /* =========================
    INIT MASTER HELPERS
 ========================= */
@@ -2868,8 +2894,8 @@ export const deleteMasterSupplier = masterSupplier.delete;
 // =======================
 
 const masterPaymentMetode = createMasterHelpers("masterPaymentMetode");
-export const listenMasterPaymentMetode = masterPaymentMetode.listen;
-export const addMasterPaymentMetode = masterPaymentMetode.add;
+// export const listenMasterPaymentMetode = masterPaymentMetode.listen;
+// export const addMasterPaymentMetode = masterPaymentMetode.add;
 export const updateMasterPaymentMetode = masterPaymentMetode.update;
 export const deleteMasterPaymentMetode = masterPaymentMetode.delete;
 

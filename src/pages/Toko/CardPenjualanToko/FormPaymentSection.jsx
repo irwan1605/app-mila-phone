@@ -8,6 +8,7 @@ import {
   listenMasterMDR,
   listenMasterTenor,
   listenMasterBank,
+  listenMasterPaymentMetode,
 } from "../../../services/FirebaseService";
 
 export default function FormPaymentSection({
@@ -59,6 +60,16 @@ export default function FormPaymentSection({
     nominal: 0,
   });
 
+  const [masterPaymentMetode, setMasterPaymentMetode] = useState([]);
+
+  useEffect(() => {
+    const unsub = listenMasterPaymentMetode((data) => {
+      setMasterPaymentMetode(data || []);
+    });
+
+    return () => unsub && unsub();
+  }, []);
+
   /* ================= LOAD MASTER ================= */
   useEffect(() => {
     const u1 = listenMasterMDR(setMasterMdr);
@@ -94,6 +105,17 @@ export default function FormPaymentSection({
     }),
     [value]
   );
+
+  const paymentMetodeOptions = useMemo(() => {
+    return [
+      ...new Set(
+        masterPaymentMetode.flatMap((m) =>
+          Array.isArray(m.paymentMetode) ? m.paymentMetode : [m.paymentMetode]
+        )
+      ),
+    ];
+  }, [masterPaymentMetode]);
+
   /* ================= HITUNG MDR (BARU) ================= */
   /* Nominal MDR = Nominal Dashboard KREDIT × Persen MDR (%) */
   const nominalMdr = useMemo(() => {
@@ -357,7 +379,7 @@ export default function FormPaymentSection({
         {paymentSplit.enabled &&
           paymentSplit.detail.map((p, i) => (
             <div key={i} className="grid grid-cols-4 gap-2">
-              <label className="font-semibold">Payment Metode</label>
+              <label className="font-semibold">Payment Metode User</label>
               <select
                 value={p.metode}
                 className="w-full border rounded px-2 py-1"
@@ -372,11 +394,12 @@ export default function FormPaymentSection({
                   setPaymentSplit({ ...paymentSplit, detail: next });
                 }}
               >
-                <option>CASH</option>
-                <option>DEBIT</option>
-                <option>QRIS</option>
-                <option>VHOCHER</option>
-                <option>TUKAR TAMBAH</option>
+                <option value="">Pilih Metode</option>
+                {paymentMetodeOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
               </select>
 
               {/* BANK */}
@@ -460,7 +483,7 @@ export default function FormPaymentSection({
         {/* CASH NORMAL → PAYMENT METODE */}
         {!paymentSplit.enabled && paymentSafe.paymentMethod === "CASH" && (
           <div className="space-y-2">
-            <label className="font-semibold">Payment Metode</label>
+            <label className="font-semibold">Payment Metode User</label>
 
             <div className="grid grid-cols-3 gap-2">
               {/* METODE */}
@@ -476,11 +499,12 @@ export default function FormPaymentSection({
                   })
                 }
               >
-                <option>CASH</option>
-                <option>DEBIT</option>
-                <option>QRIS</option>
-                <option>VHOCHER</option>
-                <option>TUKAR TAMBAH</option>
+                <option value="">Pilih Metode</option>
+                {paymentMetodeOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
               </select>
 
               {/* BANK (khusus DEBIT / QRIS) */}

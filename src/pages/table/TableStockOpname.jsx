@@ -4,6 +4,7 @@ import { FaSave } from "react-icons/fa";
 
 export default function TableStockOpname({
   data = [],
+  allTransaksi = [], // ✅ TAMBAH
   opnameMap = {},
   setOpnameMap,
   isSuperAdmin,
@@ -11,6 +12,43 @@ export default function TableStockOpname({
   tableRef,
   onVoidOpname,
 }) {
+  const getStatusStock = (item) => {
+    const imei = String(item.imei || item.key || "").trim();
+
+    if (!imei) return "TERSEDIA";
+
+    // ===============================
+    // 1️⃣ CEK PENJUALAN (PRIORITAS)
+    // ===============================
+    const isSold = allTransaksi.some(
+      (t) =>
+        t.STATUS === "Approved" &&
+        t.PAYMENT_METODE === "PENJUALAN" &&
+        String(t.IMEI || t.NOMOR_UNIK || "").trim() === imei
+    );
+
+    if (isSold) return "TERJUAL";
+
+    // ===============================
+    // 2️⃣ CEK TRANSFER
+    // ===============================
+    const hasTransfer = allTransaksi.some(
+      (t) =>
+        t.STATUS === "Approved" &&
+        (t.PAYMENT_METODE === "TRANSFER_MASUK" ||
+          t.PAYMENT_METODE === "TRANSFER_KELUAR") &&
+        String(t.IMEI || t.NOMOR_UNIK || "").trim() === imei
+    );
+
+    // transfer TETAP dianggap tersedia
+    if (hasTransfer) return "TERSEDIA";
+
+    // ===============================
+    // 3️⃣ DEFAULT
+    // ===============================
+    return "TERSEDIA";
+  };
+
   return (
     <div className="overflow-x-auto p-2" ref={tableRef}>
       <table className="w-full text-sm border">
@@ -64,7 +102,7 @@ export default function TableStockOpname({
                 </td>
 
                 <td className="p-2 border text-center font-bold">
-                  {r.statusBarang || "TERSEDIA"}
+                  {getStatusStock(r)}
                 </td>
 
                 <td className="p-2 border text-xs text-gray-600">

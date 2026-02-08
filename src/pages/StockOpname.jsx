@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   addTransaksi,
   updateTransaksi,
-  listenAllTransaksi ,
+  listenAllTransaksi,
   deleteTransaksi,
   addStock,
   reduceStock,
@@ -67,7 +67,6 @@ export default function StockOpname() {
   /* ================== STATE ================== */
   const [opnameMap, setOpnameMap] = useState({});
   const navigate = useNavigate();
-  
 
   const [form, setForm] = useState({});
   const [editId, setEditId] = useState(null);
@@ -133,10 +132,10 @@ export default function StockOpname() {
 
   useEffect(() => {
     if (typeof listenAllTransaksi !== "function") return;
-  
+
     const unsub = listenAllTransaksi((rows = []) => {
       console.log("🔥 ALL TRANSAKSI (RAW):", rows);
-  
+
       setAllTransaksi(
         rows.filter(
           (t) =>
@@ -153,11 +152,10 @@ export default function StockOpname() {
         )
       );
     });
-  
+
     return () => unsub && unsub();
   }, []);
-  
- 
+
   // ===============================
   // 3️⃣ STOCK MAP (AGREGAT STOK)
   // ===============================
@@ -178,65 +176,57 @@ export default function StockOpname() {
       )
     );
   }, [allTransaksi]);
-  
 
   const normalizeKey = (t = {}) => {
     if (t.IMEI) return String(t.IMEI).trim();
     if (t.NOMOR_UNIK) return String(t.NOMOR_UNIK).trim();
     return `${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`.trim();
   };
-  
 
   // ===============================
   // 4️⃣ DETAIL LOOKUP (WAJIB DI SINI)
   // ===============================
   const detailStockLookup = useMemo(() => {
     const map = {};
-  
+
     allTransaksi.forEach((t) => {
-      if (
-        !t ||
-        t.STATUS !== "Approved" ||
-        t.PAYMENT_METODE !== "PEMBELIAN"
-      )
+      if (!t || t.STATUS !== "Approved" || t.PAYMENT_METODE !== "PEMBELIAN")
         return;
-  
+
       const key = normalizeKey(t);
       if (!key) return;
-  
+
       // simpan data pembelian pertama saja
       if (!map[key]) {
         map[key] = {
           tanggal:
             t.TANGGAL_TRANSAKSI ||
             t.tanggal ||
-            new Date(t.createdAt || Date.now())
-              .toISOString()
-              .slice(0, 10),
-  
+            new Date(t.createdAt || Date.now()).toISOString().slice(0, 10),
+
           supplier: t.NAMA_SUPPLIER || "-",
-  
+
           imei: t.IMEI || t.NOMOR_UNIK || "",
         };
       }
     });
-  
+
     return map;
   }, [allTransaksi]);
 
   const masterPembelianLookup = useMemo(() => {
     const map = {};
-  
+
     allTransaksi.forEach((t) => {
       if (!t) return;
-  
+
       if (
         t.PAYMENT_METODE === "PEMBELIAN" &&
         t.STATUS === "Approved" &&
         t.IMEI
       ) {
         const key = String(t.IMEI).trim();
-  
+
         map[key] = {
           tanggal: t.TANGGAL_TRANSAKSI || "-",
           supplier: t.NAMA_SUPPLIER || "-",
@@ -244,22 +234,17 @@ export default function StockOpname() {
         };
       }
     });
-  
+
     console.log("MASTER PEMBELIAN LOOKUP:", map);
     return map;
   }, [allTransaksi]);
-  
-  
-  
-  
-  
 
   // ===============================
   // 5️⃣ AGGREGATED (BOLEH PAKAI detailStockLookup)
   // ===============================
   const aggregated = useMemo(() => {
     let rows = [];
-  
+
     if (filterToko === "semua") {
       Object.values(stockMap).forEach((perToko) => {
         rows.push(...Object.values(perToko));
@@ -267,10 +252,10 @@ export default function StockOpname() {
     } else if (stockMap[filterToko]) {
       rows = Object.values(stockMap[filterToko]);
     }
-  
+
     return rows.map((r) => {
       const meta = masterPembelianLookup[String(r.key).trim()];
-  
+
       return {
         ...r,
         tanggal: meta?.tanggal || "-",
@@ -279,13 +264,6 @@ export default function StockOpname() {
       };
     });
   }, [stockMap, filterToko, masterPembelianLookup]);
-  
-  
-  
-  
-  
-
-  
 
   const tableData = aggregated;
 
@@ -606,6 +584,7 @@ export default function StockOpname() {
         {/* OPNAME CEPAT */}
         <TableStockOpname
           data={paginatedData}
+          allTransaksi={allTransaksi} // ✅ TAMBAH INI
           opnameMap={opnameMap}
           setOpnameMap={setOpnameMap}
           isSuperAdmin={isSuperAdmin}

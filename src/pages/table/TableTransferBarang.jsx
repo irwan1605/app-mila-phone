@@ -372,28 +372,34 @@ export default function TableTransferBarang({ currentRole }) {
                     </div>
                   )}
 
-<td className="border px-3 py-2">
-  <div className="flex flex-nowrap gap-3 justify-center items-center">
-    {r.status !== "Rejected" && (
-      <>
-        {/* APPROVE */}
-        <button
-          title="Approve Transfer"
-          disabled={!isSuperAdmin || r.status !== "Pending"}
-          onClick={async () => {
-            if (!isSuperAdmin || r.status !== "Pending") return;
+                  <td className="border px-3 py-2">
+                    <div className="flex flex-nowrap gap-3 justify-center items-center">
+                      {r.status !== "Rejected" && (
+                        <>
+                          {/* APPROVE */}
+                          <button
+                            title="Approve Transfer"
+                            disabled={!isSuperAdmin || r.status !== "Pending"}
+                            onClick={async () => {
+                              if (!isSuperAdmin || r.status !== "Pending")
+                                return;
 
-            for (const imei of r.imeis || []) {
-              if (isImeiAlreadyUsed(imei)) {
-                alert(`❌ IMEI ${imei} sudah pernah dipakai (transfer / jual)!`);
-                return;
-              }
-            }
+                              for (const imei of r.imeis || []) {
+                                if (isImeiAlreadyUsed(imei)) {
+                                  alert(
+                                    `❌ IMEI ${imei} sudah pernah dipakai (transfer / jual)!`
+                                  );
+                                  return;
+                                }
+                              }
 
-            const sjId = await FirebaseService.approveTransferFINAL({ transfer: r });
-            navigate(`/surat-jalan/${sjId}`);
-          }}
-          className={`
+                              const sjId =
+                                await FirebaseService.approveTransferFINAL({
+                                  transfer: r,
+                                });
+                              navigate(`/surat-jalan/${sjId}`);
+                            }}
+                            className={`
             flex flex-col items-center justify-center gap-1
             px-3 py-2 rounded-lg text-[11px] font-bold
             ${
@@ -402,21 +408,24 @@ export default function TableTransferBarang({ currentRole }) {
                 : "bg-green-500 text-white hover:bg-green-600"
             }
           `}
-        >
-          <span className="text-sm">✔</span>
-          <span>Approve</span>
-        </button>
+                          >
+                            <span className="text-sm">✔</span>
+                            <span>Approve</span>
+                          </button>
 
-        {/* REJECT */}
-        <button
-          title="Reject Transfer"
-          disabled={!isSuperAdmin || r.status !== "Pending"}
-          onClick={async () => {
-            if (!isSuperAdmin || r.status !== "Pending") return;
-            await FirebaseService.rejectTransferFINAL({ transfer: r });
-            alert("Transfer ditolak & IMEI dikembalikan");
-          }}
-          className={`
+                          {/* REJECT */}
+                          <button
+                            title="Reject Transfer"
+                            disabled={!isSuperAdmin || r.status !== "Pending"}
+                            onClick={async () => {
+                              if (!isSuperAdmin || r.status !== "Pending")
+                                return;
+                              await FirebaseService.rejectTransferFINAL({
+                                transfer: r,
+                              });
+                              alert("Transfer ditolak & IMEI dikembalikan");
+                            }}
+                            className={`
             flex flex-col items-center justify-center gap-1
             px-3 py-2 rounded-lg text-[11px] font-bold
             ${
@@ -425,21 +434,21 @@ export default function TableTransferBarang({ currentRole }) {
                 : "bg-red-500 text-white hover:bg-red-600"
             }
           `}
-        >
-          <span className="text-sm">✖</span>
-          <span>Reject</span>
-        </button>
+                          >
+                            <span className="text-sm">✖</span>
+                            <span>Reject</span>
+                          </button>
 
-        {/* PRINT SURAT JALAN */}
-        <button
-          title="Print Surat Jalan"
-          disabled={!isSuperAdmin}
-          onClick={() => {
-            if (!isSuperAdmin) return;
-            const sjId = r.suratJalanId || r.id;
-            navigate(`/surat-jalan/${sjId}`);
-          }}
-          className={`
+                          {/* PRINT SURAT JALAN */}
+                          <button
+                            title="Print Surat Jalan"
+                            disabled={!isSuperAdmin}
+                            onClick={() => {
+                              if (!isSuperAdmin) return;
+                              const sjId = r.suratJalanId || r.id;
+                              navigate(`/surat-jalan/${sjId}`);
+                            }}
+                            className={`
             flex flex-col items-center justify-center gap-1
             px-3 py-2 rounded-lg text-[11px] font-bold
             ${
@@ -448,13 +457,13 @@ export default function TableTransferBarang({ currentRole }) {
                 : "bg-indigo-500 text-white hover:bg-indigo-600"
             }
           `}
-        >
-          <FaPrint className="text-sm" />
-          <span>Print</span>
-        </button>
+                          >
+                            <FaPrint className="text-sm" />
+                            <span>Print</span>
+                          </button>
 
-        {/* REJECT & ROLLBACK */}
-        <button
+                          {/* REJECT & ROLLBACK */}
+                          {/* <button
           title="Reject & Rollback Stok"
           disabled={!isSuperAdmin || (r.status !== "Pending" && r.status !== "Approved")}
           onClick={() => {
@@ -473,16 +482,17 @@ export default function TableTransferBarang({ currentRole }) {
         >
           <span className="text-sm">↩</span>
           <span>Rollback</span>
-        </button>
-      </>
-    )}
+        </button> */}
+                        </>
+                      )}
 
-    {r.status === "Rejected" && (
-      <span className="text-xs font-bold text-red-600">❌ DITOLAK</span>
-    )}
-  </div>
-</td>
-
+                      {r.status === "Rejected" && (
+                        <span className="text-xs font-bold text-red-600">
+                          ❌ DITOLAK
+                        </span>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
           </tbody>

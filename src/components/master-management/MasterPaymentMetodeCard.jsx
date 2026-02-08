@@ -8,117 +8,218 @@ import {
 import { FaPlus, FaEdit, FaTrash } from "react-icons/fa";
 import { exportToExcel } from "../../utils/exportToExcel";
 
+const PAYMENT_METODE_OPTIONS = [
+  "CASH",
+  "DEBIT",
+  "QRIS",
+  "VOUCHER",
+  "TUKAR TAMBAH",
+];
+
 export default function MasterPaymentMetodeCard() {
   const [rows, setRows] = useState([]);
   const [nama, setNama] = useState("");
+  const [paymentMetode, setPaymentMetode] = useState([]);
+  const [inputText, setInputText] = useState("");
   const [editId, setEditId] = useState(null);
 
-  // ===============================
-  // LISTENER
-  // ===============================
+  /* ================= LISTENER ================= */
   useEffect(() => {
     const unsub = listenMasterPaymentMetode((data) => {
-      setRows(data || []);
+      // 🔥 pastikan selalu array
+      setRows(Array.isArray(data) ? data : []);
     });
+
     return () => unsub && unsub();
   }, []);
 
-  // ===============================
-  // EXPORT EXCEL (SESUAI TABLE)
-  // ===============================
-  const handleExport = () => {
-    if (!rows || rows.length === 0) {
-      alert("❌ Data kosong, tidak bisa export");
-      return;
-    }
+  useEffect(() => {
+    console.log("ROWS TABLE:", rows);
+  }, [rows]);
 
-    const formattedData = rows.map((r) => ({
-      "Nama Payment Metode": r.nama || "",
+  /* ================= EXPORT ================= */
+  const handleExport = () => {
+    if (!rows.length) return alert("Data kosong");
+
+    const formatted = rows.map((r) => ({
+      Nama: r.nama || "",
+      "Payment Metode": Array.isArray(r.paymentMetode)
+        ? r.paymentMetode.join(", ")
+        : r.paymentMetode || "",
     }));
 
     exportToExcel({
-      data: formattedData,
+      data: formatted,
       fileName: "MASTER_PAYMENT_METODE",
       sheetName: "Payment Metode",
     });
   };
 
-  // ===============================
-  // SAVE
-  // ===============================
+  
+
+  /* ================= ADD METODE ================= */
+  const addMetode = (val) => {
+    if (!val) return;
+
+    const metode = String(val).toUpperCase();
+
+    if (paymentMetode.includes(metode)) return;
+
+    setPaymentMetode((prev) => [...prev, metode]);
+    setInputText("");
+  };
+
+  const removeMetode = (metode) => {
+    setPaymentMetode((prev) =>
+      prev.filter((m) => m !== metode)
+    );
+  };
+
+  /* ================= EDIT ================= */
+  const handleEdit = (row) => {
+    setEditId(row.id);
+    setNama(row.nama || "");
+    setPaymentMetode(
+      Array.isArray(row.paymentMetode)
+        ? row.paymentMetode
+        : row.paymentMetode
+        ? [row.paymentMetode]
+        : []
+    );
+  };
+
+  /* ================= SAVE ================= */
   const save = async () => {
-    if (!nama) {
-      alert("Nama wajib diisi");
-      return;
-    }
+    try {
+      if (!nama) return alert("Nama wajib diisi");
+      // if (paymentMetode.length === 0)
+      //   return alert("Payment metode minimal 1");
 
-    if (editId) {
-      await updateMasterPaymentMetode(editId, { nama });
-    } else {
-      await addMasterPaymentMetode({ nama });
-    }
+      const payload = {
+        nama,
+        paymentMetode,
+      };
 
-    setNama("");
-    setEditId(null);
+      if (editId) {
+        await updateMasterPaymentMetode(editId, payload);
+      } else {
+        await addMasterPaymentMetode(payload);
+      }
+
+      // RESET FORM
+      setNama("");
+      setPaymentMetode([]);
+      setEditId(null);
+
+      alert("✅ Data berhasil disimpan");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Gagal menyimpan data");
+    }
   };
 
   return (
     <div>
-      {/* ================= HEADER ================= */}
-      <div className="flex justify-between items-center mb-3">
+      {/* HEADER */}
+      <div className="flex justify-between mb-3">
         <h2 className="font-bold text-lg">MASTER PAYMENT METODE</h2>
 
         <button
           onClick={handleExport}
-          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700
-                   text-white text-sm font-semibold shadow"
+          className="px-4 py-2 bg-emerald-600 text-white rounded"
         >
           Export Excel
         </button>
       </div>
 
-      {/* ================= FORM ================= */}
-      <div className="flex gap-2 mb-4">
+      {/* FORM */}
+      <div className="space-y-2 mb-4">
         <input
           value={nama}
           onChange={(e) => setNama(e.target.value)}
-          placeholder="Nama Payment Metode"
+          placeholder="Nama Payment"
           className="border px-3 py-2 rounded w-full"
         />
+
+        <div className="flex gap-2">
+          <select
+            onChange={(e) => addMetode(e.target.value)}
+            className="border px-3 py-2 rounded"
+            value=""
+          >
+            <option value="">Pilih Metode</option>
+            {PAYMENT_METODE_OPTIONS.map((m) => (
+              <option key={m}>{m}</option>
+            ))}
+          </select>
+
+          <input
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Tambah metode manual"
+            className="border px-3 py-2 rounded w-full"
+          />
+
+          <button
+            onClick={() => addMetode(inputText)}
+            className="bg-indigo-600 text-white px-3 rounded"
+          >
+            +
+          </button>
+        </div>
+
+        {/* TAG */}
+        <div className="flex flex-wrap gap-2">
+          {paymentMetode.map((m) => (
+            <span
+              key={m}
+              className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-xs"
+            >
+              {m}
+              <button
+                onClick={() => removeMetode(m)}
+                className="ml-2 text-red-500"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+
         <button
           onClick={save}
-          className="bg-indigo-600 text-white px-4 rounded flex items-center"
+          className="bg-indigo-600 text-white px-4 py-2 rounded"
         >
-          <FaPlus />
+          <FaPlus /> Simpan
         </button>
       </div>
 
-      {/* ================= TABLE ================= */}
+      {/* TABLE */}
       <table className="w-full text-sm border">
         <thead className="bg-indigo-600 text-white">
           <tr>
             <th className="p-2">NO</th>
             <th className="p-2">NAMA</th>
+            <th className="p-2">PAYMENT METODE</th>
             <th className="p-2">AKSI</th>
           </tr>
         </thead>
+
         <tbody>
           {rows.map((r, i) => (
             <tr key={r.id} className="border-t">
               <td className="p-2 text-center">{i + 1}</td>
               <td className="p-2">{r.nama}</td>
+              <td className="p-2">
+                {Array.isArray(r.paymentMetode)
+                  ? r.paymentMetode.join(", ")
+                  : "-"}
+              </td>
               <td className="p-2 flex justify-center gap-2">
-                <button
-                  onClick={() => {
-                    setEditId(r.id);
-                    setNama(r.nama);
-                  }}
-                >
+                <button onClick={() => handleEdit(r)}>
                   <FaEdit />
                 </button>
-                <button
-                  onClick={() => deleteMasterPaymentMetode(r.id)}
-                >
+                <button onClick={() => deleteMasterPaymentMetode(r.id)}>
                   <FaTrash />
                 </button>
               </td>
@@ -127,7 +228,7 @@ export default function MasterPaymentMetodeCard() {
 
           {rows.length === 0 && (
             <tr>
-              <td colSpan={3} className="text-center py-4 text-slate-400">
+              <td colSpan={4} className="text-center py-4 text-gray-400">
                 Belum ada data
               </td>
             </tr>
