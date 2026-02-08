@@ -17,6 +17,7 @@ import jsPDF from "jspdf";
 
 import {
   listenAllTransaksi,
+  listenPenjualan,
   updateTransaksi,
   deleteTransaksi,
 } from "../../services/FirebaseService";
@@ -63,41 +64,42 @@ export default function SalesReport() {
 
   /* ===================== REALTIME ===================== */
   useEffect(() => {
-    const unsub = listenAllTransaksi((items = []) => {
+    const unsub = listenPenjualan((items = []) => {
       console.log("🔥 RAW ALL TRANSAKSI:", items);
-  
+
       // ===============================
       // 1️⃣ HEADER PENJUALAN (INVOICE)
       // ===============================
       const headerMap = {};
+
       items.forEach((x) => {
         const invoice = x.invoice || x.NO_INVOICE;
-        if (
-          invoice &&
-          invoice.startsWith("INV-") &&
-          x.payment
-        ) {
+
+        if (invoice && invoice.startsWith("INV-") && x.payment) {
           headerMap[invoice] = {
             invoice,
+
+            // ===== HEADER =====
             tanggal: x.tanggal || x.createdAt,
             user: x.user || {},
-            sales: x.user?.namaSales || "-",
-            toko: x.toko || x.NAMA_TOKO || x.TOKO,
-            total: x.payment?.grandTotal || 0,
-            status: x.statusPembayaran || "OK",
+            toko: x.toko || x.NAMA_TOKO || x.TOKO || "-",
+
+            // ===== PAYMENT (WAJIB ADA) =====
+            payment: x.payment || {},
+
+            status: x.statusPembayaran || "LUNAS",
           };
         }
       });
-  
+
       // ===============================
       // 2️⃣ DETAIL BARANG (AUTO FROM PENJUALAN)
       // ===============================
       const detailRows = items.filter(
         (x) =>
-          x.KETERANGAN === "AUTO FROM PENJUALAN" &&
-          (x.invoice || x.NO_INVOICE)
+          x.KETERANGAN === "AUTO FROM PENJUALAN" && (x.invoice || x.NO_INVOICE)
       );
-  
+
       // ===============================
       // 3️⃣ INVOICE YANG DIRETUR
       // ===============================
@@ -107,55 +109,132 @@ export default function SalesReport() {
             String(x.KETERANGAN || "").startsWith("REFUND dari invoice")
           )
           .map((x) =>
-            String(x.KETERANGAN)
-              .replace("REFUND dari invoice ", "")
-              .trim()
+            String(x.KETERANGAN).replace("REFUND dari invoice ", "").trim()
           )
       );
-  
+
       // ===============================
       // 4️⃣ JOIN HEADER + DETAIL
       // ===============================
       const finalRows = detailRows
-      .filter((d) => {
-        const inv = d.invoice || d.NO_INVOICE;
-        return !refundedInvoices.has(inv);
-      })
-      .map((d, idx) => {
-        const inv = d.invoice || d.NO_INVOICE;
-        const h = headerMap[inv] || {};
-    
-        return {
-          id: d.id || `${inv}-${idx}`,
-    
-          // ⬇⬇⬇ SAMAKAN DENGAN UI ⬇⬇⬇
-          TANGGAL_TRANSAKSI: h.tanggal || d.createdAt,
-          NO_INVOICE: inv,
-    
-          NAMA_USER: h.user?.namaPelanggan || "SYSTEM",
-          NAMA_SALES: h.sales || "-",
-          NAMA_TOKO: h.toko || d.TOKO || "-",
-    
-          NAMA_BRAND: d.NAMA_BRAND || "-",
-          NAMA_BARANG: d.NAMA_BARANG || "-",
-          IMEI: d.IMEI || "NON-IMEI",
-    
-          QTY: 1,
-          TOTAL: h.total || 0,
-          STATUS: h.status || "OK",
-        };
-      });
-  
+        .filter((d) => {
+          const inv = d.invoice || d.NO_INVOICE;
+          return !refundedInvoices.has(inv);
+        })
+        .map((d, idx) => {
+          const inv = d.invoice || d.NO_INVOICE;
+          const h = headerMap[inv] || {};
+          const payment = h.payment || {};
+
+          /* ================= PAYMENT METODE (SAMA TABLE PENJUALAN) ================= */
+          let paymentMetode = "-";
+          let namaBank = "-";
+          let nominalPayment = 0;
+
+          if (
+            Array.isArray(payment.splitPayment) &&
+            payment.splitPayment.length
+          ) {
+            paymentMetode = payment.splitPayment
+              .map((p) => p.metode)
+              .join(" + ");
+
+            namaBank = payment.splitPayment
+              .map((p) => p.bankNama || "-")
+              .join(" + ");
+
+            nominalPayment = payment.splitPayment.reduce(
+              (s, p) => s + Number(p.nominal || 0),
+              0
+            );
+          } else {
+            paymentMetode = payment.metode || payment.status || "-";
+
+            namaBank = payment.bankNama || payment.namaBank || "-";
+
+            nominalPayment =
+              Number(payment.nominalPayment || 0) ||
+              Number(payment.nominal || 0);
+          }
+
+          /* ================= AMBIL ITEM ASLI (SAMA TABLE PENJUALAN) ================= */
+          const item =
+            (items.find((t) => t.invoice === inv)?.items || [])[0] || {};
+
+          /* ================= KATEGORI (SAMA TABLE PENJUALAN) ================= */
+          const kategoriBarang = item.kategoriBarang || "-";
+
+          /* ================= HARGA (SAMA TABLE PENJUALAN) ================= */
+          let hargaSRP = 0;
+          let hargaGrosir = 0;
+          let hargaReseller = 0;
+
+          if (item.skemaHarga === "srp") {
+            hargaSRP = Number(item.hargaAktif || 0);
+          }
+
+          if (item.skemaHarga === "grosir") {
+            hargaGrosir = Number(item.hargaAktif || 0);
+          }
+
+          if (item.skemaHarga === "reseller") {
+            hargaReseller = Number(item.hargaAktif || 0);
+          }
+
+          return {
+            id: d.id || `${inv}-${idx}`,
+
+            /* ===== HEADER ===== */
+            TANGGAL_TRANSAKSI: h.tanggal || d.createdAt,
+            NO_INVOICE: inv,
+
+            NAMA_TOKO: h.toko || "-",
+            NAMA_USER: h.user?.namaPelanggan || "-",
+            NO_TLP: h.user?.noTlpPelanggan || "-", // ✅ FIX
+            STORE_HEAD: h.user?.storeHead || "-",
+            NAMA_SALES: h.user?.namaSales || "-",
+            SALES_HANDLE: h.user?.salesHandle || "-",
+
+            /* ===== BARANG ===== */
+            KATEGORI: kategoriBarang,
+
+            NAMA_BRAND: d.NAMA_BRAND || "-",
+            NAMA_BARANG: d.NAMA_BARANG || "-",
+            IMEI: d.IMEI || "NON-IMEI",
+            QTY: Number(d.QTY || 1),
+
+            HARGA_SRP: hargaSRP,
+            HARGA_GROSIR: hargaGrosir,
+            HARGA_RESELLER: hargaReseller,
+
+            /* ===== PAYMENT ===== */
+            STATUS_BAYAR: payment.status || "-",
+            PAYMENT_METODE: paymentMetode,
+            NAMA_BANK: namaBank,
+            NOMINAL_PAYMENT: nominalPayment,
+            DP_TALANGAN: Number(payment.dpTalangan || 0),
+
+            NAMA_MDR: payment.namaMdr || "-",
+            NOMINAL_MDR: Number(payment.nominalMdr || 0),
+
+            PAYMENT_KREDIT: payment.status === "PIUTANG" ? "KREDIT" : "LUNAS",
+
+            TENOR: payment.tenor || "-",
+
+            /* ===== KETERANGAN (PRIORITAS PAYMENT) ===== */
+            KETERANGAN: payment.keterangan || d.KETERANGAN || "-",
+
+            STATUS: h.status || "OK",
+            GRAND_TOTAL: Number(payment.grandTotal || 0),
+          };
+        });
+
       setAllData(finalRows);
       setCurrentPage(1);
     });
-  
+
     return () => unsub && unsub();
   }, []);
-  
-  
-
-
 
   const normalizeRow = (r) => {
     const item = r.items?.[0] || {};
@@ -176,45 +255,39 @@ export default function SalesReport() {
     };
   };
 
-
-
   const normalizeRecord = (r) => {
     return {
       id: r.id || r.key,
-  
+
       // ===== INVOICE =====
       NO_INVOICE: r.invoice || r.NO_INVOICE || "-",
-  
+
       // ===== TANGGAL =====
       TANGGAL_TRANSAKSI: r.createdAt || r.CREATED_AT || null,
-  
+
       // ===== TOKO =====
-      NAMA_TOKO:
-        r.toko ||
-        r.TOKO ||
-        "-", // real data kamu pakai TOKO
-  
+      NAMA_TOKO: r.toko || r.TOKO || "-", // real data kamu pakai TOKO
+
       // ===== BARANG =====
       NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "-",
       NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "-",
-  
+
       // ===== IMEI =====
       IMEI: r.IMEI || "NON-IMEI",
-  
+
       // ===== QTY =====
       QTY: r.QTY ? Number(r.QTY) : r.IMEI ? 1 : 0,
-  
+
       // ===== TOTAL =====
       TOTAL: Number(r.TOTAL || r.HARGA_JUAL || r.HARGA_SUPLAYER || 0),
-  
+
       // ===== USER =====
       NAMA_USER: r.NAMA_USER || "-",
       NAMA_SALES: r.NAMA_SALES || "-",
-  
+
       STATUS: "OK",
     };
   };
-  
 
   /* ===================== OPTIONS ===================== */
   const tokoOptions = useMemo(() => {
@@ -298,7 +371,7 @@ export default function SalesReport() {
   ]);
 
   const totalOmzet = useMemo(
-    () => filteredData.reduce((sum, r) => sum + Number(r.TOTAL || 0), 0),
+    () => filteredData.reduce((sum, r) => sum + Number(r.GRAND_TOTAL || 0), 0),
     [filteredData]
   );
 
@@ -320,15 +393,63 @@ export default function SalesReport() {
 
   const handleExportExcel = () => {
     try {
-      const ws = XLSX.utils.json_to_sheet(filteredData);
+      const exportData = filteredData.map((r, i) => ({
+        No: i + 1,
+  
+        Tanggal: r.TANGGAL_TRANSAKSI
+          ? new Date(r.TANGGAL_TRANSAKSI).toLocaleDateString("id-ID")
+          : "-",
+  
+        NoInvoice: r.NO_INVOICE,
+        NamaToko: r.NAMA_TOKO,
+        NamaPelanggan: r.NAMA_USER,
+        NoTlp: r.NO_TLP,
+        StoreHead: r.STORE_HEAD,
+        Sales: r.NAMA_SALES,
+        SalesHandle: r.SALES_HANDLE,
+  
+        Kategori: r.KATEGORI,
+        Brand: r.NAMA_BRAND,
+        NamaBarang: r.NAMA_BARANG,
+        IMEI: r.IMEI,
+        Qty: r.QTY,
+  
+        HargaSRP: r.HARGA_SRP,
+        HargaGrosir: r.HARGA_GROSIR,
+        HargaReseller: r.HARGA_RESELLER,
+  
+        StatusBayar: r.STATUS_BAYAR,
+        PaymentMetode: r.PAYMENT_METODE,
+        Bank: r.NAMA_BANK,
+        NominalPayment: r.NOMINAL_PAYMENT,
+  
+        DPTalangan: r.DP_TALANGAN,
+        NamaMDR: r.NAMA_MDR,
+        NominalMDR: r.NOMINAL_MDR,
+  
+        PaymentKredit: r.PAYMENT_KREDIT,
+        Tenor: r.TENOR,
+  
+        Keterangan: r.KETERANGAN,
+        Status: r.STATUS,
+        GrandTotal: r.GRAND_TOTAL,
+      }));
+  
+      const ws = XLSX.utils.json_to_sheet(exportData);
+  
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "SalesReport");
-      XLSX.writeFile(wb, `SalesReport_${myTokoName || "ALL"}.xlsx`);
-    } catch (e) {
+  
+      XLSX.writeFile(
+        wb,
+        `SalesReport_${myTokoName || "ALL"}_${Date.now()}.xlsx`
+      );
+    } catch (err) {
+      console.error(err);
       alert("Gagal export Excel");
     }
   };
-
+  
   const handleExportPDF = async () => {
     try {
       const el = tableRef.current;
@@ -481,16 +602,33 @@ export default function SalesReport() {
             <tr>
               <th className="p-2 border">No</th>
               <th className="p-2 border">Tanggal</th>
-              <th className="p-2 border">Invoice</th>
-              <th className="p-2 border">User</th>
+              <th className="p-2 border">No Invoice</th>
+              <th className="p-2 border">Nama Toko</th>
+              <th className="p-2 border">Nama Pelanggan</th>
+              <th className="p-2 border">No TLP</th>
+              <th className="p-2 border">Store Head</th>
               <th className="p-2 border">Sales</th>
-              <th className="p-2 border">Toko</th>
+              <th className="p-2 border">Sales Handle</th>
+              <th className="p-2 border">Kategori</th>
               <th className="p-2 border">Brand</th>
-              <th className="p-2 border">Barang</th>
+              <th className="p-2 border">Nama Barang</th>
               <th className="p-2 border">No IMEI</th>
               <th className="p-2 border">Qty</th>
-              <th className="p-2 border">Total</th>
+              <th className="p-2 border">Harga SRP</th>
+              <th className="p-2 border">Harga Grosir</th>
+              <th className="p-2 border">Harga Reseller</th>
+              <th className="p-2 border">Status Bayar</th>
+              <th className="p-2 border">Payment Metode</th>
+              <th className="p-2 border">Bank</th>
+              <th className="p-2 border">Nominal Payment</th>
+              <th className="p-2 border">DP Talangan</th>
+              <th className="p-2 border">Nama MDR</th>
+              <th className="p-2 border">Nominal MDR</th>
+              <th className="p-2 border">Payment Kredit</th>
+              <th className="p-2 border">Tenor</th>
+              <th className="p-2 border">Keterangan</th>
               <th className="p-2 border">Status</th>
+              <th className="p-2 border">Grand Total</th>
             </tr>
           </thead>
 
@@ -509,21 +647,46 @@ export default function SalesReport() {
                 </td>
 
                 <td className="p-2 border">{row.NO_INVOICE}</td>
-                <td className="p-2 border">{row.NAMA_USER}</td>
-                <td className="p-2 border">{row.NAMA_SALES}</td>
                 <td className="p-2 border">{row.NAMA_TOKO}</td>
+                <td className="p-2 border">{row.NAMA_USER}</td>
+                <td className="p-2 border">{row.NO_TLP}</td>
+                <td className="p-2 border">{row.STORE_HEAD}</td>
+                <td className="p-2 border">{row.NAMA_SALES}</td>
+                <td className="p-2 border">{row.SALES_HANDLE}</td>
+                <td className="p-2 border">{row.KATEGORI}</td>
                 <td className="p-2 border">{row.NAMA_BRAND}</td>
                 <td className="p-2 border">{row.NAMA_BARANG}</td>
-                <td className="p-2 border font-mono text-xs">
-                  {row.IMEI !== "-" ? row.IMEI : "NON-IMEI"}
+                <td className="p-2 border">{row.IMEI}</td>
+                <td className="p-2 border">{row.QTY}</td>
+                <td className="p-2 border">
+                  Rp {row.HARGA_SRP.toLocaleString("id-ID")}
                 </td>
-                <td className="p-2 border text-center">{row.QTY}</td>
-
-                <td className="p-2 border text-right font-bold">
-                  Rp {Number(row.TOTAL || 0).toLocaleString("id-ID")}
+                <td className="p-2 border">
+                  Rp {row.HARGA_GROSIR.toLocaleString("id-ID")}
                 </td>
-
+                <td className="p-2 border">
+                  Rp {row.HARGA_RESELLER.toLocaleString("id-ID")}
+                </td>
+                <td className="p-2 border">{row.STATUS_BAYAR}</td>
+                <td className="p-2 border">{row.PAYMENT_METODE}</td>
+                <td className="p-2 border">{row.NAMA_BANK}</td>
+                <td className="p-2 border">
+                  Rp {row.NOMINAL_PAYMENT.toLocaleString("id-ID")}
+                </td>
+                <td className="p-2 border">
+                  Rp {row.DP_TALANGAN.toLocaleString("id-ID")}
+                </td>
+                <td className="p-2 border">{row.NAMA_MDR}</td>
+                <td className="p-2 border">
+                  Rp {row.NOMINAL_MDR.toLocaleString("id-ID")}
+                </td>
+                <td className="p-2 border">{row.PAYMENT_KREDIT}</td>
+                <td className="p-2 border">{row.TENOR}</td>
+                <td className="p-2 border">{row.KETERANGAN}</td>
                 <td className="p-2 border">{row.STATUS}</td>
+                <td className="p-2 border">
+                  Rp {row.GRAND_TOTAL.toLocaleString("id-ID")}
+                </td>
               </tr>
             ))}
           </tbody>
