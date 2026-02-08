@@ -53,6 +53,7 @@ export default function TablePenjualan() {
   const [keyword, setKeyword] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [showRefund, setShowRefund] = useState(false);
 
   const pageSize = 10;
 
@@ -244,10 +245,16 @@ export default function TablePenjualan() {
   /* ================= FILTER ================= */
   const filteredRows = useMemo(() => {
     return tableRows.filter((r) => {
-      // ✅ REFUND LANGSUNG HILANG DARI TABLE
-      if (String(r.status).toUpperCase() === "REFUND") {
+      const status = String(r.status || "")
+        .trim()
+        .toUpperCase();
+
+      // ✅ REFUND HILANG OTOMATIS
+      if (!showRefund && status === "REFUND") {
         return false;
       }
+
+      // ✅ FILTER TOKO
       if (!isSuperAdmin && tokoLogin) {
         const dbToko = String(r.toko || "")
           .replace(/\s+/g, "")
@@ -263,19 +270,19 @@ export default function TablePenjualan() {
       }
 
       const text = `
-      ${r.invoice}
-      ${r.toko}
-      ${r.pelanggan}
-      ${r.idpelanggan}
-      ${r.sales}
-      ${r.salesHandle}
-      ${r.kategoriBarang}
-      ${r.namaBrand}
-      ${r.namaBarang}
-      ${r.imei}
-      ${r.namaBank}
-      ${r.nominalPaymentMetode}
-    `.toLowerCase();
+        ${r.invoice}
+        ${r.toko}
+        ${r.pelanggan}
+        ${r.idpelanggan}
+        ${r.sales}
+        ${r.salesHandle}
+        ${r.kategoriBarang}
+        ${r.namaBrand}
+        ${r.namaBarang}
+        ${r.imei}
+        ${r.namaBank}
+        ${r.nominalPaymentMetode}
+      `.toLowerCase();
 
       const matchText = text.includes(keyword.toLowerCase());
 
@@ -291,7 +298,15 @@ export default function TablePenjualan() {
 
       return matchText && matchDate;
     });
-  }, [tableRows, keyword, dateFrom, dateTo, isSuperAdmin, tokoLogin]);
+  }, [
+    tableRows,
+    keyword,
+    dateFrom,
+    dateTo,
+    isSuperAdmin,
+    tokoLogin,
+    showRefund,
+  ]);
 
   /* ================= PAGINATION ================= */
   const pageCount = Math.ceil(filteredRows.length / pageSize);
@@ -413,124 +428,47 @@ export default function TablePenjualan() {
     return TOKO_NAME_TO_ID[nama] || "";
   };
 
+  const [refundLoading, setRefundLoading] = useState(null);
+
   const handleRefund = async (row) => {
     if (!isSuperAdmin) {
-      return alert("Refund hanya bisa dilakukan oleh Superadmin");
-    }
-    if (row.status === "REFUND") {
-      return alert("Barang ini sudah Pernah Di Refund");
+      alert("Refund hanya bisa dilakukan oleh Superadmin");
+      return;
     }
 
-    if (!row.trxKey) {
-      console.warn("trxKey belum ada, skip warning");
+    if (refundLoading === row.id) return;
+
+    const statusNow = String(row.statusPembayaran || "")
+      .toUpperCase()
+      .trim();
+
+    if (statusNow === "REFUND") {
+      return alert("Barang ini sudah pernah di Refund");
     }
 
     if (!window.confirm("Yakin ingin RETUR / REFUND barang ini?")) return;
 
+    setRefundLoading(row.id);
+
     try {
-      /* ================= TOKO ID ================= */
-      const TOKO_REFUND_MAP = {
-        "CILANGKAP PUSAT": "1",
-        CIBINONG: "2",
-        "GAS ALAM": "3",
-        CITEUREUP: "4",
-        CIRACAS: "5",
-        "METLAND 1": "6",
-        "METLAND 2": "7",
-        PITARA: "8",
-        "KOTA WISATA": "9",
-        SAWANGAN: "10",
-      };
-
-      console.log("ROW REFUND:", row);
-
-      const tokoName = String(row.toko || "")
-        .trim()
-        .toUpperCase();
-      const tokoIdFix = TOKO_REFUND_MAP[tokoName];
-      if (!tokoIdFix) throw new Error("ID TOKO INVALID");
-
-      const brand = row.namaBrand || "-";
-      const barang = row.namaBarang || "-";
-      const imei =
-        row.imei && row.imei !== "-" ? row.imei.split(",")[0].trim() : "";
-      const qty = Number(row.qty || 1);
-
-      const payload = {
-        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
-        NO_INVOICE: `RET-${Date.now()}`,
-        NAMA_TOKO: tokoName,
-        NAMA_SUPPLIER: "-",
-        NAMA_BRAND: brand,
-        NAMA_BARANG: barang,
-        QTY: qty,
-        IMEI: imei,
-        NOMOR_UNIK: imei || `${brand}|${barang}`,
-        PAYMENT_METODE: "RETUR",
-        STATUS: "Approved",
-        KETERANGAN: `REFUND dari invoice ${row.invoice}`,
-        INVOICE_ASAL: row.invoice,
-      };
-
-      await addTransaksi(tokoIdFix, payload);
-
       await updateTransaksiPenjualan(
-        row.tokoId,
         row.trxKey,
-        {
-          statusPembayaran: "REFUND",
-          refundedAt: Date.now(),
-        },
-        userLogin   // ✅ WAJIB
+        { statusPembayaran: "REFUND" },
+        userLogin
       );
-      
-      
 
-      if (imei) {
-        const stokSnap = await get(ref(db, `toko/${tokoIdFix}/stok`));
-
-        if (stokSnap.exists()) {
-          stokSnap.forEach((c) => {
-            const val = c.val();
-            const dbImei = String(val.IMEI || val.imei || "").trim();
-
-            if (dbImei === imei) {
-              update(ref(db, `toko/${tokoIdFix}/stok/${c.key}`), {
-                qty: 1,
-                QTY: 1,
-                statusBarang: "TERSEDIA",
-                STATUS: "TERSEDIA",
-                keterangan: `REFUND dari ${row.invoice}`,
-              });
-            }
-          });
-        }
-
-        await remove(ref(db, `imeiLock/${imei}`));
-
-        await update(
-          ref(db, `toko/${tokoIdFix}/transaksi/${row.id}`),
-          {
-            STATUS: "REFUND",
-            statusPembayaran: "REFUND",
-            refundedAt: Date.now(),
-          }
-        );
-        
+      if (row.imei) {
+        try {
+          await remove(ref(db, `imeiLock/${row.imei}`));
+        } catch {}
       }
 
-      // 🔥 INI YANG DIUBAH
       alert("✅ Refund Barang BERHASIL");
-      // ✅ LANGSUNG HILANGKAN DARI TABLE (TANPA TUNGGU REALTIME)
     } catch (e) {
       console.error(e);
-
-      // 🔥 PAKSA SUKSES JIKA STOK SUDAH BALIK
-      if (String(e.message).includes("Akses ditolak")) {
-        alert("✅ Refund Barang BERHASIL");
-      } else {
-        alert("❌ Refund gagal: " + e.message);
-      }
+      alert("❌ Refund gagal: " + e.message);
+    } finally {
+      setRefundLoading(null);
     }
   };
 
@@ -638,6 +576,15 @@ export default function TablePenjualan() {
           onChange={(e) => setDateTo(e.target.value)}
         />
       </div>
+
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={showRefund}
+          onChange={(e) => setShowRefund(e.target.checked)}
+        />
+        Tampilkan transaksi refund
+      </label>
 
       {/* SCROLL HORIZONTAL */}
       <div className="relative overflow-x-auto rounded-xl border border-gray-300 shadow-md">
@@ -836,14 +783,24 @@ export default function TablePenjualan() {
                     </button>
 
                     {/* REFUND */}
-                    {isSuperAdmin && row.status !== "REFUND" && (
+
+                    {isSuperAdmin && (
                       <button
                         onClick={() => handleRefund(row)}
-                        className="bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600"
+                        disabled={refundLoading === row.id}
+                        className="btn-refund bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600"
+                      >
+                        {refundLoading === row.id ? "Processing..." : "Refund"}
+                      </button>
+                    )}
+                    {/* {isSuperAdmin && row.status !== "REFUND" && (
+                      <button
+                        onClick={() => handleRefund(row)}
+                        className="btn-refund bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600"
                       >
                         🔄 Refund
                       </button>
-                    )}
+                    )} */}
                   </div>
                 </td>
               </tr>

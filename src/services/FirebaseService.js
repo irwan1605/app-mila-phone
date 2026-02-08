@@ -83,7 +83,6 @@ export const listenTransferBarangMasuk = (namaToko, callback) => {
   return () => unsub();
 };
 
-
 export const listenDetailStokToko = (namaToko, callback) => {
   if (!namaToko) return () => {};
 
@@ -122,7 +121,7 @@ export const submitPenjualanAtomic = async (data) => {
       ...user,
       idPelanggan: user.idPelanggan || "",
     },
-    
+
     statusPembayaran: "OK",
     PAYMENT_METODE: "PENJUALAN",
     STATUS: "Approved",
@@ -245,37 +244,57 @@ export const getUserRole = async (username) => {
 export const updateTransaksiPenjualan = async (trxId, payload, userLogin) => {
   if (!trxId) throw new Error("ID transaksi kosong");
 
-  // 🔒 Proteksi role
-  if (!["superadmin", "admin"].includes(userLogin.role)) {
-    throw new Error("Akses ditolak");
+  const role =
+  userLogin?.role ||
+  userLogin?.ROLE ||
+  "";
+
+if (!["superadmin", "admin"].includes(role.toLowerCase())) {
+  throw new Error("Akses ditolak");
+}
+
+  const tokoSnap = await get(ref(db, "toko"));
+
+  if (!tokoSnap.exists()) {
+    throw new Error("Data toko tidak ditemukan");
   }
 
-  const trxRef = ref(db, `penjualan/${trxId}`);
-  const snap = await get(trxRef);
+  let trxRef = null;
+  let oldData = null;
 
-  if (!snap.exists()) {
+  // 🔍 cari transaksi di semua toko
+  tokoSnap.forEach((toko) => {
+    const transaksi = toko.child("transaksi");
+
+    transaksi.forEach((trx) => {
+      if (trx.key === trxId) {
+        trxRef = ref(db, `toko/${toko.key}/transaksi/${trxId}`);
+        oldData = trx.val();
+      }
+    });
+  });
+
+  if (!trxRef) {
     throw new Error("Transaksi tidak ditemukan");
   }
 
-  const oldData = snap.val();
-
-  // 🧾 Audit log
+  // ================= AUDIT =================
   const audit = {
-    action: "EDIT",
+    action: payload.statusPembayaran === "REFUND" ? "REFUND" : "EDIT",
     invoice: oldData.invoice,
     before: {
-      user: oldData.user,
+      statusPembayaran: oldData.statusPembayaran,
     },
     after: {
-      user: payload.user,
+      statusPembayaran: payload.statusPembayaran || oldData.statusPembayaran,
     },
-    editedBy: userLogin.username || userLogin.uid,
+    editedBy: userLogin.username,
     role: userLogin.role,
     at: Date.now(),
   };
 
   await update(trxRef, {
-    user: payload.user,
+    ...payload,
     updatedAt: Date.now(),
     audit: [...(oldData.audit || []), audit],
   });
@@ -403,21 +422,35 @@ export const addTransferBarang = async (data) => {
   return transferRef.key;
 };
 
-export const refundPenjualan = async (trx) => {
-  // 1. Tandai transaksi REFUND
-  await update(ref(db, `penjualan/${trx.id}`), {
-    STATUS: "REFUND",
-    refundedAt: Date.now(),
-  });
+export const refundPenjualan = async (row, userLogin) => {
+  const updates = {};
 
-  // 2. Kembalikan stok
-  for (const item of trx.items) {
-    if (item.imeiList?.length) {
-      await restoreStockByImeiRealtime(item.imeiList[0], trx.toko);
-    } else {
-      await returnStock(trx.tokoId, item.sku, item.qty);
-    }
+  // =========================
+  // 1. UPDATE STATUS TRANSAKSI
+  // =========================
+  updates[`toko/${row.tokoId}/transaksi/${row.trxKey}/statusPembayaran`] =
+    "REFUND";
+
+  updates[`toko/${row.tokoId}/transaksi/${row.trxKey}/STATUS`] = "REFUND";
+
+  updates[`toko/${row.tokoId}/transaksi/${row.trxKey}/refundedAt`] = Date.now();
+
+  updates[`toko/${row.tokoId}/transaksi/${row.trxKey}/refundedBy`] =
+    userLogin?.username || "-";
+
+  // =========================
+  // 2. KEMBALIKAN STOCK IMEI
+  // =========================
+  if (row.imei) {
+    updates[`stokToko/${row.tokoId}/${row.imei}/status`] = "TERSEDIA";
+
+    updates[`stokToko/${row.tokoId}/${row.imei}/updatedAt`] = Date.now();
+
+    // unlock imei
+    updates[`imeiLock/${row.imei}`] = null;
   }
+
+  await update(ref(db), updates);
 };
 
 /* ===============================
@@ -2032,7 +2065,6 @@ export const approveTransferFINAL = async ({ transfer }) => {
   // 🔹 KASUS BARANG PAKAI IMEI
   if (safeImeis.length > 0) {
     for (const imei of safeImeis) {
-
       // 🔻 TRANSFER KELUAR (TOKO ASAL)
       await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
@@ -2129,8 +2161,6 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
   return noSuratJalan;
 };
-
-
 
 export const editTransferFINAL = async (id, data) => {
   await update(ref(db, `transfer_barang/${id}`), {
@@ -2594,67 +2624,39 @@ export const listenPenjualanRealtime = (callback) => {
   });
 };
 
+export const refundRestorePenjualan = async (trx) => {
+  try {
+    const updates = {};
 
+    // =========================
+    // 1. UPDATE STATUS TRANSAKSI
+    // =========================
+    updates[`toko/${trx.tokoId}/transaksi/${trx.trxKey}/statusPembayaran`] =
+      "REFUND";
 
-export const refundRestorePenjualan = async (row) => {
-  const { id, toko, userLogin, imei, invoice } = row;
+    updates[`toko/${trx.tokoId}/transaksi/${trx.trxKey}/refundAt`] = Date.now();
 
-  if (!id) throw new Error("ID transaksi tidak ditemukan");
+    // =========================
+    // 2. KEMBALIKAN STOCK IMEI
+    // =========================
+    if (trx.items) {
+      trx.items.forEach((item) => {
+        if (!item.imei) return;
 
-  // 🔥 NORMALISASI TOKO (sesuai struktur DB kamu)
-  const tokoId = String(toko || "")
-    .trim()
-    .replace(/\s+/g, " ");
+        updates[`stokToko/${trx.tokoId}/${item.imei}/status`] = "TERSEDIA";
 
-  // ============================
-  // 1. UPDATE STATUS PENJUALAN
-  // ============================
-  await update(ref(db, `toko/${tokoId}/penjualan/${id}`), {
-    statusPembayaran: "REFUND",   // 🔥 dari OK → REFUND
-    refundedAt: Date.now(),
-    refundedBy: userLogin?.username || userLogin?.email || "system",
-    keterangan: `REFUND dari ${invoice || id}`,
-  });
-
-  // ============================
-  // 2. RESTORE STOK / IMEI
-  // ============================
-  if (imei && imei !== "-") {
-    const imeiArr = imei.split(",");
-
-    for (const im of imeiArr) {
-      const imeiTrim = im.trim();
-
-      // 🔍 Cari IMEI di stok toko
-      const stokSnap = await get(ref(db, `toko/${tokoId}/stok`));
-
-      if (stokSnap.exists()) {
-        stokSnap.forEach((c) => {
-          const val = c.val();
-
-          if (String(val.IMEI || val.imei || "") === imeiTrim) {
-            // 🔥 Kembalikan stok
-            update(ref(db, `toko/${tokoId}/stok/${c.key}`), {
-              QTY: 1,                 // stok balik 1
-              qty: 1,
-              STATUS: "TERSEDIA",     // hilangkan SOLD
-              statusBarang: "TERSEDIA",
-              keterangan: `REFUND dari ${invoice || id}`,
-            });
-          }
-        });
-      }
-
-      // ============================
-      // 3. HAPUS IMEI LOCK (kalau ada)
-      // ============================
-      await remove(ref(db, `imeiLock/${imeiTrim}`));
+        updates[`stokToko/${trx.tokoId}/${item.imei}/updatedAt`] = Date.now();
+      });
     }
+
+    await update(ref(db), updates);
+
+    return true;
+  } catch (err) {
+    console.error("REFUND ERROR:", err);
+    return false;
   }
-
-  return true;
 };
-
 
 /* =========================================================
    LIST IMEI TOKO (AUTOCOMPLETE SAAT KETIK)
@@ -2693,46 +2695,45 @@ export const getImeiListByToko = async (namaToko, keyword = "") => {
 // 🔥 KHUSUS PENJUALAN
 export const listenPenjualan = (cb) => {
   const r = ref(db, "toko");
+  
 
-  return onValue(r, (snap) => {
+  onValue(r, (snap) => {
     const val = snap.val();
     if (!val) return cb([]);
 
     const result = [];
 
-    Object.keys(val).forEach((tokoId) => {
-      const transaksi = val[tokoId]?.transaksi || {};
+    Object.entries(val).forEach(([tokoId, toko]) => {
+      const transaksi = toko?.transaksi || {};
 
-      Object.keys(transaksi).forEach((key) => {
-        const trx = transaksi[key];
+      Object.entries(transaksi).forEach(([key, trx]) => {
+        const statusPembayaran = String(trx.statusPembayaran || "")
+          .toUpperCase()
+          .trim();
 
-        // ✅ HANYA PENJUALAN
-        if (trx.PAYMENT_METODE !== "PENJUALAN") return;
-
-        // ✅ JANGAN TAMPILKAN REFUND
-        if (
-          String(trx.STATUS || "").toUpperCase() === "REFUND" ||
-          String(trx.statusPembayaran || "").toUpperCase() === "REFUND"
-        ) {
-          return;
-        }
+          if (
+            String(trx.statusPembayaran || "")
+              .toUpperCase()
+              .trim() === "REFUND"
+          ) {
+            return;
+          }
 
         result.push({
           id: key,
+          trxKey: key,
           tokoId,
           ...trx,
         });
       });
     });
 
-    result.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    // debug (WAJIB SEMENTARA)
+    console.log("DATA TABLE PENJUALAN:", result);
 
     cb(result);
   });
 };
-
-
-
 
 export const voidTransaksiPenjualan = async (penjualanId) => {
   const trxRef = ref(db, `penjualan/${penjualanId}`);
@@ -2829,7 +2830,6 @@ export const deleteMasterSales = async (id) => {
   return remove(ref(db, `dataManagement/masterSales/${id}`));
 };
 
-
 export const listenMasterPaymentMetode = (callback) => {
   const dbRef = ref(db, "master_payment_metode");
 
@@ -2863,9 +2863,7 @@ export const generateIdPelanggan = async (nama, telp) => {
       const v = c.val();
 
       // ✅ cek pelanggan lama
-      if (
-        String(v.telp || "").trim() === String(telp || "").trim()
-      ) {
+      if (String(v.telp || "").trim() === String(telp || "").trim()) {
         existingId = c.key;
       }
 
@@ -2889,9 +2887,6 @@ export const generateIdPelanggan = async (nama, telp) => {
 
   return newId;
 };
-
-
-
 
 /* =========================
    INIT MASTER HELPERS
