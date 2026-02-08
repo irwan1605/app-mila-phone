@@ -118,7 +118,11 @@ export const submitPenjualanAtomic = async (data) => {
     toko: tokoNama,
     items,
     payment,
-    user,
+    user: {
+      ...user,
+      idPelanggan: user.idPelanggan || "",
+    },
+    
     statusPembayaran: "OK",
     PAYMENT_METODE: "PENJUALAN",
     STATUS: "Approved",
@@ -2690,7 +2694,7 @@ export const getImeiListByToko = async (namaToko, keyword = "") => {
 export const listenPenjualan = (cb) => {
   const r = ref(db, "toko");
 
-  onValue(r, (snap) => {
+  return onValue(r, (snap) => {
     const val = snap.val();
     if (!val) return cb([]);
 
@@ -2700,19 +2704,35 @@ export const listenPenjualan = (cb) => {
       const transaksi = val[tokoId]?.transaksi || {};
 
       Object.keys(transaksi).forEach((key) => {
+        const trx = transaksi[key];
+
+        // ✅ HANYA PENJUALAN
+        if (trx.PAYMENT_METODE !== "PENJUALAN") return;
+
+        // ✅ JANGAN TAMPILKAN REFUND
+        if (
+          String(trx.STATUS || "").toUpperCase() === "REFUND" ||
+          String(trx.statusPembayaran || "").toUpperCase() === "REFUND"
+        ) {
+          return;
+        }
+
         result.push({
           id: key,
-          ...transaksi[key],
+          tokoId,
+          ...trx,
         });
       });
     });
 
-    // 🔥 URUTKAN TERBARU
     result.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     cb(result);
   });
 };
+
+
+
 
 export const voidTransaksiPenjualan = async (penjualanId) => {
   const trxRef = ref(db, `penjualan/${penjualanId}`);
@@ -2830,6 +2850,44 @@ export const listenMasterPaymentMetode = (callback) => {
 export const addMasterPaymentMetode = async (payload) => {
   const dbRef = ref(db, "master_payment_metode");
   await push(dbRef, payload);
+};
+
+export const generateIdPelanggan = async (nama, telp) => {
+  const snap = await get(ref(db, "masterPelanggan"));
+
+  let lastNumber = 0;
+  let existingId = null;
+
+  if (snap.exists()) {
+    snap.forEach((c) => {
+      const v = c.val();
+
+      // ✅ cek pelanggan lama
+      if (
+        String(v.telp || "").trim() === String(telp || "").trim()
+      ) {
+        existingId = c.key;
+      }
+
+      // ✅ cari nomor terbesar
+      const num = Number(String(c.key).replace("PLG-", ""));
+      if (num > lastNumber) lastNumber = num;
+    });
+  }
+
+  // ✅ jika sudah ada
+  if (existingId) return existingId;
+
+  // ✅ buat baru
+  const newId = `PLG-${String(lastNumber + 1).padStart(4, "0")}`;
+
+  await set(ref(db, `masterPelanggan/${newId}`), {
+    nama,
+    telp,
+    createdAt: Date.now(),
+  });
+
+  return newId;
 };
 
 

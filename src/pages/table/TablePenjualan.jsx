@@ -11,6 +11,7 @@ import {
   updateTransaksiPenjualan,
   getUserRole,
   addTransaksi,
+  generateIdPelanggan,
 } from "../../services/FirebaseService";
 import { ref, get, update, remove } from "firebase/database";
 import { db } from "../../services/FirebaseInit";
@@ -118,26 +119,31 @@ export default function TablePenjualan() {
   /* ================= FLATTEN DATA ================= */
   const tableRows = useMemo(() => {
     const result = [];
-  
+
     (rows || []).forEach((trx) => {
+      if (trx.statusPembayaran === "REFUND") return;
+
       if (!Array.isArray(trx.items)) return;
-  
+
       trx.items.forEach((item) => {
         /* ================= PAYMENT METODE ================= */
         let paymentMetode = "-";
         let namaBank = "-";
         let nominalPaymentMetode = 0;
-  
+
         // ✅ PRIORITAS: splitPayment
-        if (Array.isArray(trx.payment?.splitPayment) && trx.payment.splitPayment.length) {
+        if (
+          Array.isArray(trx.payment?.splitPayment) &&
+          trx.payment.splitPayment.length
+        ) {
           paymentMetode = trx.payment.splitPayment
             .map((p) => p.metode)
             .join(" + ");
-  
+
           namaBank = trx.payment.splitPayment
             .map((p) => p.bankNama || "-")
             .join(" + ");
-  
+
           nominalPaymentMetode = trx.payment.splitPayment.reduce(
             (s, p) => s + Number(p.nominal || 0),
             0
@@ -151,45 +157,73 @@ export default function TablePenjualan() {
             Number(trx.payment?.nominal || 0) ||
             0;
         }
-  
+
+        /* ================= GRAND TOTAL ================= */
+        /* ================= KURANG BAYAR & KEMBALIAN ================= */
+        const grandTotalFix =
+          Number(trx.payment?.grandTotal || 0) > 0
+            ? Number(trx.payment.grandTotal)
+            : (trx.items || []).reduce(
+                (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+                0
+              ) + Number(trx.payment?.nominalMdr || 0);
+
+        const totalBayarFix = Number(nominalPaymentMetode || 0);
+
+        const kurangBayar =
+          totalBayarFix < grandTotalFix ? grandTotalFix - totalBayarFix : 0;
+
+        const sisaKembalian =
+          totalBayarFix > grandTotalFix ? totalBayarFix - grandTotalFix : 0;
+
         result.push({
-          id: trx.id,
+          id: trx.id, // id transaksi
+          trxKey: trx.trxKey, // firebase key
+          tokoId: trx.tokoId,
           tanggal: trx.tanggal || trx.createdAt,
           invoice: trx.invoice,
           toko: trx.toko || "-",
           keterangan: trx.payment?.keterangan || "-",
-  
+
           pelanggan: trx.user?.namaPelanggan || "-",
+          idPelanggan: trx.user?.idPelanggan || "-",
+
           telp: trx.user?.noTlpPelanggan || "-",
           storeHead: trx.user?.storeHead || "-",
           sales: trx.user?.namaSales || "-",
           salesHandle: trx.user?.salesHandle || "-",
-  
+
           /* 🔥 FIXED PAYMENT FIELD */
           paymentMetode,
           namaBank,
           nominalPaymentMetode,
-  
+
           namaMdr: trx.payment?.namaMdr || "-",
           dpTalangan: Number(trx.payment?.dpTalangan || 0),
           paymentKredit: trx.payment?.status === "PIUTANG" ? "KREDIT" : "LUNAS",
-  
+
           kategoriBarang: item.kategoriBarang || "-",
           namaBrand: item.namaBrand || "-",
           namaBarang: item.namaBarang || "-",
-  
+
           imei: Array.isArray(item.imeiList) ? item.imeiList.join(", ") : "-",
           qty: Number(item.qty || 0),
-  
-          hargaSRP: item.skemaHarga === "srp" ? Number(item.hargaAktif || 0) : 0,
-          hargaGrosir: item.skemaHarga === "grosir" ? Number(item.hargaAktif || 0) : 0,
-          hargaReseller: item.skemaHarga === "reseller" ? Number(item.hargaAktif || 0) : 0,
-  
+
+          hargaSRP:
+            item.skemaHarga === "srp" ? Number(item.hargaAktif || 0) : 0,
+          hargaGrosir:
+            item.skemaHarga === "grosir" ? Number(item.hargaAktif || 0) : 0,
+          hargaReseller:
+            item.skemaHarga === "reseller" ? Number(item.hargaAktif || 0) : 0,
+
           statusBayar: trx.payment?.status || "-",
           nominalMdr: trx.payment?.nominalMdr || 0,
           tenor: trx.payment?.tenor || "-",
           cicilan: trx.payment?.cicilan || 0,
-  
+
+          KURANG_BAYAR: kurangBayar,
+          SISA_KEMBALIAN: sisaKembalian,
+
           grandTotal:
             Number(trx.payment?.grandTotal || 0) > 0
               ? Number(trx.payment.grandTotal)
@@ -198,20 +232,22 @@ export default function TablePenjualan() {
                     s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
                   0
                 ) + Number(trx.payment?.nominalMdr || 0),
-  
+
           status: trx.statusPembayaran || "OK",
         });
       });
     });
-  
+
     return result;
   }, [rows]);
-  
 
   /* ================= FILTER ================= */
   const filteredRows = useMemo(() => {
     return tableRows.filter((r) => {
-      // 🔐 FILTER TOKO (KHUSUS PIC)
+      // ✅ REFUND LANGSUNG HILANG DARI TABLE
+      if (String(r.status).toUpperCase() === "REFUND") {
+        return false;
+      }
       if (!isSuperAdmin && tokoLogin) {
         const dbToko = String(r.toko || "")
           .replace(/\s+/g, "")
@@ -230,6 +266,7 @@ export default function TablePenjualan() {
       ${r.invoice}
       ${r.toko}
       ${r.pelanggan}
+      ${r.idpelanggan}
       ${r.sales}
       ${r.salesHandle}
       ${r.kategoriBarang}
@@ -377,8 +414,15 @@ export default function TablePenjualan() {
   };
 
   const handleRefund = async (row) => {
+    if (!isSuperAdmin) {
+      return alert("Refund hanya bisa dilakukan oleh Superadmin");
+    }
     if (row.status === "REFUND") {
       return alert("Barang ini sudah Pernah Di Refund");
+    }
+
+    if (!row.trxKey) {
+      console.warn("trxKey belum ada, skip warning");
     }
 
     if (!window.confirm("Yakin ingin RETUR / REFUND barang ini?")) return;
@@ -397,6 +441,8 @@ export default function TablePenjualan() {
         "KOTA WISATA": "9",
         SAWANGAN: "10",
       };
+
+      console.log("ROW REFUND:", row);
 
       const tokoName = String(row.toko || "")
         .trim()
@@ -428,10 +474,17 @@ export default function TablePenjualan() {
 
       await addTransaksi(tokoIdFix, payload);
 
-      await updateTransaksiPenjualan(tokoIdFix, row.trxKey || row.id, {
-        statusPembayaran: "REFUND",
-        refundedAt: Date.now(),
-      });
+      await updateTransaksiPenjualan(
+        row.tokoId,
+        row.trxKey,
+        {
+          statusPembayaran: "REFUND",
+          refundedAt: Date.now(),
+        },
+        userLogin   // ✅ WAJIB
+      );
+      
+      
 
       if (imei) {
         const stokSnap = await get(ref(db, `toko/${tokoIdFix}/stok`));
@@ -454,10 +507,21 @@ export default function TablePenjualan() {
         }
 
         await remove(ref(db, `imeiLock/${imei}`));
+
+        await update(
+          ref(db, `toko/${tokoIdFix}/transaksi/${row.id}`),
+          {
+            STATUS: "REFUND",
+            statusPembayaran: "REFUND",
+            refundedAt: Date.now(),
+          }
+        );
+        
       }
 
       // 🔥 INI YANG DIUBAH
       alert("✅ Refund Barang BERHASIL");
+      // ✅ LANGSUNG HILANGKAN DARI TABLE (TANPA TUNGGU REALTIME)
     } catch (e) {
       console.error(e);
 
@@ -480,56 +544,53 @@ export default function TablePenjualan() {
       Invoice: r.invoice,
       Toko: r.toko,
       Pelanggan: r.pelanggan,
+      idPelanggan: r.idPelanggan,
       Telp: r.telp,
       StoreHead: r.storeHead,
       Sales: r.sales,
       SalesHandle: r.salesHandle,
-  
+
       Kategori: r.kategoriBarang,
       Brand: r.namaBrand,
       Barang: r.namaBarang,
       IMEI: r.imei,
       QTY: r.qty,
-  
+
       HargaSRP: r.hargaSRP || 0,
       HargaGrosir: r.hargaGrosir || 0,
       HargaReseller: r.hargaReseller || 0,
-  
+
       StatusBayar: r.statusBayar,
-  
+
       // 🔥 PAYMENT
       PaymentMetode: r.paymentMetode || "-",
       NamaBank: r.namaBank || "-",
       NominalPayment: r.nominalPaymentMetode || 0,
-  
+
       // 🔥 MDR & DP
       NamaMDR: r.namaMdr || "-",
       NominalMDR: r.nominalMdr || 0,
       DPTalangan: r.dpTalangan || 0,
-  
+
       PaymentKredit: r.paymentKredit || "-",
       Tenor: r.tenor || "-",
-  
+
       Keterangan: r.keterangan || "-",
       GrandTotal: r.grandTotal || 0,
       Status: r.status,
     }));
-  
+
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Penjualan");
-  
+
     const excelBuffer = XLSX.write(wb, {
       bookType: "xlsx",
       type: "array",
     });
-  
-    saveAs(
-      new Blob([excelBuffer]),
-      `Laporan_Penjualan_${Date.now()}.xlsx`
-    );
+
+    saveAs(new Blob([excelBuffer]), `Laporan_Penjualan_${Date.now()}.xlsx`);
   };
-  
 
   /* ================= RENDER ================= */
   return (
@@ -591,27 +652,24 @@ export default function TablePenjualan() {
               <th className="px-3 py-2 border border-gray-400">Nama Toko</th>
               <th className="px-3 py-2 border border-gray-400">
                 Nama Pelanggan
-              </th>
+              </th>{" "}
+              <th className="px-3 py-2 border border-gray-400">ID Pelanggan</th>
               <th className="px-3 py-2 border border-gray-400">No TLP</th>
               <th className="px-3 py-2 border border-gray-400">
                 Nama Store Head
               </th>
               <th className="px-3 py-2 border border-gray-400">Nama Sales</th>
               <th className="px-3 py-2 border border-gray-400">Sales Handle</th>
-
               <th className="px-3 py-2 border border-gray-400">Kategori</th>
               <th className="px-3 py-2 border border-gray-400">Brand</th>
               <th className="px-3 py-2 border border-gray-400">Nama Barang</th>
-
               <th className="px-3 py-2 border border-gray-400">No IMEI</th>
               <th className="px-3 py-2 border border-gray-400">QTY</th>
-
               <th className="px-3 py-2 border border-gray-400">Harga SRP</th>
               <th className="px-3 py-2 border border-gray-400">Harga Grosir</th>
               <th className="px-3 py-2 border border-gray-400">
                 Harga Reseller
               </th>
-
               <th className="px-3 py-2 border border-gray-400">Status Bayar</th>
               <th className="px-3 py-2 border border-gray-400">
                 Payment Metode
@@ -619,6 +677,10 @@ export default function TablePenjualan() {
               <th className="px-3 py-2 border border-gray-400">Nama Bank</th>
               <th className="px-3 py-2 border border-gray-400">
                 Nominal Payment
+              </th>
+              <th className="px-3 py-2 border border-gray-400">Kurang Bayar</th>
+              <th className="px-3 py-2 border border-gray-400">
+                Sisa Kembalian
               </th>
               <th className="px-3 py-2 border border-gray-400">DP Talangan</th>
               <th className="px-3 py-2 border border-gray-400">Nama MDR</th>
@@ -629,7 +691,6 @@ export default function TablePenjualan() {
               <th className="px-3 py-2 border border-gray-400">Tenor</th>
               <th className="px-3 py-2 border border-gray-400">Keterangan</th>
               <th className="px-3 py-2 border border-gray-400">Grand Total</th>
-
               <th className="px-3 py-2 border border-gray-400">Status</th>
               <th className="px-3 py-2 border border-gray-400">Aksi</th>
             </tr>
@@ -657,6 +718,9 @@ export default function TablePenjualan() {
                 <td className="px-3 py-2 border border-gray-300">{row.toko}</td>
                 <td className="px-3 py-2 border border-gray-300">
                   {row.pelanggan}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.idPelanggan}
                 </td>
                 <td className="px-3 py-2 border border-gray-300">{row.telp}</td>
                 <td className="px-3 py-2 border border-gray-300">
@@ -703,6 +767,14 @@ export default function TablePenjualan() {
                 <td className="px-3 py-2 border border-gray-300 text-right font-medium">
                   {rupiah(row.nominalPaymentMetode || 0)}
                 </td>
+                <td className="px-3 py-2 border border-gray-300 text-right">
+                  {rupiah(row.KURANG_BAYAR || 0)}
+                </td>
+
+                <td className="px-3 py-2 border border-gray-300 text-right">
+                  {rupiah(row.SISA_KEMBALIAN || 0)}
+                </td>
+
                 <td className="px-3 py-2 border border-gray-300">
                   {rupiah(row.dpTalangan)}
                 </td>
@@ -764,12 +836,14 @@ export default function TablePenjualan() {
                     </button>
 
                     {/* REFUND */}
-                    <button
-                      onClick={() => handleRefund(row)}
-                      className="bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600"
-                    >
-                      🔄 Refund
-                    </button>
+                    {isSuperAdmin && row.status !== "REFUND" && (
+                      <button
+                        onClick={() => handleRefund(row)}
+                        className="bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600"
+                      >
+                        🔄 Refund
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

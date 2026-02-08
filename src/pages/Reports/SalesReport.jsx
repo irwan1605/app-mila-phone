@@ -605,6 +605,7 @@ export default function SalesReport() {
               <th className="p-2 border">No Invoice</th>
               <th className="p-2 border">Nama Toko</th>
               <th className="p-2 border">Nama Pelanggan</th>
+              <th className="p-2 border">ID Pelanggan</th>
               <th className="p-2 border">No TLP</th>
               <th className="p-2 border">Store Head</th>
               <th className="p-2 border">Sales</th>
@@ -649,6 +650,7 @@ export default function SalesReport() {
                 <td className="p-2 border">{row.NO_INVOICE}</td>
                 <td className="p-2 border">{row.NAMA_TOKO}</td>
                 <td className="p-2 border">{row.NAMA_USER}</td>
+                <td className="p-2 border">{row.ID_USER}</td>
                 <td className="p-2 border">{row.NO_TLP}</td>
                 <td className="p-2 border">{row.STORE_HEAD}</td>
                 <td className="p-2 border">{row.NAMA_SALES}</td>

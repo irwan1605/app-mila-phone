@@ -176,6 +176,7 @@ export default function CardPenjualanToko() {
       user: {
         namaSales: formUser.namaSales,
         namaPelanggan: formUser.namaPelanggan,
+        idPelanggan : formUser.idPelanggan ,
         noTlpPelanggan: formUser.noTlpPelanggan,
       },
       items: items.map((it) => ({
@@ -390,6 +391,7 @@ export default function CardPenjualanToko() {
 
         user: {
           namaPelanggan: formUser.namaPelanggan,
+          idPelanggan : formUser.idPelanggan ,
           noTlpPelanggan: formUser.noTlpPelanggan,
           storeHead: formUser.storeHead,
           namaSales: formUser.namaSales,
