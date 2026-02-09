@@ -2631,25 +2631,43 @@ export const refundRestorePenjualan = async (trx) => {
     // =========================
     // 1. UPDATE STATUS TRANSAKSI
     // =========================
-    updates[`toko/${trx.tokoId}/transaksi/${trx.trxKey}/statusPembayaran`] =
-      "REFUND";
+    updates[
+      `toko/${trx.tokoId}/transaksi/${trx.trxKey}/statusPembayaran`
+    ] = "REFUND";
 
-    updates[`toko/${trx.tokoId}/transaksi/${trx.trxKey}/refundAt`] = Date.now();
+    updates[
+      `toko/${trx.tokoId}/transaksi/${trx.trxKey}/refundAt`
+    ] = Date.now();
 
     // =========================
     // 2. KEMBALIKAN STOCK IMEI
     // =========================
-    if (trx.items) {
+    if (Array.isArray(trx.items)) {
       trx.items.forEach((item) => {
         if (!item.imei) return;
 
-        updates[`stokToko/${trx.tokoId}/${item.imei}/status`] = "TERSEDIA";
+        const imei = String(item.imei).trim();
 
-        updates[`stokToko/${trx.tokoId}/${item.imei}/updatedAt`] = Date.now();
+        // ✅ status kembali tersedia
+        updates[`stokToko/${trx.tokoId}/${imei}/status`] = "TERSEDIA";
+
+        // ✅ hilangkan tanda SOLD
+        updates[`stokToko/${trx.tokoId}/${imei}/sold`] = false;
+
+        // ✅ reset info penjualan
+        updates[`stokToko/${trx.tokoId}/${imei}/invoice`] = null;
+
+        updates[`stokToko/${trx.tokoId}/${imei}/updatedAt`] =
+          Date.now();
+
+        // ✅ unlock IMEI
+        updates[`imeiLock/${imei}`] = null;
       });
     }
 
     await update(ref(db), updates);
+
+    console.log("✅ REFUND RESTORE STOCK BERHASIL");
 
     return true;
   } catch (err) {
@@ -2657,6 +2675,7 @@ export const refundRestorePenjualan = async (trx) => {
     return false;
   }
 };
+
 
 /* =========================================================
    LIST IMEI TOKO (AUTOCOMPLETE SAAT KETIK)

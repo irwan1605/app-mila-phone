@@ -14,34 +14,38 @@ export default function TableStockOpname({
 }) {
   const getStatusStock = (item) => {
     const imei = String(item.imei || item.key || "").trim();
-
     if (!imei) return "TERSEDIA";
 
     // ===============================
-    // 1️⃣ CEK PENJUALAN (PRIORITAS)
+    // 1️⃣ CEK REFUND (PRIORITAS TERTINGGI)
     // ===============================
-    const isSold = allTransaksi.some(
-      (t) =>
-        t.STATUS === "Approved" &&
-        t.PAYMENT_METODE === "PENJUALAN" &&
-        String(t.IMEI || t.NOMOR_UNIK || "").trim() === imei
-    );
+    const hasRefund = allTransaksi.some((t) => {
+      const sameImei = String(t.IMEI || t.NOMOR_UNIK || "").trim() === imei;
 
-    if (isSold) return "TERJUAL";
+      const isRefund =
+        String(t.PAYMENT_METODE || "").toUpperCase() === "RETUR" ||
+        String(t.STATUS || "").toUpperCase() === "REFUND";
+
+      return sameImei && isRefund;
+    });
+
+    // ✅ kalau refund ditemukan → langsung tersedia
+    if (hasRefund) return "TERSEDIA";
 
     // ===============================
-    // 2️⃣ CEK TRANSFER
+    // 2️⃣ CEK PENJUALAN
     // ===============================
-    const hasTransfer = allTransaksi.some(
-      (t) =>
-        t.STATUS === "Approved" &&
-        (t.PAYMENT_METODE === "TRANSFER_MASUK" ||
-          t.PAYMENT_METODE === "TRANSFER_KELUAR") &&
-        String(t.IMEI || t.NOMOR_UNIK || "").trim() === imei
-    );
+    const hasSale = allTransaksi.some((t) => {
+      const sameImei = String(t.IMEI || t.NOMOR_UNIK || "").trim() === imei;
 
-    // transfer TETAP dianggap tersedia
-    if (hasTransfer) return "TERSEDIA";
+      return (
+        sameImei &&
+        String(t.STATUS || "").toUpperCase() === "APPROVED" &&
+        String(t.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
+      );
+    });
+
+    if (hasSale) return "TERJUAL";
 
     // ===============================
     // 3️⃣ DEFAULT
@@ -90,7 +94,7 @@ export default function TableStockOpname({
                 <td className="p-2 border font-medium">
                   {r.barang}
 
-                  {r.qty === 0 && (
+                  {r.qty === 0 && getStatusStock(r) === "TERJUAL" && (
                     <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded">
                       SOLD
                     </span>

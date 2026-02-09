@@ -137,20 +137,31 @@ export default function StockOpname() {
       console.log("🔥 ALL TRANSAKSI (RAW):", rows);
 
       setAllTransaksi(
-        rows.filter(
-          (t) =>
-            t &&
-            t.STATUS === "Approved" &&
-            [
-              "PEMBELIAN",
-              "TRANSFER_MASUK",
-              "STOK OPNAME",
-              "VOID OPNAME",
-              "PENJUALAN",
-              "TRANSFER_KELUAR",
-            ].includes(t.PAYMENT_METODE)
-        )
+        rows.filter((t) => {
+          if (!t) return false;
+      
+          const status = String(t.STATUS || "").toUpperCase();
+          const statusBayar = String(t.statusPembayaran || "").toUpperCase();
+      
+          // ✅ transaksi valid
+          const validStatus =
+            status === "APPROVED" || statusBayar === "REFUND";
+      
+          const validMetode = [
+            "PEMBELIAN",
+            "TRANSFER_MASUK",
+            "STOK OPNAME",
+            "VOID OPNAME",
+            "PENJUALAN",
+            "TRANSFER_KELUAR",
+            "RETUR",
+          ].includes(t.PAYMENT_METODE);
+      
+          return validStatus && validMetode;
+        })
       );
+      
+
     });
 
     return () => unsub && unsub();
@@ -169,9 +180,10 @@ export default function StockOpname() {
             "PEMBELIAN",
             "TRANSFER_MASUK",
             "STOK OPNAME",
+            "VOID OPNAME",
             "PENJUALAN",
             "TRANSFER_KELUAR",
-            "RETUR",
+            "REFUND", // ✅ TAMBAH INI
           ].includes(t.PAYMENT_METODE)
       )
     );
