@@ -179,25 +179,25 @@ export default function TablePenjualan() {
         const kategoriUpper = String(item.kategoriBarang || "")
           .trim()
           .toUpperCase();
-        
+
         if (kategoriUpper === "ACCESSORIES") {
-        
+          // ambil harga aktif sesuai skema
           const hargaAccessories =
-            (item.skemaHarga === "srp"
-              ? Number(item.hargaAktif || 0)
-              : 0) ||
-            (item.skemaHarga === "grosir"
-              ? Number(item.hargaAktif || 0)
-              : 0) ||
-            (item.skemaHarga === "reseller"
-              ? Number(item.hargaAktif || 0)
-              : 0);
-        
-          // ✅ kalau accessories tidak punya harga → tampil 0
-          grandTotalDisplay =
-            Number(hargaAccessories || 0) * Number(item.qty || 1);
+            Number(
+              item.skemaHarga === "srp"
+                ? item.hargaAktif
+                : item.skemaHarga === "grosir"
+                ? item.hargaAktif
+                : item.skemaHarga === "reseller"
+                ? item.hargaAktif
+                : 0
+            ) || 0;
+
+          const totalAccessories = hargaAccessories * Number(item.qty || 1);
+
+          // hanya ubah tampilan, bukan rumus invoice
+          grandTotalDisplay = totalAccessories;
         }
-        
 
         const totalBayarFix = Number(nominalPaymentMetode || 0);
 
@@ -713,7 +713,11 @@ export default function TablePenjualan() {
                 <td className="px-3 py-2 border border-gray-300">
                   {row.salesHandle || "-"}
                 </td>
-                <td className="px-3 py-2 border border-gray-300">
+                <td
+                  className={`px-3 py-2 border text-right font-medium ${
+                    row.kategoriBarang === "ACCESSORIES" ? "text-blue-600" : ""
+                  }`}
+                >
                   {row.kategoriBarang}
                 </td>
                 <td className="px-3 py-2 border border-gray-300">
