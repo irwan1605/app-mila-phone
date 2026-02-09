@@ -64,178 +64,115 @@ export default function SalesReport() {
 
   /* ===================== REALTIME ===================== */
   useEffect(() => {
-    const unsub = listenPenjualan((items = []) => {
-      console.log("🔥 RAW ALL TRANSAKSI:", items);
-
-      // ===============================
-      // 1️⃣ HEADER PENJUALAN (INVOICE)
-      // ===============================
-      const headerMap = {};
-
-      items.forEach((x) => {
-        const invoice = x.invoice || x.NO_INVOICE;
-
-        if (invoice && invoice.startsWith("INV-") && x.payment) {
-          headerMap[invoice] = {
-            invoice,
-
-            // ===== HEADER =====
-            tanggal: x.tanggal || x.createdAt,
-            user: x.user || {},
-            toko: x.toko || x.NAMA_TOKO || x.TOKO || "-",
-
-            // ===== PAYMENT (WAJIB ADA) =====
-            payment: x.payment || {},
-
-            status: x.statusPembayaran || "LUNAS",
-          };
-        }
-      });
-
-      // ===============================
-      // 2️⃣ DETAIL BARANG (AUTO FROM PENJUALAN)
-      // ===============================
-      const detailRows = items.filter(
-        (x) =>
-          x.KETERANGAN === "AUTO FROM PENJUALAN" && (x.invoice || x.NO_INVOICE)
-      );
-
-      // ===============================
-      // 3️⃣ INVOICE YANG DIRETUR
-      // ===============================
-      const refundedInvoices = new Set(
-        items
-          .filter((x) =>
-            String(x.KETERANGAN || "").startsWith("REFUND dari invoice")
-          )
-          .map((x) =>
-            String(x.KETERANGAN).replace("REFUND dari invoice ", "").trim()
-          )
-      );
-
-      // ===============================
-      // 4️⃣ JOIN HEADER + DETAIL
-      // ===============================
-      const finalRows = detailRows
-        .filter((d) => {
-          const inv = d.invoice || d.NO_INVOICE;
-          return !refundedInvoices.has(inv);
-        })
-        .map((d, idx) => {
-          const inv = d.invoice || d.NO_INVOICE;
-          const h = headerMap[inv] || {};
-          const payment = h.payment || {};
-
-          /* ================= PAYMENT METODE (SAMA TABLE PENJUALAN) ================= */
+    const unsub = listenPenjualan((data = []) => {
+      console.log("🔥 SALES REPORT RAW:", data);
+  
+      const result = [];
+  
+      (data || []).forEach((trx) => {
+        if (!Array.isArray(trx.items)) return;
+  
+        trx.items.forEach((item, idx) => {
+  
+          /* ================= PAYMENT (SAMA TABLE PENJUALAN) ================= */
+          const payment = trx.payment || {};
+  
           let paymentMetode = "-";
           let namaBank = "-";
           let nominalPayment = 0;
-
-          if (
-            Array.isArray(payment.splitPayment) &&
-            payment.splitPayment.length
-          ) {
-            paymentMetode = payment.splitPayment
-              .map((p) => p.metode)
-              .join(" + ");
-
-            namaBank = payment.splitPayment
-              .map((p) => p.bankNama || "-")
-              .join(" + ");
-
+  
+          if (Array.isArray(payment.splitPayment) && payment.splitPayment.length) {
+            paymentMetode = payment.splitPayment.map(p => p.metode).join(" + ");
+            namaBank = payment.splitPayment.map(p => p.bankNama || "-").join(" + ");
             nominalPayment = payment.splitPayment.reduce(
               (s, p) => s + Number(p.nominal || 0),
               0
             );
           } else {
             paymentMetode = payment.metode || payment.status || "-";
-
-            namaBank = payment.bankNama || payment.namaBank || "-";
-
+            namaBank = payment.bankNama || "-";
             nominalPayment =
               Number(payment.nominalPayment || 0) ||
               Number(payment.nominal || 0);
           }
-
-          /* ================= AMBIL ITEM ASLI (SAMA TABLE PENJUALAN) ================= */
-          const item =
-            (items.find((t) => t.invoice === inv)?.items || [])[0] || {};
-
-          /* ================= KATEGORI (SAMA TABLE PENJUALAN) ================= */
-          const kategoriBarang = item.kategoriBarang || "-";
-
+  
           /* ================= HARGA (SAMA TABLE PENJUALAN) ================= */
           let hargaSRP = 0;
           let hargaGrosir = 0;
           let hargaReseller = 0;
-
+  
           if (item.skemaHarga === "srp") {
             hargaSRP = Number(item.hargaAktif || 0);
           }
-
+  
           if (item.skemaHarga === "grosir") {
             hargaGrosir = Number(item.hargaAktif || 0);
           }
-
+  
           if (item.skemaHarga === "reseller") {
             hargaReseller = Number(item.hargaAktif || 0);
           }
-
-          return {
-            id: d.id || `${inv}-${idx}`,
-
+  
+          result.push({
+            id: `${trx.id || trx._key}-${idx}`,
+  
             /* ===== HEADER ===== */
-            TANGGAL_TRANSAKSI: h.tanggal || d.createdAt,
-            NO_INVOICE: inv,
-
-            NAMA_TOKO: h.toko || "-",
-            NAMA_USER: h.user?.namaPelanggan || "-",
-            NO_TLP: h.user?.noTlpPelanggan || "-", // ✅ FIX
-            STORE_HEAD: h.user?.storeHead || "-",
-            NAMA_SALES: h.user?.namaSales || "-",
-            SALES_HANDLE: h.user?.salesHandle || "-",
-
+            TANGGAL_TRANSAKSI: trx.tanggal || trx.createdAt,
+            NO_INVOICE: trx.invoice,
+            NAMA_TOKO: trx.toko || "-",
+  
+            NAMA_USER: trx.user?.namaPelanggan || "-",
+            ID_USER: trx.user?.idPelanggan || "-",
+            NO_TLP: trx.user?.noTlpPelanggan || "-",
+            STORE_HEAD: trx.user?.storeHead || "-",
+            NAMA_SALES: trx.user?.namaSales || "-",
+            SALES_HANDLE: trx.user?.salesHandle || "-",
+  
             /* ===== BARANG ===== */
-            KATEGORI: kategoriBarang,
-
-            NAMA_BRAND: d.NAMA_BRAND || "-",
-            NAMA_BARANG: d.NAMA_BARANG || "-",
-            IMEI: d.IMEI || "NON-IMEI",
-            QTY: Number(d.QTY || 1),
-
+            KATEGORI: item.kategoriBarang || "-",
+            NAMA_BRAND: item.namaBrand || "-",
+            NAMA_BARANG: item.namaBarang || "-",
+            IMEI: Array.isArray(item.imeiList)
+              ? item.imeiList.join(", ")
+              : "NON-IMEI",
+  
+            QTY: Number(item.qty || 1),
+  
             HARGA_SRP: hargaSRP,
             HARGA_GROSIR: hargaGrosir,
             HARGA_RESELLER: hargaReseller,
-
+  
             /* ===== PAYMENT ===== */
             STATUS_BAYAR: payment.status || "-",
             PAYMENT_METODE: paymentMetode,
             NAMA_BANK: namaBank,
             NOMINAL_PAYMENT: nominalPayment,
+  
             DP_TALANGAN: Number(payment.dpTalangan || 0),
-
             NAMA_MDR: payment.namaMdr || "-",
             NOMINAL_MDR: Number(payment.nominalMdr || 0),
-
-            PAYMENT_KREDIT: payment.status === "PIUTANG" ? "KREDIT" : "LUNAS",
-
+  
+            PAYMENT_KREDIT:
+              payment.status === "PIUTANG" ? "KREDIT" : "LUNAS",
+  
             TENOR: payment.tenor || "-",
-
-            /* ===== KETERANGAN (PRIORITAS PAYMENT) ===== */
-            KETERANGAN: payment.keterangan || d.KETERANGAN || "-",
-
-            STATUS: h.status || "OK",
+  
+            KETERANGAN:
+              payment.keterangan || trx.keterangan || "-",
+  
+            STATUS: trx.statusPembayaran || "OK",
             GRAND_TOTAL: Number(payment.grandTotal || 0),
-          };
+          });
         });
-
-      setAllData(finalRows);
+      });
+  
+      setAllData(result);
       setCurrentPage(1);
     });
-
+  
     return () => unsub && unsub();
   }, []);
-
+  
   const normalizeRow = (r) => {
     const item = r.items?.[0] || {};
 
@@ -244,6 +181,7 @@ export default function SalesReport() {
       Tanggal: r.tanggal || r.createdAt,
       Invoice: r.invoice || r.NO_INVOICE,
       User: r.user?.namaPelanggan || "-",
+      idPelanggan: r.user?.idPelanggan || "-",
       Sales: r.user?.namaSales || "-",
       Toko: r.toko || r.NAMA_TOKO || "-",
       Brand: item.namaBrand || r.NAMA_BRAND || "-",
@@ -403,6 +341,7 @@ export default function SalesReport() {
         NoInvoice: r.NO_INVOICE,
         NamaToko: r.NAMA_TOKO,
         NamaPelanggan: r.NAMA_USER,
+        idPelanggan: r.ID_USER,
         NoTlp: r.NO_TLP,
         StoreHead: r.STORE_HEAD,
         Sales: r.NAMA_SALES,
