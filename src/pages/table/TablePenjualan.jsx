@@ -161,6 +161,10 @@ export default function TablePenjualan() {
 
         /* ================= GRAND TOTAL ================= */
         /* ================= KURANG BAYAR & KEMBALIAN ================= */
+
+        /* ================= GRAND TOTAL ================= */
+
+        // ✅ GRAND TOTAL ASLI (RUMUS SISTEM)
         const grandTotalFix =
           Number(trx.payment?.grandTotal || 0) > 0
             ? Number(trx.payment.grandTotal)
@@ -168,6 +172,32 @@ export default function TablePenjualan() {
                 (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
                 0
               ) + Number(trx.payment?.nominalMdr || 0);
+
+        // ✅ DEFAULT TAMPILAN = TOTAL INVOICE
+        let grandTotalDisplay = grandTotalFix;
+
+        const kategoriUpper = String(item.kategoriBarang || "")
+          .trim()
+          .toUpperCase();
+        
+        if (kategoriUpper === "ACCESSORIES") {
+        
+          const hargaAccessories =
+            (item.skemaHarga === "srp"
+              ? Number(item.hargaAktif || 0)
+              : 0) ||
+            (item.skemaHarga === "grosir"
+              ? Number(item.hargaAktif || 0)
+              : 0) ||
+            (item.skemaHarga === "reseller"
+              ? Number(item.hargaAktif || 0)
+              : 0);
+        
+          // ✅ kalau accessories tidak punya harga → tampil 0
+          grandTotalDisplay =
+            Number(hargaAccessories || 0) * Number(item.qty || 1);
+        }
+        
 
         const totalBayarFix = Number(nominalPaymentMetode || 0);
 
@@ -225,14 +255,17 @@ export default function TablePenjualan() {
           KURANG_BAYAR: kurangBayar,
           SISA_KEMBALIAN: sisaKembalian,
 
-          grandTotal:
-            Number(trx.payment?.grandTotal || 0) > 0
-              ? Number(trx.payment.grandTotal)
-              : (trx.items || []).reduce(
-                  (s, it) =>
-                    s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-                  0
-                ) + Number(trx.payment?.nominalMdr || 0),
+          grandTotal: grandTotalFix, // dipakai sistem
+          grandTotalDisplay: grandTotalDisplay, // dipakai tabel
+
+          // grandTotal:
+          //   Number(trx.payment?.grandTotal || 0) > 0
+          //     ? Number(trx.payment.grandTotal)
+          //     : (trx.items || []).reduce(
+          //         (s, it) =>
+          //           s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+          //         0
+          //       ) + Number(trx.payment?.nominalMdr || 0),
 
           status: trx.statusPembayaran || "OK",
         });
@@ -742,7 +775,7 @@ export default function TablePenjualan() {
                 </td>
 
                 <td className="px-3 py-2 border border-gray-300 text-right font-medium">
-                  {rupiah(row.grandTotal)}
+                  {rupiah(row.grandTotalDisplay ?? row.grandTotal)}
                 </td>
 
                 <td className="px-3 py-2 border border-gray-300">
