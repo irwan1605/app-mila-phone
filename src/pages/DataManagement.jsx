@@ -7,22 +7,15 @@ import {
   FaBoxOpen,
   FaTruck,
   FaUserShield,
-  FaUserFriends,
-  FaUserTag,
   FaTags,
   FaBolt,
   FaMoneyBillWave,
-  FaCubes,
 } from "react-icons/fa";
 
 import MasterPelangganCard from "../components/master-management/MasterPelangganCard";
 import MasterSalesCard from "../components/master-management/MasterSalesCard";
 import MasterStoreHeadCard from "../components/master-management/MasterStoreHeadCard";
-import MasterStoreLeaderCard from "../components/master-management/MasterStoreLeaderCard";
-import MasterSalesTitipanCard from "../components/master-management/MasterSalesTitipanCard";
 import MasterTokoCard from "../components/master-management/MasterTokoCard";
-// ❌ TIDAK DIPAKAI LAGI:
-// import MasterBarangHargaCard from "../components/master-management/MasterBarangHargaCard";
 import MasterSupplierCard from "../components/master-management/MasterSupplierCard";
 import MasterKategoriBarangCard from "../components/master-management/MasterKategoriBarangCard";
 import MasterBarangKategoriCard from "../components/master-management/MasterBarangKategoriCard";
@@ -48,20 +41,6 @@ const cardsConfig = [
     description: "Kelola data Store Head (SH).",
     icon: FaUserShield,
     gradient: "from-indigo-500 via-indigo-400 to-blue-400",
-  },
-  {
-    key: "masterStoreLeader",
-    title: "MASTER STORE LEADER (SL)",
-    description: "Kelola data Store Leader (SL).",
-    icon: FaUserFriends,
-    gradient: "from-purple-500 via-purple-400 to-fuchsia-400",
-  },
-  {
-    key: "masterSalesTitipan",
-    title: "MASTER SALES TITIPAN (ST)",
-    description: "Kelola data Sales Titipan (ST).",
-    icon: FaUserTag,
-    gradient: "from-amber-500 via-amber-400 to-orange-400",
   },
   {
     key: "masterToko",
@@ -135,10 +114,6 @@ export default function MasterManagement() {
         return <MasterSalesCard />;
       case "masterStoreHead":
         return <MasterStoreHeadCard />;
-      case "masterStoreLeader":
-        return <MasterStoreLeaderCard />;
-      case "masterSalesTitipan":
-        return <MasterSalesTitipanCard />;
       case "masterToko":
         return <MasterTokoCard />;
       case "masterSupplier":
@@ -155,7 +130,6 @@ export default function MasterManagement() {
         return <MasterBarangKategoriCard kategori="ACCESSORIES" />;
       case "barangSparePartListrik":
         return <MasterBarangKategoriCard kategori="SPARE PART" />;
-   
 
       default:
         return null;

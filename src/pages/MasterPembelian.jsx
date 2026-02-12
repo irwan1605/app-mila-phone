@@ -49,6 +49,10 @@ import CetakInvoicePembelian from "./Print/CetakInvoicePembelian";
 // ];
 
 const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
+// ===============================
+// KATEGORI TANPA IMEI
+// ===============================
+const KATEGORI_NON_IMEI = ["ACCESSORIES", "SPARE PART"];
 
 const fmt = (n) => {
   try {
@@ -158,7 +162,6 @@ export default function MasterPembelian() {
     });
     return () => unsub && unsub();
   }, []);
-
 
   useEffect(() => {
     const unsub = listenMasterBarang((rows) => {
@@ -302,6 +305,12 @@ export default function MasterPembelian() {
       .map((b) => b.namaBarang)
       .filter(Boolean);
   }, [masterBarang, tambahForm.brand, tambahForm.kategoriBrand]);
+
+  const isNonImeiKategori = useMemo(() => {
+    return KATEGORI_NON_IMEI.includes(
+      String(tambahForm.kategoriBrand || "").toUpperCase()
+    );
+  }, [tambahForm.kategoriBrand]);
 
   // const namaBarangOptions = useMemo(() => {
   //   if (!tambahForm.brand) {
@@ -1370,7 +1379,6 @@ export default function MasterPembelian() {
                             im.toLowerCase().includes(search.toLowerCase())
                           );
 
-
                     return (
                       <tr
                         key={item.key}
@@ -1756,11 +1764,14 @@ export default function MasterPembelian() {
             </div>
 
             {/* IMEI */}
-            {tambahForm.kategoriBrand !== "ACCESORIES" && (
+            {!["ACCESSORIES", "SPARE PART"].includes(
+              String(tambahForm.kategoriBrand || "").toUpperCase()
+            ) && (
               <div className="mt-3">
                 <label className="text-xs font-semibold text-slate-600">
                   No IMEI / No Mesin (1 per baris)
                 </label>
+
                 <textarea
                   rows={4}
                   className="w-full border rounded-lg px-2 py-2 text-xs font-mono bg-slate-50"
