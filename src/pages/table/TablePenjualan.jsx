@@ -13,7 +13,7 @@ import {
   addTransaksi,
   generateIdPelanggan,
 } from "../../services/FirebaseService";
-import { ref, get, update, remove } from "firebase/database";
+import { ref, get, update, remove, push } from "firebase/database";
 import { db } from "../../services/FirebaseInit";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -44,6 +44,7 @@ const TOKO_MAP = {
 
 export default function TablePenjualan() {
   const [rows, setRows] = useState([]);
+  const [refundLoading, setRefundLoading] = useState(null);
   const [page, setPage] = useState(1);
   const [printData, setPrintData] = useState(null);
   const [showPrint, setShowPrint] = useState(false);
@@ -445,58 +446,74 @@ export default function TablePenjualan() {
     SAWANGAN: "10",
   };
 
-  const normalizeTokoId = (row) => {
-    // 1️⃣ kalau ada tokoId langsung pakai
-    if (row.tokoId) {
-      if (typeof row.tokoId === "string") return row.tokoId;
-      if (typeof row.tokoId === "number") return String(row.tokoId);
-      if (typeof row.tokoId === "object") return String(row.tokoId.id || "");
-    }
 
-    // 2️⃣ fallback dari nama toko
-    const nama = String(row.toko || "")
-      .trim()
-      .toUpperCase();
-
-    return TOKO_NAME_TO_ID[nama] || "";
-  };
-
-  const [refundLoading, setRefundLoading] = useState(null);
 
   const handleRefund = async (row) => {
     if (!isSuperAdmin) {
       alert("Refund hanya bisa dilakukan oleh Superadmin");
       return;
     }
-
+  
     if (refundLoading === row.id) return;
-
-    const statusNow = String(row.statusPembayaran || "")
+  
+    const statusNow = String(row.status || "")
       .toUpperCase()
       .trim();
-
+  
     if (statusNow === "REFUND") {
       return alert("Barang ini sudah pernah di Refund");
     }
-
+  
     if (!window.confirm("Yakin ingin RETUR / REFUND barang ini?")) return;
-
+  
     setRefundLoading(row.id);
-
+  
     try {
+      // ===============================
+      // 1️⃣ UPDATE STATUS PENJUALAN
+      // ===============================
       await updateTransaksiPenjualan(
         row.trxKey,
         { statusPembayaran: "REFUND" },
         userLogin
       );
-
+  
+      // ===============================
+      // 2️⃣ UNLOCK IMEI
+      // ===============================
       if (row.imei) {
         try {
           await remove(ref(db, `imeiLock/${row.imei}`));
         } catch {}
       }
-
-      alert("✅ Refund Barang BERHASIL");
+  
+      // ===============================
+      // 3️⃣ BUAT TRANSAKSI REFUND STOCK
+      // ===============================
+      await addTransaksi(row.tokoId, {
+        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+        NO_INVOICE: `REF-${Date.now()}`,
+  
+        NAMA_TOKO: row.toko,
+        NAMA_BRAND: row.namaBrand,
+        NAMA_BARANG: row.namaBarang,
+  
+        IMEI: row.imei,
+        NOMOR_UNIK: row.imei,
+  
+        QTY: 1,
+  
+        PAYMENT_METODE: "REFUND",
+        STATUS: "Approved",
+  
+        KETERANGAN: "REFUND PENJUALAN",
+        CREATED_AT: Date.now(),
+        REFUND_FROM: row.trxKey,
+        USER_REFUND: userLogin?.name || "SYSTEM",
+      });
+  
+      alert("✅ Refund berhasil");
+  
     } catch (e) {
       console.error(e);
       alert("❌ Refund gagal: " + e.message);
@@ -504,6 +521,9 @@ export default function TablePenjualan() {
       setRefundLoading(null);
     }
   };
+  
+  
+  
 
   /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {

@@ -2624,6 +2624,25 @@ export const listenPenjualanRealtime = (callback) => {
   });
 };
 
+
+export async function createRefundTransaksi(trx) {
+  if (!trx) throw new Error("Data transaksi tidak valid");
+
+  const refundData = {
+    ...trx,
+
+    STATUS: "REFUND",
+    PAYMENT_METODE: "PENJUALAN",
+
+    KETERANGAN: "REFUND PENJUALAN",
+
+    REFUND_FROM: trx.id,
+    CREATED_AT: Date.now(),
+  };
+
+  await push(ref(db, "transaksi"), refundData);
+}
+
 export const refundRestorePenjualan = async (trx) => {
   try {
     const updates = {};
@@ -2640,28 +2659,53 @@ export const refundRestorePenjualan = async (trx) => {
     ] = Date.now();
 
     // =========================
-    // 2. KEMBALIKAN STOCK IMEI
+    // 2. KEMBALIKAN STOCK + BUAT RETUR
     // =========================
     if (Array.isArray(trx.items)) {
+
       trx.items.forEach((item) => {
-        if (!item.imei) return;
+
+        if (!item?.imei) return;
 
         const imei = String(item.imei).trim();
 
-        // ✅ status kembali tersedia
+        // ✅ stock kembali tersedia
         updates[`stokToko/${trx.tokoId}/${imei}/status`] = "TERSEDIA";
-
-        // ✅ hilangkan tanda SOLD
         updates[`stokToko/${trx.tokoId}/${imei}/sold`] = false;
-
-        // ✅ reset info penjualan
         updates[`stokToko/${trx.tokoId}/${imei}/invoice`] = null;
+        updates[`stokToko/${trx.tokoId}/${imei}/updatedAt`] = Date.now();
 
-        updates[`stokToko/${trx.tokoId}/${imei}/updatedAt`] =
-          Date.now();
-
-        // ✅ unlock IMEI
+        // ✅ unlock imei
         updates[`imeiLock/${imei}`] = null;
+
+        // =========================
+        // ✅ BUAT TRANSAKSI RETUR
+        // =========================
+        const returKey = push(
+          ref(db, `transaksi/${trx.tokoId}`)
+        ).key;
+
+        updates[`transaksi/${trx.tokoId}/${returKey}`] = {
+          TANGGAL_TRANSAKSI: new Date()
+            .toISOString()
+            .slice(0, 10),
+
+          NO_INVOICE: `RET-${Date.now()}`,
+
+          NAMA_TOKO: trx.toko,
+          NAMA_BARANG: item.namaBarang,
+          NAMA_BRAND: item.namaBrand,
+
+          IMEI: imei,
+          NOMOR_UNIK: imei,
+
+          QTY: 1,
+          PAYMENT_METODE: "RETUR",
+          STATUS: "Approved",
+          KETERANGAN: "REFUND PENJUALAN",
+
+          createdAt: Date.now(),
+        };
       });
     }
 
@@ -2670,11 +2714,13 @@ export const refundRestorePenjualan = async (trx) => {
     console.log("✅ REFUND RESTORE STOCK BERHASIL");
 
     return true;
+
   } catch (err) {
     console.error("REFUND ERROR:", err);
     return false;
   }
 };
+
 
 
 /* =========================================================

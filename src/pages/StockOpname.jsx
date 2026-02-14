@@ -137,31 +137,24 @@ export default function StockOpname() {
       console.log("🔥 ALL TRANSAKSI (RAW):", rows);
 
       setAllTransaksi(
-        rows.filter((t) => {
-          if (!t) return false;
-      
-          const status = String(t.STATUS || "").toUpperCase();
-          const statusBayar = String(t.statusPembayaran || "").toUpperCase();
-      
-          // ✅ transaksi valid
-          const validStatus =
-            status === "APPROVED" || statusBayar === "REFUND";
-      
-          const validMetode = [
-            "PEMBELIAN",
-            "TRANSFER_MASUK",
-            "STOK OPNAME",
-            "VOID OPNAME",
-            "PENJUALAN",
-            "TRANSFER_KELUAR",
-            "RETUR",
-          ].includes(t.PAYMENT_METODE);
-      
-          return validStatus && validMetode;
-        })
+        rows.filter(
+          (t) =>
+            t &&
+            ["APPROVED", "REFUND"].includes(
+              String(t.STATUS || "").toUpperCase()
+            ) &&
+            [
+              "PEMBELIAN",
+              "TRANSFER_MASUK",
+              "STOK OPNAME",
+              "VOID OPNAME",
+              "PENJUALAN",
+              "TRANSFER_KELUAR",
+              "REFUND",
+              "RETUR",
+            ].includes(String(t.PAYMENT_METODE || "").toUpperCase())
+        )
       );
-      
-
     });
 
     return () => unsub && unsub();
@@ -175,7 +168,9 @@ export default function StockOpname() {
       allTransaksi.filter(
         (t) =>
           t &&
-          t.STATUS === "Approved" &&
+          ["APPROVED", "REFUND"].includes(
+            String(t.STATUS || "").toUpperCase()
+          ) &&
           [
             "PEMBELIAN",
             "TRANSFER_MASUK",
@@ -183,7 +178,8 @@ export default function StockOpname() {
             "VOID OPNAME",
             "PENJUALAN",
             "TRANSFER_KELUAR",
-            "REFUND", // ✅ TAMBAH INI
+            "REFUND",
+            "RETUR",
           ].includes(t.PAYMENT_METODE)
       )
     );
@@ -202,7 +198,11 @@ export default function StockOpname() {
     const map = {};
 
     allTransaksi.forEach((t) => {
-      if (!t || t.STATUS !== "Approved" || t.PAYMENT_METODE !== "PEMBELIAN")
+      if (
+        !t ||
+        String(t.STATUS).toUpperCase() !== "APPROVED" ||
+        t.PAYMENT_METODE !== "PEMBELIAN"
+      )
         return;
 
       const key = normalizeKey(t);
@@ -234,7 +234,7 @@ export default function StockOpname() {
 
       if (
         t.PAYMENT_METODE === "PEMBELIAN" &&
-        t.STATUS === "Approved" &&
+        String(t.STATUS).toUpperCase() === "APPROVED" &&
         t.IMEI
       ) {
         const key = String(t.IMEI).trim();
@@ -270,9 +270,15 @@ export default function StockOpname() {
 
       return {
         ...r,
+
         tanggal: meta?.tanggal || "-",
         supplier: meta?.supplier || "-",
         imei: meta?.imei || r.key || "",
+
+        // ✅ WAJIB DITAMBAH
+        qty: Number(r.qty || 0),
+        lastStatus: r.lastStatus || "TERSEDIA",
+        lastTransaksi: r.lastTransaksi || "",
       };
     });
   }, [stockMap, filterToko, masterPembelianLookup]);

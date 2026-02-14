@@ -12,45 +12,77 @@ export default function TableStockOpname({
   tableRef,
   onVoidOpname,
 }) {
-  const getStatusStock = (item) => {
+  const getStockInfo = (item) => {
     const imei = String(item.imei || item.key || "").trim();
-    if (!imei) return "TERSEDIA";
 
-    // ===============================
-    // 1️⃣ CEK REFUND (PRIORITAS TERTINGGI)
-    // ===============================
-    const hasRefund = allTransaksi.some((t) => {
-      const sameImei = String(t.IMEI || t.NOMOR_UNIK || "").trim() === imei;
+    let qty = 0;
+    let lastMetode = "";
+    let lastStatus = "TERSEDIA";
+    let lastTime = 0;
 
-      const isRefund =
-        String(t.PAYMENT_METODE || "").toUpperCase() === "RETUR" ||
-        String(t.STATUS || "").toUpperCase() === "REFUND";
+    allTransaksi.forEach((t) => {
+      const trxImei = String(t.IMEI || t.NOMOR_UNIK || "").trim();
+      if (trxImei !== imei) return;
 
-      return sameImei && isRefund;
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+      const status = String(t.STATUS || "").toUpperCase();
+      const time = Number(t.CREATED_AT || 0);
+
+      const isRefund = status === "REFUND";
+
+      // =====================
+      // HITUNG STOCK
+      // =====================
+      if (
+        metode === "PEMBELIAN" ||
+        metode === "TRANSFER_MASUK" ||
+        metode === "STOK OPNAME" ||
+        isRefund
+      ) {
+        qty += 1;
+      }
+
+      if (
+        (metode === "PENJUALAN" || metode === "TRANSFER_KELUAR") &&
+        !isRefund
+      ) {
+        qty -= 1;
+      }
+
+      // =====================
+      // TRANSAKSI TERAKHIR
+      // =====================
+      if (time >= lastTime) {
+        lastTime = time;
+
+        if (isRefund) {
+          lastMetode = "REFUND";
+          lastStatus = "TERSEDIA";
+        } else {
+          lastMetode = metode;
+          lastStatus = metode === "PENJUALAN" ? "TERJUAL" : "TERSEDIA";
+        }
+      }
     });
 
-    // ✅ kalau refund ditemukan → langsung tersedia
-    if (hasRefund) return "TERSEDIA";
+    return {
+      qty,
+      status: qty > 0 ? "TERSEDIA" : "TERJUAL",
+      isSold: qty <= 0,
+      isRefund: lastMetode === "REFUND",
+      lastMetode,
+    };
+  };
 
-    // ===============================
-    // 2️⃣ CEK PENJUALAN
-    // ===============================
-    const hasSale = allTransaksi.some((t) => {
-      const sameImei = String(t.IMEI || t.NOMOR_UNIK || "").trim() === imei;
+  const getLastTransaksi = (imei) => {
+    const trx = allTransaksi
+      .filter(
+        (t) =>
+          String(t.IMEI || t.NOMOR_UNIK || "").trim() === String(imei).trim()
+      )
+      .sort((a, b) => (b.CREATED_AT || 0) - (a.CREATED_AT || 0));
 
-      return (
-        sameImei &&
-        String(t.STATUS || "").toUpperCase() === "APPROVED" &&
-        String(t.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
-      );
-    });
-
-    if (hasSale) return "TERJUAL";
-
-    // ===============================
-    // 3️⃣ DEFAULT
-    // ===============================
-    return "TERSEDIA";
+    return trx[0] || null;
   };
 
   return (
@@ -76,8 +108,10 @@ export default function TableStockOpname({
         </thead>
         <tbody>
           {data.map((r, i) => {
+            const stockInfo = getStockInfo(r);
+
             const fisik = Number(opnameMap[r.key] ?? "");
-            const selisih = Number.isNaN(fisik) ? "" : fisik - r.qty;
+            const selisih = Number.isNaN(fisik) ? "" : fisik - stockInfo.qty;
 
             return (
               <tr key={r.key} className="hover:bg-gray-50">
@@ -94,7 +128,7 @@ export default function TableStockOpname({
                 <td className="p-2 border font-medium">
                   {r.barang}
 
-                  {r.qty === 0 && getStatusStock(r) === "TERJUAL" && (
+                  {r.lastStatus === "TERJUAL" && (
                     <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded">
                       SOLD
                     </span>
@@ -106,11 +140,11 @@ export default function TableStockOpname({
                 </td>
 
                 <td className="p-2 border text-center font-bold">
-                  {getStatusStock(r)}
+                {r.lastStatus}
                 </td>
 
                 <td className="p-2 border text-xs text-gray-600">
-                  {r.keterangan || "-"}
+                {r.keterangan || "-"}
                 </td>
 
                 <td className="p-2 border text-center">{r.qty}</td>

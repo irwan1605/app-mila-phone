@@ -1,59 +1,25 @@
-// src/utils/stockDerived.js
-
-/**
- * SINGLE SOURCE OF TRUTH STOCK DERIVATION
- * --------------------------------------
- * Menghitung stok FINAL per Toko + per SKU
- * berdasarkan transaksi APPROVED.
- *
- * Digunakan oleh:
- * - InventoryReport.jsx
- * - DetailStockToko.jsx
- * - StockOpname.jsx
- *
- * Output:
- * {
- *   "CIBINONG": {
- *     "IMEI123": { toko, key, brand, barang, qty },
- *     "SAMSUNG|A15": { ... }
- *   }
- * }
- */
-
 export function deriveStockFromTransaksi(transaksi = []) {
   const map = {};
 
   transaksi.forEach((t) => {
     if (!t) return;
-    if (t.STATUS !== "Approved") return;
+
+    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+    const status = String(t.STATUS || "").toUpperCase();
+
+    // hanya transaksi valid
+    if (status !== "APPROVED") return;
 
     const toko = t.NAMA_TOKO || "CILANGKAP PUSAT";
 
     const key =
-  t.IMEI && String(t.IMEI).trim()
-    ? String(t.IMEI).trim()
-    : t.NOMOR_UNIK && String(t.NOMOR_UNIK).trim()
-    ? String(t.NOMOR_UNIK).trim()
-    : `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-
-
-    // const key =
-    //   (t.NOMOR_UNIK && String(t.NOMOR_UNIK).trim()) ||
-    //   `${String(t.NAMA_BRAND || "").trim()}|${String(
-    //     t.NAMA_BARANG || ""
-    //   ).trim()}`;
+      t.IMEI?.trim() ||
+      t.NOMOR_UNIK?.trim() ||
+      `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
 
     if (!key) return;
 
     const qty = t.IMEI ? 1 : Number(t.QTY || 0);
-
-    const isMasuk = ["PEMBELIAN", "TRANSFER_MASUK", "STOK OPNAME"].includes(
-      t.PAYMENT_METODE
-    );
-
-    const isKeluar = ["PENJUALAN", "TRANSFER_KELUAR"].includes(
-      t.PAYMENT_METODE
-    );
 
     if (!map[toko]) map[toko] = {};
 
@@ -64,11 +30,63 @@ export function deriveStockFromTransaksi(transaksi = []) {
         brand: t.NAMA_BRAND || "",
         barang: t.NAMA_BARANG || "",
         qty: 0,
+        lastStatus: "TERSEDIA",
+        lastTransaksi: "",
+        lastTime: 0,
+        keterangan: "",
       };
     }
 
-    if (isMasuk) map[toko][key].qty += qty;
-    if (isKeluar) map[toko][key].qty -= qty;
+    const stock = map[toko][key];
+
+    const time =
+      Number(t.CREATED_AT) ||
+      Number(t.createdAt) ||
+      Date.now();
+
+    // ======================
+    // STOCK MASUK
+    // ======================
+    if (
+      metode === "PEMBELIAN" ||
+      metode === "TRANSFER_MASUK" ||
+      metode === "STOK OPNAME" ||
+      metode === "REFUND"
+    ) {
+      stock.qty += qty;
+    }
+
+    // ======================
+    // STOCK KELUAR
+    // ======================
+    if (
+      metode === "PENJUALAN" ||
+      metode === "TRANSFER_KELUAR"
+    ) {
+      stock.qty -= qty;
+    }
+
+    // ======================
+    // LAST TRANSAKSI (PALING BARU)
+    // ======================
+   // REFUND selalu menang
+if (metode === "REFUND" || time >= stock.lastTime) {
+      stock.lastTime = time;
+      stock.lastTransaksi = metode;
+
+      if (metode === "REFUND") {
+        stock.lastStatus = "TERSEDIA";
+        stock.keterangan = "REFUND";
+      } else if (
+        metode === "PENJUALAN" ||
+        metode === "TRANSFER_KELUAR"
+      ) {
+        stock.lastStatus = "TERJUAL";
+        stock.keterangan = "";
+      } else {
+        stock.lastStatus = "TERSEDIA";
+      }
+    }
   });
 
   return map;
