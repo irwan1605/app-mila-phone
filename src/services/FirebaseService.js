@@ -2895,27 +2895,35 @@ export const deleteMasterSales = async (id) => {
   return remove(ref(db, `dataManagement/masterSales/${id}`));
 };
 
+
 export const listenMasterPaymentMetode = (callback) => {
-  const dbRef = ref(db, "master_payment_metode");
+  return onValue(ref(db, "master_payment_metode"), (snap) => {
+    const data = snap.val() || {};
 
-  return onValue(dbRef, (snap) => {
-    const arr = [];
+    const arr = Object.entries(data).map(([id, v]) => ({
+      id,
+      ...v,
+    }));
 
-    snap.forEach((child) => {
-      arr.push({
-        id: child.key,
-        ...child.val(),
-      });
-    });
-
-    callback(arr); // ✅ HARUS ARRAY
+    callback(arr);
   });
 };
 
+
 export const addMasterPaymentMetode = async (payload) => {
-  const dbRef = ref(db, "master_payment_metode");
-  await push(dbRef, payload);
+  const newRef = push(ref(db, "master_payment_metode"));
+  await set(newRef, payload);
 };
+
+export const updateMasterPaymentMetode = async (id, payload) => {
+  await update(ref(db, `master_payment_metode/${id}`), payload);
+};
+
+export const deleteMasterPaymentMetode = async (id) => {
+  await remove(ref(db, `master_payment_metode/${id}`));
+};
+
+
 
 export const generateIdPelanggan = async (nama, telp) => {
   const snap = await get(ref(db, "masterPelanggan"));
@@ -3014,8 +3022,8 @@ export const deleteMasterSupplier = masterSupplier.delete;
 const masterPaymentMetode = createMasterHelpers("masterPaymentMetode");
 // export const listenMasterPaymentMetode = masterPaymentMetode.listen;
 // export const addMasterPaymentMetode = masterPaymentMetode.add;
-export const updateMasterPaymentMetode = masterPaymentMetode.update;
-export const deleteMasterPaymentMetode = masterPaymentMetode.delete;
+// export const updateMasterPaymentMetode = masterPaymentMetode.update;
+// export const deleteMasterPaymentMetode = masterPaymentMetode.delete;
 
 const masterLeasing = createMasterHelpers("masterLeasing");
 export const listenMasterLeasing = masterLeasing.listen;

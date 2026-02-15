@@ -23,39 +23,14 @@ export default function MasterPaymentMetodeCard() {
   const [inputText, setInputText] = useState("");
   const [editId, setEditId] = useState(null);
 
-  /* ================= LISTENER ================= */
+  /* ================= LISTENER REALTIME ================= */
   useEffect(() => {
     const unsub = listenMasterPaymentMetode((data) => {
-      // 🔥 pastikan selalu array
       setRows(Array.isArray(data) ? data : []);
     });
 
     return () => unsub && unsub();
   }, []);
-
-  useEffect(() => {
-    console.log("ROWS TABLE:", rows);
-  }, [rows]);
-
-  /* ================= EXPORT ================= */
-  const handleExport = () => {
-    if (!rows.length) return alert("Data kosong");
-
-    const formatted = rows.map((r) => ({
-      Nama: r.nama || "",
-      "Payment Metode": Array.isArray(r.paymentMetode)
-        ? r.paymentMetode.join(", ")
-        : r.paymentMetode || "",
-    }));
-
-    exportToExcel({
-      data: formatted,
-      fileName: "MASTER_PAYMENT_METODE",
-      sheetName: "Payment Metode",
-    });
-  };
-
-  
 
   /* ================= ADD METODE ================= */
   const addMetode = (val) => {
@@ -70,9 +45,7 @@ export default function MasterPaymentMetodeCard() {
   };
 
   const removeMetode = (metode) => {
-    setPaymentMetode((prev) =>
-      prev.filter((m) => m !== metode)
-    );
+    setPaymentMetode((prev) => prev.filter((m) => m !== metode));
   };
 
   /* ================= EDIT ================= */
@@ -90,37 +63,49 @@ export default function MasterPaymentMetodeCard() {
 
   /* ================= SAVE ================= */
   const save = async () => {
+    if (!nama) return alert("Nama wajib diisi");
+
+    const payload = {
+      nama,
+      paymentMetode,
+    };
+
     try {
-      if (!nama) return alert("Nama wajib diisi");
-      // if (paymentMetode.length === 0)
-      //   return alert("Payment metode minimal 1");
-
-      const payload = {
-        nama,
-        paymentMetode,
-      };
-
       if (editId) {
         await updateMasterPaymentMetode(editId, payload);
       } else {
         await addMasterPaymentMetode(payload);
       }
 
-      // RESET FORM
       setNama("");
       setPaymentMetode([]);
       setEditId(null);
-
-      alert("✅ Data berhasil disimpan");
     } catch (err) {
       console.error(err);
-      alert("❌ Gagal menyimpan data");
+      alert("❌ Gagal menyimpan");
     }
+  };
+
+  /* ================= EXPORT ================= */
+  const handleExport = () => {
+    if (!rows.length) return alert("Data kosong");
+
+    const formatted = rows.map((r) => ({
+      Nama: r.nama || "",
+      "Payment Metode": Array.isArray(r.paymentMetode)
+        ? r.paymentMetode.join(", ")
+        : "",
+    }));
+
+    exportToExcel({
+      data: formatted,
+      fileName: "MASTER_PAYMENT_METODE",
+      sheetName: "Payment Metode",
+    });
   };
 
   return (
     <div>
-      {/* HEADER */}
       <div className="flex justify-between mb-3">
         <h2 className="font-bold text-lg">MASTER PAYMENT METODE</h2>
 
@@ -132,7 +117,6 @@ export default function MasterPaymentMetodeCard() {
         </button>
       </div>
 
-      {/* FORM */}
       <div className="space-y-2 mb-4">
         <input
           value={nama}
@@ -168,7 +152,6 @@ export default function MasterPaymentMetodeCard() {
           </button>
         </div>
 
-        {/* TAG */}
         <div className="flex flex-wrap gap-2">
           {paymentMetode.map((m) => (
             <span
@@ -194,7 +177,6 @@ export default function MasterPaymentMetodeCard() {
         </button>
       </div>
 
-      {/* TABLE */}
       <table className="w-full text-sm border">
         <thead className="bg-indigo-600 text-white">
           <tr>

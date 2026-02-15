@@ -5,11 +5,13 @@ import {
   addMasterBank,
   updateMasterBank,
   deleteMasterBank,
+  listenMasterPaymentMetode,
 } from "../../services/FirebaseService";
 
 export default function MasterBankCard() {
   const [banks, setBanks] = useState([]);
   const [editId, setEditId] = useState(null);
+  const [masterPaymentMetode, setMasterPaymentMetode] = useState([]);
 
   const [form, setForm] = useState({
     namaBank: [], // 🔥 MULTI NAMA
@@ -22,6 +24,14 @@ export default function MasterBankCard() {
   /* ================= LOAD ================= */
   useEffect(() => {
     const unsub = listenMasterBank(setBanks);
+    return () => unsub && unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = listenMasterPaymentMetode((data) => {
+      setMasterPaymentMetode(Array.isArray(data) ? data : []);
+    });
+
     return () => unsub && unsub();
   }, []);
 
@@ -51,24 +61,24 @@ export default function MasterBankCard() {
   /* ================= SUBMIT ================= */
   const handleSubmit = async () => {
     let finalNamaBank = [...form.namaBank];
-  
+
     // 🔥 AUTO ADD JIKA USER BELUM KLIK +
     if (tempNama.trim()) {
       if (!finalNamaBank.includes(tempNama.trim())) {
         finalNamaBank.push(tempNama.trim());
       }
     }
-  
+
     if (!finalNamaBank.length || !form.kodeBank) {
       alert("Minimal 1 Nama Bank & Kode wajib diisi");
       return;
     }
-  
+
     const payload = {
       ...form,
       namaBank: finalNamaBank,
     };
-  
+
     try {
       if (editId) {
         await updateMasterBank(editId, payload);
@@ -79,7 +89,7 @@ export default function MasterBankCard() {
           createdAt: Date.now(),
         });
       }
-  
+
       setForm({ namaBank: [], kodeBank: "", jenis: "DEBIT" });
       setTempNama("");
       setEditId(null);
@@ -87,7 +97,6 @@ export default function MasterBankCard() {
       alert("Gagal menyimpan data bank");
     }
   };
-  
 
   const normalizeNamaBank = (namaBank) => {
     if (Array.isArray(namaBank)) return namaBank;
@@ -96,6 +105,20 @@ export default function MasterBankCard() {
     }
     return [];
   };
+
+  const paymentJenisOptions = React.useMemo(() => {
+    return [
+      ...new Set(
+        masterPaymentMetode.flatMap((m) =>
+          Array.isArray(m.paymentMetode)
+            ? m.paymentMetode
+            : m.paymentMetode
+            ? [m.paymentMetode]
+            : []
+        )
+      ),
+    ];
+  }, [masterPaymentMetode]);
 
   /* ================= RENDER ================= */
   return (
@@ -153,8 +176,13 @@ export default function MasterBankCard() {
           value={form.jenis}
           onChange={(e) => setForm({ ...form, jenis: e.target.value })}
         >
-          <option value="DEBIT">DEBIT</option>
-          <option value="QRIS">QRIS</option>
+          <option value="">Pilih Jenis</option>
+
+          {paymentJenisOptions.map((j) => (
+            <option key={j} value={j}>
+              {j}
+            </option>
+          ))}
         </select>
 
         <button
