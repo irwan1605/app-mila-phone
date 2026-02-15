@@ -10,8 +10,6 @@ const normalizeDefaultUsers = () => {
   return [];
 };
 
-
-
 export default function Login({ onLogin, users: usersProp }) {
   const navigate = useNavigate();
 
@@ -20,7 +18,6 @@ export default function Login({ onLogin, users: usersProp }) {
   const [onlineUsers, setOnlineUsers] = useState([]);
 
   const defaultUsers = useMemo(() => normalizeDefaultUsers(), []);
-  
 
   // ✅ LISTENER REALTIME FIREBASE USERS
   useEffect(() => {
@@ -32,8 +29,6 @@ export default function Login({ onLogin, users: usersProp }) {
 
     return () => unsub && unsub();
   }, []);
-
-  
 
   // ✅ PRIORITAS DATA USER:
   // 1. props users dari App.jsx
@@ -55,42 +50,40 @@ export default function Login({ onLogin, users: usersProp }) {
   // ✅ HANDLE LOGIN
   const handleSubmit = (e) => {
     e.preventDefault();
-  
+
     const u = users.find(
       (x) =>
         (x.username || "").trim().toLowerCase() ===
-          username.trim().toLowerCase() &&
-        (x.password || "") === password
+          username.trim().toLowerCase() && (x.password || "") === password
     );
-  
+
     if (!u) {
       alert("❌ Username atau password salah.");
       return;
     }
-  
+
     let role = u.role;
     let tokoId = u.toko;
-  
+
     // ✅ NORMALISASI ROLE PIC TOKO
-  // ✅ NORMALISASI ROLE PIC & SPV TOKO
-if (
-  String(role).startsWith("pic_toko") ||
-  String(role).startsWith("spv_toko")
-) {
-  const prefix = String(role).startsWith("spv_toko")
-    ? "spv_toko"
-    : "pic_toko";
+    // ✅ NORMALISASI ROLE PIC & SPV TOKO
+    if (
+      String(role).startsWith("pic_toko") ||
+      String(role).startsWith("spv_toko")
+    ) {
+      const prefix = String(role).startsWith("spv_toko")
+        ? "spv_toko"
+        : "pic_toko";
 
-  const parsedId = Number(String(role).replace(prefix, ""));
-  const finalId = parsedId || Number(tokoId);
+      const parsedId = Number(String(role).replace(prefix, ""));
+      const finalId = parsedId || Number(tokoId);
 
-  if (Number.isFinite(finalId)) {
-    role = `${prefix}${finalId}`;
-    tokoId = finalId;
-  }
-}
+      if (Number.isFinite(finalId)) {
+        role = `${prefix}${finalId}`;
+        tokoId = finalId;
+      }
+    }
 
-  
     const logged = {
       username: u.username,
       name: u.name,
@@ -98,64 +91,60 @@ if (
       status: u.status,
       toko: tokoId || null,
     };
-  
+
     // ================= SIMPAN KE LOCALSTORAGE =================
     localStorage.setItem("userLogin", JSON.stringify(logged));
     localStorage.setItem("ROLE_USER", role);
-  
+
     // 🔥 JIKA PIC TOKO → SIMPAN TOKO LOGIN
     if (
       (String(role).startsWith("pic_toko") ||
         String(role).startsWith("spv_toko")) &&
       tokoId
     ) {
-    
       const TOKO_MAP = {
-        "1": "CILANGKAP PUSAT",
-        "2": "CIBINONG",
-        "3": "GAS ALAM",
-        "4": "CITEUREUP",
-        "5": "CIRACAS",
-        "6": "METLAND 1",
-        "7": "METLAND 2",
-        "8": "PITARA",
-        "9": "KOTA WISATA",
-        "10": "SAWANGAN",
+        1: "CILANGKAP PUSAT",
+        2: "CIBINONG",
+        3: "GAS ALAM",
+        4: "CITEUREUP",
+        5: "CIRACAS",
+        6: "METLAND 1",
+        7: "METLAND 2",
+        8: "PITARA",
+        9: "KOTA WISATA",
+        10: "SAWANGAN",
       };
-  
+
       const namaToko = TOKO_MAP[String(tokoId)];
       localStorage.setItem("TOKO_LOGIN", namaToko || "");
     } else {
       localStorage.removeItem("TOKO_LOGIN");
     }
-  
+
     if (typeof onLogin === "function") onLogin(logged);
-  
-  // ================= REDIRECT =================
 
-// ADMIN & SUPERADMIN
-if (role === "superadmin" || role === "admin") {
-  navigate("/dashboard", { replace: true });
-  return;
-}
+    // ================= REDIRECT =================
 
-// PIC TOKO
-// PIC & SPV TOKO
-if (
-  (String(role).startsWith("pic_toko") ||
-    String(role).startsWith("spv_toko")) &&
-  Number(tokoId)
-) {
-  navigate(`/dashboard-toko/${tokoId}`, { replace: true });
-  return;
-}
+    // ADMIN & SUPERADMIN
+    if (role === "superadmin" || role === "admin") {
+      navigate("/dashboard", { replace: true });
+      return;
+    }
 
+    // PIC TOKO
+    // PIC & SPV TOKO
+    if (
+      (String(role).startsWith("pic_toko") ||
+        String(role).startsWith("spv_toko")) &&
+      Number(tokoId)
+    ) {
+      navigate(`/dashboard-toko/${tokoId}`, { replace: true });
+      return;
+    }
 
-// default
-navigate("/dashboard", { replace: true });
-
+    // default
+    navigate("/dashboard", { replace: true });
   };
-  
 
   return (
     <div
@@ -179,13 +168,15 @@ navigate("/dashboard", { replace: true });
       <div className="w-full max-w-md">
         <div className="bg-white/80 backdrop-blur rounded-2xl shadow-xl p-6">
           <div className="text-center mb-6">
-            <img src="/logoMMT.png" alt="Logo" className="mx-auto h-12 w-12 object-contain" />
+            <img
+              src="/logoMMT.png"
+              alt="Logo"
+              className="mx-auto h-12 w-12 object-contain"
+            />
             <h1 className="mt-3 text-2xl font-bold text-slate-800">
               Inventory Pusat
             </h1>
-            <p className="text-slate-500 text-sm">
-              Silakan masuk ke akun Anda
-            </p>
+            <p className="text-slate-500 text-sm">Silakan masuk ke akun Anda</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

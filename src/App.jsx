@@ -96,7 +96,12 @@ function TokoWrapper({ user }) {
   const { id } = useParams();
   const tokoId = Number(id);
 
-  if (user.role === "superadmin" || user.role === "admin")
+  if (
+    user.role === "superadmin" ||
+    user.role === "admin" ||
+    user.role?.startsWith("spv_toko")
+  )
+  
     return <DashboardToko tokoId={tokoId} user={user} />;
 
   if (user.role?.startsWith("pic_toko")) {
@@ -214,7 +219,8 @@ export default function App() {
                           replace
                         />
                       ) : (
-                        <ProtectedRoute allowedRoles={["superadmin", "admin"]}>
+                        <ProtectedRoute allowedRoles={["superadmin", "admin", "spv_toko"]}>
+
                           <Dashboard user={user} />
                         </ProtectedRoute>
                       )
@@ -226,7 +232,13 @@ export default function App() {
                     path="/toko/:id"
                     element={
                       <ProtectedRoute
-                        allowedRoles={["superadmin", "admin", "pic_toko"]}
+                      allowedRoles={[
+                        "superadmin",
+                        "admin",
+                        "pic_toko",
+                        "spv_toko",
+                      ]}
+                      
                       >
                         <TokoWrapper user={user} />
                       </ProtectedRoute>

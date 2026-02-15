@@ -51,8 +51,14 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
   const { searchQuery } = useGlobalSearch();
 
-  const isSuper = role === "superadmin" || role === "admin";
   const isSPV = String(role || "").startsWith("spv_toko");
+const isSuper =
+  role === "superadmin" ||
+  role === "admin" ||
+  isSPV;
+
+
+
 
   const picMatch = /^pic_toko(\d+)$/i.exec(role || "");
   const picTokoId = picMatch ? Number(picMatch[1]) : toko ? Number(toko) : null;
