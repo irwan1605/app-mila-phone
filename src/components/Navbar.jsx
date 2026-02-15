@@ -29,6 +29,7 @@ const Navbar = ({ user, onLogout }) => {
   const [editPassword, setEditPassword] = useState("");
   const [editPassword2, setEditPassword2] = useState("");
   const [showEditAccount, setShowEditAccount] = useState(false);
+  const [myPendingTransfer, setMyPendingTransfer] = useState([]);
 
   // ✅ SAFE USER DARI LOCALSTORAGE
   const activeUser = useMemo(() => {
@@ -49,6 +50,42 @@ const Navbar = ({ user, onLogout }) => {
   }, [activeUser]);
 
   useEffect(() => {
+    if (!TOKO_LOGIN) return;
+
+    const filtered = (pendingTransfer || []).filter((t) => {
+      const dari = String(t.dari || t.tokoPengirim || "").toUpperCase();
+      const ke = String(t.ke || "").toUpperCase();
+
+      return dari === TOKO_LOGIN || ke === TOKO_LOGIN;
+    });
+
+    setMyPendingTransfer(filtered);
+  }, [pendingTransfer, TOKO_LOGIN]);
+
+  useEffect(() => {
+    return FirebaseService.listenTransferRequests((rows) => {
+      const relevant = (rows || []).filter((t) => {
+        if (t.status !== "Pending") return false;
+  
+        const dari = String(t.dari || t.tokoPengirim || "").toUpperCase();
+        const ke = String(t.ke || "").toUpperCase();
+  
+        return dari === TOKO_LOGIN || ke === TOKO_LOGIN;
+      });
+  
+      setPendingTransfer(relevant);
+    });
+  }, [TOKO_LOGIN]);
+
+  useEffect(() => {
+    if (notifTransfer.length > 0) {
+      console.log("🔔 Ada transfer menunggu approval");
+    }
+  }, [notifTransfer]);
+
+  useEffect(() => {
+    if (!TOKO_LOGIN) return;
+  
     return FirebaseService.listenTransferRequests((rows) => {
       const relevant = (rows || []).filter((t) => {
         if (t.status !== "Pending") return false;
@@ -64,21 +101,7 @@ const Navbar = ({ user, onLogout }) => {
   }, [TOKO_LOGIN]);
   
 
-  useEffect(() => {
-    if (notifTransfer.length > 0) {
-      console.log("🔔 Ada transfer menunggu approval");
-    }
-  }, [notifTransfer]);
-
-  useEffect(() => {
-    return onValue(ref(db, "transfer_barang"), (snap) => {
-      const pending = [];
-      snap.forEach((c) => {
-        if (c.val().status === "Pending") pending.push(c.val());
-      });
-      setPendingTransfer(pending);
-    });
-  }, []);
+  const lastTransferSound = useRef(null);
 
   const bellAudio = useRef(null);
 
@@ -87,28 +110,31 @@ const Navbar = ({ user, onLogout }) => {
   }, []);
 
   useEffect(() => {
-    if (pendingTransfer.length > 0) {
-      bellAudio.current?.play().catch(() => {});
-    }
-  }, [pendingTransfer.length]);
+    if (!pendingTransfer?.length) return;
+    if (!TOKO_LOGIN) return;
 
-  // useEffect(() => {
-  //   const unsub = listenTransferRequests((list) => {
-  //     const pending = (list || []).filter((t) => t.status === "Pending");
-  //     setNotifTransfer(pending);
-  //   });
+    // cari transfer yang memang untuk toko ini
+    const relevantTransfer = pendingTransfer.find((t) => {
+      const dari = String(t.dari || t.tokoPengirim || "").toUpperCase();
+      const ke = String(t.ke || "").toUpperCase();
 
-  //   return () => unsub && unsub();
-  // }, []);
+      return dari === TOKO_LOGIN || ke === TOKO_LOGIN;
+    });
 
-  // // ✅ AMBIL DATA USER DARI FIREBASE
-  // useEffect(() => {
-  //   const unsub = listenUsers((list) => {
-  //     setFirebaseUsers(Array.isArray(list) ? list : []);
-  //   });
+    if (!relevantTransfer) return;
 
-  //   return () => unsub && unsub();
-  // }, []);
+    // ✅ anti bunyi berulang
+    const transferId =
+      relevantTransfer.id ||
+      relevantTransfer.key ||
+      JSON.stringify(relevantTransfer);
+
+    if (lastTransferSound.current === transferId) return;
+
+    lastTransferSound.current = transferId;
+
+    bellAudio.current?.play().catch(() => {});
+  }, [pendingTransfer, TOKO_LOGIN]);
 
   const handleUpdateAccount = async () => {
     const session = JSON.parse(localStorage.getItem("user"));
@@ -136,9 +162,6 @@ const Navbar = ({ user, onLogout }) => {
       alert("❌ Gagal update akun");
     }
   };
-
-  
-  
 
   // ✅ SINKRONKAN NAMA DARI USER MANAGEMENT
   const finalUser = useMemo(() => {
@@ -243,21 +266,21 @@ const Navbar = ({ user, onLogout }) => {
         }
         className={`
         relative cursor-pointer
-        ${pendingTransfer.length > 0 ? "animate-pulse" : ""}
+       ${myPendingTransfer.length > 0 ? "animate-pulse" : ""}
       `}
       >
         <FaBell
           className={`
           text-2xl transition-all
           ${
-            pendingTransfer.length > 0
+            myPendingTransfer.length > 0
               ? "text-red-500 drop-shadow-[0_0_12px_rgba(255,0,0,0.9)] animate-bounce"
               : "text-gray-500"
           }
         `}
         />
 
-        {pendingTransfer.length > 0 && (
+        {myPendingTransfer.length > 0 && (
           <span
             className="
             absolute -top-2 -right-2
@@ -266,7 +289,7 @@ const Navbar = ({ user, onLogout }) => {
             animate-ping
           "
           >
-            {pendingTransfer.length}
+            {myPendingTransfer.length}
           </span>
         )}
       </div>
