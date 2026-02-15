@@ -21,6 +21,8 @@ export default function TableTransferBarang({ currentRole }) {
 
   const [soldImeis, setSoldImeis] = useState([]);
 
+  const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "";
+
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {
       const map = {}; // key = imei
@@ -56,9 +58,6 @@ export default function TableTransferBarang({ currentRole }) {
     });
   }, []);
 
-  const TOKO_LOGIN =
-  localStorage.getItem("TOKO_LOGIN") || "";
-
   // ================= FILTER TRANSFER: TOLAK IMEI TERJUAL =================
   const safeRows = useMemo(() => {
     return rows.filter((r) => {
@@ -76,21 +75,16 @@ export default function TableTransferBarang({ currentRole }) {
   }, [rows, inventory]);
 
   const rowsByToko = useMemo(() => {
-    // SUPERADMIN lihat semua
     if (isSuperAdmin) return safeRows;
-  
-    // PIC TOKO hanya lihat transfer toko sendiri
-    return safeRows.filter(
-      (r) =>
-        String(r.tokoPengirim || "").toUpperCase() ===
-          TOKO_LOGIN.toUpperCase() ||
-        String(r.ke || "").toUpperCase() ===
-          TOKO_LOGIN.toUpperCase()
-    );
-  }, [safeRows, TOKO_LOGIN, isSuperAdmin]);
 
-  
-  
+    return safeRows.filter((r) => {
+      const pengirim = String(r.tokoPengirim || "").toUpperCase();
+      const tujuan = String(r.ke || "").toUpperCase();
+      const tokoLogin = TOKO_LOGIN.toUpperCase();
+
+      return pengirim === tokoLogin || tujuan === tokoLogin;
+    });
+  }, [safeRows, TOKO_LOGIN, isSuperAdmin]);
 
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {
@@ -199,9 +193,6 @@ export default function TableTransferBarang({ currentRole }) {
       alert("❌ Gagal reject & rollback stok");
     }
   };
-
- 
-
 
   const handleExportExcel = () => {
     const filteredData = rows.filter(
@@ -313,12 +304,11 @@ export default function TableTransferBarang({ currentRole }) {
           </thead>
 
           <tbody>
-          {rowsByToko
-  .filter(
-    (r) => filterStatus === "ALL" || r.status === filterStatus
-  )
-  .map((r, i) => (
-
+            {rowsByToko
+              .filter(
+                (r) => filterStatus === "ALL" || r.status === filterStatus
+              )
+              .map((r, i) => (
                 <tr
                   key={r.id}
                   className="hover:bg-indigo-50 transition-colors p-2"
