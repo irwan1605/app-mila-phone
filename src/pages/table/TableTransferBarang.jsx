@@ -137,10 +137,17 @@ export default function TableTransferBarang({ currentRole }) {
         arr.push({
           id: c.key,
           ...val,
-          imeis: uniqueImeis, // pakai yg sudah unik
-          qty: uniqueImeis.length,
+          imeis: uniqueImeis,
+        
+          // ✅ FIX QTY
+          qty:
+            uniqueImeis.length > 0
+              ? uniqueImeis.length
+              : Number(val.qty || 0),
+        
           status: String(val.status || "Pending"),
         });
+        
       });
 
       console.log("🔥 DATA TRANSFER TABLE:", arr);
@@ -304,212 +311,153 @@ export default function TableTransferBarang({ currentRole }) {
           </thead>
 
           <tbody>
-            {rowsByToko
-              .filter(
-                (r) => filterStatus === "ALL" || r.status === filterStatus
-              )
-              .map((r, i) => (
-                <tr
-                  key={r.id}
-                  className="hover:bg-indigo-50 transition-colors p-2"
-                >
-                  <td className="border px-3 py-2">{i + 1}</td>
-                  <td className="border px-3 py-2">{r.tanggal || "-"}</td>
-                  <td className="border px-3 py-2">{r.noDo || "-"}</td>
-                  <td className="border px-3 py-2">{r.noSuratJalan || "-"}</td>
-                  <td className="border px-3 py-2">{r.pengirim || "-"}</td>
-                  <td className="border px-3 py-2">{r.tokoPengirim || "-"}</td>
-                  <td className="border px-3 py-2">{r.ke || "-"}</td>
-                  <td className="border px-3 py-2">{r.brand || "-"}</td>
-                  <td className="border px-3 py-2">{r.barang || "-"}</td>
-                  <td className="border px-3 py-2 text-xs">
-                    {Array.isArray(r.imeis) ? r.imeis.join(", ") : "-"}
-                    {r.imeis.length !== new Set(r.imeis).size && (
-                      <span className="text-red-600 text-xs">
-                        ⚠ IMEI DUPLIKAT
-                      </span>
-                    )}
-                  </td>
-                  <td className="border px-3 py-2 text-center font-semibold">
-                    {r.qty || 0}
-                  </td>
-                  <td className="border px-3 py-2 text-center">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-bold
-                         ${
-                           r.status === "Approved"
-                             ? "bg-green-100 text-green-700"
-                             : ""
-                         }
-                         ${
-                           r.status === "Pending"
-                             ? "bg-yellow-100 text-yellow-700"
-                             : ""
-                         }
-                         ${
-                           r.status === "Rejected"
-                             ? "bg-red-100 text-red-700"
-                             : ""
-                         }
-                         ${
-                           r.status === "Voided"
-                             ? "bg-gray-200 text-gray-700"
-                             : ""
-                         }
-                      `}
-                    >
-                      {r.status || "Pending"}
-                    </span>
-                  </td>
+  {rowsByToko
+    .filter(
+      (r) => filterStatus === "ALL" || r.status === filterStatus
+    )
+    .map((r, i) => {
 
-                  {preview && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                      <div className="bg-white rounded-xl p-6 w-[500px]">
-                        <h3 className="font-bold mb-3">Preview Transfer</h3>
+      // ✅ CEK TOKO TUJUAN
+      const isTokoTujuan =
+        String(r.ke || "").toUpperCase() ===
+        TOKO_LOGIN.toUpperCase();
 
-                        <p>📦 Dari: {preview.tokoAsal}</p>
-                        <p>🏬 Ke: {preview.tokoTujuan}</p>
+      // ✅ YANG BOLEH APPROVE
+      const canApprove =
+        (isSuperAdmin || isTokoTujuan) &&
+        r.status === "Pending";
 
-                        <ul className="mt-3 max-h-40 overflow-auto">
-                          {preview.imeis.map((i) => (
-                            <li key={i}>• {i}</li>
-                          ))}
-                        </ul>
-
-                        <button
-                          onClick={() => setPreview(null)}
-                          className="mt-4 bg-slate-700 text-white px-4 py-2 rounded"
-                        >
-                          Tutup
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <td className="border px-3 py-2">
-                    <div className="flex flex-nowrap gap-3 justify-center items-center">
-                      {r.status !== "Rejected" && (
-                        <>
-                          {/* APPROVE */}
-                          <button
-                            title="Approve Transfer"
-                            disabled={!isSuperAdmin || r.status !== "Pending"}
-                            onClick={async () => {
-                              if (!isSuperAdmin || r.status !== "Pending")
-                                return;
-
-                              for (const imei of r.imeis || []) {
-                                if (isImeiAlreadyUsed(imei)) {
-                                  alert(
-                                    `❌ IMEI ${imei} sudah pernah dipakai (transfer / jual)!`
-                                  );
-                                  return;
-                                }
-                              }
-
-                              const sjId =
-                                await FirebaseService.approveTransferFINAL({
-                                  transfer: r,
-                                });
-                              navigate(`/surat-jalan/${sjId}`);
-                            }}
-                            className={`
-            flex flex-col items-center justify-center gap-1
-            px-3 py-2 rounded-lg text-[11px] font-bold
-            ${
-              !isSuperAdmin || r.status !== "Pending"
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-green-500 text-white hover:bg-green-600"
-            }
-          `}
-                          >
-                            <span className="text-sm">✔</span>
-                            <span>Approve</span>
-                          </button>
-
-                          {/* REJECT */}
-                          <button
-                            title="Reject Transfer"
-                            disabled={!isSuperAdmin || r.status !== "Pending"}
-                            onClick={async () => {
-                              if (!isSuperAdmin || r.status !== "Pending")
-                                return;
-                              await FirebaseService.rejectTransferFINAL({
-                                transfer: r,
-                              });
-                              alert("Transfer ditolak & IMEI dikembalikan");
-                            }}
-                            className={`
-            flex flex-col items-center justify-center gap-1
-            px-3 py-2 rounded-lg text-[11px] font-bold
-            ${
-              !isSuperAdmin || r.status !== "Pending"
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-red-500 text-white hover:bg-red-600"
-            }
-          `}
-                          >
-                            <span className="text-sm">✖</span>
-                            <span>Reject</span>
-                          </button>
-
-                          {/* PRINT SURAT JALAN */}
-                          <button
-                            title="Print Surat Jalan"
-                            disabled={!isSuperAdmin}
-                            onClick={() => {
-                              if (!isSuperAdmin) return;
-                              const sjId = r.suratJalanId || r.id;
-                              navigate(`/surat-jalan/${sjId}`);
-                            }}
-                            className={`
-            flex flex-col items-center justify-center gap-1
-            px-3 py-2 rounded-lg text-[11px] font-bold
-            ${
-              !isSuperAdmin
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-indigo-500 text-white hover:bg-indigo-600"
-            }
-          `}
-                          >
-                            <FaPrint className="text-sm" />
-                            <span>Print</span>
-                          </button>
-
-                          {/* REJECT & ROLLBACK */}
-                          {/* <button
-          title="Reject & Rollback Stok"
-          disabled={!isSuperAdmin || (r.status !== "Pending" && r.status !== "Approved")}
-          onClick={() => {
-            if (!isSuperAdmin) return;
-            handleRejectAndRollback(r);
-          }}
-          className={`
-            flex flex-col items-center justify-center gap-1
-            px-3 py-2 rounded-lg text-[11px] font-bold
-            ${
-              !isSuperAdmin || (r.status !== "Pending" && r.status !== "Approved")
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-rose-600 text-white hover:bg-rose-700"
-            }
-          `}
+      return (
+        <tr
+          key={r.id}
+          className="hover:bg-indigo-50 transition-colors p-2"
         >
-          <span className="text-sm">↩</span>
-          <span>Rollback</span>
-        </button> */}
-                        </>
-                      )}
+          <td className="border px-3 py-2">{i + 1}</td>
+          <td className="border px-3 py-2">{r.tanggal || "-"}</td>
+          <td className="border px-3 py-2">{r.noDo || "-"}</td>
+          <td className="border px-3 py-2">{r.noSuratJalan || "-"}</td>
+          <td className="border px-3 py-2">{r.pengirim || "-"}</td>
+          <td className="border px-3 py-2">{r.tokoPengirim || "-"}</td>
+          <td className="border px-3 py-2">{r.ke || "-"}</td>
+          <td className="border px-3 py-2">{r.brand || "-"}</td>
+          <td className="border px-3 py-2">{r.barang || "-"}</td>
 
-                      {r.status === "Rejected" && (
-                        <span className="text-xs font-bold text-red-600">
-                          ❌ DITOLAK
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-          </tbody>
+          <td className="border px-3 py-2 text-xs">
+            {Array.isArray(r.imeis) ? r.imeis.join(", ") : "-"}
+          </td>
+
+          <td className="border px-3 py-2 text-center font-semibold">
+            {r.qty || 0}
+          </td>
+
+          <td className="border px-3 py-2 text-center">
+            <span
+              className={`px-2 py-1 rounded-full text-xs font-bold
+                ${
+                  r.status === "Approved"
+                    ? "bg-green-100 text-green-700"
+                    : ""
+                }
+                ${
+                  r.status === "Pending"
+                    ? "bg-yellow-100 text-yellow-700"
+                    : ""
+                }
+                ${
+                  r.status === "Rejected"
+                    ? "bg-red-100 text-red-700"
+                    : ""
+                }
+                ${
+                  r.status === "Voided"
+                    ? "bg-gray-200 text-gray-700"
+                    : ""
+                }
+              `}
+            >
+              {r.status || "Pending"}
+            </span>
+          </td>
+
+          {/* ===== AKSI ===== */}
+          <td className="border px-3 py-2">
+            <div className="flex gap-2 justify-center">
+
+              {/* APPROVE */}
+              <button
+                title="Approve Transfer"
+                disabled={!canApprove}
+                onClick={async () => {
+                  if (!canApprove) return;
+
+                  for (const imei of r.imeis || []) {
+                    if (isImeiAlreadyUsed(imei)) {
+                      alert(
+                        `❌ IMEI ${imei} sudah pernah dipakai!`
+                      );
+                      return;
+                    }
+                  }
+
+                  const sjId =
+                    await FirebaseService.approveTransferFINAL({
+                      transfer: r,
+                    });
+
+                  navigate(`/surat-jalan/${sjId}`);
+                }}
+                className={`px-3 py-2 rounded-lg text-[11px] font-bold
+                  ${
+                    !canApprove
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-green-500 text-white hover:bg-green-600"
+                  }
+                `}
+              >
+                ✔ Approve
+              </button>
+
+              {/* REJECT (SUPERADMIN ONLY) */}
+              <button
+                disabled={!isSuperAdmin || r.status !== "Pending"}
+                onClick={async () => {
+                  if (!isSuperAdmin) return;
+                  await FirebaseService.rejectTransferFINAL({
+                    transfer: r,
+                  });
+                  alert("Transfer ditolak");
+                }}
+                className={`px-3 py-2 rounded-lg text-[11px] font-bold
+                  ${
+                    !isSuperAdmin || r.status !== "Pending"
+                      ? "bg-gray-300 text-gray-500"
+                      : "bg-red-500 text-white hover:bg-red-600"
+                  }
+                `}
+              >
+                ✖ Reject
+              </button>
+
+              {/* PRINT */}
+              <button
+                disabled={!isSuperAdmin}
+                onClick={() => {
+                  if (!isSuperAdmin) return;
+                  const sjId = r.suratJalanId || r.id;
+                  navigate(`/surat-jalan/${sjId}`);
+                }}
+                className="px-3 py-2 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600"
+              >
+                <FaPrint />
+              </button>
+
+            </div>
+          </td>
+        </tr>
+      );
+    })}
+</tbody>
+
         </table>
       </div>
     </div>
