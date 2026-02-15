@@ -16,6 +16,20 @@ import { renameUsername } from "../services/FirebaseService";
 // } from "../services/FirebaseService";
 import FirebaseService from "../services/FirebaseService";
 
+const TOKO_MAP = {
+  "1": "CILANGKAP PUSAT",
+  "2": "CIBINONG",
+  "3": "GAS ALAM",
+  "4": "CITEUREUP",
+  "5": "CIRACAS",
+  "6": "METLAND 1",
+  "7": "METLAND 2",
+  "8": "PITARA",
+  "9": "KOTA WISATA",
+  "10": "SAWANGAN",
+};
+
+
 const Navbar = ({ user, onLogout }) => {
   const [showWhatsAppDropdown, setShowWhatsAppDropdown] = useState(false);
   const [firebaseUsers, setFirebaseUsers] = useState([]);
@@ -43,11 +57,25 @@ const Navbar = ({ user, onLogout }) => {
   const TOKO_LOGIN = useMemo(() => {
     try {
       const u = activeUser || JSON.parse(localStorage.getItem("user"));
-      return String(u?.tokoNama || u?.toko || "").toUpperCase();
+  
+      // ✅ PRIORITAS NAMA TOKO
+      if (u?.tokoNama) {
+        return String(u.tokoNama).trim().toUpperCase();
+      }
+  
+      // ✅ JIKA ANGKA → KONVERSI KE NAMA TOKO
+      if (u?.toko) {
+        return String(TOKO_MAP[String(u.toko)] || "")
+          .trim()
+          .toUpperCase();
+      }
+  
+      return "";
     } catch {
       return "";
     }
   }, [activeUser]);
+  
 
   useEffect(() => {
     if (!TOKO_LOGIN) return;
@@ -109,12 +137,10 @@ const Navbar = ({ user, onLogout }) => {
   
     const dari = normalize(trx.dari || trx.tokoPengirim);
     const ke = normalize(trx.ke);
+    const tokoLogin = normalize(TOKO_LOGIN);
   
-    // ✅ DOUBLE SAFETY CHECK
-    if (
-      dari !== normalize(TOKO_LOGIN) &&
-      ke !== normalize(TOKO_LOGIN)
-    ) return;
+    // ✅ HARD STOP
+    if (dari !== tokoLogin && ke !== tokoLogin) return;
   
     const id = trx.id || trx.key;
   
@@ -124,6 +150,7 @@ const Navbar = ({ user, onLogout }) => {
   
     bellAudio.current?.play().catch(() => {});
   }, [pendingTransfer, TOKO_LOGIN]);
+  
   
 
   const handleUpdateAccount = async () => {
