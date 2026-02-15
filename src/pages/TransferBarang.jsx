@@ -58,6 +58,8 @@ export default function TransferBarang() {
   const location = useLocation();
   const suratJalanRef = useRef(null);
   const [inventory, setInventory] = useState([]);
+  const [stokAccessories, setStokAccessories] = useState([]);
+
 
   /* ================= TOKO ================= */
   const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "CILANGKAP PUSAT";
@@ -99,31 +101,32 @@ export default function TransferBarang() {
   const [masterKaryawan, setMasterKaryawan] = useState([]);
   const [editIndex, setEditIndex] = useState(null);
 
+  useEffect(() => {
+    return onValue(ref(db, "stok_toko"), (snap) => {
+      const data = snap.val() || {};
+      setStokAccessories(data);
+    });
+  }, []);
+  
+
   const handleDeleteTransfer = (index) => {
     if (!window.confirm("Hapus item transfer ini?")) return;
-  
-    setDaftarTransfer(prev =>
-      prev.filter((_, i) => i !== index)
-    );
+
+    setDaftarTransfer((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleEditTransfer = (index) => {
     const item = daftarTransfer[index];
-  
+
     setForm({
       ...item,
     });
-  
-    setEditIndex(index);
-  
-    // hapus dari daftar sementara
-    setDaftarTransfer(prev =>
-      prev.filter((_, i) => i !== index)
-    );
-  };
-  
-  
 
+    setEditIndex(index);
+
+    // hapus dari daftar sementara
+    setDaftarTransfer((prev) => prev.filter((_, i) => i !== index));
+  };
 
   useEffect(() => {
     const unsub = listenKaryawan((data) => {
@@ -141,7 +144,6 @@ export default function TransferBarang() {
   const [showPreview, setShowPreview] = useState(false);
   const [loading, setLoading] = useState(false);
   const [daftarTransfer, setDaftarTransfer] = useState([]);
-
 
   /* ================= HELPER ================= */
   const normalize = (v) =>
@@ -331,6 +333,41 @@ export default function TransferBarang() {
     ];
   }, [inventory, masterBarang, form.tokoPengirim, form.kategori, form.brand]);
 
+  const stokTersedia = useMemo(() => {
+
+    if (!form.tokoPengirim || !form.barang) return 0;
+  
+    // =====================
+    // BARANG IMEI
+    // =====================
+    if (isKategoriImei) {
+      return inventory.filter(
+        (i) =>
+          i.status === "AVAILABLE" &&
+          i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
+          i.namaBarang.toUpperCase() === form.barang.toUpperCase()
+      ).length;
+    }
+  
+    // =====================
+    // ACCESSORIES (FIX)
+    // =====================
+    const barangMaster = masterBarang.find(
+      (b) =>
+        String(b.namaBarang || "").toUpperCase() ===
+        form.barang.toUpperCase()
+    );
+  
+    // kalau tidak ada stok field → anggap unlimited sementara
+    if (!barangMaster) return 9999;
+  
+    return Number(barangMaster.qty || barangMaster.stok || 9999);
+  
+  }, [inventory, masterBarang, form, isKategoriImei]);
+  
+  
+  
+
   // ================= CEK FORM SUDAH LENGKAP =================
   const isFormComplete =
     form.tokoPengirim &&
@@ -472,6 +509,30 @@ export default function TransferBarang() {
       alert("⚠️ IMEI ini sudah ditambahkan");
       return;
     }
+    // ❌ DUPLIKAT DI FORM
+    if (form.imeis.includes(found.imei)) {
+      alert("⚠️ IMEI sudah ada di daftar transfer");
+      return;
+    }
+
+    const imeiSudahAda = daftarTransfer.some((item) =>
+      (item.imeis || []).includes(found.imei)
+    );
+
+    if (imeiSudahAda) {
+      alert("❌ IMEI sudah ada di daftar transfer");
+      return;
+    }
+
+    const imeiPending = history.some(
+      (trx) =>
+        trx.status === "Pending" && (trx.imeis || []).includes(found.imei)
+    );
+
+    if (imeiPending) {
+      alert("❌ IMEI sedang dalam proses transfer lain");
+      return;
+    }
 
     // ✅ AMAN
     setForm((f) => ({
@@ -539,15 +600,22 @@ export default function TransferBarang() {
       alert("❌ " + error);
       return;
     }
-  
+
+    if (!isKategoriImei) {
+      if (form.qty > stokTersedia) {
+        alert(`❌ Qty melebihi stok tersedia.\nStok tersedia: ${stokTersedia}`);
+        return;
+      }
+    }
+
     const newItem = {
       ...form,
       id: Date.now(),
     };
-  
+
     // masuk ke daftar transfer
-    setDaftarTransfer(prev => [...prev, newItem]);
-  
+    setDaftarTransfer((prev) => [...prev, newItem]);
+
     // reset form supaya bisa input barang berikutnya
     setForm({
       ...initialForm,
@@ -559,7 +627,6 @@ export default function TransferBarang() {
       pengirim: form.pengirim,
     });
   };
-  
 
   // ================= FILTER HISTORY (FIX ERROR) =================
   const filteredHistory = useMemo(() => {
@@ -604,9 +671,9 @@ export default function TransferBarang() {
     try {
       let transferList = [...daftarTransfer];
   
-      // =====================================================
-      // ✅ JIKA BELUM DITAMBAH KE DAFTAR, AMBIL DARI FORM
-      // =====================================================
+      // ==========================================
+      // JIKA FORM BELUM MASUK DAFTAR
+      // ==========================================
       if (transferList.length === 0) {
         const error = validateForm();
         if (error) {
@@ -620,13 +687,27 @@ export default function TransferBarang() {
         });
       }
   
-      // =====================================================
-      // ✅ VALIDASI SEMUA ITEM TRANSFER
-      // =====================================================
+      // ==========================================
+      // CEK DUPLIKAT IMEI GLOBAL
+      // ==========================================
+      const allImeis = transferList.flatMap(i => i.imeis || []);
+      const duplicateImeis = allImeis.filter(
+        (im, idx) => allImeis.indexOf(im) !== idx
+      );
+  
+      if (duplicateImeis.length > 0) {
+        alert(
+          "❌ Terdapat IMEI duplikat:\n" +
+          [...new Set(duplicateImeis)].join(", ")
+        );
+        return;
+      }
+  
+      // ==========================================
+      // VALIDASI PER ITEM
+      // ==========================================
       for (const item of transferList) {
-        // -------------------------------
-        // VALIDASI DATA WAJIB
-        // -------------------------------
+  
         if (!item.tokoPengirim)
           return alert("❌ Toko pengirim kosong");
   
@@ -636,85 +717,110 @@ export default function TransferBarang() {
         if (!item.barang)
           return alert("❌ Nama barang kosong");
   
-        // -------------------------------
-        // VALIDASI STOK (NON IMEI)
-        // -------------------------------
-        if ((!item.imeis || item.imeis.length === 0) && item.qty <= 0) {
-          return alert(`❌ Qty barang ${item.barang} tidak valid`);
-        }
-  
-        // -------------------------------
-        // VALIDASI IMEI (JIKA ADA)
-        // -------------------------------
+        // ===============================
+        // BARANG IMEI
+        // ===============================
         if (Array.isArray(item.imeis) && item.imeis.length > 0) {
+  
+          // cek imei valid
           const invalidImeis = item.imeis.filter((im) => {
-            const found = inventory.find((i) => i.imei === im);
+            const found = inventory.find(i => i.imei === im);
+  
             if (!found) return true;
             if (found.status === "SOLD") return true;
             if (found.status !== "AVAILABLE") return true;
+  
             return false;
           });
   
           if (invalidImeis.length > 0) {
             alert(
-              "❌ Transfer dibatalkan!\nIMEI tidak valid / terjual:\n" +
-                invalidImeis.join(", ")
+              "❌ IMEI tidak valid / sudah keluar:\n" +
+              invalidImeis.join(", ")
+            );
+            return;
+          }
+  
+          // cek stok imei
+          const availableStock = inventory.filter(
+            (i) =>
+              i.status === "AVAILABLE" &&
+              i.toko.toUpperCase() === item.tokoPengirim.toUpperCase() &&
+              i.namaBarang.toUpperCase() === item.barang.toUpperCase()
+          );
+  
+          if (item.imeis.length > availableStock.length) {
+            alert(
+              `❌ Qty melebihi stok tersedia\nBarang: ${item.barang}\nStok tersedia: ${availableStock.length}`
+            );
+            return;
+          }
+        }
+  
+        // ===============================
+        // ACCESSORIES (NON IMEI)
+        // ===============================
+        else {
+  
+          if (!item.qty || item.qty <= 0) {
+            alert(`❌ Qty tidak valid untuk ${item.barang}`);
+            return;
+          }
+  
+          const stokAccessories = inventory.filter(
+            (i) =>
+              i.toko.toUpperCase() === item.tokoPengirim.toUpperCase() &&
+              i.namaBarang?.toUpperCase() === item.barang.toUpperCase()
+          ).length;
+  
+          // kalau accessories belum pakai inventory engine
+          if (stokAccessories > 0 && item.qty > stokAccessories) {
+            alert(
+              `❌ Qty melebihi stok tersedia\nBarang: ${item.barang}\nStok tersedia: ${stokAccessories}`
             );
             return;
           }
         }
       }
   
-      // =====================================================
-      // ✅ PROSES SIMPAN TRANSFER
-      // =====================================================
+      // ==========================================
+      // SIMPAN TRANSFER
+      // ==========================================
       for (const item of transferList) {
   
-        const payload = {
-          ...item,
-          status: "Pending",
-          createdAt: Date.now(),
-        };
-  
         const transferRef = push(ref(db, "transfer_barang"));
-        const newTransferId = transferRef.key;
+        const transferId = transferRef.key;
   
         await update(transferRef, {
-          ...payload,
-          id: newTransferId,
+          ...item,
+          id: transferId,
+          status: "Pending",
+          createdAt: Date.now(),
         });
   
-        // -------------------------------
-        // LOCK & UPDATE INVENTORY IMEI
-        // -------------------------------
-        if (Array.isArray(item.imeis)) {
-          for (const imei of item.imeis) {
+        // lock imei
+        for (const imei of item.imeis || []) {
+          await lockImeiTransfer({
+            imei,
+            transferId,
+            tokoAsal: item.tokoPengirim,
+          });
   
-            await lockImeiTransfer({
-              imei,
-              transferId: newTransferId,
-              tokoAsal: item.dari || item.tokoPengirim,
-            });
-  
-            await update(
-              ref(db, `inventory/${item.tokoPengirim}/${imei}`),
-              {
-                STATUS: "OUT",
-                TRANSFER_ID: newTransferId,
-                UPDATED_AT: Date.now(),
-              }
-            );
-          }
+          await update(
+            ref(db, `inventory/${item.tokoPengirim}/${imei}`),
+            {
+              STATUS: "OUT",
+              TRANSFER_ID: transferId,
+              UPDATED_AT: Date.now(),
+            }
+          );
         }
       }
   
-      // =====================================================
-      // ✅ SUCCESS
-      // =====================================================
       alert("✅ Transfer masuk tabel & siap di-approve");
   
       setForm(initialForm);
-      setDaftarTransfer([]); // reset daftar juga
+      setDaftarTransfer([]);
   
     } catch (err) {
       console.error(err);
@@ -722,7 +828,6 @@ export default function TransferBarang() {
     }
   };
   
-
   /* ================= RENDER ================= */
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-700 via-blue-700 to-purple-700 p-4">
@@ -971,61 +1076,57 @@ export default function TransferBarang() {
           />
         )}
 
-{daftarTransfer.length > 0 && (
-  <div className="mt-6">
-    <h3 className="font-bold text-indigo-700 mb-2">
-      DAFTAR TRANSFER BARANG
-    </h3>
+        {daftarTransfer.length > 0 && (
+          <div className="mt-6">
+            <h3 className="font-bold text-indigo-700 mb-2">
+              DAFTAR TRANSFER BARANG
+            </h3>
 
-    <table className="w-full border text-sm">
-      <thead className="bg-indigo-100">
-        <tr>
-          <th>No</th>
-          <th>Kategori</th>
-          <th>Brand</th>
-          <th>Barang</th>
-          <th>Qty</th>
-          <th>IMEI</th>
-          <th>AKSI</th>
-        </tr>
-      </thead>
-      <tbody>
-  {daftarTransfer.map((item, i) => (
-    <tr key={item.id} className="border-t">
-      <td>{i + 1}</td>
-      <td>{item.kategori}</td>
-      <td>{item.brand}</td>
-      <td>{item.barang}</td>
-      <td>{item.qty}</td>
-      <td>
-        {item.imeis?.length > 0
-          ? item.imeis.join(", ")
-          : "-"}
-      </td>
+            <table className="w-full border text-sm">
+              <thead className="bg-indigo-100">
+                <tr>
+                  <th>No</th>
+                  <th>Kategori</th>
+                  <th>Brand</th>
+                  <th>Barang</th>
+                  <th>Qty</th>
+                  <th>IMEI</th>
+                  <th>AKSI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {daftarTransfer.map((item, i) => (
+                  <tr key={item.id} className="border-t">
+                    <td>{i + 1}</td>
+                    <td>{item.kategori}</td>
+                    <td>{item.brand}</td>
+                    <td>{item.barang}</td>
+                    <td>{item.qty}</td>
+                    <td>
+                      {item.imeis?.length > 0 ? item.imeis.join(", ") : "-"}
+                    </td>
 
-      <td className="flex gap-2">
-        <button
-          onClick={() => handleEditTransfer(i)}
-          className="px-2 py-1 bg-yellow-500 text-white rounded"
-        >
-          EDIT
-        </button>
+                    <td className="flex gap-2">
+                      <button
+                        onClick={() => handleEditTransfer(i)}
+                        className="px-2 py-1 bg-yellow-500 text-white rounded"
+                      >
+                        EDIT
+                      </button>
 
-        <button
-          onClick={() => handleDeleteTransfer(i)}
-          className="px-2 py-1 bg-red-600 text-white rounded"
-        >
-          DELETE
-        </button>
-      </td>
-    </tr>
-  ))}
-</tbody>
-
-    </table>
-  </div>
-)}
-
+                      <button
+                        onClick={() => handleDeleteTransfer(i)}
+                        className="px-2 py-1 bg-red-600 text-white rounded"
+                      >
+                        DELETE
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div className="flex gap-3">
           <button

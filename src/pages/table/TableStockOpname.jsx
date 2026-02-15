@@ -12,111 +12,88 @@ export default function TableStockOpname({
   tableRef,
   onVoidOpname,
 }) {
-  const getStockInfo = (item) => {
-    const imei = String(item.imei || item.key || "").trim();
 
+  const getStockInfo = (item) => {
+
+    const imeiKey = String(item.imei || "").trim();
+  
+    const skuKey = `${item.brand}|${item.barang}`.trim();
+  
     let qty = 0;
     let lastMetode = "";
-    let lastStatus = "TERSEDIA";
     let lastTime = 0;
+  
 
-    allTransaksi.forEach((t) => {
-      const trxImei = String(t.IMEI || t.NOMOR_UNIK || "").trim();
-      if (trxImei !== imei) return;
+  allTransaksi.forEach((t) => {
+    const trxKey =
+    t.IMEI && String(t.IMEI).trim()
+      ? String(t.IMEI).trim()
+      : `${t.NAMA_BRAND}|${t.NAMA_BARANG}`.trim();
+  
+  const currentKey = imeiKey || skuKey;
+  
+  if (trxKey !== currentKey) return;
+    
 
-      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-      const status = String(t.STATUS || "").toUpperCase();
-      const time = Number(t.CREATED_AT || 0);
+    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+    const status = String(t.STATUS || "").toUpperCase();
+    const time = Number(t.CREATED_AT || 0);
 
-      const isRefund = status === "REFUND";
+    const isRefundLocal = status === "REFUND";
 
-      // =====================
-      // HITUNG STOCK
-      // =====================
-      if (
-        metode === "PEMBELIAN" ||
-        metode === "TRANSFER_MASUK" ||
-        metode === "STOK OPNAME" ||
-        isRefund
-      ) {
-        qty += 1;
+    // =====================
+    // HITUNG STOCK
+    // =====================
+    if (
+      metode === "PEMBELIAN" ||
+      metode === "TRANSFER_MASUK" ||
+      metode === "STOK OPNAME" ||
+      isRefundLocal
+    ) {
+      qty += 1;
+    }
+
+    if (metode === "PENJUALAN" && !isRefundLocal) {
+      qty -= 1;
+    }
+
+    // =====================
+    // TRANSAKSI TERAKHIR
+    // =====================
+    if (time >= lastTime) {
+      lastTime = time;
+
+      if (isRefundLocal) {
+        lastMetode = "REFUND";
+      } else {
+        lastMetode = metode;
       }
+    }
+  });
 
-      // =====================
-// KELUAR (HANYA PENJUALAN)
-// =====================
-if (metode === "PENJUALAN" && !isRefund) {
-  qty -= 1;
-}
+  const isTransfer =
+    lastMetode === "TRANSFER_MASUK" ||
+    lastMetode === "TRANSFER_KELUAR";
 
-      // =====================
-      // TRANSAKSI TERAKHIR
-      // =====================
-      // if (time >= lastTime) {
-      //   lastTime = time;
+  const isRefund = lastMetode === "REFUND";
 
-      //   if (isRefund) {
-      //     lastMetode = "REFUND";
-      //     lastStatus = "TERSEDIA";
+  // ✅ SOLD hanya jika benar-benar terakhir PENJUALAN
+  const isSold =
+    lastMetode === "PENJUALAN" &&
+    qty <= 0 &&
+    !isRefund &&
+    !isTransfer;
 
-      //   } else {
-      //     lastMetode = metode;
-      //     lastStatus = metode === "PENJUALAN" ? "TERJUAL" : "TERSEDIA";
-      //   }
-
-      // }
-      if (time >= lastTime) {
-        lastTime = time;
-
-        // =============================
-        // PRIORITAS STATUS TERAKHIR
-        // =============================
-
-        // ✅ REFUND → barang kembali tersedia
-        if (isRefund) {
-          lastMetode = "REFUND";
-          lastStatus = "TERSEDIA";
-        }
-
-        // ✅ TRANSFER MASUK → barang tersedia
-        else if (metode === "TRANSFER_MASUK") {
-          lastMetode = "TRANSFER_MASUK";
-          lastStatus = "TERSEDIA";
-        }
-
-        // ✅ PEMBELIAN → tersedia
-        else if (metode === "PEMBELIAN") {
-          lastMetode = "PEMBELIAN";
-          lastStatus = "TERSEDIA";
-        }
-
-        // ✅ PENJUALAN → terjual
-        else if (metode === "PENJUALAN") {
-          lastMetode = "PENJUALAN";
-          lastStatus = "TERJUAL";
-        }
-
-        // default
-        else {
-          lastMetode = metode;
-          lastStatus = "TERSEDIA";
-        }
-      }
-    });
-
-    const isTransfer =
-      lastMetode === "TRANSFER_MASUK" || lastMetode === "TRANSFER_KELUAR";
-
-    return {
-      qty,
-      status: isTransfer ? "TERSEDIA" : qty > 0 ? "TERSEDIA" : "TERJUAL",
-
-      isSold: !isTransfer && qty <= 0,
-      isRefund: lastMetode === "REFUND",
-      isTransfer,
-      lastMetode,
-    };
+  return {
+    qty,
+    status: isSold ? "TERJUAL" : "TERSEDIA",
+    isSold,
+    isRefund,
+    isTransfer,
+    lastMetode,
   };
+};
+
 
   const getLastTransaksi = (imei) => {
     const trx = allTransaksi
@@ -175,11 +152,11 @@ if (metode === "PENJUALAN" && !isRefund) {
                 <td className="p-2 border font-medium">
                   {r.barang}
 
-                  {r.lastTransaksi === "PENJUALAN" && (
-                    <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded">
-                      SOLD
-                    </span>
-                  )}
+                  {stockInfo.isSold && (
+                      <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded">
+                        SOLD
+                      </span>
+                    )}
                 </td>
 
                 <td className="p-2 border font-mono text-xs">
@@ -187,7 +164,7 @@ if (metode === "PENJUALAN" && !isRefund) {
                 </td>
 
                 <td className="p-2 border text-center font-bold">
-                  {r.qty > 0 ? "TERSEDIA" : "TERJUAL"}
+                {stockInfo.isSold ? "TERJUAL" : "TERSEDIA"}
                 </td>
 
                 <td className="p-2 border text-xs text-gray-600">
@@ -198,7 +175,7 @@ if (metode === "PENJUALAN" && !isRefund) {
                     : r.keterangan || "-"}
                 </td>
 
-                <td className="p-2 border text-center">{r.qty}</td>
+                <td className="p-2 border text-center">{stockInfo.qty}</td>
 
                 <td className="p-2 border">
                   <input
