@@ -120,6 +120,7 @@ export default function App() {
       return null;
     }
   });
+  const isSPV = user?.role?.startsWith("spv_toko");
 
   /* Realtime Firebase Users */
   const [users, setUsers] = useState(defaultUsers);
@@ -252,7 +253,12 @@ export default function App() {
                   />
 
                   {/* Management User */}
-                  <Route path="/user-management" element={<UserManagement />} />
+                  <Route
+                    path="/user-management"
+                    element={
+                      isSPV ? <Navigate to="/dashboard" /> : <UserManagement />
+                    }
+                  />
 
                   {/* Reports */}
                   <Route path="/sales-report" element={<SalesReport />} />
@@ -290,20 +296,43 @@ export default function App() {
                     element={<FinanceReportMonthly />}
                   />
                   <Route path="/stok-opname" element={<StockOpname />} />
-                  <Route path="/master-barang" element={<MasterBarang />} />
+                  <Route
+                    path="/master-barang"
+                    element={
+                      isSPV ? <Navigate to="/dashboard" /> : <MasterBarang />
+                    }
+                  />
                   <Route
                     path="/master-pembelian"
-                    element={<MasterPembelian />}
+                    element={
+                      isSPV ? <Navigate to="/dashboard" /> : <MasterPembelian />
+                    }
                   />
+
                   {/* Master Penjualan – BARU */}
-                  <Route path="/master-payment" element={<MasterPayment />} />
-                  <Route path="/master-karyawan" element={<MasterKaryawan />} />
+                  <Route
+                    path="/master-payment"
+                    element={
+                      isSPV ? <Navigate to="/dashboard" /> : <MasterPayment />
+                    }
+                  />
+                  <Route
+                    path="/master-karyawan"
+                    element={
+                      isSPV ? <Navigate to="/dashboard" /> : <MasterKaryawan />
+                    }
+                  />
 
                   {/* Produk */}
                   <Route path="/products" element={<Products />} />
 
                   {/* MASTER MANAGEMENT */}
-                  <Route path="/data-management" element={<DataManagement />} />
+                  <Route
+                    path="/data-management"
+                    element={
+                      isSPV ? <Navigate to="/dashboard" /> : <DataManagement />
+                    }
+                  />
 
                   {/* Cetak Faktur PRO MAX (halaman khusus) */}
                   <Route path="/cetak-faktur" element={<CetakFaktur />} />

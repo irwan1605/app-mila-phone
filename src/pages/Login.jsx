@@ -72,15 +72,24 @@ export default function Login({ onLogin, users: usersProp }) {
     let tokoId = u.toko;
   
     // ✅ NORMALISASI ROLE PIC TOKO
-    if (String(role).startsWith("pic_toko")) {
-      const parsedId = Number(String(role).replace("pic_toko", ""));
-      const finalId = parsedId || Number(tokoId);
-  
-      if (Number.isFinite(finalId)) {
-        role = `pic_toko${finalId}`;
-        tokoId = finalId;
-      }
-    }
+  // ✅ NORMALISASI ROLE PIC & SPV TOKO
+if (
+  String(role).startsWith("pic_toko") ||
+  String(role).startsWith("spv_toko")
+) {
+  const prefix = String(role).startsWith("spv_toko")
+    ? "spv_toko"
+    : "pic_toko";
+
+  const parsedId = Number(String(role).replace(prefix, ""));
+  const finalId = parsedId || Number(tokoId);
+
+  if (Number.isFinite(finalId)) {
+    role = `${prefix}${finalId}`;
+    tokoId = finalId;
+  }
+}
+
   
     const logged = {
       username: u.username,
@@ -95,7 +104,12 @@ export default function Login({ onLogin, users: usersProp }) {
     localStorage.setItem("ROLE_USER", role);
   
     // 🔥 JIKA PIC TOKO → SIMPAN TOKO LOGIN
-    if (String(role).startsWith("pic_toko") && tokoId) {
+    if (
+      (String(role).startsWith("pic_toko") ||
+        String(role).startsWith("spv_toko")) &&
+      tokoId
+    ) {
+    
       const TOKO_MAP = {
         "1": "CILANGKAP PUSAT",
         "2": "CIBINONG",
@@ -126,10 +140,16 @@ if (role === "superadmin" || role === "admin") {
 }
 
 // PIC TOKO
-if (String(role).startsWith("pic_toko") && Number(tokoId)) {
+// PIC & SPV TOKO
+if (
+  (String(role).startsWith("pic_toko") ||
+    String(role).startsWith("spv_toko")) &&
+  Number(tokoId)
+) {
   navigate(`/dashboard-toko/${tokoId}`, { replace: true });
   return;
 }
+
 
 // default
 navigate("/dashboard", { replace: true });

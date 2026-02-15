@@ -52,6 +52,8 @@ const Sidebar = ({ role, toko, onLogout }) => {
   const { searchQuery } = useGlobalSearch();
 
   const isSuper = role === "superadmin" || role === "admin";
+  const isSPV = String(role || "").startsWith("spv_toko");
+
   const picMatch = /^pic_toko(\d+)$/i.exec(role || "");
   const picTokoId = picMatch ? Number(picMatch[1]) : toko ? Number(toko) : null;
 
@@ -329,83 +331,90 @@ const Sidebar = ({ role, toko, onLogout }) => {
               </ul>
             )}
 
-             {/* PEMBELIAN (EX MASTER PEMBELIAN) */}
-             <Link
-              to="/master-pembelian"
-              className={`flex items-center p-3 hover:bg-blue-500 ${
-                activePath === "/master-pembelian" ? "bg-blue-600" : ""
-              }${highlightIfMatch("pembelian")}`}
-            >
-              <FaShoppingCart className="text-xl" />
-              <span className="ml-2">PEMBELIAN</span>
-            </Link>
+            {/* PEMBELIAN (EX MASTER PEMBELIAN) */}
+            {!isSPV && (
+              <Link
+                to="/master-pembelian"
+                className={`flex items-center p-3 hover:bg-blue-500 ${
+                  activePath === "/master-pembelian" ? "bg-blue-600" : ""
+                }${highlightIfMatch("pembelian")}`}
+              >
+                <FaShoppingCart className="text-xl" />
+                <span className="ml-2">PEMBELIAN</span>
+              </Link>
+            )}
 
+            {!isSPV && (
+              <>
+                <button
+                  onClick={() => setShowSubMenuMasterData((s) => !s)}
+                  className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${
+                    activePath.includes("/data-management") ||
+                    activePath.includes("/master-barang")
+                      ? "bg-blue-600"
+                      : ""
+                  }`}
+                >
+                  <AiOutlineDatabase className="text-xl" />
+                  <span className="ml-2">MASTER DATA</span>
+                </button>
 
-            <button
-              onClick={() => setShowSubMenuMasterData((s) => !s)}
-              className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${
-                activePath.includes("/data-management") ||
-                activePath.includes("/master-barang")
-                  ? "bg-blue-600"
-                  : ""
-              }`}
-            >
-              <AiOutlineDatabase className="text-xl" />
-              <span className="ml-2">MASTER DATA</span>
-            </button>
+                {showSubMenuMasterData && (
+                  <ul className="pl-6">
+                    <li>
+                      <Link
+                        to="/master-barang"
+                        className={`flex items-center p-2 hover:bg-blue-500 ${
+                          activePath === "/master-barang" ? "bg-blue-600" : ""
+                        }`}
+                      >
+                        <AiOutlineDatabase className="text-sm" />
+                        <span className="ml-2">Master Barang</span>
+                      </Link>
+                    </li>
 
-            {showSubMenuMasterData && (
-              <ul className="pl-6">
-                <li>
-                  <Link
-                    to="/master-barang"
-                    className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/master-barang" ? "bg-blue-600" : ""
-                    }`}
-                  >
-                    <AiOutlineDatabase className="text-sm" />
-                    <span className="ml-2">Master Barang</span>
-                  </Link>
-                </li>
+                    <li>
+                      <Link
+                        to="/master-payment"
+                        onClick={() => setMobileOpen(false)}
+                        className={`flex items-center p-2 hover:bg-blue-500 ${
+                          activePath === "/master-penjualan"
+                            ? "bg-blue-600"
+                            : ""
+                        }`}
+                      >
+                        <AiOutlineDatabase className="text-sm" />
+                        <span className="ml-2">Master Payment</span>
+                      </Link>
+                    </li>
 
-                <li>
-                  <Link
-                    to="/master-payment"
-                    onClick={() => setMobileOpen(false)}
-                    className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/master-penjualan" ? "bg-blue-600" : ""
-                    }`}
-                  >
-                    <AiOutlineDatabase className="text-sm" />
-                    <span className="ml-2">Master Payment</span>
-                  </Link>
-                </li>
+                    <li>
+                      <Link
+                        to="/master-karyawan"
+                        onClick={() => setMobileOpen(false)}
+                        className={`flex items-center p-2 hover:bg-blue-500 ${
+                          activePath === "/master-karyawan" ? "bg-blue-600" : ""
+                        }`}
+                      >
+                        <AiOutlineDatabase className="text-sm" />
+                        <span className="ml-2">Master Karyawan</span>
+                      </Link>
+                    </li>
 
-                <li>
-                  <Link
-                    to="/master-karyawan"
-                    onClick={() => setMobileOpen(false)}
-                    className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/master-karyawan" ? "bg-blue-600" : ""
-                    }`}
-                  >
-                    <AiOutlineDatabase className="text-sm" />
-                    <span className="ml-2">Master Karyawan</span>
-                  </Link>
-                </li>
-
-                <li>
-                  <Link
-                    to="/data-management"
-                    className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/data-management" ? "bg-blue-600" : ""
-                    }`}
-                  >
-                    <AiOutlineDatabase className="text-sm" />
-                    <span className="ml-2">Master Management</span>
-                  </Link>
-                </li>
-              </ul>
+                    <li>
+                      <Link
+                        to="/data-management"
+                        className={`flex items-center p-2 hover:bg-blue-500 ${
+                          activePath === "/data-management" ? "bg-blue-600" : ""
+                        }`}
+                      >
+                        <AiOutlineDatabase className="text-sm" />
+                        <span className="ml-2">Master Management</span>
+                      </Link>
+                    </li>
+                  </ul>
+                )}
+              </>
             )}
 
             <button
@@ -573,15 +582,17 @@ const Sidebar = ({ role, toko, onLogout }) => {
               <span className="ml-2">MODUL SPAREPART</span>
             </Link> */}
 
-            <Link
-              to="/user-management"
-              className={`flex items-center p-3 hover:bg-blue-500 ${
-                activePath === "/user-management" ? "bg-blue-600" : ""
-              }`}
-            >
-              <FaUsers className="text-xl" />
-              <span className="ml-2">USER MANAGEMENT</span>
-            </Link>
+            {!isSPV && (
+              <Link
+                to="/user-management"
+                className={`flex items-center p-3 hover:bg-blue-500 ${
+                  activePath === "/user-management" ? "bg-blue-600" : ""
+                }`}
+              >
+                <FaUsers className="text-xl" />
+                <span className="ml-2">USER MANAGEMENT</span>
+              </Link>
+            )}
           </>
         ) : (
           <>

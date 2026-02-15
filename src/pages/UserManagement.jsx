@@ -85,25 +85,39 @@ export default function UserManagement() {
       alert("Nama, Username, dan Password WAJIB diisi");
       return;
     }
-  
+
     if (users.some((u) => u.username === form.username)) {
       alert("Username sudah digunakan.");
       return;
     }
-  
+
     let role = form.role;
     let toko = form.toko || null;
-  
+    
+    // ✅ PIC TOKO
     if (role === "pic_toko") {
       if (!toko) {
         alert("Pilih toko untuk PIC Toko.");
         return;
       }
       role = `pic_toko${toko}`;
-    } else {
+    }
+    
+    // ✅ SPV TOKO (AUTO AKTIF)
+    else if (role === "spv_toko") {
+      if (!toko) {
+        alert("SPV harus memiliki toko.");
+        return;
+      }
+      role = `spv_toko${toko}`;
+    }
+    
+    // ✅ SUPERADMIN
+    else {
       toko = null;
     }
-  
+    
+
     const newUser = {
       username: form.username,
       password: form.password,
@@ -114,9 +128,9 @@ export default function UserManagement() {
       status: "AKTIF",
       createdAt: new Date().toISOString(),
     };
-  
+
     await saveUserOnline(newUser);
-  
+
     setForm({
       username: "",
       password: "",
@@ -125,10 +139,9 @@ export default function UserManagement() {
       name: "",
       nik: "",
     });
-  
+
     alert("✅ User berhasil ditambahkan & tampil realtime");
   };
-  
 
   const handleDelete = async (username) => {
     if (!window.confirm("Hapus user ini?")) return;
@@ -188,6 +201,11 @@ export default function UserManagement() {
       const id = role.replace("pic_toko", "");
       return `PIC Toko ${TOKO_LABELS[id]}`;
     }
+    
+    if (role.startsWith("spv_toko")) {
+      const id = role.replace("spv_toko", "");
+      return `SPV Toko ${TOKO_LABELS[id]}`;
+    }
     return role;
   };
 
@@ -196,6 +214,12 @@ export default function UserManagement() {
       const id = role.replace("pic_toko", "");
       return TOKO_LABELS[id] || "-";
     }
+    
+    if (role.startsWith("spv_toko")) {
+      const id = role.replace("spv_toko", "");
+      return TOKO_LABELS[id] || "-";
+    }
+    
     return toko ? TOKO_LABELS[toko] : "-";
   };
 
@@ -263,6 +287,7 @@ export default function UserManagement() {
             onChange={(e) => setForm({ ...form, role: e.target.value })}
           >
             <option value="superadmin">Superadmin</option>
+            <option value="spv_toko">SPV Toko</option>
             <option value="pic_toko">PIC Toko</option>
           </select>
         </div>
@@ -317,6 +342,7 @@ export default function UserManagement() {
         >
           <option value="ALL">Semua Role</option>
           <option value="superadmin">Superadmin</option>
+          <option value="spv_toko">SPV Toko</option>
           <option value="pic_toko">PIC Toko</option>
         </select>
 
@@ -461,6 +487,7 @@ export default function UserManagement() {
                   }
                 >
                   <option value="superadmin">Superadmin</option>
+                  <option value="spv_toko">SPV Toko</option>
                   <option value="pic_toko">PIC Toko</option>
                 </select>
               </div>
