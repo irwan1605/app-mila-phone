@@ -42,34 +42,78 @@ export default function TableStockOpname({
         qty += 1;
       }
 
-      if (
-        (metode === "PENJUALAN" || metode === "TRANSFER_KELUAR") &&
-        !isRefund
-      ) {
-        qty -= 1;
-      }
+      // =====================
+// KELUAR (HANYA PENJUALAN)
+// =====================
+if (metode === "PENJUALAN" && !isRefund) {
+  qty -= 1;
+}
 
       // =====================
       // TRANSAKSI TERAKHIR
       // =====================
+      // if (time >= lastTime) {
+      //   lastTime = time;
+
+      //   if (isRefund) {
+      //     lastMetode = "REFUND";
+      //     lastStatus = "TERSEDIA";
+
+      //   } else {
+      //     lastMetode = metode;
+      //     lastStatus = metode === "PENJUALAN" ? "TERJUAL" : "TERSEDIA";
+      //   }
+
+      // }
       if (time >= lastTime) {
         lastTime = time;
 
+        // =============================
+        // PRIORITAS STATUS TERAKHIR
+        // =============================
+
+        // ✅ REFUND → barang kembali tersedia
         if (isRefund) {
           lastMetode = "REFUND";
           lastStatus = "TERSEDIA";
-        } else {
+        }
+
+        // ✅ TRANSFER MASUK → barang tersedia
+        else if (metode === "TRANSFER_MASUK") {
+          lastMetode = "TRANSFER_MASUK";
+          lastStatus = "TERSEDIA";
+        }
+
+        // ✅ PEMBELIAN → tersedia
+        else if (metode === "PEMBELIAN") {
+          lastMetode = "PEMBELIAN";
+          lastStatus = "TERSEDIA";
+        }
+
+        // ✅ PENJUALAN → terjual
+        else if (metode === "PENJUALAN") {
+          lastMetode = "PENJUALAN";
+          lastStatus = "TERJUAL";
+        }
+
+        // default
+        else {
           lastMetode = metode;
-          lastStatus = metode === "PENJUALAN" ? "TERJUAL" : "TERSEDIA";
+          lastStatus = "TERSEDIA";
         }
       }
     });
 
+    const isTransfer =
+      lastMetode === "TRANSFER_MASUK" || lastMetode === "TRANSFER_KELUAR";
+
     return {
       qty,
-      status: qty > 0 ? "TERSEDIA" : "TERJUAL",
-      isSold: qty <= 0,
+      status: isTransfer ? "TERSEDIA" : qty > 0 ? "TERSEDIA" : "TERJUAL",
+
+      isSold: !isTransfer && qty <= 0,
       isRefund: lastMetode === "REFUND",
+      isTransfer,
       lastMetode,
     };
   };
@@ -109,6 +153,9 @@ export default function TableStockOpname({
         <tbody>
           {data.map((r, i) => {
             const stockInfo = getStockInfo(r);
+            const isTransfer =
+              stockInfo.lastMetode === "TRANSFER_MASUK" ||
+              stockInfo.lastMetode === "TRANSFER_KELUAR";
 
             const fisik = Number(opnameMap[r.key] ?? "");
             const selisih = Number.isNaN(fisik) ? "" : fisik - stockInfo.qty;
@@ -128,7 +175,7 @@ export default function TableStockOpname({
                 <td className="p-2 border font-medium">
                   {r.barang}
 
-                  {r.lastStatus === "TERJUAL" && (
+                  {r.lastTransaksi === "PENJUALAN" && (
                     <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded">
                       SOLD
                     </span>
@@ -140,11 +187,15 @@ export default function TableStockOpname({
                 </td>
 
                 <td className="p-2 border text-center font-bold">
-                {r.lastStatus}
+                  {r.qty > 0 ? "TERSEDIA" : "TERJUAL"}
                 </td>
 
                 <td className="p-2 border text-xs text-gray-600">
-                {r.keterangan || "-"}
+                  {stockInfo.isRefund
+                    ? "REFUND"
+                    : stockInfo.isTransfer
+                    ? "TRANSFER BARANG"
+                    : r.keterangan || "-"}
                 </td>
 
                 <td className="p-2 border text-center">{r.qty}</td>

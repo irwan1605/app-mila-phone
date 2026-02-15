@@ -11,26 +11,64 @@ export default function RefundReport() {
   /* ================= LISTENER ================= */
   useEffect(() => {
     const unsub = listenAllTransaksi((data = []) => {
-      const refundRowsRaw = data.filter(
-        (t) => t.PAYMENT_METODE === "RETUR" && t.STATUS === "Approved"
-      );
-      
+  
+      // 1️⃣ ambil semua transaksi refund
+      const refundRowsRaw = data.filter((t) => {
+        return (
+          t.PAYMENT_METODE === "RETUR" ||
+          t.PAYMENT_METODE === "REFUND" ||
+          t.STATUS === "REFUND" ||
+          t.STATUS_REFUND === "Approved"
+        );
+      });
+  
+      // 2️⃣ hilangkan duplicate berdasarkan invoice asal
       const uniqueMap = new Map();
-      
+  
       refundRowsRaw.forEach((r) => {
-        const key = r.INVOICE_ASAL || r.NO_INVOICE;
+        const key =
+          r.INVOICE_ASAL ||
+          r.NO_INVOICE ||
+          r.IMEI ||
+          Math.random();
+  
         if (!uniqueMap.has(key)) {
-          uniqueMap.set(key, r);
+          uniqueMap.set(key, {
+            id: r.id,
+            TANGGAL_TRANSAKSI:
+              r.TANGGAL_TRANSAKSI ||
+              r.TANGGAL ||
+              "-",
+  
+            NAMA_TOKO: r.NAMA_TOKO || "-",
+            NAMA_BRAND: r.NAMA_BRAND || "-",
+            NAMA_BARANG: r.NAMA_BARANG || "-",
+  
+            IMEI: r.IMEI || "NON IMEI",
+            QTY: r.QTY || 1,
+  
+            NO_INVOICE: r.NO_INVOICE || "-",
+            KETERANGAN:
+              r.KETERANGAN ||
+              r.ALASAN_REFUND ||
+              "RETUR / REFUND",
+          });
         }
       });
-      
-      setRows(Array.from(uniqueMap.values()));
-      
-      
+  
+      // 3️⃣ urutkan terbaru di atas
+      const sorted = Array.from(uniqueMap.values()).sort(
+        (a, b) =>
+          new Date(b.TANGGAL_TRANSAKSI) -
+          new Date(a.TANGGAL_TRANSAKSI)
+      );
+  
+      setRows(sorted);
     });
-
+  
     return () => unsub && unsub();
   }, []);
+  
 
   /* ================= FILTER ================= */
   const filtered = useMemo(() => {
