@@ -99,6 +99,65 @@ export default function TransferBarang() {
 
   const [masterKaryawan, setMasterKaryawan] = useState([]);
   const [editIndex, setEditIndex] = useState(null);
+  const [inventoryAccessories, setInventoryAccessories] = useState([]);
+
+  // ================= INVENTORY ACCESSORIES (NON IMEI) =================
+useEffect(() => {
+  return onValue(ref(db, "toko"), (snap) => {
+    const map = {};
+
+    snap.forEach((tokoSnap) => {
+      const transaksiSnap = tokoSnap.child("transaksi");
+      if (!transaksiSnap.exists()) return;
+
+      transaksiSnap.forEach((trx) => {
+        const v = trx.val();
+
+        // ✅ hanya NON IMEI
+        if (v.IMEI) return;
+
+        const key = `${v.NAMA_TOKO}|${v.NAMA_BRAND}|${v.NAMA_BARANG}`;
+        const metode = String(v.PAYMENT_METODE || "").toUpperCase();
+
+        if (!map[key]) {
+          map[key] = {
+            toko: String(v.NAMA_TOKO || "").trim(),
+            namaBrand: String(v.NAMA_BRAND || "").trim(),
+            namaBarang: String(v.NAMA_BARANG || "").trim(),
+            kategori: String(v.KATEGORI_BRAND || "").trim(),
+            qty: 0,
+          };
+        }
+
+        if (metode === "PEMBELIAN") {
+          map[key].qty += Number(v.QTY || 0);
+        }
+
+        if (metode === "PENJUALAN") {
+          map[key].qty -= Number(v.QTY || 0);
+        }
+
+        if (metode === "TRANSFER_KELUAR") {
+          map[key].qty -= Number(v.QTY || 0);
+        }
+
+        if (metode === "TRANSFER_MASUK") {
+          map[key].qty += Number(v.QTY || 0);
+        }
+
+        if (metode === "REFUND") {
+          map[key].qty += Number(v.QTY || 0);
+        }
+      });
+    });
+
+    setInventoryAccessories(
+      Object.values(map).filter(i => i.qty > 0)
+    );
+  });
+}, []);
+
+
 
   useEffect(() => {
     return onValue(ref(db, "stok_toko"), (snap) => {
@@ -262,22 +321,22 @@ export default function TransferBarang() {
     if (!form.kategori || !form.tokoPengirim) return [];
 
     // ✅ KHUSUS ACCESSORIES → dari MASTER BARANG
-    if (form.kategori === "ACCESSORIES") {
-      return [
-        ...new Set(
-          masterBarang
-            .filter(
-              (b) =>
-                String(b.kategoriBarang || "")
-                  .toUpperCase()
-                  .trim() === "ACCESSORIES"
-            )
-            .map((b) => b.brand)
-            .filter(Boolean)
-        ),
-      ];
-    }
+// ================= ACCESSORIES =================
+if (form.kategori === "ACCESSORIES") {
+  return [
+    ...new Set(
+      inventoryAccessories
+        .filter(
+          i =>
+            i.toko.toUpperCase() === form.tokoPengirim.toUpperCase()
+        )
+        .map(i => i.namaBrand)
+    ),
+  ];
+}
 
+
+    
     // 🔁 selain accessories → pakai inventory lama
     if (!form.tokoPengirim) return [];
 
@@ -296,9 +355,28 @@ export default function TransferBarang() {
     ];
   }, [inventory, masterBarang, form.tokoPengirim, form.kategori]);
 
+ 
+  
+
   // ================= BARANG OPTIONS (DARI STOK TOKO) =================
   const barangOptions = useMemo(() => {
     if (!form.kategori || !form.brand) return [];
+
+    if (form.kategori === "ACCESSORIES") {
+      return [
+        ...new Set(
+          inventoryAccessories
+            .filter(
+              i =>
+                i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
+                i.namaBrand.toUpperCase() === form.brand.toUpperCase()
+            )
+            .map(i => i.namaBarang)
+        ),
+      ];
+    }
+    
+    
 
     // ambil dari MASTER BARANG dulu
     const masterList = masterBarang
@@ -350,6 +428,8 @@ export default function TransferBarang() {
 
     return Number(barangMaster.qty || barangMaster.stok || 9999);
   }, [inventory, masterBarang, form, isKategoriImei]);
+
+  
 
   // ================= CEK FORM SUDAH LENGKAP =================
   const isFormComplete =
@@ -537,6 +617,8 @@ export default function TransferBarang() {
 
     setImeiSearch("");
   };
+
+  
 
   const handleSearchByImei = () => {
     const im = String(imeiSearch || "").trim();
