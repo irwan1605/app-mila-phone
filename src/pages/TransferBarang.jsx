@@ -180,13 +180,21 @@ export default function TransferBarang() {
           }
 
           // 🔥 RULE MUTLAK (WAJIB)
-          if (metode === "PENJUALAN") {
-            map[imei].status = "SOLD"; // ⛔ TERJUAL (PALING KUAT)
-          } else if (metode === "TRANSFER_KELUAR") {
-            if (map[imei].status !== "SOLD") map[imei].status = "OUT";
-          } else if (metode === "TRANSFER_MASUK") {
-            if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
+          if (metode === "REFUND") {
+            map[imei].status = "AVAILABLE";
           }
+          else if (metode === "PENJUALAN") {
+            map[imei].status = "SOLD";
+          }
+          else if (metode === "TRANSFER_KELUAR") {
+            if (map[imei].status !== "SOLD")
+              map[imei].status = "OUT";
+          }
+          else if (metode === "TRANSFER_MASUK") {
+            if (map[imei].status !== "SOLD")
+              map[imei].status = "AVAILABLE";
+          }
+          
         });
       });
 
@@ -298,40 +306,31 @@ export default function TransferBarang() {
 
   // ================= BARANG OPTIONS (DARI STOK TOKO) =================
   const barangOptions = useMemo(() => {
-    if (!form.kategori || !form.brand || !form.tokoPengirim) return [];
-
-    // ✅ KHUSUS ACCESSORIES → dari MASTER BARANG
-    if (form.kategori === "ACCESSORIES") {
-      return [
-        ...new Set(
-          masterBarang
-            .filter(
-              (b) =>
-                String(b.kategoriBarang || "")
-                  .toUpperCase()
-                  .trim() === "ACCESSORIES" && b.brand === form.brand
-            )
-            .map((b) => b.namaBarang)
-            .filter(Boolean)
-        ),
-      ];
-    }
-
-    return [
-      ...new Set(
-        inventory
-          .filter(
-            (i) =>
-              i.status === "AVAILABLE" && // 🔥 SOLD & OUT KE BLOK
-              i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
-              i.kategori.toUpperCase() === form.kategori.toUpperCase() &&
-              i.namaBrand.toUpperCase() === form.brand.toUpperCase()
-          )
-          .map((i) => i.namaBarang)
-          .filter(Boolean)
-      ),
-    ];
-  }, [inventory, masterBarang, form.tokoPengirim, form.kategori, form.brand]);
+    if (!form.kategori || !form.brand) return [];
+  
+    // ambil dari MASTER BARANG dulu
+    const masterList = masterBarang
+      .filter(
+        (b) =>
+          String(b.kategoriBarang || "").toUpperCase() ===
+          form.kategori.toUpperCase() &&
+          String(b.brand || "").toUpperCase() ===
+          form.brand.toUpperCase()
+      )
+      .map((b) => b.namaBarang);
+  
+    // ambil dari INVENTORY
+    const inventoryList = inventory
+      .filter(
+        (i) =>
+          i.kategori?.toUpperCase() === form.kategori.toUpperCase() &&
+          i.namaBrand?.toUpperCase() === form.brand.toUpperCase()
+      )
+      .map((i) => i.namaBarang);
+  
+    return [...new Set([...masterList, ...inventoryList])];
+  }, [inventory, masterBarang, form.kategori, form.brand]);
+  
 
   const stokTersedia = useMemo(() => {
 
