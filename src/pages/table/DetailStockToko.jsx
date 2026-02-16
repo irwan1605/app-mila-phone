@@ -47,6 +47,10 @@ export default function DetailStockToko() {
     };
   }, []);
 
+  const normalize = (v) =>
+    String(v || "").trim().toUpperCase();
+  
+
   /* ======================
      MAP MASTER BARANG
   ====================== */
@@ -104,6 +108,30 @@ export default function DetailStockToko() {
     return map;
   }, [transaksi]);
 
+  const imeiTerjual = useMemo(() => {
+    const sold = new Set();
+  
+    transaksi.forEach((t) => {
+      if (t.STATUS !== "Approved" || !t.IMEI) return;
+  
+      const imei = String(t.IMEI);
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+  
+      // PENJUALAN → tandai terjual
+      if (metode === "PENJUALAN") {
+        sold.add(imei);
+      }
+  
+      // ✅ REFUND → keluarkan dari daftar terjual
+      if (metode === "REFUND") {
+        sold.delete(imei);
+      }
+    });
+  
+    return sold;
+  }, [transaksi]);
+  
+
   /* ======================
      BUILD ROWS
   ====================== */
@@ -115,19 +143,70 @@ export default function DetailStockToko() {
 
     const map = {};
 
-    transaksi
-      .filter((t) => t.STATUS === "Approved" && t.NAMA_TOKO === namaToko)
-      .forEach((t) => {
-        const key = t.IMEI || `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+    transaksi.forEach((t) => {
+      if (t.STATUS !== "Approved") return;
+      if (normalize(t.NAMA_TOKO) !== normalize(namaToko)) return;
 
-        // 🔥 LOGIKA PENENTU QTY
-        const qty = ["PENJUALAN", "TRANSFER_KELUAR"].includes(
-          String(t.PAYMENT_METODE || "").toUpperCase()
-        )
-          ? -1
-          : 1;
+      console.log("MATCH TOKO:", t.NAMA_TOKO);
 
-        if (!map[key]) {
+
+
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+      // =====================
+      // ✅ KHUSUS IMEI
+      // =====================
+      if (t.IMEI) {
+        const imei = String(t.IMEI);
+
+        // IMEI sudah dijual → skip
+        if (imeiTerjual.has(imei)) return;
+
+        // hanya simpan 1 data terakhir
+        map[imei] = {
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
+          noDo: t.NO_INVOICE || "-",
+          supplier: t.NAMA_SUPPLIER || "-",
+          namaToko: t.NAMA_TOKO || "-",
+          brand: t.NAMA_BRAND || "-",
+          barang: t.NAMA_BARANG || "-",
+          imei,
+          qty: 1,
+
+          hargaSRP:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
+
+          hargaGrosir:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
+
+          hargaReseller:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+
+          statusBarang: "TERSEDIA",
+        };
+
+        return;
+      }
+
+      // =====================
+      // ✅ NON IMEI (ACC / DLL)
+      // =====================
+      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+      const baseQty = Number(t.QTY || 0);
+
+      let qty = ["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)
+      ? -baseQty
+      : baseQty;
+    
+    // ✅ REFUND = STOK MASUK
+    if (metode === "REFUND") {
+      qty = baseQty;
+    }
+    
+      if (!map[key]) {
+
+        // ✅ JANGAN SKIP REFUND
+        if (metode === "REFUND") {
           map[key] = {
             tanggal: t.TANGGAL_TRANSAKSI || "-",
             noDo: t.NO_INVOICE || "-",
@@ -137,33 +216,41 @@ export default function DetailStockToko() {
             barang: t.NAMA_BARANG || "-",
             imei: t.IMEI || "",
             qty: 0,
-
             hargaSRP:
               masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
-
             hargaGrosir:
               masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
-
             hargaReseller:
-              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller ||
-              0,
-
-            statusBarang:
-              t.PAYMENT_METODE === "PENJUALAN"
-                ? "TERJUAL"
-                : t.PAYMENT_METODE === "TRANSFER_KELUAR"
-                ? "REFUND"
-                : "TERSEDIA",
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+            statusBarang: "TERSEDIA",
+          };
+        } else {
+          map[key] = {
+            tanggal: t.TANGGAL_TRANSAKSI || "-",
+            noDo: t.NO_INVOICE || "-",
+            supplier: t.NAMA_SUPPLIER || "-",
+            namaToko: t.NAMA_TOKO || "-",
+            brand: t.NAMA_BRAND || "-",
+            barang: t.NAMA_BARANG || "-",
+            imei: t.IMEI || "",
+            qty: 0,
+            hargaSRP:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
+            hargaGrosir:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
+            hargaReseller:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+            statusBarang: "TERSEDIA",
           };
         }
+      }
+      
 
-        // 🔥 TAMBAH / KURANGI STOK
-        map[key].qty += qty;
-      });
+      map[key].qty += qty;
+    });
 
-    // ❌ HAPUS YANG STOKNYA HABIS
     return Object.values(map).filter((r) => r.qty > 0);
-  }, [transaksi, masterMap, namaToko]);
+  }, [transaksi, masterMap, namaToko, imeiTerjual]);
 
   /* ======================
      SEARCH FILTER
@@ -325,7 +412,7 @@ export default function DetailStockToko() {
                     <td className="px-3 py-2 text-right font-mono">
                       {r.brand}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono" td>
+                    <td className="px-3 py-2 text-right font-mono">
                       {r.barang}
                     </td>
                     <td className="px-3 py-2 text-right font-mono">{r.imei}</td>

@@ -7,10 +7,7 @@ import {
   listenMasterBarang,
   updateTransaksi,
 } from "../../services/FirebaseService";
-import {
- 
-  FaStore,
-} from "react-icons/fa";
+import { FaStore } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { hitungSemuaStok } from "../../utils/stockUtils";
 
@@ -80,15 +77,10 @@ export default function InventoryReport() {
       rows?.forEach((b) => {
         const key = `${normalize(b.NAMA_BRAND)}|${normalize(b.NAMA_BARANG)}`;
         map[key] = {
+          kategori: normalize(b.KATEGORI_BRAND),
           hargaSRP: Number(b.HARGA_SRP || 0),
           hargaGrosir: Number(b.HARGA_GROSIR || 0),
           hargaReseller: Number(b.HARGA_RESELLER || 0),
-          band1: b.NAMA_BANDLING_1 || "",
-          hband1: Number(b.HARGA_BANDLING_1 || 0),
-          band2: b.NAMA_BANDLING_2 || "",
-          hband2: Number(b.HARGA_BANDLING_2 || 0),
-          band3: b.NAMA_BANDLING_3 || "",
-          hband3: Number(b.HARGA_BANDLING_3 || 0),
         };
       });
       setMasterBarangMap(map);
@@ -126,6 +118,32 @@ export default function InventoryReport() {
     [transaksiToko]
   );
 
+  const imeiTerjual = useMemo(() => {
+    const sold = new Set();
+  
+    transaksi.forEach((t) => {
+      if (
+        t.STATUS === "Approved" &&
+        t.PAYMENT_METODE === "PENJUALAN" &&
+        t.IMEI
+      ) {
+        sold.add(String(t.IMEI));
+      }
+  
+      // ✅ REFUND → keluarkan dari sold
+      if (
+        t.STATUS === "Approved" &&
+        t.PAYMENT_METODE === "REFUND" &&
+        t.IMEI
+      ) {
+        sold.delete(String(t.IMEI));
+      }
+    });
+  
+    return sold;
+  }, [transaksi]);
+  
+
   // ======================
   // DETAIL TABLE
   // ======================
@@ -136,12 +154,14 @@ export default function InventoryReport() {
       .filter(
         (t) =>
           t.STATUS === "Approved" &&
-          t.PAYMENT_METODE === "PEMBELIAN" &&
-          t.NAMA_TOKO === selectedToko &&
+          ["PEMBELIAN", "TRANSFER_MASUK"].includes(t.PAYMENT_METODE) &&
+          // ✅ HAPUS IMEI YANG SUDAH TERJUAL
+          !(t.IMEI && imeiTerjual.has(String(t.IMEI))) &&
           `${t.NAMA_BRAND} ${t.NAMA_BARANG} ${t.IMEI}`
             .toLowerCase()
             .includes(search.toLowerCase())
       )
+
       .map((t) => {
         const key = `${normalize(t.NAMA_BRAND)}|${normalize(t.NAMA_BARANG)}`;
         const m = masterBarangMap[key] || {};
@@ -178,8 +198,6 @@ export default function InventoryReport() {
       });
   }, [transaksi, selectedToko, search, masterBarangMap]);
 
-
-
   // ==========================
   // CARD KECIL PER TOKO + PER KATEGORI (FIX)
   // ==========================
@@ -190,22 +208,85 @@ export default function InventoryReport() {
       transaksi.forEach((t) => {
         if (t.STATUS !== "Approved") return;
         if (t.NAMA_TOKO !== toko) return;
+        console.log(
+          "DEBUG:",
+          t.NAMA_TOKO,
+          t.PAYMENT_METODE,
+          t.KATEGORI_BRAND,
+          t.QTY
+        );
 
-        const kat = t.KATEGORI_BRAND || "LAINNYA";
-        const qty = t.IMEI ? 1 : Number(t.QTY || 0);
+        // ❌ HAPUS TOTAL KATEGORI LAINNYA
+        let kat = t.KATEGORI_BRAND;
 
+        // =============================
+        // ✅ FIX FINAL NON IMEI CATEGORY
+        // =============================
+        if (!kat && !t.IMEI) {
+          // semua barang non IMEI dianggap accessories
+          kat = "ACCESSORIES";
+        }
+
+        if (!kat) return;
+
+        kat = normalize(kat);
+
+        // ✅ SAMAKAN PENULISAN KATEGORI
+        if (kat === "ACCESSORY") kat = "ACCESSORIES";
+        if (kat === "ACC") kat = "ACCESSORIES";
+        if (kat === "SPAREPART") kat = "SPARE PART";
+
+        let qty = t.IMEI ? 1 : Number(t.QTY ?? t.qty ?? t.JUMLAH ?? 0);
+        console.log(kat, t.PAYMENT_METODE, t.QTY);
+
+        // ✅ TAMBAHAN KHUSUS NON IMEI (ACCESSORIES / SPARE PART / JASA)
+        if (
+          !t.IMEI &&
+          qty === 0 &&
+          ["ACCESSORIES", "SPARE PART", "JASA"].includes(kat) &&
+          ["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)
+        ) {
+          qty = 1;
+        }
+
+        // ======================
         // STOK MASUK
+        // ======================
         if (["PEMBELIAN", "TRANSFER_MASUK"].includes(t.PAYMENT_METODE)) {
+          // ✅ IMEI SUDAH TERJUAL -> JANGAN MASUK STOK
+          if (t.IMEI && imeiTerjual.has(String(t.IMEI))) return;
+
           kategori[kat] = (kategori[kat] || 0) + qty;
         }
 
-        // STOK KELUAR
+        // ======================
+        // STOK KELUAR (JUAL / TRANSFER)
+        // ======================
         if (["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)) {
           kategori[kat] = (kategori[kat] || 0) - qty;
         }
+
+        // ======================
+      // REFUND → STOK KEMBALI
+      // ======================
+      if (t.PAYMENT_METODE === "REFUND") {
+        kategori[kat] = (kategori[kat] || 0) + qty;
+      }
       });
 
-      return { toko, kategori };
+      
+
+      // ======================
+      // HILANGKAN MINUS & NOL
+      // ======================
+      const kategoriFix = Object.fromEntries(
+        Object.entries(kategori).filter(([_, v]) => Number(v) > 0)
+      );
+
+      return {
+        toko,
+        kategori: kategoriFix,
+      };
     });
   }, [transaksi]);
 
@@ -223,7 +304,6 @@ export default function InventoryReport() {
     }, 0);
   }, [cardStockPerToko]);
 
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white">
       <div className="max-w-7xl mx-auto">
@@ -236,11 +316,11 @@ export default function InventoryReport() {
         {/* ================================================================== */}
         {/* CARD BESAR PUSAT */}
         <div
-          onClick={() =>
-            navigate("/table/detail-stock-all-toko", {
-              state: { mode: "ALL_TOKO" },
-            })
-          }
+          // onClick={() =>
+          //   navigate("/table/detail-stock-all-toko", {
+          //     state: { mode: "ALL_TOKO" },
+          //   })
+          // }
           className="cursor-pointer rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-500 p-6 mb-6 shadow-2xl"
         >
           <div className="flex gap-4 items-center">
@@ -253,8 +333,8 @@ export default function InventoryReport() {
             </div>
           </div>
           <div className="text-sm font-semibold">
-                Total Item: {Object.keys(stokMap || {}).length}
-              </div>
+            Total Item: {totalStockSemuaToko}
+          </div>
 
           <p className="mt-4 text-4xl font-bold">
             {totalStockSemuaToko.toLocaleString("id-ID")}
@@ -290,8 +370,7 @@ export default function InventoryReport() {
             </div>
           ))}
         </div>
-
-        </div>
+      </div>
     </div>
   );
 }

@@ -674,7 +674,13 @@ export default function TablePenjualan() {
               <th className="px-3 py-2 border border-gray-400">
                 Payment Metode
               </th>
+              <th className="px-3 py-2 border border-gray-400">
+                Payment Kredit
+              </th>
+              <th className="px-3 py-2 border border-gray-400">Tenor</th>
               <th className="px-3 py-2 border border-gray-400">Nama Bank</th>
+              <th className="px-3 py-2 border border-gray-400">Nama MDR</th>
+              <th className="px-3 py-2 border border-gray-400">Nominal MDR</th>
               <th className="px-3 py-2 border border-gray-400">
                 Nominal Payment
               </th>
@@ -683,12 +689,9 @@ export default function TablePenjualan() {
                 Sisa Kembalian
               </th>
               <th className="px-3 py-2 border border-gray-400">DP Talangan</th>
-              <th className="px-3 py-2 border border-gray-400">Nama MDR</th>
-              <th className="px-3 py-2 border border-gray-400">Nominal MDR</th>
-              <th className="px-3 py-2 border border-gray-400">
-                Payment Kredit
-              </th>
-              <th className="px-3 py-2 border border-gray-400">Tenor</th>
+              
+             
+             
               <th className="px-3 py-2 border border-gray-400">Keterangan</th>
               <th className="px-3 py-2 border border-gray-400">Grand Total</th>
               <th className="px-3 py-2 border border-gray-400">Status</th>
@@ -763,9 +766,21 @@ export default function TablePenjualan() {
                 <td className="px-3 py-2 border border-gray-300">
                   {row.paymentMetode}
                 </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.paymentKredit}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.tenor}
+                </td>
                 {/* 🔥 NAMA BANK */}
                 <td className="px-3 py-2 border border-gray-300">
                   {row.namaBank || "-"}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {row.namaMdr}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  {rupiah(row.nominalMdr)}
                 </td>
                 {/* 🔥 NOMINAL PAYMENT */}
                 <td className="px-3 py-2 border border-gray-300 text-right font-medium">
@@ -782,18 +797,8 @@ export default function TablePenjualan() {
                 <td className="px-3 py-2 border border-gray-300">
                   {rupiah(row.dpTalangan)}
                 </td>
-                <td className="px-3 py-2 border border-gray-300">
-                  {row.namaMdr}
-                </td>
-                <td className="px-3 py-2 border border-gray-300">
-                  {rupiah(row.nominalMdr)}
-                </td>
-                <td className="px-3 py-2 border border-gray-300">
-                  {row.paymentKredit}
-                </td>
-                <td className="px-3 py-2 border border-gray-300">
-                  {row.tenor}
-                </td>
+              
+             
                 <td className="px-3 py-2 border border-gray-300">
                   {row.keterangan}
                 </td>
