@@ -118,9 +118,25 @@ export default function InventoryReport() {
     [transaksiToko]
   );
 
+  const imeiTransferKeluar = useMemo(() => {
+    const set = new Set();
+
+    transaksi.forEach((t) => {
+      if (
+        t.STATUS === "Approved" &&
+        String(t.PAYMENT_METODE).toUpperCase() === "TRANSFER_KELUAR" &&
+        t.IMEI
+      ) {
+        set.add(String(t.IMEI));
+      }
+    });
+
+    return set;
+  }, [transaksi]);
+
   const imeiTerjual = useMemo(() => {
     const sold = new Set();
-  
+
     transaksi.forEach((t) => {
       if (
         t.STATUS === "Approved" &&
@@ -129,20 +145,15 @@ export default function InventoryReport() {
       ) {
         sold.add(String(t.IMEI));
       }
-  
+
       // ✅ REFUND → keluarkan dari sold
-      if (
-        t.STATUS === "Approved" &&
-        t.PAYMENT_METODE === "REFUND" &&
-        t.IMEI
-      ) {
+      if (t.STATUS === "Approved" && t.PAYMENT_METODE === "REFUND" && t.IMEI) {
         sold.delete(String(t.IMEI));
       }
     });
-  
+
     return sold;
   }, [transaksi]);
-  
 
   // ======================
   // DETAIL TABLE
@@ -154,7 +165,9 @@ export default function InventoryReport() {
       .filter(
         (t) =>
           t.STATUS === "Approved" &&
-          ["PEMBELIAN", "TRANSFER_MASUK"].includes(t.PAYMENT_METODE) &&
+          ["PEMBELIAN", "TRANSFER_MASUK", "TRANSFER_BARANG"].includes(
+            t.PAYMENT_METODE
+          ) &&
           // ✅ HAPUS IMEI YANG SUDAH TERJUAL
           !(t.IMEI && imeiTerjual.has(String(t.IMEI))) &&
           `${t.NAMA_BRAND} ${t.NAMA_BARANG} ${t.IMEI}`
@@ -253,7 +266,6 @@ export default function InventoryReport() {
         // STOK MASUK
         // ======================
         if (["PEMBELIAN", "TRANSFER_MASUK"].includes(t.PAYMENT_METODE)) {
-          // ✅ IMEI SUDAH TERJUAL -> JANGAN MASUK STOK
           if (t.IMEI && imeiTerjual.has(String(t.IMEI))) return;
 
           kategori[kat] = (kategori[kat] || 0) + qty;
@@ -267,14 +279,12 @@ export default function InventoryReport() {
         }
 
         // ======================
-      // REFUND → STOK KEMBALI
-      // ======================
-      if (t.PAYMENT_METODE === "REFUND") {
-        kategori[kat] = (kategori[kat] || 0) + qty;
-      }
+        // REFUND → STOK KEMBALI
+        // ======================
+        if (t.PAYMENT_METODE === "REFUND") {
+          kategori[kat] = (kategori[kat] || 0) + qty;
+        }
       });
-
-      
 
       // ======================
       // HILANGKAN MINUS & NOL

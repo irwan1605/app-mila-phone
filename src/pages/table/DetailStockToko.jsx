@@ -130,6 +130,23 @@ export default function DetailStockToko() {
   
     return sold;
   }, [transaksi]);
+
+  const imeiTransferKeluar = useMemo(() => {
+    const set = new Set();
+  
+    transaksi.forEach((t) => {
+      if (
+        t.STATUS === "Approved" &&
+        String(t.PAYMENT_METODE).toUpperCase() === "TRANSFER_KELUAR" &&
+        t.IMEI
+      ) {
+        set.add(String(t.IMEI));
+      }
+    });
+  
+    return set;
+  }, [transaksi]);
+  
   
 
   /* ======================
@@ -158,11 +175,16 @@ export default function DetailStockToko() {
       // =====================
       if (t.IMEI) {
         const imei = String(t.IMEI);
-
-        // IMEI sudah dijual → skip
+        const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+      
+        // ❌ skip hanya jika masih terjual
         if (imeiTerjual.has(imei)) return;
-
-        // hanya simpan 1 data terakhir
+      
+        // ✅ PEMBELIAN & TRANSFER MASUK = stok aktif
+        if (!["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+          return;
+        }
+      
         map[imei] = {
           tanggal: t.TANGGAL_TRANSAKSI || "-",
           noDo: t.NO_INVOICE || "-",
@@ -172,21 +194,18 @@ export default function DetailStockToko() {
           barang: t.NAMA_BARANG || "-",
           imei,
           qty: 1,
-
           hargaSRP:
             masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
-
           hargaGrosir:
             masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
-
           hargaReseller:
             masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
-
           statusBarang: "TERSEDIA",
         };
-
+      
         return;
       }
+      
 
       // =====================
       // ✅ NON IMEI (ACC / DLL)
