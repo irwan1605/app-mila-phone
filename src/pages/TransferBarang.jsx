@@ -59,6 +59,7 @@ export default function TransferBarang() {
   const suratJalanRef = useRef(null);
   const [inventory, setInventory] = useState([]);
   const [stokAccessories, setStokAccessories] = useState([]);
+  const [previewSJ, setPreviewSJ] = useState(null);
 
   /* ================= TOKO ================= */
   const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "CILANGKAP PUSAT";
@@ -102,62 +103,58 @@ export default function TransferBarang() {
   const [inventoryAccessories, setInventoryAccessories] = useState([]);
 
   // ================= INVENTORY ACCESSORIES (NON IMEI) =================
-useEffect(() => {
-  return onValue(ref(db, "toko"), (snap) => {
-    const map = {};
+  useEffect(() => {
+    return onValue(ref(db, "toko"), (snap) => {
+      const map = {};
 
-    snap.forEach((tokoSnap) => {
-      const transaksiSnap = tokoSnap.child("transaksi");
-      if (!transaksiSnap.exists()) return;
+      snap.forEach((tokoSnap) => {
+        const transaksiSnap = tokoSnap.child("transaksi");
+        if (!transaksiSnap.exists()) return;
 
-      transaksiSnap.forEach((trx) => {
-        const v = trx.val();
+        transaksiSnap.forEach((trx) => {
+          const v = trx.val();
 
-        // ✅ hanya NON IMEI
-        if (v.IMEI) return;
+          // ✅ hanya NON IMEI
+          if (v.IMEI) return;
 
-        const key = `${v.NAMA_TOKO}|${v.NAMA_BRAND}|${v.NAMA_BARANG}`;
-        const metode = String(v.PAYMENT_METODE || "").toUpperCase();
+          const key = `${v.NAMA_TOKO}|${v.NAMA_BRAND}|${v.NAMA_BARANG}`;
+          const metode = String(v.PAYMENT_METODE || "").toUpperCase();
 
-        if (!map[key]) {
-          map[key] = {
-            toko: String(v.NAMA_TOKO || "").trim(),
-            namaBrand: String(v.NAMA_BRAND || "").trim(),
-            namaBarang: String(v.NAMA_BARANG || "").trim(),
-            kategori: String(v.KATEGORI_BRAND || "").trim(),
-            qty: 0,
-          };
-        }
+          if (!map[key]) {
+            map[key] = {
+              toko: String(v.NAMA_TOKO || "").trim(),
+              namaBrand: String(v.NAMA_BRAND || "").trim(),
+              namaBarang: String(v.NAMA_BARANG || "").trim(),
+              kategori: String(v.KATEGORI_BRAND || "").trim(),
+              qty: 0,
+            };
+          }
 
-        if (metode === "PEMBELIAN") {
-          map[key].qty += Number(v.QTY || 0);
-        }
+          if (metode === "PEMBELIAN") {
+            map[key].qty += Number(v.QTY || 0);
+          }
 
-        if (metode === "PENJUALAN") {
-          map[key].qty -= Number(v.QTY || 0);
-        }
+          if (metode === "PENJUALAN") {
+            map[key].qty -= Number(v.QTY || 0);
+          }
 
-        if (metode === "TRANSFER_KELUAR") {
-          map[key].qty -= Number(v.QTY || 0);
-        }
+          if (metode === "TRANSFER_KELUAR") {
+            map[key].qty -= Number(v.QTY || 0);
+          }
 
-        if (metode === "TRANSFER_MASUK") {
-          map[key].qty += Number(v.QTY || 0);
-        }
+          if (metode === "TRANSFER_MASUK") {
+            map[key].qty += Number(v.QTY || 0);
+          }
 
-        if (metode === "REFUND") {
-          map[key].qty += Number(v.QTY || 0);
-        }
+          if (metode === "REFUND") {
+            map[key].qty += Number(v.QTY || 0);
+          }
+        });
       });
+
+      setInventoryAccessories(Object.values(map).filter((i) => i.qty > 0));
     });
-
-    setInventoryAccessories(
-      Object.values(map).filter(i => i.qty > 0)
-    );
-  });
-}, []);
-
-
+  }, []);
 
   useEffect(() => {
     return onValue(ref(db, "stok_toko"), (snap) => {
@@ -321,22 +318,19 @@ useEffect(() => {
     if (!form.kategori || !form.tokoPengirim) return [];
 
     // ✅ KHUSUS ACCESSORIES → dari MASTER BARANG
-// ================= ACCESSORIES =================
-if (form.kategori === "ACCESSORIES") {
-  return [
-    ...new Set(
-      inventoryAccessories
-        .filter(
-          i =>
-            i.toko.toUpperCase() === form.tokoPengirim.toUpperCase()
-        )
-        .map(i => i.namaBrand)
-    ),
-  ];
-}
+    // ================= ACCESSORIES =================
+    if (form.kategori === "ACCESSORIES") {
+      return [
+        ...new Set(
+          inventoryAccessories
+            .filter(
+              (i) => i.toko.toUpperCase() === form.tokoPengirim.toUpperCase()
+            )
+            .map((i) => i.namaBrand)
+        ),
+      ];
+    }
 
-
-    
     // 🔁 selain accessories → pakai inventory lama
     if (!form.tokoPengirim) return [];
 
@@ -355,9 +349,6 @@ if (form.kategori === "ACCESSORIES") {
     ];
   }, [inventory, masterBarang, form.tokoPengirim, form.kategori]);
 
- 
-  
-
   // ================= BARANG OPTIONS (DARI STOK TOKO) =================
   const barangOptions = useMemo(() => {
     if (!form.kategori || !form.brand) return [];
@@ -367,16 +358,14 @@ if (form.kategori === "ACCESSORIES") {
         ...new Set(
           inventoryAccessories
             .filter(
-              i =>
+              (i) =>
                 i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
                 i.namaBrand.toUpperCase() === form.brand.toUpperCase()
             )
-            .map(i => i.namaBarang)
+            .map((i) => i.namaBarang)
         ),
       ];
     }
-    
-    
 
     // ambil dari MASTER BARANG dulu
     const masterList = masterBarang
@@ -428,8 +417,6 @@ if (form.kategori === "ACCESSORIES") {
 
     return Number(barangMaster.qty || barangMaster.stok || 9999);
   }, [inventory, masterBarang, form, isKategoriImei]);
-
-  
 
   // ================= CEK FORM SUDAH LENGKAP =================
   const isFormComplete =
@@ -617,8 +604,6 @@ if (form.kategori === "ACCESSORIES") {
 
     setImeiSearch("");
   };
-
-  
 
   const handleSearchByImei = () => {
     const im = String(imeiSearch || "").trim();
@@ -1194,6 +1179,7 @@ if (form.kategori === "ACCESSORIES") {
                       >
                         DELETE
                       </button>
+                      
                     </td>
                   </tr>
                 ))}
@@ -1218,53 +1204,8 @@ if (form.kategori === "ACCESSORIES") {
           >
             {loading ? "Processing..." : "SUBMIT TRANSFER"}
           </button>
-          <button
-            type="button"
-            onClick={() =>
-              alert(
-                "Surat Jalan dicetak melalui tabel setelah transfer di-Approve"
-              )
-            }
-            className="btn-indigo"
-          >
-            🖨️ PRINT SURAT JALAN
-          </button>
+        
 
-          {showPreview && (
-            <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-start overflow-auto p-6">
-              <div className="bg-white rounded-2xl shadow-2xl p-4">
-                <PrintSuratJalan
-                  data={{
-                    noSuratJalan: form.noSuratJalan,
-                    tanggal: form.tanggal,
-                    tokoPengirim: form.tokoPengirim,
-                    ke: form.ke,
-                    pengirim: form.pengirim,
-                    items: [
-                      {
-                        barang: form.barang,
-                        qty: form.qty,
-                        imeis: form.imeis,
-                      },
-                    ],
-                  }}
-                />
-
-                <div className="flex gap-3 justify-end mt-4">
-                  <button onClick={() => window.print()} className="btn-indigo">
-                    🖨️ Cetak
-                  </button>
-
-                  <button
-                    onClick={() => setShowPreview(false)}
-                    className="btn-red"
-                  >
-                    Tutup
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         <div id="table-transfer-barang">

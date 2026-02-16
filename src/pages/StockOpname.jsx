@@ -78,6 +78,18 @@ export default function StockOpname() {
   const [filterSupplier, setFilterSupplier] = useState("");
   const [filterImei, setFilterImei] = useState("");
 
+  const [transaksi, setTransaksi] = useState([]);
+
+  useEffect(() => {
+    const unsub = listenAllTransaksi((rows) => {
+      setTransaksi(rows || []);
+    });
+  
+    return () => unsub && unsub();
+  }, []);
+  
+
+
   const [masterHargaMap, setMasterHargaMap] = useState({});
   const tableRef = useRef(null);
   const [viewMode, setViewMode] = useState("SKU"); // SKU | IMEI
@@ -159,6 +171,77 @@ export default function StockOpname() {
 
     return () => unsub && unsub();
   }, []);
+
+  const stockOpnameData = useMemo(() => {
+    const map = {};
+  
+    transaksi.forEach((t) => {
+      if (t.STATUS !== "Approved") return;
+  
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+      const toko = t.NAMA_TOKO || t.tokoPengirim || t.ke;
+  
+      if (!toko) return;
+  
+      const key = t.IMEI
+        ? `${toko}|${t.IMEI}`
+        : `${toko}|${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+  
+      const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
+  
+      let qty = 0;
+  
+      // ==========================
+      // RULE STOCK
+      // ==========================
+      if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+        qty = qtyBase;
+      }
+  
+      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+        qty = -qtyBase;
+      }
+  
+      if (!map[key]) {
+        map[key] = {
+          key,
+          tanggal: t.TANGGAL_TRANSAKSI || t.tanggal || "-",
+          toko,
+          supplier: t.NAMA_SUPPLIER || "-",
+          brand: t.NAMA_BRAND,
+          barang: t.NAMA_BARANG,
+          imei: t.IMEI || "",
+          qty: 0,
+          lastTransaksi: metode,
+        };
+      }
+  
+      // ==========================
+      // UPDATE QTY
+      // ==========================
+      map[key].qty += qty;
+  
+      // ==========================
+      // UPDATE TANGGAL & SUPPLIER
+      // (ACC / JASA / SPARE PART)
+      // ==========================
+      if (
+        ["ACCESSORIES", "SPARE PART", "JASA"].includes(
+          String(t.KATEGORI_BRAND || "").toUpperCase()
+        )
+      ) {
+        map[key].tanggal =
+          t.TANGGAL_TRANSAKSI || map[key].tanggal;
+  
+        map[key].supplier =
+          t.NAMA_SUPPLIER || map[key].supplier;
+      }
+    });
+  
+    // hanya tampilkan stok yang masih ada
+    return Object.values(map).filter((r) => r.qty > 0);
+  }, [transaksi]);
+  
 
   // ===============================
   // 3️⃣ STOCK MAP (AGREGAT STOK)
@@ -255,30 +338,31 @@ export default function StockOpname() {
   // 5️⃣ AGGREGATED (BOLEH PAKAI detailStockLookup)
   // ===============================
   const aggregated = useMemo(() => {
-    let rows = [];
+    let rows = stockOpnameData;
   
-    if (filterToko === "semua") {
-      Object.values(stockMap).forEach((perToko) => {
-        rows.push(...Object.values(perToko));
-      });
-    } else if (stockMap[filterToko]) {
-      rows = Object.values(stockMap[filterToko]);
+    if (filterToko !== "semua") {
+      rows = rows.filter((r) => r.toko === filterToko);
     }
   
-    return rows
-      .filter((r) => Number(r.qty || 0) > 0) // ✅ HILANGKAN YANG SUDAH TERJUAL
-      .map((r) => {
-        const meta = masterPembelianLookup[String(r.key).trim()];
+    return rows.map((r) => {
+      const imeiKey = String(r.imei || "").trim();
+      const skuKey = `${r.brand}|${r.barang}`;
+      
+      const meta =
+        masterPembelianLookup[imeiKey] ||
+        detailStockLookup[imeiKey] ||
+        detailStockLookup[skuKey];
+      
   
-        return {
-          ...r,
-          tanggal: meta?.tanggal || "-",
-          supplier: meta?.supplier || "-",
-          imei: meta?.imei || r.key || "",
-          qty: Number(r.qty || 0),
-        };
-      });
-  }, [stockMap, filterToko, masterPembelianLookup]);
+      return {
+        ...r,
+        tanggal: meta?.tanggal || r.tanggal || "-",
+        supplier: meta?.supplier || r.supplier || "-",
+        imei: r.imei || "",
+        qty: Number(r.qty || 0),
+      };
+    });
+  }, [stockOpnameData, filterToko, masterPembelianLookup]);
   
 
   const tableData = aggregated;
