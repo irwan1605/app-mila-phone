@@ -44,9 +44,13 @@ export default function TableTransferBarang({ currentRole }) {
           }
 
           // RULE MUTLAK
-          if (metode === "PENJUALAN") {
-            map[imei].status = "SOLD"; // 🔥 PALING KUAT
-          } else if (metode === "TRANSFER_KELUAR") {
+          if (metode === "REFUND") {
+            map[imei].status = "AVAILABLE";
+          }
+          else if (metode === "PENJUALAN") {
+            map[imei].status = "SOLD";
+          }
+           else if (metode === "TRANSFER_KELUAR") {
             if (map[imei].status !== "SOLD") map[imei].status = "OUT";
           } else if (metode === "TRANSFER_MASUK") {
             if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
@@ -69,7 +73,11 @@ export default function TableTransferBarang({ currentRole }) {
 
       return r.imeis.every((im) => {
         const found = inventory.find((i) => i.imei === im);
-        return found && found.status === "AVAILABLE";
+        return (
+          found &&
+          (found.status === "AVAILABLE" || found.status === "REFUND")
+        );
+        
       });
     });
   }, [rows, inventory]);
@@ -106,14 +114,22 @@ export default function TableTransferBarang({ currentRole }) {
             map[imei] = { imei, status: "AVAILABLE" };
           }
 
-          // RULE MUTLAK
-          if (metode === "PENJUALAN") {
-            map[imei].status = "SOLD"; // 🔥 PALING KUAT
-          } else if (metode === "TRANSFER_KELUAR") {
-            if (map[imei].status !== "SOLD") map[imei].status = "OUT";
-          } else if (metode === "TRANSFER_MASUK") {
-            if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
+          if (
+            metode === "PEMBELIAN" ||
+            metode === "REFUND" ||
+            metode === "TRANSFER_MASUK" ||
+            metode === "INPUT_STOK"
+          ) {
+            map[imei].status = "AVAILABLE";
           }
+          else if (metode === "PENJUALAN") {
+            map[imei].status = "SOLD";
+          }
+          else if (metode === "TRANSFER_KELUAR") {
+            if (map[imei].status !== "SOLD")
+              map[imei].status = "OUT";
+          }
+          
         });
       });
 

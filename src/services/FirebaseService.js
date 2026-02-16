@@ -456,14 +456,56 @@ export const refundPenjualan = async (row, userLogin) => {
 /* ===============================
    LOCK IMEI
 =============================== */
-export const lockImeiTransfer = async ({ imei, transferId, tokoAsal }) => {
+export const lockImeiTransfer = async ({
+  imei,
+  transferId,
+  tokoAsal,
+}) => {
+
   const lockRef = ref(db, `imei_lock/${imei}`);
   const snap = await get(lockRef);
 
+  // =====================================
+  // CEK LOCK LAMA
+  // =====================================
   if (snap.exists()) {
-    throw new Error(`IMEI ${imei} sedang digunakan / terkunci`);
+    const lockData = snap.val();
+
+    // ✅ kalau lock milik transfer yg sama → lanjut
+    if (lockData.transferId === transferId) {
+      return;
+    }
+
+    // ✅ cek apakah transfer lama masih pending
+    const oldTransferRef = ref(
+      db,
+      `transfer_barang/${lockData.transferId}`
+    );
+
+    const oldTransferSnap = await get(oldTransferRef);
+
+    // -------------------------------------
+    // JIKA TRANSFER LAMA SUDAH TIDAK ADA
+    // ATAU SUDAH APPROVED / REJECTED
+    // → AUTO UNLOCK
+    // -------------------------------------
+    if (
+      !oldTransferSnap.exists() ||
+      ["Approved", "Rejected", "Voided"].includes(
+        oldTransferSnap.val()?.status
+      )
+    ) {
+      await remove(lockRef);
+    } else {
+      throw new Error(
+        `IMEI ${imei} sedang digunakan / terkunci`
+      );
+    }
   }
 
+  // =====================================
+  // BUAT LOCK BARU
+  // =====================================
   await set(lockRef, {
     status: "LOCKED",
     transferId,
@@ -471,6 +513,7 @@ export const lockImeiTransfer = async ({ imei, transferId, tokoAsal }) => {
     createdAt: Date.now(),
   });
 };
+
 
 export const unlockImeiTransfer = async (imei) => {
   await remove(ref(db, `imei_lock/${imei}`));
