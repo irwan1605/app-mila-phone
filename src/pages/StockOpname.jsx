@@ -256,7 +256,7 @@ export default function StockOpname() {
   // ===============================
   const aggregated = useMemo(() => {
     let rows = [];
-
+  
     if (filterToko === "semua") {
       Object.values(stockMap).forEach((perToko) => {
         rows.push(...Object.values(perToko));
@@ -264,24 +264,22 @@ export default function StockOpname() {
     } else if (stockMap[filterToko]) {
       rows = Object.values(stockMap[filterToko]);
     }
-
-    return rows.map((r) => {
-      const meta = masterPembelianLookup[String(r.key).trim()];
-
-      return {
-        ...r,
-
-        tanggal: meta?.tanggal || "-",
-        supplier: meta?.supplier || "-",
-        imei: meta?.imei || r.key || "",
-
-        // ✅ WAJIB DITAMBAH
-        qty: Number(r.qty || 0),
-        lastStatus: r.lastStatus || "TERSEDIA",
-        lastTransaksi: r.lastTransaksi || "",
-      };
-    });
+  
+    return rows
+      .filter((r) => Number(r.qty || 0) > 0) // ✅ HILANGKAN YANG SUDAH TERJUAL
+      .map((r) => {
+        const meta = masterPembelianLookup[String(r.key).trim()];
+  
+        return {
+          ...r,
+          tanggal: meta?.tanggal || "-",
+          supplier: meta?.supplier || "-",
+          imei: meta?.imei || r.key || "",
+          qty: Number(r.qty || 0),
+        };
+      });
   }, [stockMap, filterToko, masterPembelianLookup]);
+  
 
   const tableData = aggregated;
 

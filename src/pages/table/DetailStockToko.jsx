@@ -289,21 +289,13 @@ export default function DetailStockToko() {
                     Harga SRP
                   </th>
                   <th className="px-3 py-2 text-left whitespace-nowrap">
-                    Total SRP
-                  </th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">
                     Harga Grosir
                   </th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">
-                    Total Grosir
-                  </th>
+
                   <th className="px-3 py-2 text-left whitespace-nowrap">
                     Harga Reseller
                   </th>
                   <th className="px-3 py-2">STATUS</th>
-                  <th className="px-3 py-2 text-left whitespace-nowrap">
-                    Total Reseller
-                  </th>
 
                   <th className="px-3 py-2 text-left whitespace-nowrap">
                     Keterangan
@@ -341,23 +333,16 @@ export default function DetailStockToko() {
                     <td className="px-3 py-2 text-right font-mono">
                       {rupiah(r.hargaSRP)}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      {rupiah(r.totalSRP)}
-                    </td>
+
                     <td className="px-3 py-2 text-right font-mono">
                       {rupiah(r.hargaGrosir)}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      {rupiah(r.totalGrosir)}
-                    </td>
+
                     <td className="px-3 py-2 text-right font-mono">
                       {rupiah(r.hargaReseller)}
                     </td>
                     <td className="px-3 py-2 text-center font-semibold">
                       {r.statusBarang}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      {rupiah(r.totalReseller)}
                     </td>
 
                     <td className="px-3 py-2 text-right font-mono text-xs text-gray-600">
