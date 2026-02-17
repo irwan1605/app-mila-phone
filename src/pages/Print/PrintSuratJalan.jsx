@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ref, get } from "firebase/database";
+import { ref, get, onValue } from "firebase/database";
 import { db } from "../../firebase/FirebaseInit";
 
 export default function PrintSuratJalan() {
@@ -9,6 +9,65 @@ export default function PrintSuratJalan() {
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [itemsGabungan, setItemsGabungan] = useState([]);
+  const [brandMap, setBrandMap] = useState({});
+
+
+  useEffect(() => {
+    if (!data?.noSuratJalan) return;
+
+    const unsub = onValue(ref(db, "surat_jalan"), (snap) => {
+      const arr = [];
+
+      snap.forEach((c) => {
+        const v = c.val();
+        if (!v) return;
+
+        if (
+          String(v.noSuratJalan).trim() === String(data.noSuratJalan).trim()
+        ) {
+          arr.push({
+            barang: v.barang,
+            brand: v.brand || brandMap[v.barang] || "-",
+            qty: v.qty,
+            imeis: v.imeis || [],
+          });
+          
+          
+        }
+      });
+
+      console.log("ITEM SURAT JALAN:", arr); // DEBUG
+      setItemsGabungan(arr);
+    });
+
+    return () => unsub();
+  }, [data?.noSuratJalan]);
+
+  useEffect(() => {
+    return onValue(ref(db, "toko"), (snap) => {
+      const map = {};
+  
+      snap.forEach((tokoSnap) => {
+        const trxSnap = tokoSnap.child("transaksi");
+        if (!trxSnap.exists()) return;
+  
+        trxSnap.forEach((trx) => {
+          const v = trx.val();
+  
+          const barang = String(v.NAMA_BARANG || "").trim();
+          const brand = String(v.NAMA_BRAND || "").trim();
+  
+          if (barang && brand && !map[barang]) {
+            map[barang] = brand;
+          }
+        });
+      });
+  
+      setBrandMap(map);
+    });
+  }, []);
+  
 
   useEffect(() => {
     if (!id) return;
@@ -133,21 +192,41 @@ export default function PrintSuratJalan() {
           <thead>
             <tr className="bg-gray-100">
               <th className="border px-2 py-2 w-10">No</th>
+              <th className="border px-2 py-2 text-left">Nama Brand</th>
               <th className="border px-2 py-2 text-left">Nama Barang</th>
               <th className="border px-2 py-2 text-left">IMEI</th>
               <th className="border px-2 py-2 w-16 text-center">Qty</th>
             </tr>
           </thead>
+
           <tbody>
-            {(data.imeis || []).map((im, i) => (
-              <tr key={i}>
-                <td className="border px-2 py-2 text-center">{i + 1}</td>
-                <td className="border px-2 py-2">{data.barang}</td>
-                <td className="border px-2 py-2 text-xs">{im}</td>
-                <td className="border px-2 py-2 text-center">1</td>
-              </tr>
-            ))}
-          </tbody>
+{(itemsGabungan.length ? itemsGabungan : data.items || [])
+  .map((item, i) => (
+    <tr key={i}>
+      <td className="border px-2 py-2 text-center">{i + 1}</td>
+
+      <td className="border px-2 py-2">
+        {item.brand || "-"}
+      </td>
+
+      <td className="border px-2 py-2">
+        {item.barang || "-"}
+      </td>
+
+      <td className="border px-2 py-2 text-xs">
+        {item.imeis?.length
+          ? item.imeis.join(", ")
+          : "-"}
+      </td>
+
+      <td className="border px-2 py-2 text-center">
+        {item.qty || 0}
+      </td>
+    </tr>
+))}
+</tbody>
+
+
         </table>
 
         {/* CATATAN */}

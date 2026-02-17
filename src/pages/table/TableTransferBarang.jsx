@@ -464,7 +464,7 @@ export default function TableTransferBarang({ currentRole }) {
                 }}
                 className="px-3 py-2 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600"
               >
-                <FaPrint />
+                <FaPrint /> Print Surat Jalan
               </button>
 
             </div>
