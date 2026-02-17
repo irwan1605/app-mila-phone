@@ -46,8 +46,14 @@ export default function SummaryTransferReport() {
           id: c.key,
           ...val,
           imeis: uniqueImeis,
-          qty: uniqueImeis.length,
+        
+          // ✅ FIX QTY SAMA DENGAN TABLE TRANSFER BARANG
+          qty:
+            uniqueImeis.length > 0
+              ? uniqueImeis.length
+              : Number(val.qty || 0),
         });
+        
       });
 
       setRows(arr.reverse());
@@ -123,6 +129,8 @@ export default function SummaryTransferReport() {
         suratJalanId: trx.suratJalanId,
       }));
   }, [rows, inventory]);
+
+  
   
 
   /* ================= FILTER ================= */
