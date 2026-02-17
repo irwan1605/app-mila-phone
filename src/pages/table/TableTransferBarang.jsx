@@ -153,22 +153,20 @@ export default function TableTransferBarang({ currentRole }) {
 
         const imeis = Array.isArray(val.imeis) ? val.imeis : [];
 
-        // 🚫 FILTER DUPLIKAT IMEI DALAM 1 TRANSFER
         const uniqueImeis = [...new Set(imeis.map((i) => String(i).trim()))];
-
+        
         arr.push({
           id: c.key,
           ...val,
           imeis: uniqueImeis,
         
-          // ✅ FIX QTY
+          // ✅ FIX QTY FINAL
           qty:
             uniqueImeis.length > 0
               ? uniqueImeis.length
               : Number(val.qty || 0),
-        
-          status: String(val.status || "Pending"),
         });
+        
         
       });
 
@@ -176,6 +174,21 @@ export default function TableTransferBarang({ currentRole }) {
       setRows(arr);
     });
   }, []);
+
+  const getSafeQty = (transfer, safeImeis) => {
+    // IMEI barang
+    if (safeImeis.length > 0) {
+      return safeImeis.length;
+    }
+  
+    // ACCESSORIES
+    const q = Number(transfer.qty);
+  
+    if (!isNaN(q) && q > 0) return q;
+  
+    return 1;
+  };
+  
 
   const handleRejectAndRollback = async (r) => {
     if (!window.confirm("Yakin REJECT & kembalikan stok ke toko pengirim?"))
@@ -209,6 +222,7 @@ export default function TableTransferBarang({ currentRole }) {
         SOURCE: "REJECT_TRANSFER",
         CREATED_AT: now,
       });
+      
 
       // 🔁 3. UPDATE STATUS TRANSFER
       await update(ref(db, `transfer_barang/${r.id}`), {
@@ -405,39 +419,37 @@ export default function TableTransferBarang({ currentRole }) {
           <td className="border px-3 py-2">
             <div className="flex gap-2 justify-center">
 
-              {/* APPROVE */}
-              <button
-                title="Approve Transfer"
-                disabled={!canApprove}
-                onClick={async () => {
-                  if (!canApprove) return;
+            <button
+  title="Approve Transfer"
+  disabled={!canApprove}
+  onClick={async () => {
+    if (!canApprove) return;
 
-                  for (const imei of r.imeis || []) {
-                    if (isImeiAlreadyUsed(imei)) {
-                      alert(
-                        `❌ IMEI ${imei} sudah pernah dipakai!`
-                      );
-                      return;
-                    }
-                  }
+    for (const imei of r.imeis || []) {
+      if (isImeiAlreadyUsed(imei)) {
+        alert(`❌ IMEI ${imei} sudah pernah dipakai!`);
+        return;
+      }
+    }
 
-                  const sjId =
-                    await FirebaseService.approveTransferFINAL({
-                      transfer: r,
-                    });
+    const sjId =
+      await FirebaseService.approveTransferFINAL({
+        transfer: r,
+      });
 
-                  navigate(`/surat-jalan/${sjId}`);
-                }}
-                className={`px-3 py-2 rounded-lg text-[11px] font-bold
-                  ${
-                    !canApprove
-                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-green-500 text-white hover:bg-green-600"
-                  }
-                `}
-              >
-                ✔ Approve
-              </button>
+    navigate(`/surat-jalan/${sjId}`);
+  }}
+  className={`px-3 py-2 rounded-lg text-[11px] font-bold
+    ${
+      !canApprove
+        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+        : "bg-green-500 text-white hover:bg-green-600"
+    }
+  `}
+>
+  ✔ Approve
+</button>
+
 
               {/* REJECT (SUPERADMIN ONLY) */}
               <button

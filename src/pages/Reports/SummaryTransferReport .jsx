@@ -46,14 +46,11 @@ export default function SummaryTransferReport() {
           id: c.key,
           ...val,
           imeis: uniqueImeis,
-        
-          // ✅ FIX QTY SAMA DENGAN TABLE TRANSFER BARANG
+
+          // ✅ FIX QTY FINAL
           qty:
-            uniqueImeis.length > 0
-              ? uniqueImeis.length
-              : Number(val.qty || 0),
+            uniqueImeis.length > 0 ? uniqueImeis.length : Number(val.qty || 0),
         });
-        
       });
 
       setRows(arr.reverse());
@@ -98,15 +95,15 @@ export default function SummaryTransferReport() {
   /* ================= BUILD TABLE ROWS ================= */
   const tableRows = useMemo(() => {
     const usedImeis = new Set();
-  
+
     return rows
       .filter((trx) => {
         // ✅ TRANSFER BERHASIL / SELESAI → TAMPIL SELALU
         if (trx.status !== "Pending") return true;
-  
+
         // ⛔ FILTER HANYA UNTUK PENDING
         if (!Array.isArray(trx.imeis)) return false;
-  
+
         return trx.imeis.every((im) => {
           const found = inventory.find(
             (i) => String(i.imei).trim() === String(im).trim()
@@ -129,9 +126,6 @@ export default function SummaryTransferReport() {
         suratJalanId: trx.suratJalanId,
       }));
   }, [rows, inventory]);
-
-  
-  
 
   /* ================= FILTER ================= */
   const filtered = useMemo(() => {

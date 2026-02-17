@@ -322,6 +322,8 @@ export default function TransferBarang() {
     setCurrentRole(String(roleFromLogin).toLowerCase());
   }, []);
 
+  
+
   /* ================= OPTIONS ================= */
   const TOKO_OPTIONS = useMemo(() => {
     return (masterToko || [])
@@ -699,7 +701,13 @@ export default function TransferBarang() {
     const newItem = {
       ...form,
       id: Date.now(),
+    
+      // ✅ SAFE ENGINE v3
+      qty: isKategoriImei
+        ? (form.imeis?.length || 0)
+        : Number(form.qty || 0),
     };
+    
 
     const allImeis = [
       ...daftarTransfer.flatMap((i) => i.imeis || []),
@@ -732,6 +740,7 @@ export default function TransferBarang() {
       pengirim: form.pengirim,
     });
   };
+  
 
   // ================= FILTER HISTORY (FIX ERROR) =================
   const filteredHistory = useMemo(() => {
@@ -882,17 +891,19 @@ export default function TransferBarang() {
         const transferRef = push(ref(db, "transfer_barang"));
         const transferId = transferRef.key;
 
-        await update(transferRef, {
-          ...item,
-          id: transferId,
-          status: "Pending",
-          createdAt: Date.now(),
-        
-          // ✅ pastikan qty benar untuk semua kategori
-          qty: Array.isArray(item.imeis)
-            ? item.imeis.length
-            : Number(item.qty || 0),
-        });
+        const safeQty =
+        Array.isArray(item.imeis) && item.imeis.length > 0
+          ? item.imeis.length
+          : Number(item.qty || 0);
+      
+      await update(transferRef, {
+        ...item,
+        qty: safeQty, // ✅ SAFE ENGINE V3
+        id: transferId,
+        status: "Pending",
+        createdAt: Date.now(),
+      });
+      
         
 
         // ======================================
