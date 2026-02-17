@@ -540,7 +540,7 @@ const isSuper =
               </ul>
             )}
 
-            <button
+            {/* <button
               onClick={() => setShowSubMenuCetak((s) => !s)}
               className={`w-full flex items-center p-3 hover:bg-blue-500 text-left ${highlightIfMatch(
                 "cetak"
@@ -576,7 +576,7 @@ const isSuper =
                   </Link>
                 </li>
               </ul>
-            )}
+            )} */}
 
             {/* <Link
               to="/modul-sparepart"
