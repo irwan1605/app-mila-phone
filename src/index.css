@@ -73,3 +73,59 @@ code {
   scrollbar-color: rgba(255,255,255,0.35) transparent;
 }
 
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background: white;
+  }
+
+  .thermal-paper {
+    width: 80mm;
+    font-size: 11px;
+  }
+
+  table {
+    font-size: 10px;
+  }
+
+  th, td {
+    padding: 3px !important;
+    word-break: break-word;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
+@media print {
+  @page {
+    size: 60mm auto;
+    margin: 0;
+  }
+
+  html, body {
+    width: 60mm;
+    margin: 0;
+    padding: 0;
+  }
+
+  .thermal-paper {
+    width: 60mm !important;
+  }
+
+  th, td {
+    padding: 2px !important;
+    word-break: break-word;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

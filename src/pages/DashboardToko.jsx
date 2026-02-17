@@ -897,22 +897,16 @@ export default function DashboardToko(props) {
                       <th className="px-3 py-2 text-left whitespace-nowrap">
                         Harga SRP
                       </th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">
-                        Total SRP
-                      </th>
+                     
                       <th className="px-3 py-2 text-left whitespace-nowrap">
                         Harga Grosir
                       </th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">
-                        Total Grosir
-                      </th>
+                     
                       <th className="px-3 py-2 text-left whitespace-nowrap">
                         Harga Reseller
                       </th>
                       <th className="px-3 py-2">STATUS</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap">
-                        Total Reseller
-                      </th>
+                     
 
                       <th className="px-3 py-2 text-left whitespace-nowrap">
                         Keterangan
@@ -953,20 +947,14 @@ export default function DashboardToko(props) {
                             {rupiah(r.hargaSRP)}
                           </td>
 
-                          {/* TOTAL SRP */}
-                          <td className="px-3 py-2 text-right font-semibold">
-                            {rupiah(totalSRP)}
-                          </td>
+                        
 
                           {/* HARGA GROSIR */}
                           <td className="px-3 py-2 text-right">
                             {rupiah(r.hargaGrosir)}
                           </td>
 
-                          {/* TOTAL GROSIR */}
-                          <td className="px-3 py-2 text-right font-semibold">
-                            {rupiah(totalGrosir)}
-                          </td>
+                       
 
                           {/* HARGA RESELLER */}
                           <td className="px-3 py-2 text-right">
@@ -978,10 +966,7 @@ export default function DashboardToko(props) {
                             {r.statusBarang}
                           </td>
 
-                          {/* TOTAL RESELLER */}
-                          <td className="px-3 py-2 text-right font-semibold">
-                            {rupiah(totalReseller)}
-                          </td>
+                         
 
                           <td className="px-3 py-2 text-xs text-gray-500">
                             {r.keterangan || "-"}

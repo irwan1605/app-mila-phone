@@ -1,6 +1,6 @@
 // ==================================================
 // CetakInvoicePenjualan.jsx
-// Print Invoice Penjualan
+// Print Invoice Penjualan (THERMAL 60MM)
 // ==================================================
 import React, { useEffect, useRef } from "react";
 import logoUrl from "../../assets/logoMMT.png";
@@ -18,7 +18,7 @@ const safeNumber = (n) => Number(n || 0);
 export default function CetakInvoicePenjualan({
   transaksi,
   onClose,
-  mode = "print", // 🔥 default = print
+  mode = "print",
 }) {
   const printRef = useRef(null);
 
@@ -52,26 +52,18 @@ export default function CetakInvoicePenjualan({
     kembalian: Number(payment?.kembalian || 0),
   };
 
-  // HITUNG TOTAL BARANG DARI ITEMS
   const totalBarang = items.reduce(
     (s, it) =>
-      s + Number(it.qty || 0) * Number(it.hargaUnit || it.hargaAktif || 0),
+      s +
+      Number(it.qty || 0) *
+        Number(it.hargaUnit || it.hargaAktif || 0),
     0
   );
 
-  // 🔥 FALLBACK GRAND TOTAL JIKA DATA 0
   const finalGrandTotal = Number(totalBarang || 0);
 
   const isKredit = payment?.status === "PIUTANG";
 
-  const tenorAngka = parseInt(payment?.tenor || 0);
-
-  const cicilan =
-    tenorAngka > 0
-      ? Math.ceil(Number(payment.grandTotal || 0) / tenorAngka)
-      : 0;
-
-  // TANGGAL CETAK (HARI INI)
   const tanggalCetak = new Date().toLocaleDateString("id-ID", {
     day: "2-digit",
     month: "long",
@@ -89,7 +81,6 @@ export default function CetakInvoicePenjualan({
           ❌ Close
         </button>
 
-        {/* 🔥 HANYA TAMPIL JIKA MODE PRINT */}
         {mode === "print" && (
           <button
             type="button"
@@ -107,222 +98,112 @@ export default function CetakInvoicePenjualan({
       {/* AREA CETAK */}
       <div
         ref={printRef}
-        className="p-6 text-sm bg-white mx-auto"
-        style={{ width: "210mm", minHeight: "297mm" }}
+        className="thermal-paper bg-white mx-auto p-2 text-[10px]"
+        style={{
+          width: "60mm",
+          minHeight: "auto",
+        }}
       >
         {/* HEADER */}
-        <div className="flex justify-between items-center mb-4">
-          <img src={logoUrl} alt="logo" className="h-12" />
+        <div className="flex justify-between items-center mb-2">
+          <img src={logoUrl} alt="logo" className="h-8" />
           <div className="text-right">
-            <h2 className="font-bold text-lg">INVOICE PENJUALAN</h2>
-            <p>No Invoice : {invoice}</p>
-            <p>Tanggal : {tanggalCetak}</p>
+            <h2 className="font-bold text-sm">INVOICE PENJUALAN</h2>
+            <p>No : {invoice}</p>
+            <p>{tanggalCetak}</p>
           </div>
         </div>
 
-        {/* INFO TOKO & PELANGGAN */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <p>
-              <b>Nama Toko</b> : {toko}
-            </p>
-            <p>
-              <b>Nama Sales</b> : {user?.namaSales}
-            </p>
-          </div>
-          <div>
-            <p>
-              <b>Nama Pelanggan</b> : {user?.namaPelanggan}
-            </p>
-            <p>
-              <b>No Telepon</b> : {user?.noTlpPelanggan}
-            </p>
-          </div>
+        {/* INFO */}
+        <div className="grid grid-cols-1 gap-1 mb-2">
+          <p><b>Toko</b> : {toko}</p>
+          <p><b>Sales</b> : {user?.namaSales}</p>
+          <p><b>Pelanggan</b> : {user?.namaPelanggan}</p>
+          <p><b>No HP</b> : {user?.noTlpPelanggan}</p>
         </div>
 
-        {/* TABLE BARANG */}
-        <table className="w-full border-collapse border text-xs">
+        {/* TABLE */}
+        <table className="w-full border-collapse border text-[9px]">
           <thead>
             <tr className="bg-gray-100">
-              <th className="border p-2">No</th>
-              <th className="border p-2">Nama Barang</th>
-              <th className="border p-2">IMEI</th>
-              <th className="border p-2">Qty</th>
-              <th className="border p-2">Harga</th>
-              <th className="border p-2">Total</th>
+              <th className="border p-1">No</th>
+              <th className="border p-1">Barang</th>
+              <th className="border p-1">Qty</th>
+              {/* <th className="border p-1">Total</th> */}
             </tr>
           </thead>
           <tbody>
             {items.map((it, idx) => {
               const harga = Number(it.hargaUnit || it.hargaAktif || 0);
               const qty = Number(it.qty || 0);
-              const total = harga * qty; // 🔥 RUMUS TOTAL BARANG
+              const total = harga * qty;
 
               return (
                 <tr key={idx}>
-                  <td className="border p-2 text-center">{idx + 1}</td>
-                  <td className="border p-2">{it.namaBarang}</td>
-                  <td className="border p-2">
-                    {(it.imeiList || []).join(", ")}
+                  <td className="border p-1 text-center">{idx + 1}</td>
+                  <td className="border p-1">
+                    {it.namaBarang}
+                    {(it.imeiList || []).length > 0 && (
+                      <div className="text-[8px]">
+                        IMEI: {(it.imeiList || []).join(", ")}
+                      </div>
+                    )}
                   </td>
-                  <td className="border p-2 text-center">{qty}</td>
-                  <td className="border p-2 text-right">{rupiah(harga)}</td>
-                  <td className="border p-2 text-right">{rupiah(total)}</td>
+                  <td className="border p-1 text-center">{qty}</td>
+                  {/* <td className="border p-1 text-right">{rupiah(total)}</td> */}
                 </tr>
               );
             })}
           </tbody>
         </table>
+
         <div className="mt-2 text-right font-bold">
-          TOTAL BARANG : {rupiah(totalBarang)}
+          NOMINAL PAYMENT : {rupiah(finalGrandTotal)}
         </div>
 
-        {isKredit && (
-          <div className="mt-3 text-right text-sm">
-            <p>
-              Total Nominal Barang : <b>{rupiah(totalBarang)}</b>
-            </p>
-
-            <hr className="my-1" />
-
-            {/* <p className="text-base font-bold text-indigo-700">
-              TOTAL KREDIT : {rupiah(totalKredit)}
-            </p> */}
+        {/* SPLIT PAYMENT */}
+        {safePayment.splitPayment.length > 0 && (
+          <div className="mt-2">
+            <div className="font-semibold">Pembayaran</div>
+            {safePayment.splitPayment.map((p, i) => (
+              <div key={i} className="flex justify-between text-[9px]">
+                <span>{p.metode}</span>
+                <span>
+                  Rp {safeNumber(p.nominal).toLocaleString("id-ID")}
+                </span>
+              </div>
+            ))}
           </div>
         )}
 
-        {/* TOTAL */}
-        <div className="mt-4 text-right">
-          {/* <p>
-            Status Bayar : <b>{payment?.status}</b>
-          </p> */}
-          <p>
-            Metode Bayar : <b>{payment?.paymentMethod}</b>
-          </p>
+        <hr className="my-2" />
 
-          {isKredit && (
-            <div className="mt-2 text-xs space-y-1">
-              <p>Harga Barang : {rupiah(totalBarang)}</p>
-              {/* 
-              <p>DP Talangan : {rupiah(safePayment.dpUser)}</p>
-              <p>DP User ke PT : {rupiah(safePayment.dpUserPT)}</p>
-              <p>DP Merchant : {rupiah(safePayment.dpMerchant)}</p>
-              <p>Voucher / Kupon / Cashback : {rupiah(safePayment.voucher)}</p> */}
-
-              <hr />
-
-              <p>Tenor : {payment.tenor}</p>
-            </div>
-          )}
-
-          <p className="text-lg font-bold mt-2">
-            GRAND TOTAL : {rupiah(finalGrandTotal)}
-          </p>
-        </div>
-
-        <hr className="my-3" />
-
-        <div className="text-sm space-y-1">
-          {/* <div className="flex justify-between">
-            <p>
-              Total Penjualan : <b>{rupiah(finalGrandTotal)}</b>
-            </p>
-          </div> */}
-
-          {/* {isKredit && (
-            <div className="text-xs mt-1 space-y-1">
-              <div className="flex justify-between">
-                <span>DP User ke PT</span>
-                <span>{rupiah(safePayment.dpUserPT)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>DP Merchant</span>
-                <span>{rupiah(safePayment.dpMerchant)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Voucher / Cashback</span>
-                <span>{rupiah(safePayment.voucher)}</span>
-              </div>
-            </div>
-          )} */}
-
-          {/* SPLIT PAYMENT */}
-          {safePayment.splitPayment.length > 0 && (
-            <>
-              <div className="font-semibold mt-2">Detail Pembayaran</div>
-              {safePayment.splitPayment.map((p, i) => (
-                <div key={i} className="flex justify-between text-xs">
-                  <span>
-                    {p.metode || "-"}
-                    {p.bankNama ? ` - ${p.bankNama}` : ""}
-                    {p.metode === "TUKAR TAMBAH" ? " (TUKAR TAMBAH)" : ""}
-                  </span>
-                  <span>
-                    Rp {safeNumber(p.nominal).toLocaleString("id-ID")}
-                  </span>
-                </div>
-              ))}
-            </>
-          )}
-
-          {payment.splitPayment?.some((p) => p.metode === "TUKAR TAMBAH") && (
-            <div className="mt-2 text-red-600 font-semibold">
-              ⚠️ TRANSAKSI DENGAN TUKAR TAMBAH
-            </div>
-          )}
-
-          {/* KEMBALIAN */}
-
-          {/* <div className="flex justify-between font-bold text-green-700 mt-2">
-            <span>Uang Kembalian</span>
-            {safeNumber(safePayment.kembalian) > 0 && (
-              <span>
-                Rp {safeNumber(safePayment.kembalian).toLocaleString("id-ID")}
-              </span>
-            )}
-          </div> */}
-        </div>
-
-        {/* FOOTER */}
-        <div className="flex justify-between mt-10">
-          <div className="text-center">
-            <p>Pelanggan</p>
-            <br />
-            <br />
-            <p>{user?.namaPelanggan}</p>
-          </div>
-          <div className="text-center">
-            <p>Hormat Kami</p>
-            <br />
-            <br />
-            <p>{user?.namaSales}</p>
-          </div>
-        </div>
-
-        <p className="text-center mt-6 text-xs">
-          Terima kasih telah berbelanja di tempat kami
+        <p className="text-center text-[9px]">
+          Terima kasih telah berbelanja
         </p>
-         {/* NOTE / PERHATIAN */}
-      <div className="mt-2 border border-red-500 p-2 text-red-600 text-[10px] leading-tight">
-        <div className="font-bold text-center mb-1">PERHATIAN !!!</div>
 
-        <ul className="list-disc pl-4 space-y-0.5">
-          <li>Mohon diperiksa kembali kelengkapan dan kelayakan unit</li>
-          <li>Barang yang sudah dibeli tidak dapat ditukar / dikembalikan</li>
-          <li>
-            Garansi Toko:
-            <br />- Garansi Tukar Unit 1 × 24 jam
-            <br />- Garansi Home Service 1 Hari
-            <br />- Lebih dari 1 Hari dikenakan Biaya Transport Teknisi / Driver
-          </li>
-          <li>
-            Ketentuan & regulasi garansi pabrik mengikuti buku garansi yang
-            tersedia di setiap unit sepeda atau motor
-          </li>
-        </ul>
+        {/* ================= PERINGATAN ================= */}
+        <div className="mt-2 border border-red-500 p-2 text-red-600 text-[8px] leading-tight">
+          <div className="font-bold text-center mb-1">
+            PERHATIAN !!!
+          </div>
+
+          <ul className="list-disc pl-3 space-y-0.5">
+            <li>Mohon diperiksa kembali kelengkapan dan kelayakan unit</li>
+            <li>Barang yang sudah dibeli tidak dapat ditukar / dikembalikan</li>
+            <li>
+              Garansi Toko:
+              <br />- Garansi Tukar Unit 1 × 24 jam
+              <br />- Garansi Home Service 1 Hari
+              <br />- Lebih dari 1 Hari dikenakan Biaya Transport Teknisi / Driver
+            </li>
+            <li>
+              Ketentuan & regulasi garansi pabrik mengikuti buku garansi
+              yang tersedia di setiap unit sepeda atau motor
+            </li>
+          </ul>
+        </div>
       </div>
-      </div>
-     
     </div>
   );
 }

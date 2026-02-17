@@ -12,7 +12,6 @@ export default function PrintSuratJalan() {
   const [itemsGabungan, setItemsGabungan] = useState([]);
   const [brandMap, setBrandMap] = useState({});
 
-
   useEffect(() => {
     if (!data?.noSuratJalan) return;
 
@@ -24,7 +23,8 @@ export default function PrintSuratJalan() {
         if (!v) return;
 
         if (
-          String(v.noSuratJalan).trim() === String(data.noSuratJalan).trim()
+          String(v.noSuratJalan).trim() ===
+          String(data.noSuratJalan).trim()
         ) {
           arr.push({
             barang: v.barang,
@@ -32,12 +32,9 @@ export default function PrintSuratJalan() {
             qty: v.qty,
             imeis: v.imeis || [],
           });
-          
-          
         }
       });
 
-      console.log("ITEM SURAT JALAN:", arr); // DEBUG
       setItemsGabungan(arr);
     });
 
@@ -47,27 +44,25 @@ export default function PrintSuratJalan() {
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {
       const map = {};
-  
+
       snap.forEach((tokoSnap) => {
         const trxSnap = tokoSnap.child("transaksi");
         if (!trxSnap.exists()) return;
-  
+
         trxSnap.forEach((trx) => {
           const v = trx.val();
-  
           const barang = String(v.NAMA_BARANG || "").trim();
           const brand = String(v.NAMA_BRAND || "").trim();
-  
+
           if (barang && brand && !map[barang]) {
             map[barang] = brand;
           }
         });
       });
-  
+
       setBrandMap(map);
     });
   }, []);
-  
 
   useEffect(() => {
     if (!id) return;
@@ -81,7 +76,6 @@ export default function PrintSuratJalan() {
           alert("❌ Surat Jalan tidak ditemukan");
         }
       } catch (e) {
-        console.error(e);
         alert("❌ Gagal memuat Surat Jalan");
       } finally {
         setLoading(false);
@@ -91,166 +85,124 @@ export default function PrintSuratJalan() {
     load();
   }, [id]);
 
-  if (loading) {
+  if (loading)
     return <div className="p-6 text-center">Loading Surat Jalan...</div>;
-  }
 
-  if (!data) {
+  if (!data)
     return (
       <div className="p-6 text-center text-red-600 font-bold">
         ❌ Surat Jalan Tidak Ditemukan
       </div>
     );
-  }
 
   const handlePrint = () => {
     const printArea = document.querySelector(".print-area");
-    if (!printArea) {
-      alert("Area Surat Jalan tidak ditemukan");
-      return;
-    }
-
-    // simpan tampilan awal
     const originalContents = document.body.innerHTML;
 
-    // ganti body dengan surat jalan saja
     document.body.innerHTML = printArea.innerHTML;
-
-    // cetak
     window.print();
-
-    // kembalikan tampilan semula
     document.body.innerHTML = originalContents;
-
-    // reload react supaya event & state normal
     window.location.reload();
   };
 
   return (
     <div className="bg-gray-100 min-h-screen py-6">
-      {/* ================= BUTTON ACTION ================= */}
+      {/* BUTTON */}
       <div className="max-w-[900px] mx-auto mb-4 flex justify-end gap-3 no-print">
         <button
           onClick={() => navigate(-1)}
-          className="px-4 py-2 rounded-lg bg-gray-500 text-white font-bold hover:bg-gray-600"
+          className="px-4 py-2 rounded-lg bg-gray-500 text-white font-bold"
         >
           ⬅ CANCEL
         </button>
 
         <button
           onClick={handlePrint}
-          className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 no-print"
+          className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold"
         >
           🖨 CETAK
         </button>
       </div>
 
-      {/* ================= DOCUMENT ================= */}
-      {/* ================= DOCUMENT ================= */}
-      <div className="print-area w-[800px] mx-auto bg-white text-black p-6 shadow print:shadow-none">
+      {/* DOCUMENT */}
+      <div
+        className="print-area thermal-paper bg-white text-black p-2"
+        style={{ width: "60mm", margin: "0 auto" }}
+      >
         {/* HEADER */}
-        <div className="flex justify-between items-center border-b pb-3 mb-4">
-          <div className="flex items-center gap-3">
-            <img src="/logoMMT.png" alt="MMT" className="h-14 object-contain" />
-            <div>
-              <h1 className="text-xl font-extrabold">
-                PT. MILA MEDIA TELEKOMUNIKASI
-              </h1>
-              <p className="text-xs text-gray-600">
-                Monitoring & Report Management
-              </p>
-            </div>
-          </div>
-
-          <div className="text-sm text-right">
-            <p>
-              <b>SURAT JALAN</b>
-            </p>
-            <p>No: {data.noSuratJalan}</p>
-            <p>Tanggal: {new Date(data.tanggal).toLocaleDateString("id-ID")}</p>
-          </div>
+        <div className="text-center border-b pb-2 mb-2">
+          <img src="/logoMMT.png" alt="MMT" className="h-10 mx-auto mb-1" />
+          <h1 className="text-[11px] font-bold">
+            PT. MILA MEDIA TELEKOMUNIKASI
+          </h1>
+          <p className="text-[9px]">SURAT JALAN</p>
+          <p className="text-[9px]">No: {data.noSuratJalan}</p>
+          <p className="text-[9px]">
+            {new Date(data.tanggal).toLocaleDateString("id-ID")}
+          </p>
         </div>
 
-        {/* INFO TOKO */}
-        <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-          <div className="border rounded p-3">
-            <p className="font-bold mb-1">Toko Pengirim</p>
-            <p>{data.tokoPengirim}</p>
-            <p className="mt-1 text-xs">
-              Pengirim: <b>{data.pengirim || "-"}</b>
-            </p>
-          </div>
-
-          <div className="border rounded p-3">
-            <p className="font-bold mb-1">Toko Tujuan</p>
-            <p>{data.tokoTujuan}</p>
-          </div>
+        {/* INFO */}
+        <div className="text-[9px] mb-2 space-y-1">
+        <p><b> Nama Pengirim:</b> {data.pengirim || "-"}</p>
+          <p><b>Toko Pengirim:</b> {data.tokoPengirim}</p>
+         
+          <p><b>Toko Tujuan:</b> {data.tokoTujuan}</p>
         </div>
 
-        {/* TABLE BARANG */}
-        <table className="w-full border-collapse text-sm mb-6">
+        {/* TABLE */}
+        <table className="w-full border-collapse text-[8px] mb-3">
           <thead>
             <tr className="bg-gray-100">
-              <th className="border px-2 py-2 w-10">No</th>
-              <th className="border px-2 py-2 text-left">Nama Brand</th>
-              <th className="border px-2 py-2 text-left">Nama Barang</th>
-              <th className="border px-2 py-2 text-left">IMEI</th>
-              <th className="border px-2 py-2 w-16 text-center">Qty</th>
+              <th className="border px-1 py-1">No</th>
+              <th className="border px-1 py-1">Brand</th>
+              <th className="border px-1 py-1">Barang</th>
+              <th className="border px-1 py-1">IMEI</th>
+              <th className="border px-1 py-1">Qty</th>
             </tr>
           </thead>
 
           <tbody>
-{(itemsGabungan.length ? itemsGabungan : data.items || [])
-  .map((item, i) => (
-    <tr key={i}>
-      <td className="border px-2 py-2 text-center">{i + 1}</td>
-
-      <td className="border px-2 py-2">
-        {item.brand || "-"}
-      </td>
-
-      <td className="border px-2 py-2">
-        {item.barang || "-"}
-      </td>
-
-      <td className="border px-2 py-2 text-xs">
-        {item.imeis?.length
-          ? item.imeis.join(", ")
-          : "-"}
-      </td>
-
-      <td className="border px-2 py-2 text-center">
-        {item.qty || 0}
-      </td>
-    </tr>
-))}
-</tbody>
-
-
+            {(itemsGabungan.length
+              ? itemsGabungan
+              : data.items || []
+            ).map((item, i) => (
+              <tr key={i}>
+                <td className="border px-1 py-1 text-center">{i + 1}</td>
+                <td className="border px-1 py-1">{item.brand}</td>
+                <td className="border px-1 py-1">{item.barang}</td>
+                <td className="border px-1 py-1">
+                  {item.imeis?.length ? item.imeis.join(", ") : "-"}
+                </td>
+                <td className="border px-1 py-1 text-center">
+                  {item.qty || 0}
+                </td>
+              </tr>
+            ))}
+          </tbody>
         </table>
 
-        {/* CATATAN */}
-        <p className="text-xs text-gray-600 mb-10">
+        <p className="text-[8px] mt-2">
           Barang di atas telah diserahkan dalam kondisi baik dan sesuai.
         </p>
 
         {/* TTD */}
-        <div className="grid grid-cols-3 gap-6 text-center text-sm mt-14">
+        <div className="grid grid-cols-3 gap-2 text-center text-[8px] mt-6">
           <div>
-            <p className="mb-14 font-semibold">Menyerahkan</p>
-            <div className="border-t pt-1">( ......................... )</div>
+            <p className="mb-10">Menyerahkan</p>
+            <div className="border-t">( ............ )</div>
           </div>
 
           <div>
-            <p className="mb-14 font-semibold">Pengirim</p>
-            <div className="border-t pt-1">
-              ( {data.pengirim || "........................."} )
+            <p className="mb-10">Pengirim</p>
+            <div className="border-t">
+              ( {data.pengirim || "........"} )
             </div>
           </div>
 
           <div>
-            <p className="mb-14 font-semibold">Penerima</p>
-            <div className="border-t pt-1">( ......................... )</div>
+            <p className="mb-10">Penerima</p>
+            <div className="border-t">( ............ )</div>
           </div>
         </div>
       </div>
