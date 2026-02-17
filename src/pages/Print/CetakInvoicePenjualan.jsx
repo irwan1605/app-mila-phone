@@ -73,7 +73,7 @@ export default function CetakInvoicePenjualan({
   return (
     <div className="p-4">
       {/* BUTTON AREA */}
-      <div className="flex justify-center mb-4 p-2 print:hidden">
+      <div className="flex justify-center gap-4 mb-4 p-2 print:hidden">
         <button
           onClick={onClose}
           className="px-4 py-2 bg-gray-600 text-white rounded"
@@ -88,7 +88,7 @@ export default function CetakInvoicePenjualan({
               e.stopPropagation();
               handlePrint();
             }}
-            className="px-4 py-2 bg-blue-600 text-white rounded"
+            className="px-4 py-2 p-4 bg-blue-600 text-white rounded"
           >
             🖨️ CETAK INVOICE
           </button>
