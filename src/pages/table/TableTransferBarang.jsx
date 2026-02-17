@@ -75,8 +75,14 @@ export default function TableTransferBarang({ currentRole }) {
         const found = inventory.find((i) => i.imei === im);
         return (
           found &&
-          (found.status === "AVAILABLE" || found.status === "REFUND")
+          [
+            "AVAILABLE",
+            "REFUND",
+            "TRANSFER_MASUK",
+            "OUT" // ✅ ini yang bikin barang transfer bisa transfer lagi
+          ].includes(found.status)
         );
+        
         
       });
     });
