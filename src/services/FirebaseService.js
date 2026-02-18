@@ -3004,6 +3004,28 @@ export const generateIdPelanggan = async (nama, telp) => {
   return newId;
 };
 
+// ================================
+// LIST MASTER PAYMENT JENIS
+// ================================
+export const listenPaymentJenis = (callback) => {
+  const r = ref(db, "master_bank");
+
+  return onValue(r, (snap) => {
+    const arr = [];
+
+    snap.forEach((c) => {
+      const v = c.val();
+
+      // ambil field jenis dari master bank
+      if (v?.jenis) {
+        arr.push(String(v.jenis).toUpperCase());
+      }
+    });
+
+    callback(arr);
+  });
+};
+
 /* =========================
    INIT MASTER HELPERS
 ========================= */

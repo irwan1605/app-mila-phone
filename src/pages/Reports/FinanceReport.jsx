@@ -4,6 +4,8 @@
 // ================================
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ref, onValue } from "firebase/database";
+import { db } from "../../firebase/FirebaseInit";
 import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -14,6 +16,8 @@ import {
   addTransaksi,
   updateTransaksi,
   deleteTransaksi,
+  listenPaymentJenis,
+  listenMasterPaymentMetode,
 } from "../../services/FirebaseService";
 
 // ===== Konfigurasi Toko =====
@@ -60,9 +64,9 @@ const formatCurrency = (n) => {
 function normalizeRecord(r) {
   return {
     id: r.id || r._id || r.key || r.ID || String(Date.now()) + Math.random(),
-    TIPE: r.TIPE || "PENJUALAN",
 
-    // SETORAN
+    TIPE: String(r.TIPE || "").toUpperCase(), // ✅ WAJIB
+
     TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || todayStr(),
     NAMA_TOKO: r.NAMA_TOKO || "CILANGKAP PUSAT",
     KATEGORI_PEMBAYARAN: r.KATEGORI_PEMBAYARAN || "",
@@ -72,15 +76,10 @@ function normalizeRecord(r) {
     KETERANGAN: r.KETERANGAN || "",
     STATUS: r.STATUS || "Pending",
 
-    // FIELD PENJUALAN (jaga tetap ada)
-    NAMA_BRAND: r.NAMA_BRAND || "",
-    NAMA_BARANG: r.NAMA_BARANG || "",
-    QTY: toNum(r.QTY || 0),
-    NOMOR_UNIK: r.NOMOR_UNIK || "",
-
     TOTAL: toNum(r.TOTAL || r.JUMLAH_SETORAN || 0),
   };
 }
+
 
 // =====================================================
 //                  MAIN COMPONENT
@@ -89,6 +88,74 @@ export default function FinanceReport() {
   // Semua transaksi pusat (setoran + penjualan)
   const [allData, setAllData] = useState([]);
   const [setoran, setSetoran] = useState([]);
+  const [pengeluaran, setPengeluaran] = useState([]);
+  const [masterPayment, setMasterPayment] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [paymentJenisList, setPaymentJenisList] = useState([]);
+  const [masterPaymentMetode, setMasterPaymentMetode] = useState([]);
+
+  useEffect(() => {
+    const unsub = listenAllTransaksi((items) => {
+      const metode = new Set();
+
+      (items || []).forEach((r) => {
+        if (r.KATEGORI_PEMBAYARAN) {
+          metode.add(r.KATEGORI_PEMBAYARAN);
+        }
+      });
+
+      setMasterPayment(Array.from(metode));
+    });
+
+    return () => unsub && unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "master_payment_metode"), (snap) => {
+      const arr = [];
+
+      snap.forEach((c) => {
+        const v = c.val();
+        if (!v) return;
+
+        arr.push(v.nama || v.NAMA || "");
+      });
+
+      setPaymentMethods(arr);
+    });
+
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "master_bank"), (snap) => {
+      const arr = [];
+
+      snap.forEach((child) => {
+        const val = child.val();
+
+        console.log("MASTER BANK:", val); // DEBUG
+
+        if (val?.jenis) {
+          arr.push(String(val.jenis).toUpperCase());
+        }
+      });
+
+      console.log("JENIS LIST:", arr); // DEBUG
+
+      setPaymentJenisList(arr);
+    });
+
+    return () => unsub();
+  }, []);
+  useEffect(() => {
+    const unsub = listenPaymentJenis((list) => {
+      console.log("JENIS LIST:", list);
+      setPaymentJenisList(list);
+    });
+
+    return () => unsub && unsub();
+  }, []);
 
   // Filter
   const [filter, setFilter] = useState({
@@ -123,15 +190,46 @@ export default function FinanceReport() {
   // ===============================
   useEffect(() => {
     const unsub = listenAllTransaksi((items) => {
-      const map = (items || []).map((r) => normalizeRecord(r));
+      const map = (items || []).map(normalizeRecord);
+  
       setAllData(map);
-      setSetoran(map.filter((x) => x.TIPE === "SETORAN"));
+  
+      setSetoran(
+        map.filter((x) => x.TIPE === "SETORAN")
+      );
+  
+      setPengeluaran(
+        map.filter((x) => x.TIPE === "PENGELUARAN")
+      );
     });
+  
+    return () => unsub && unsub();
+  }, []);
+  
+
+  useEffect(() => {
+    const unsub = listenMasterPaymentMetode((data) => {
+      setMasterPaymentMetode(Array.isArray(data) ? data : []);
+    });
+
     return () => unsub && unsub();
   }, []);
 
-  const tokoNameToId = (name) =>
-    ALL_TOKO.findIndex((t) => t === name) + 1 || 1;
+  const paymentJenisOptions = useMemo(() => {
+    return [
+      ...new Set(
+        masterPaymentMetode.flatMap((m) =>
+          Array.isArray(m.paymentMetode)
+            ? m.paymentMetode
+            : m.paymentMetode
+            ? [m.paymentMetode]
+            : []
+        )
+      ),
+    ];
+  }, [masterPaymentMetode]);
+
+  const tokoNameToId = (name) => ALL_TOKO.findIndex((t) => t === name) + 1 || 1;
 
   // ===============================
   // Filtering
@@ -140,20 +238,55 @@ export default function FinanceReport() {
     return setoran.filter((s) => {
       if (filter.toko !== "ALL" && s.NAMA_TOKO !== filter.toko) return false;
       if (filter.status !== "ALL" && s.STATUS !== filter.status) return false;
-      if (filter.kategori !== "ALL" && s.KATEGORI_PEMBAYARAN !== filter.kategori)
+      if (
+        filter.kategori !== "ALL" &&
+        s.KATEGORI_PEMBAYARAN !== filter.kategori
+      )
         return false;
 
-      if (filter.dateFrom && s.TANGGAL_TRANSAKSI < filter.dateFrom) return false;
+      if (filter.dateFrom && s.TANGGAL_TRANSAKSI < filter.dateFrom)
+        return false;
       if (filter.dateTo && s.TANGGAL_TRANSAKSI > filter.dateTo) return false;
 
       if (filter.search) {
         const q = filter.search.toLowerCase();
-        const hay = `${s.NAMA_TOKO} ${s.KETERANGAN} ${s.REF_SETORAN} ${s.DIBUAT_OLEH}`.toLowerCase();
+        const hay =
+          `${s.NAMA_TOKO} ${s.KETERANGAN} ${s.REF_SETORAN} ${s.DIBUAT_OLEH}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
   }, [setoran, filter]);
+
+  const filteredPengeluaran = useMemo(() => {
+    return pengeluaran.filter((s) => {
+      if (filter.toko !== "ALL" && s.NAMA_TOKO !== filter.toko) return false;
+      if (filter.status !== "ALL" && s.STATUS !== filter.status) return false;
+
+      if (filter.dateFrom && s.TANGGAL_TRANSAKSI < filter.dateFrom)
+        return false;
+      if (filter.dateTo && s.TANGGAL_TRANSAKSI > filter.dateTo) return false;
+
+      if (filter.search) {
+        const q = filter.search.toLowerCase();
+        const hay =
+          `${s.NAMA_TOKO} ${s.KETERANGAN} ${s.REF_SETORAN} ${s.DIBUAT_OLEH}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+
+      return true;
+    });
+  }, [pengeluaran, filter]);
+
+  const totalAllPengeluaran = useMemo(
+    () => pengeluaran.reduce((a, b) => a + toNum(b.JUMLAH_SETORAN), 0),
+    [pengeluaran]
+  );
+
+  const totalFilteredPengeluaran = useMemo(
+    () => filteredPengeluaran.reduce((a, b) => a + toNum(b.JUMLAH_SETORAN), 0),
+    [filteredPengeluaran]
+  );
 
   // ===============================
   // Summary
@@ -197,9 +330,17 @@ export default function FinanceReport() {
   // ===============================
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
-  const totalPages = Math.max(1, Math.ceil(filteredSetoran.length / rowsPerPage));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredSetoran.length / rowsPerPage)
+  );
 
   const paginatedSetoran = filteredSetoran.slice(
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
+  );
+
+  const paginatedPengeluaran = filteredPengeluaran.slice(
     (currentPage - 1) * rowsPerPage,
     currentPage * rowsPerPage
   );
@@ -251,6 +392,25 @@ export default function FinanceReport() {
     await updateTransaksi(tokoId, id, { STATUS: status });
   };
 
+  const addPengeluaran = async () => {
+    if (!form.TANGGAL_TRANSAKSI || !form.NAMA_TOKO) {
+      alert("Tanggal dan Toko wajib diisi");
+      return;
+    }
+  
+    const payload = {
+      ...form,
+      TOTAL: toNum(form.JUMLAH_SETORAN),
+      TIPE: "PENGELUARAN",
+      STATUS: "Approved",
+    };
+  
+    const tokoId = tokoNameToId(form.NAMA_TOKO);
+    await addTransaksi(tokoId, payload);
+    setForm(formEmpty);
+  };
+  
+
   // ===============================
   // Import Excel
   // ===============================
@@ -292,10 +452,11 @@ export default function FinanceReport() {
   // ===============================
   // Export Excel
   // ===============================
-  const exportExcel = (rows = filteredSetoran) => {
+  const exportExcel = (rows) => {
     const data = rows.map((r) => ({
       Tanggal: r.TANGGAL_TRANSAKSI,
       Toko: r.NAMA_TOKO,
+      Tipe: r.TIPE,
       Kategori: r.KATEGORI_PEMBAYARAN,
       Jumlah: r.JUMLAH_SETORAN,
       Keterangan: r.KETERANGAN,
@@ -303,6 +464,7 @@ export default function FinanceReport() {
       "Dibuat Oleh": r.DIBUAT_OLEH,
       Status: r.STATUS,
     }));
+
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Setoran");
@@ -327,29 +489,47 @@ export default function FinanceReport() {
   return (
     <div className="p-4 space-y-6">
       <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-lg shadow mb-4">
-          <h1 className="text-2xl font-bold">Finance Report — Setoran (CILANGKAP PUSAT)</h1>
-          <p className="text-sm text-slate-600">
-            Semua setoran disimpan sebagai transaksi bertipe <code>"SETORAN DAN PENGELUARAN"</code>.
-          </p>
-        </div>
+        <h1 className="text-2xl font-bold">
+          Finance Report — Setoran (CILANGKAP PUSAT)
+        </h1>
+        <p className="text-sm text-slate-600">
+          Semua setoran disimpan sebagai transaksi bertipe{" "}
+          <code>"SETORAN DAN PENGELUARAN"</code>.
+        </p>
+      </div>
 
-        <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
         <label className=" px-3 py-2 text-xl text-bold font-bold bg-white ">
-           SETORAN PENJUALAN
-          </label>
+          SETORAN PENJUALAN
+        </label>
 
-          <label className="cursor-pointer px-3 py-2 border bg-white rounded">
-            Import Excel
-            <input type="file" accept=".xlsx,.xls" ref={fileRef} onChange={handleImport} className="hidden" />
-          </label>
+        <label
+          onClick={() => exportExcel(filteredSetoran)}
+          className="cursor-pointer px-3 py-2 border bg-white rounded"
+        >
+          Import Excel
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            ref={fileRef}
+            onChange={handleImport}
+            className="hidden"
+          />
+        </label>
 
-          <button onClick={() => exportExcel()} className="px-3 py-2 border bg-white rounded">
-            Export Excel
-          </button>
-          <button onClick={() => exportPDF()} className="px-3 py-2 border bg-white rounded">
-            Export PDF
-          </button>
-        </div>
+        <button
+          onClick={() => exportExcel(filteredSetoran)}
+          className="px-3 py-2 border bg-white rounded"
+        >
+          Export Excel
+        </button>
+        <button
+          onClick={() => exportPDF()}
+          className="px-3 py-2 border bg-white rounded"
+        >
+          Export PDF
+        </button>
+      </div>
 
       {/* Filters + Form */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -438,7 +618,9 @@ export default function FinanceReport() {
               <input
                 type="date"
                 value={form.TANGGAL_TRANSAKSI}
-                onChange={(e) => setForm({ ...form, TANGGAL_TRANSAKSI: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, TANGGAL_TRANSAKSI: e.target.value })
+                }
                 className="w-full border rounded p-1"
               />
             </div>
@@ -447,7 +629,9 @@ export default function FinanceReport() {
               <label className="text-xs">Toko</label>
               <select
                 value={form.NAMA_TOKO}
-                onChange={(e) => setForm({ ...form, NAMA_TOKO: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, NAMA_TOKO: e.target.value })
+                }
                 className="w-full border rounded p-1"
               >
                 {ALL_TOKO.map((t) => (
@@ -461,11 +645,20 @@ export default function FinanceReport() {
             <div>
               <label className="text-xs">Kategori</label>
               <input
+                list="paymentJenisList"
                 value={form.KATEGORI_PEMBAYARAN}
-                onChange={(e) => setForm({ ...form, KATEGORI_PEMBAYARAN: e.target.value })}
-                placeholder="QRIS / Cash / Transfer"
+                onChange={(e) =>
+                  setForm({ ...form, KATEGORI_PEMBAYARAN: e.target.value })
+                }
+                placeholder="Pilih / ketik metode"
                 className="w-full border rounded p-1"
               />
+
+              <datalist id="paymentJenisList">
+                {paymentJenisOptions.map((j, i) => (
+                  <option key={i} value={j} />
+                ))}
+              </datalist>
             </div>
 
             <div>
@@ -484,7 +677,9 @@ export default function FinanceReport() {
               <label className="text-xs">No Ref</label>
               <input
                 value={form.REF_SETORAN}
-                onChange={(e) => setForm({ ...form, REF_SETORAN: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, REF_SETORAN: e.target.value })
+                }
                 className="w-full border rounded p-1"
               />
             </div>
@@ -493,7 +688,9 @@ export default function FinanceReport() {
               <label className="text-xs">Dibuat Oleh</label>
               <input
                 value={form.DIBUAT_OLEH}
-                onChange={(e) => setForm({ ...form, DIBUAT_OLEH: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, DIBUAT_OLEH: e.target.value })
+                }
                 className="w-full border rounded p-1"
               />
             </div>
@@ -502,7 +699,9 @@ export default function FinanceReport() {
               <label className="text-xs">Keterangan</label>
               <input
                 value={form.KETERANGAN}
-                onChange={(e) => setForm({ ...form, KETERANGAN: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, KETERANGAN: e.target.value })
+                }
                 className="w-full border rounded p-1"
               />
             </div>
@@ -540,17 +739,20 @@ export default function FinanceReport() {
         </div>
       </div>
 
-      
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="border rounded-xl p-4 bg-white shadow">
           <div className="text-sm text-slate-500">Total Semua Setoran</div>
-          <div className="text-2xl font-bold">{formatCurrency(totalAllSetoran)}</div>
+          <div className="text-2xl font-bold">
+            {formatCurrency(totalAllSetoran)}
+          </div>
         </div>
 
         <div className="border rounded-xl p-4 bg-white shadow md:col-span-3">
           <div className="text-sm text-slate-600">Total (Filter)</div>
-          <div className="text-xl font-bold">{formatCurrency(totalFilteredSetoran)}</div>
+          <div className="text-xl font-bold">
+            {formatCurrency(totalFilteredSetoran)}
+          </div>
         </div>
       </div>
 
@@ -566,7 +768,6 @@ export default function FinanceReport() {
           ))}
         </div>
       </div>
-
 
       {/* TABEL */}
       <div className="border rounded-xl p-4 bg-white shadow">
@@ -694,24 +895,36 @@ export default function FinanceReport() {
 
       <div className="flex items-center gap-2">
         <label className=" px-3 py-2 text-xl text-bold font-bold bg-white ">
-           LAPORAN PENGELUARAN
-          </label>
+          LAPORAN PENGELUARAN
+        </label>
 
-          <label className="cursor-pointer px-3 py-2 border bg-white rounded">
-            Import Excel
-            <input type="file" accept=".xlsx,.xls" ref={fileRef} onChange={handleImport} className="hidden" />
-          </label>
+        <label className="cursor-pointer px-3 py-2 border bg-white rounded">
+          Import Excel
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            ref={fileRef}
+            onChange={handleImport}
+            className="hidden"
+          />
+        </label>
 
-          <button onClick={() => exportExcel()} className="px-3 py-2 border bg-white rounded">
-            Export Excel
-          </button>
-          <button onClick={() => exportPDF()} className="px-3 py-2 border bg-white rounded">
-            Export PDF
-          </button>
-        </div>
+        <button
+          onClick={() => exportExcel(filteredPengeluaran)}
+          className="px-3 py-2 border bg-white rounded"
+        >
+          Export Excel
+        </button>
+        <button
+          onClick={() => exportPDF()}
+          className="px-3 py-2 border bg-white rounded"
+        >
+          Export PDF
+        </button>
+      </div>
 
-         {/* Filters + Form */}
-         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Filters + Form */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Filters */}
         <div className="border rounded-xl p-4 bg-white shadow">
           <h3 className="font-semibold mb-2">Filter</h3>
@@ -788,7 +1001,7 @@ export default function FinanceReport() {
         {/* Form */}
         <div className="border rounded-xl p-4 bg-white shadow md:col-span-2">
           <h3 className="font-semibold mb-3">
-            {editId ? "Edit Setoran" : "Tambah Setoran"}
+            {editId ? "Edit Pengeluaran" : "Tambah Pengeluaran"}
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -797,7 +1010,9 @@ export default function FinanceReport() {
               <input
                 type="date"
                 value={form.TANGGAL_TRANSAKSI}
-                onChange={(e) => setForm({ ...form, TANGGAL_TRANSAKSI: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, TANGGAL_TRANSAKSI: e.target.value })
+                }
                 className="w-full border rounded p-1"
               />
             </div>
@@ -806,7 +1021,9 @@ export default function FinanceReport() {
               <label className="text-xs">Toko</label>
               <select
                 value={form.NAMA_TOKO}
-                onChange={(e) => setForm({ ...form, NAMA_TOKO: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, NAMA_TOKO: e.target.value })
+                }
                 className="w-full border rounded p-1"
               >
                 {ALL_TOKO.map((t) => (
@@ -820,11 +1037,20 @@ export default function FinanceReport() {
             <div>
               <label className="text-xs">Kategori</label>
               <input
+                list="payment-method-list"
                 value={form.KATEGORI_PEMBAYARAN}
-                onChange={(e) => setForm({ ...form, KATEGORI_PEMBAYARAN: e.target.value })}
-                placeholder="QRIS / Cash / Transfer"
+                onChange={(e) =>
+                  setForm({ ...form, KATEGORI_PEMBAYARAN: e.target.value })
+                }
+                placeholder="Pilih / ketik kategori"
                 className="w-full border rounded p-1"
               />
+
+              <datalist id="payment-method-list">
+                {paymentMethods.map((m, i) => (
+                  <option key={i} value={m} />
+                ))}
+              </datalist>
             </div>
 
             <div>
@@ -843,7 +1069,9 @@ export default function FinanceReport() {
               <label className="text-xs">No Ref</label>
               <input
                 value={form.REF_SETORAN}
-                onChange={(e) => setForm({ ...form, REF_SETORAN: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, REF_SETORAN: e.target.value })
+                }
                 className="w-full border rounded p-1"
               />
             </div>
@@ -852,7 +1080,9 @@ export default function FinanceReport() {
               <label className="text-xs">Dibuat Oleh</label>
               <input
                 value={form.DIBUAT_OLEH}
-                onChange={(e) => setForm({ ...form, DIBUAT_OLEH: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, DIBUAT_OLEH: e.target.value })
+                }
                 className="w-full border rounded p-1"
               />
             </div>
@@ -861,7 +1091,9 @@ export default function FinanceReport() {
               <label className="text-xs">Keterangan</label>
               <input
                 value={form.KETERANGAN}
-                onChange={(e) => setForm({ ...form, KETERANGAN: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, KETERANGAN: e.target.value })
+                }
                 className="w-full border rounded p-1"
               />
             </div>
@@ -888,34 +1120,38 @@ export default function FinanceReport() {
                 </>
               ) : (
                 <button
-                  onClick={addSetoran}
-                  className="px-4 py-2 bg-blue-600 text-white rounded"
-                >
-                  Tambah Pengeluaran
-                </button>
+                onClick={addPengeluaran}
+                className="px-4 py-2 bg-red-600 text-white rounded"
+              >
+                Tambah Pengeluaran
+              </button>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="border rounded-xl p-4 bg-white shadow">
           <div className="text-sm text-slate-500">Total Semua Pengeluaran</div>
-          <div className="text-2xl font-bold">{formatCurrency(totalAllSetoran)}</div>
+          <div className="text-2xl font-bold">
+            {formatCurrency(totalAllPengeluaran)
+            }
+          </div>
         </div>
 
         <div className="border rounded-xl p-4 bg-white shadow md:col-span-3">
           <div className="text-sm text-slate-600">Total (Filter)</div>
-          <div className="text-xl font-bold">{formatCurrency(totalFilteredSetoran)}</div>
+          <div className="text-xl font-bold">
+            {formatCurrency(totalFilteredPengeluaran)}
+          </div>
         </div>
       </div>
 
       {/* Per Toko */}
       <div className="border rounded-xl p-4 bg-white shadow">
-        <h2 className="font-semibold mb-3">Total Per Toko</h2>
+        <h2 className="font-semibold mb-3">Total Pengeluaran Per Toko</h2>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {totalPerTokoAll.map((t) => (
             <div key={t.tokoName} className="p-3 border rounded bg-white">
@@ -925,7 +1161,6 @@ export default function FinanceReport() {
           ))}
         </div>
       </div>
-
 
       {/* TABEL */}
       <div className="border rounded-xl p-4 bg-white shadow">
@@ -953,14 +1188,14 @@ export default function FinanceReport() {
             </thead>
 
             <tbody>
-              {paginatedSetoran.length === 0 ? (
+              {paginatedPengeluaran.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-6 text-center text-slate-500">
                     Tidak ada data
                   </td>
                 </tr>
               ) : (
-                paginatedSetoran.map((r) => (
+                paginatedPengeluaran.map((r) => (
                   <tr key={r.id} className="border-b hover:bg-slate-50">
                     <td className="px-3 py-2">{r.TANGGAL_TRANSAKSI}</td>
                     <td className="px-3 py-2">{r.NAMA_TOKO}</td>
