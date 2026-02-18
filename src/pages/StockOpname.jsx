@@ -60,6 +60,13 @@ const fallbackTokoNames = [
 const rowsPerPageDefault = 12;
 const FORM_STORAGE_KEY = "stockOpnameFormDraft";
 
+const STOCKABLE_CATEGORY = [
+  "HANDPHONE",
+  "SEPEDA LISTRIK",
+  "MOTOR LISTRIK"
+];
+
+
 /* ======================================================
    COMPONENT
 ====================================================== */
@@ -334,35 +341,83 @@ export default function StockOpname() {
     return map;
   }, [allTransaksi]);
 
-  // ===============================
-  // 5️⃣ AGGREGATED (BOLEH PAKAI detailStockLookup)
-  // ===============================
-  const aggregated = useMemo(() => {
-    let rows = stockOpnameData;
+  const getStockEffect = (row) => {
+    const tipe = String(row.TIPE || "").toUpperCase();
   
-    if (filterToko !== "semua") {
-      rows = rows.filter((r) => r.toko === filterToko);
+    switch (tipe) {
+      case "PEMBELIAN":
+        return Math.abs(Number(row.qty || 0));
+  
+      case "TRANSFER_IN":
+        return Math.abs(Number(row.qty || 0));
+  
+      case "REFUND":
+        return Math.abs(Number(row.qty || 0));
+  
+      case "PENJUALAN":
+      case "SALE":
+        return -Math.abs(Number(row.qty || 0));
+  
+      case "TRANSFER_OUT":
+        return -Math.abs(Number(row.qty || 0));
+  
+      default:
+        return Number(row.qty || 0);
     }
+  };
   
-    return rows.map((r) => {
-      const imeiKey = String(r.imei || "").trim();
-      const skuKey = `${r.brand}|${r.barang}`;
-      
-      const meta =
-        masterPembelianLookup[imeiKey] ||
-        detailStockLookup[imeiKey] ||
-        detailStockLookup[skuKey];
-      
+
+  const filteredStockData = useMemo(() => {
+    return stockOpnameData.filter((r) =>
+      STOCKABLE_CATEGORY.includes(
+        String(r.KATEGORI || r.kategoriBarang || "")
+          .toUpperCase()
+          .trim()
+      )
+    );
+  }, [stockOpnameData]);
   
-      return {
-        ...r,
-        tanggal: meta?.tanggal || r.tanggal || "-",
-        supplier: meta?.supplier || r.supplier || "-",
-        imei: r.imei || "",
-        qty: Number(r.qty || 0),
-      };
-    });
-  }, [stockOpnameData, filterToko, masterPembelianLookup]);
+ // ===============================
+// 5️⃣ AGGREGATED (BOLEH PAKAI detailStockLookup)
+// ===============================
+const aggregated = useMemo(() => {
+
+  let rows = filteredStockData;
+
+  if (filterToko !== "semua") {
+    rows = rows.filter((r) => r.toko === filterToko);
+  }
+
+  return rows.map((r) => {
+
+    const imeiKey = String(r.imei || "").trim();
+    const skuKey = `${r.brand}|${r.barang}`;
+
+    const meta =
+      masterPembelianLookup[imeiKey] ||
+      detailStockLookup[imeiKey] ||
+      detailStockLookup[skuKey];
+
+    // ✅ STOCK ENGINE V3
+    const qtyFinal = getStockEffect(r);
+
+    return {
+      ...r,
+      tanggal: meta?.tanggal || r.tanggal || "-",
+      supplier: meta?.supplier || r.supplier || "-",
+      imei: r.imei || "",
+      qty: qtyFinal,
+    };
+
+  });
+
+}, [
+  filteredStockData,
+  filterToko,
+  masterPembelianLookup,
+  detailStockLookup
+]);
+
   
 
   const tableData = aggregated;

@@ -20,6 +20,8 @@ import TablePenjualan from "../../table/TablePenjualan";
 import ExportExcelButton from "../../../components/ExportExcelButton";
 import CetakInvoicePenjualan from "../../Print/CetakInvoicePenjualan";
 import { useLocation } from "react-router-dom";
+import { ref, onValue } from "firebase/database";
+import { db } from "../../../firebase/FirebaseInit";
 
 import {
   listenPenjualan,
@@ -43,6 +45,12 @@ const genInvoice = () =>
     .toISOString()
     .slice(0, 10)
     .replaceAll("-", "")}-${Math.floor(Math.random() * 10000)}`;
+
+    const normalizeText = (v) =>
+      String(v || "")
+        .trim()
+        .toUpperCase();
+    
 
 // ================= COMPONENT =================
 export default function CardPenjualanToko() {
@@ -86,6 +94,18 @@ export default function CardPenjualanToko() {
   const [stockRealtime, setStockRealtime] = useState({});
   const location = useLocation();
   const [listBarang, setListBarang] = useState([]);
+  const [detailStockLookup, setDetailStockLookup] = useState({});
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "detail_stock"), (snap) => {
+      const data = snap.val() || {};
+      setDetailStockLookup(data);
+    });
+  
+    return () => unsub();
+  }, []);
+  
+
 
   useEffect(() => {
     if (!location.state?.fastSale) return;
@@ -309,6 +329,35 @@ export default function CardPenjualanToko() {
 
   const barangList = listBarang || [];
 
+  const validateStockOwnership = (items, tokoAktif, detailStockLookup) => {
+    if (!detailStockLookup) return null; // 🔥 jangan blok transaksi kalau data belum siap
+  
+    const tokoFix = String(tokoAktif || "").trim().toUpperCase();
+  
+    for (const item of items) {
+      if (!item.isImei) continue;
+  
+      const imei = item.imeiList?.[0];
+      if (!imei) continue;
+  
+      const stock = detailStockLookup?.[imei];
+  
+      if (!stock) continue; // 🔥 jangan error
+  
+      const tokoStock = String(stock.toko || "")
+        .trim()
+        .toUpperCase();
+  
+      if (tokoStock !== tokoFix) {
+        return `IMEI ${imei} bukan milik toko ${tokoAktif}`;
+      }
+    }
+  
+    return null;
+  };
+  
+  
+
   const handleSubmitPenjualan = useCallback(async () => {
     if (loading || submitting) return;
     if (!validate()) return;
@@ -423,6 +472,17 @@ export default function CardPenjualanToko() {
         }),
       };
 
+      const errorOwnership = validateStockOwnership(
+        items,
+        formUser.namaToko
+      );
+      
+      
+      if (errorOwnership) {
+        alert("❌ " + errorOwnership);
+        return;
+      }
+      
       /* =================================================
          3️⃣ SIMPAN TRANSAKSI KE FIREBASE
       ================================================= */
