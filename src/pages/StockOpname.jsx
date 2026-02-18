@@ -366,16 +366,18 @@ export default function StockOpname() {
     }
   };
   
-
   const filteredStockData = useMemo(() => {
-    return stockOpnameData.filter((r) =>
-      STOCKABLE_CATEGORY.includes(
-        String(r.KATEGORI || r.kategoriBarang || "")
-          .toUpperCase()
-          .trim()
+    return stockOpnameData.map((r) => ({
+      ...r,
+      KATEGORI_FINAL: String(
+        r.KATEGORI || r.kategoriBarang || "LAINNYA"
       )
-    );
+        .toUpperCase()
+        .trim(),
+    }));
   }, [stockOpnameData]);
+  
+  
   
  // ===============================
 // 5️⃣ AGGREGATED (BOLEH PAKAI detailStockLookup)
