@@ -77,7 +77,10 @@ export function deriveStockFromTransaksi(transaksi = []) {
     if (!t) return;
 
     const status = String(t.STATUS || t.status || "").toUpperCase();
-    if (status !== "APPROVED") return;
+
+    // ✅ APPROVED dan REFUND boleh dihitung
+    if (!["APPROVED", "REFUND"].includes(status)) return;
+    
 
     // ======================================
     // NORMALIZE METODE
