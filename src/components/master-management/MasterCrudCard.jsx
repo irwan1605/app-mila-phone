@@ -14,6 +14,7 @@ export default function MasterCrudCard({
   onDataChange,
   disableCreate = false,
   externalRows,
+  validateBeforeSave,
 }) {
   const listenFn = FirebaseService[listenFnName];
   const addFn = addFnName ? FirebaseService[addFnName] : null;
@@ -58,6 +59,12 @@ export default function MasterCrudCard({
 
   const handleSubmit = async () => {
     try {
+
+       // ✅ VALIDASI CUSTOM (ANTI DUPLIKAT DLL)
+    if (validateBeforeSave) {
+      const valid = validateBeforeSave(form, rows, editId);
+      if (!valid) return;
+    }
       if (editId && updateFn) {
         await updateFn(editId, {
           ...form,

@@ -39,6 +39,21 @@ export default function MasterBarangHargaCard() {
     });
   };
 
+  // ===============================
+  // CEK DUPLIKAT NAMA BARANG
+  // ===============================
+  const isNamaBarangExist = (nama) => {
+    return rows.some(
+      (r) =>
+        String(r.tipeNamaBarang || "")
+          .trim()
+          .toUpperCase() ===
+        String(nama || "")
+          .trim()
+          .toUpperCase()
+    );
+  };
+
   return (
     <div>
       {/* HEADER */}
@@ -68,9 +83,30 @@ export default function MasterBarangHargaCard() {
         addFnName="addMasterBarangHarga"
         updateFnName="updateMasterBarangHarga"
         deleteFnName="deleteMasterBarangHarga"
-
-        /* 🔥 KUNCI: DATA TABLE → EXPORT */
         onDataChange={setRows}
+        // ✅ VALIDASI DUPLIKAT NAMA BARANG
+        validateBeforeSave={(form, rows, editId) => {
+          const exist = rows.some((r) => {
+            // kalau edit, abaikan data sendiri
+            if (editId && r.id === editId) return false;
+
+            return (
+              String(r.tipeNamaBarang || "")
+                .trim()
+                .toUpperCase() ===
+              String(form.tipeNamaBarang || "")
+                .trim()
+                .toUpperCase()
+            );
+          });
+
+          if (exist) {
+            alert("❌ Nama Barang sudah ada, tidak boleh duplikat!");
+            return false;
+          }
+
+          return true;
+        }}
       />
     </div>
   );
