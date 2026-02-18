@@ -274,14 +274,20 @@ export default function TableTransferBarang({ currentRole }) {
   };
 
   const isImeiAlreadyUsed = (imei) => {
-    const found = inventory.find((i) => i.imei === imei);
-
-    // tidak ada di stok = sudah keluar
+    const found = inventory.find(
+      (i) => String(i.imei).trim() === String(imei).trim()
+    );
+  
+    // tidak ditemukan di inventory → anggap tidak valid
     if (!found) return true;
-
-    // SOLD / OUT tidak boleh dipakai lagi
-    return found.status !== "AVAILABLE";
+  
+    // ❌ HANYA SOLD yang tidak boleh
+    if (found.status === "SOLD") return true;
+  
+    // ✅ semua status selain SOLD boleh transfer lagi
+    return false;
   };
+  
 
   return (
     <div
