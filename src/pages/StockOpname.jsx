@@ -61,9 +61,14 @@ const rowsPerPageDefault = 12;
 const FORM_STORAGE_KEY = "stockOpnameFormDraft";
 
 const STOCKABLE_CATEGORY = [
-  "HANDPHONE",
+  "MOTOR LISTRIK",
   "SEPEDA LISTRIK",
-  "MOTOR LISTRIK"
+  "HANDPHONE",
+
+  // ✅ tambahan
+  "ACCESSORIES",
+  "SPARE PART",
+  "JASA",
 ];
 
 
@@ -179,14 +184,52 @@ export default function StockOpname() {
     return () => unsub && unsub();
   }, []);
 
-  const stockOpnameData = useMemo(() => {
-    const map = {};
+  // =======================================
+// STOCK ENGINE V3 (EVENT BASED)
+// =======================================
+const getStockEffectV3 = (t) => {
+  const metode = String(t.PAYMENT_METODE || "")
+    .toUpperCase()
+    .trim();
+
+  const qty = Number(t.QTY || 0);
+
+  // hanya transaksi stok
+  if (!qty) return 0;
+
+  switch (metode) {
+    case "PEMBELIAN":
+    case "TRANSFER_MASUK":
+    case "REFUND":
+      return Math.abs(qty);
+
+    case "PENJUALAN":
+    case "TRANSFER_KELUAR":
+      return -Math.abs(qty);
+
+    default:
+      return 0;
+  }
+};
+
+
+
+const stockOpnameData = useMemo(() => {
+  const map = {};
+
+  transaksi.forEach((t) => {
+
+    if (!t) return;
   
-    transaksi.forEach((t) => {
-      if (t.STATUS !== "Approved") return;
+    // ===============================
+    // 1️⃣ TRANSAKSI STOK NORMAL
+    // ===============================
+    if (t.PAYMENT_METODE && t.NAMA_BARANG) {
   
-      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-      const toko = t.NAMA_TOKO || t.tokoPengirim || t.ke;
+      if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
+  
+      const toko =
+        t.NAMA_TOKO || t.tokoPengirim || t.ke;
   
       if (!toko) return;
   
@@ -194,60 +237,71 @@ export default function StockOpname() {
         ? `${toko}|${t.IMEI}`
         : `${toko}|${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
   
-      const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
-  
-      let qty = 0;
-  
-      // ==========================
-      // RULE STOCK
-      // ==========================
-      if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
-        qty = qtyBase;
-      }
-  
-      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
-        qty = -qtyBase;
-      }
+      const effect = getStockEffectV3(t);
   
       if (!map[key]) {
         map[key] = {
           key,
-          tanggal: t.TANGGAL_TRANSAKSI || t.tanggal || "-",
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
           toko,
           supplier: t.NAMA_SUPPLIER || "-",
           brand: t.NAMA_BRAND,
           barang: t.NAMA_BARANG,
           imei: t.IMEI || "",
           qty: 0,
-          lastTransaksi: metode,
+          lastTransaksi: t.PAYMENT_METODE,
         };
       }
   
-      // ==========================
-      // UPDATE QTY
-      // ==========================
-      map[key].qty += qty;
+      map[key].qty += effect;
+    }
   
-      // ==========================
-      // UPDATE TANGGAL & SUPPLIER
-      // (ACC / JASA / SPARE PART)
-      // ==========================
-      if (
-        ["ACCESSORIES", "SPARE PART", "JASA"].includes(
-          String(t.KATEGORI_BRAND || "").toUpperCase()
-        )
-      ) {
-        map[key].tanggal =
-          t.TANGGAL_TRANSAKSI || map[key].tanggal;
+    // ===============================
+    // 2️⃣ REFUND DARI TRANSAKSI PENJUALAN
+    // (ACCESSORIES / SPAREPART / JASA)
+    // ===============================
+    if (
+      t.statusPembayaran === "REFUND" &&
+      Array.isArray(t.items)
+    ) {
   
-        map[key].supplier =
-          t.NAMA_SUPPLIER || map[key].supplier;
-      }
-    });
+      const toko = t.toko || t.NAMA_TOKO;
+      if (!toko) return;
   
-    // hanya tampilkan stok yang masih ada
-    return Object.values(map).filter((r) => r.qty > 0);
-  }, [transaksi]);
+      t.items.forEach((it) => {
+  
+        // hanya non IMEI
+        if (it.imeiList?.length) return;
+  
+        const key = `${toko}|${it.namaBrand}|${it.namaBarang}`;
+  
+        if (!map[key]) {
+          map[key] = {
+            key,
+            tanggal: t.tanggal || "-",
+            toko,
+            supplier: "-",
+            brand: it.namaBrand,
+            barang: it.namaBarang,
+            imei: "",
+            qty: 0,
+            lastTransaksi: "REFUND",
+          };
+        }
+  
+        // ✅ REFUND = +QTY
+        map[key].qty += Number(it.qty || 0);
+      });
+    }
+  
+  });
+  
+
+  // tampilkan hanya stok tersedia
+  return Object.values(map).filter((r) => r.qty > 0);
+
+}, [transaksi]);
+
   
 
   // ===============================
@@ -395,20 +449,25 @@ const aggregated = useMemo(() => {
     const imeiKey = String(r.imei || "").trim();
     const skuKey = `${r.brand}|${r.barang}`;
 
+    // ✅ PRIORITAS:
+    // 1. IMEI
+    // 2. SKU (Accessories / Sparepart / Jasa)
     const meta =
-      masterPembelianLookup[imeiKey] ||
-      detailStockLookup[imeiKey] ||
-      detailStockLookup[skuKey];
-
-    // ✅ STOCK ENGINE V3
-    const qtyFinal = getStockEffect(r);
+      (imeiKey && masterPembelianLookup[imeiKey]) ||
+      (imeiKey && detailStockLookup[imeiKey]) ||
+      detailStockLookup[skuKey] ||
+      masterPembelianLookup[skuKey];
 
     return {
       ...r,
       tanggal: meta?.tanggal || r.tanggal || "-",
       supplier: meta?.supplier || r.supplier || "-",
-      imei: r.imei || "",
-      qty: qtyFinal,
+
+      // ✅ IMPORTANT
+      imei: imeiKey || "",
+      sku: !imeiKey ? skuKey : "",
+
+      qty: Number(r.qty || 0),
     };
 
   });

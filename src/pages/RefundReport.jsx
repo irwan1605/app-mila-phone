@@ -13,48 +13,111 @@ export default function RefundReport() {
     const unsub = listenAllTransaksi((data = []) => {
   
       // 1️⃣ ambil semua transaksi refund
-      const refundRowsRaw = data.filter((t) => {
-        return (
-          t.PAYMENT_METODE === "RETUR" ||
-          t.PAYMENT_METODE === "REFUND" ||
-          t.STATUS === "REFUND" ||
-          t.STATUS_REFUND === "Approved"
-        );
-      });
-  
-      // 2️⃣ hilangkan duplicate berdasarkan invoice asal
-      const uniqueMap = new Map();
-  
-      refundRowsRaw.forEach((r) => {
-        const key =
-          r.INVOICE_ASAL ||
-          r.NO_INVOICE ||
-          r.IMEI ||
-          Math.random();
-  
-        if (!uniqueMap.has(key)) {
-          uniqueMap.set(key, {
-            id: r.id,
-            TANGGAL_TRANSAKSI:
-              r.TANGGAL_TRANSAKSI ||
-              r.TANGGAL ||
-              "-",
-  
-            NAMA_TOKO: r.NAMA_TOKO || "-",
-            NAMA_BRAND: r.NAMA_BRAND || "-",
-            NAMA_BARANG: r.NAMA_BARANG || "-",
-  
-            IMEI: r.IMEI || "NON IMEI",
-            QTY: r.QTY || 1,
-  
-            NO_INVOICE: r.NO_INVOICE || "-",
-            KETERANGAN:
-              r.KETERANGAN ||
-              r.ALASAN_REFUND ||
-              "RETUR / REFUND",
+      const refundRowsRaw = [];
+
+      data.forEach((t) => {
+      
+        // =========================
+        // 1️⃣ REFUND DARI PENJUALAN (ADA ITEMS)
+        // =========================
+        if (
+          t.statusPembayaran === "REFUND" &&
+          Array.isArray(t.items)
+        ) {
+          t.items.forEach((it, idx) => {
+      
+            // IMEI
+            if (Array.isArray(it.imeiList) && it.imeiList.length) {
+              it.imeiList.forEach((imei) => {
+                refundRowsRaw.push({
+                  id: `${t.id}-${imei}`,
+                  TANGGAL_TRANSAKSI: t.tanggal,
+                  NAMA_TOKO: t.toko,
+                  NAMA_BRAND: it.namaBrand,
+                  NAMA_BARANG: it.namaBarang,
+                  IMEI: imei,
+                  QTY: it.qty || 1,
+                  NO_INVOICE: t.invoice,
+                  KETERANGAN: "REFUND PENJUALAN",
+                });
+              });
+            } else {
+              // NON IMEI (ACCESSORIES / SPAREPART / JASA)
+              refundRowsRaw.push({
+                id: `${t.id}-${idx}`,
+                TANGGAL_TRANSAKSI: t.tanggal,
+                NAMA_TOKO: t.toko,
+                NAMA_BRAND: it.namaBrand,
+                NAMA_BARANG: it.namaBarang,
+                IMEI: "NON IMEI",
+                QTY: it.qty || 1,
+                NO_INVOICE: t.invoice,
+                KETERANGAN: "REFUND PENJUALAN",
+              });
+            }
+          });
+        }
+      
+        // =========================
+        // 2️⃣ REFUND DARI STOCK ENGINE
+        // =========================
+        if (
+          t.PAYMENT_METODE === "REFUND" &&
+          String(t.STATUS).toUpperCase() === "APPROVED"
+        ) {
+          refundRowsRaw.push({
+            id: t.id,
+            TANGGAL_TRANSAKSI: t.TANGGAL_TRANSAKSI,
+            NAMA_TOKO: t.NAMA_TOKO,
+            NAMA_BRAND: t.NAMA_BRAND,
+            NAMA_BARANG: t.NAMA_BARANG,
+            IMEI: t.IMEI || "NON IMEI",
+            QTY: t.QTY || 1,
+            NO_INVOICE: t.NO_INVOICE,
+            KETERANGAN: t.KETERANGAN || "REFUND",
           });
         }
       });
+      
+      
+  
+   // 2️⃣ hilangkan duplicate berdasarkan ITEM (IMEI / SKU)
+const uniqueMap = new Map();
+
+refundRowsRaw.forEach((r) => {
+
+  // ✅ KEY UNIK PER ITEM
+  const key = r.IMEI
+    ? `${r.NAMA_TOKO}|${r.IMEI}` // IMEI unik
+    : `${r.NAMA_TOKO}|${r.NAMA_BRAND}|${r.NAMA_BARANG}|${r.NO_INVOICE}`; 
+    // NON IMEI tetap unik per item
+
+  if (!uniqueMap.has(key)) {
+    uniqueMap.set(key, {
+      id: r.id,
+
+      TANGGAL_TRANSAKSI:
+        r.TANGGAL_TRANSAKSI ||
+        r.TANGGAL ||
+        "-",
+
+      NAMA_TOKO: r.NAMA_TOKO || "-",
+      NAMA_BRAND: r.NAMA_BRAND || "-",
+      NAMA_BARANG: r.NAMA_BARANG || "-",
+
+      IMEI: r.IMEI || "NON IMEI",
+      QTY: Number(r.QTY || 1),
+
+      NO_INVOICE: r.NO_INVOICE || "-",
+
+      KETERANGAN:
+        r.KETERANGAN ||
+        r.ALASAN_REFUND ||
+        "RETUR / REFUND",
+    });
+  }
+});
+
   
       // 3️⃣ urutkan terbaru di atas
       const sorted = Array.from(uniqueMap.values()).sort(
