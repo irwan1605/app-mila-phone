@@ -326,16 +326,18 @@ export default function FinanceReport() {
   // =====================================================
   return (
     <div className="p-4 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
       <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-lg shadow mb-4">
           <h1 className="text-2xl font-bold">Finance Report — Setoran (CILANGKAP PUSAT)</h1>
           <p className="text-sm text-slate-600">
-            Semua setoran disimpan sebagai transaksi bertipe <code>"SETORAN"</code>.
+            Semua setoran disimpan sebagai transaksi bertipe <code>"SETORAN DAN PENGELUARAN"</code>.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+        <label className=" px-3 py-2 text-xl text-bold font-bold bg-white ">
+           SETORAN PENJUALAN
+          </label>
+
           <label className="cursor-pointer px-3 py-2 border bg-white rounded">
             Import Excel
             <input type="file" accept=".xlsx,.xls" ref={fileRef} onChange={handleImport} className="hidden" />
@@ -348,33 +350,6 @@ export default function FinanceReport() {
             Export PDF
           </button>
         </div>
-      </div>
-
-      {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="border rounded-xl p-4 bg-white shadow">
-          <div className="text-sm text-slate-500">Total Semua Setoran</div>
-          <div className="text-2xl font-bold">{formatCurrency(totalAllSetoran)}</div>
-        </div>
-
-        <div className="border rounded-xl p-4 bg-white shadow md:col-span-3">
-          <div className="text-sm text-slate-600">Total (Filter)</div>
-          <div className="text-xl font-bold">{formatCurrency(totalFilteredSetoran)}</div>
-        </div>
-      </div>
-
-      {/* Per Toko */}
-      <div className="border rounded-xl p-4 bg-white shadow">
-        <h2 className="font-semibold mb-3">Total Per Toko</h2>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-          {totalPerTokoAll.map((t) => (
-            <div key={t.tokoName} className="p-3 border rounded bg-white">
-              <div className="text-xs">{t.tokoName}</div>
-              <div className="text-lg font-bold">{formatCurrency(t.total)}</div>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* Filters + Form */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -565,6 +540,34 @@ export default function FinanceReport() {
         </div>
       </div>
 
+      
+      {/* Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="border rounded-xl p-4 bg-white shadow">
+          <div className="text-sm text-slate-500">Total Semua Setoran</div>
+          <div className="text-2xl font-bold">{formatCurrency(totalAllSetoran)}</div>
+        </div>
+
+        <div className="border rounded-xl p-4 bg-white shadow md:col-span-3">
+          <div className="text-sm text-slate-600">Total (Filter)</div>
+          <div className="text-xl font-bold">{formatCurrency(totalFilteredSetoran)}</div>
+        </div>
+      </div>
+
+      {/* Per Toko */}
+      <div className="border rounded-xl p-4 bg-white shadow">
+        <h2 className="font-semibold mb-3">Total Per Toko</h2>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          {totalPerTokoAll.map((t) => (
+            <div key={t.tokoName} className="p-3 border rounded bg-white">
+              <div className="text-xs">{t.tokoName}</div>
+              <div className="text-lg font-bold">{formatCurrency(t.total)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+
       {/* TABEL */}
       <div className="border rounded-xl p-4 bg-white shadow">
         <h3 className="font-semibold mb-2">Daftar Setoran</h3>
@@ -689,9 +692,368 @@ export default function FinanceReport() {
         </div>
       </div>
 
+      <div className="flex items-center gap-2">
+        <label className=" px-3 py-2 text-xl text-bold font-bold bg-white ">
+           LAPORAN PENGELUARAN
+          </label>
+
+          <label className="cursor-pointer px-3 py-2 border bg-white rounded">
+            Import Excel
+            <input type="file" accept=".xlsx,.xls" ref={fileRef} onChange={handleImport} className="hidden" />
+          </label>
+
+          <button onClick={() => exportExcel()} className="px-3 py-2 border bg-white rounded">
+            Export Excel
+          </button>
+          <button onClick={() => exportPDF()} className="px-3 py-2 border bg-white rounded">
+            Export PDF
+          </button>
+        </div>
+
+         {/* Filters + Form */}
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Filters */}
+        <div className="border rounded-xl p-4 bg-white shadow">
+          <h3 className="font-semibold mb-2">Filter</h3>
+
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs">Toko</label>
+              <select
+                value={filter.toko}
+                onChange={(e) => {
+                  setFilter((f) => ({ ...f, toko: e.target.value }));
+                  setCurrentPage(1);
+                }}
+                className="w-full border rounded p-1"
+              >
+                <option value="ALL">Semua</option>
+                {ALL_TOKO.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs">Status</label>
+              <select
+                value={filter.status}
+                onChange={(e) => {
+                  setFilter((f) => ({ ...f, status: e.target.value }));
+                  setCurrentPage(1);
+                }}
+                className="w-full border rounded p-1"
+              >
+                <option value="ALL">Semua</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs">Kategori</label>
+              <select
+                value={filter.kategori}
+                onChange={(e) => {
+                  setFilter((f) => ({ ...f, kategori: e.target.value }));
+                  setCurrentPage(1);
+                }}
+                className="w-full border rounded p-1"
+              >
+                <option value="ALL">Semua</option>
+                <option value="Cash">Cash</option>
+                <option value="QRIS">QRIS</option>
+                <option value="Transfer">Transfer</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs">Cari</label>
+              <input
+                value={filter.search}
+                placeholder="Keterangan / Ref / Pembuat"
+                onChange={(e) => {
+                  setFilter((f) => ({ ...f, search: e.target.value }));
+                  setCurrentPage(1);
+                }}
+                className="w-full border rounded p-1"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Form */}
+        <div className="border rounded-xl p-4 bg-white shadow md:col-span-2">
+          <h3 className="font-semibold mb-3">
+            {editId ? "Edit Setoran" : "Tambah Setoran"}
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs">Tanggal</label>
+              <input
+                type="date"
+                value={form.TANGGAL_TRANSAKSI}
+                onChange={(e) => setForm({ ...form, TANGGAL_TRANSAKSI: e.target.value })}
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs">Toko</label>
+              <select
+                value={form.NAMA_TOKO}
+                onChange={(e) => setForm({ ...form, NAMA_TOKO: e.target.value })}
+                className="w-full border rounded p-1"
+              >
+                {ALL_TOKO.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs">Kategori</label>
+              <input
+                value={form.KATEGORI_PEMBAYARAN}
+                onChange={(e) => setForm({ ...form, KATEGORI_PEMBAYARAN: e.target.value })}
+                placeholder="QRIS / Cash / Transfer"
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs">Jumlah</label>
+              <input
+                type="number"
+                value={form.JUMLAH_SETORAN}
+                onChange={(e) =>
+                  setForm({ ...form, JUMLAH_SETORAN: toNum(e.target.value) })
+                }
+                className="w-full border rounded p-1 text-right"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs">No Ref</label>
+              <input
+                value={form.REF_SETORAN}
+                onChange={(e) => setForm({ ...form, REF_SETORAN: e.target.value })}
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs">Dibuat Oleh</label>
+              <input
+                value={form.DIBUAT_OLEH}
+                onChange={(e) => setForm({ ...form, DIBUAT_OLEH: e.target.value })}
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="text-xs">Keterangan</label>
+              <input
+                value={form.KETERANGAN}
+                onChange={(e) => setForm({ ...form, KETERANGAN: e.target.value })}
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            {/* Buttons */}
+            <div className="md:col-span-3 flex gap-2">
+              {editId ? (
+                <>
+                  <button
+                    onClick={saveEdit}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded"
+                  >
+                    Simpan Perubahan
+                  </button>
+                  <button
+                    onClick={() => {
+                      setForm(formEmpty);
+                      setEditId(null);
+                    }}
+                    className="px-4 py-2 border rounded"
+                  >
+                    Batal
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={addSetoran}
+                  className="px-4 py-2 bg-blue-600 text-white rounded"
+                >
+                  Tambah Pengeluaran
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      
+      {/* Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="border rounded-xl p-4 bg-white shadow">
+          <div className="text-sm text-slate-500">Total Semua Pengeluaran</div>
+          <div className="text-2xl font-bold">{formatCurrency(totalAllSetoran)}</div>
+        </div>
+
+        <div className="border rounded-xl p-4 bg-white shadow md:col-span-3">
+          <div className="text-sm text-slate-600">Total (Filter)</div>
+          <div className="text-xl font-bold">{formatCurrency(totalFilteredSetoran)}</div>
+        </div>
+      </div>
+
+      {/* Per Toko */}
+      <div className="border rounded-xl p-4 bg-white shadow">
+        <h2 className="font-semibold mb-3">Total Per Toko</h2>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          {totalPerTokoAll.map((t) => (
+            <div key={t.tokoName} className="p-3 border rounded bg-white">
+              <div className="text-xs">{t.tokoName}</div>
+              <div className="text-lg font-bold">{formatCurrency(t.total)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+
+      {/* TABEL */}
+      <div className="border rounded-xl p-4 bg-white shadow">
+        <h3 className="font-semibold mb-2">Daftar Pengeluaran</h3>
+
+        <div className="text-sm mb-2">
+          Menampilkan <b>{filteredSetoran.length}</b> data — Total:{" "}
+          {formatCurrency(totalFilteredSetoran)}
+        </div>
+
+        <div ref={tableRef} className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-100 text-slate-700">
+              <tr>
+                <th className="px-3 py-2 text-left">Tanggal</th>
+                <th className="px-3 py-2 text-left">Toko</th>
+                <th className="px-3 py-2 text-left">Kategori</th>
+                <th className="px-3 py-2 text-right">Jumlah</th>
+                <th className="px-3 py-2 text-left">Ref</th>
+                <th className="px-3 py-2 text-left">Keterangan</th>
+                <th className="px-3 py-2 text-left">Dibuat Oleh</th>
+                <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Aksi</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {paginatedSetoran.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-6 text-center text-slate-500">
+                    Tidak ada data
+                  </td>
+                </tr>
+              ) : (
+                paginatedSetoran.map((r) => (
+                  <tr key={r.id} className="border-b hover:bg-slate-50">
+                    <td className="px-3 py-2">{r.TANGGAL_TRANSAKSI}</td>
+                    <td className="px-3 py-2">{r.NAMA_TOKO}</td>
+                    <td className="px-3 py-2">{r.KATEGORI_PEMBAYARAN}</td>
+                    <td className="px-3 py-2 text-right">
+                      {formatCurrency(r.JUMLAH_SETORAN)}
+                    </td>
+                    <td className="px-3 py-2">{r.REF_SETORAN || "-"}</td>
+                    <td className="px-3 py-2">{r.KETERANGAN || "-"}</td>
+                    <td className="px-3 py-2">{r.DIBUAT_OLEH || "-"}</td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-semibold ${
+                          r.STATUS === "Approved"
+                            ? "bg-green-100 text-green-700"
+                            : r.STATUS === "Rejected"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-yellow-100 text-yellow-700"
+                        }`}
+                      >
+                        {r.STATUS}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() =>
+                            updateStatus(r.id, r.NAMA_TOKO, "Approved")
+                          }
+                          className="px-2 py-1 text-xs bg-green-600 text-white rounded"
+                        >
+                          Approve
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            updateStatus(r.id, r.NAMA_TOKO, "Rejected")
+                          }
+                          className="px-2 py-1 text-xs bg-orange-600 text-white rounded"
+                        >
+                          Reject
+                        </button>
+
+                        <button
+                          onClick={() => beginEdit(r)}
+                          className="px-2 py-1 text-xs bg-blue-600 text-white rounded"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          onClick={() => deleteSetoran(r.id, r.NAMA_TOKO)}
+                          className="px-2 py-1 text-xs bg-red-600 text-white rounded"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex justify-between items-center mt-3 text-sm">
+          <div>
+            Halaman {currentPage} / {totalPages}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-2 py-1 border rounded disabled:opacity-40"
+            >
+              Prev
+            </button>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-2 py-1 border rounded disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+
       <p className="text-xs text-slate-500">
         *Catatan: Data disimpan ke Firebase realtime sebagai transaksi bertipe
-        <code> "SETORAN"</code>.
+        <code> "PENGELUARAN"</code>.
       </p>
     </div>
   );

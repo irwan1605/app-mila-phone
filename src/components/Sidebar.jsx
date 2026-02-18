@@ -483,17 +483,7 @@ const isSuper =
                   </Link>
                 </li>
 
-                <li>
-                  <Link
-                    to="/finance-report"
-                    className={`flex items-center p-2 hover:bg-blue-500 ${
-                      activePath === "/finance-report" ? "bg-blue-600" : ""
-                    }`}
-                  >
-                    <FaMoneyCheckAlt className="text-lg" />
-                    <span className="ml-2">Laporan Keuangan</span>
-                  </Link>
-                </li>
+               
                 <li>
                   <Link
                     to="/laporan-summary-transfer"
@@ -509,6 +499,18 @@ const isSuper =
                     className="flex items-center p-2 hover:bg-blue-500"
                   >
                     🧾 <span className="ml-2">Summary Pembelian</span>
+                  </Link>
+                </li>
+
+                <li>
+                  <Link
+                    to="/finance-report"
+                    className={`flex items-center p-2 hover:bg-blue-500 ${
+                      activePath === "/finance-report" ? "bg-blue-600" : ""
+                    }`}
+                  >
+                    <FaMoneyCheckAlt className="text-lg" />
+                    <span className="ml-2">Laporan Keuangan</span>
                   </Link>
                 </li>
               </ul>
