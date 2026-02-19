@@ -230,11 +230,58 @@ const rows = useMemo(() => {
 
   const map = {};
 
+  // ===============================
+  // 🔥 STEP 1 — CLONE TRANSAKSI + TAMBAH REFUND PENJUALAN SEBAGAI EVENT STOK
+  // ===============================
+  const allEvents = [...transaksi];
+
   transaksi.forEach((t) => {
+    if (
+      t.statusPembayaran === "REFUND" &&
+      Array.isArray(t.items) &&
+      normalize(t.toko) === normalize(namaToko)
+    ) {
+      t.items.forEach((it) => {
+        // ❌ skip IMEI karena sudah ada transaksi REFUND stock engine
+        if (it.imeiList?.length) return;
+
+        allEvents.push({
+          STATUS: "Approved",
+          PAYMENT_METODE: "REFUND",
+          NAMA_TOKO: t.toko,
+          NAMA_BRAND: it.namaBrand,
+          NAMA_BARANG: it.namaBarang,
+          QTY: it.qty,
+          IMEI: "",
+          NO_INVOICE: t.invoice,
+          TANGGAL_TRANSAKSI: t.tanggal,
+          NAMA_SUPPLIER: supplierLookup?.[
+            `${it.namaBrand}|${it.namaBarang}`
+          ] || "-",
+        });
+      });
+    }
+  });
+
+  // ===============================
+  // 🔥 STEP 2 — HITUNG SEMUA EVENT
+  // ===============================
+  allEvents.forEach((t) => {
     if (t.STATUS !== "Approved") return;
     if (normalize(t.NAMA_TOKO) !== normalize(namaToko)) return;
 
-    const effect = getStockEffect(t);
+    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+    const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
+
+    let effect = 0;
+
+    if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+      effect = qtyBase;
+    }
+
+    if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+      effect = -qtyBase;
+    }
 
     // ======================
     // IMEI
@@ -247,7 +294,7 @@ const rows = useMemo(() => {
           tanggal: t.TANGGAL_TRANSAKSI || "-",
           noDo: t.NO_INVOICE || "-",
           supplier:
-            supplierLookup[key] ||
+            supplierLookup?.[key] ||
             t.NAMA_SUPPLIER ||
             "-",
           namaToko: t.NAMA_TOKO || "-",
@@ -279,7 +326,7 @@ const rows = useMemo(() => {
         tanggal: t.TANGGAL_TRANSAKSI || "-",
         noDo: t.NO_INVOICE || "-",
         supplier:
-          supplierLookup[skuKey] ||
+          supplierLookup?.[skuKey] ||
           t.NAMA_SUPPLIER ||
           "-",
         namaToko: t.NAMA_TOKO || "-",
@@ -301,7 +348,9 @@ const rows = useMemo(() => {
   });
 
   return Object.values(map).filter((r) => r.qty > 0);
+
 }, [transaksi, masterMap, namaToko, supplierLookup]);
+
 
   /* ======================
      SEARCH FILTER
