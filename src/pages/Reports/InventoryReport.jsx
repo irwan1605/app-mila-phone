@@ -92,6 +92,26 @@ export default function InventoryReport() {
     };
   }, []);
 
+  
+// ===============================
+// 🔥 UNIVERSAL STOCK ENGINE
+// ===============================
+const getStockEffect = (t) => {
+  const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+  const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
+
+  if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+    return qtyBase;
+  }
+
+  if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+    return -qtyBase;
+  }
+
+  return 0;
+};
+
+
   // ======================
   // MAP TRANSAKSI
   // ======================
@@ -211,109 +231,68 @@ export default function InventoryReport() {
       });
   }, [transaksi, selectedToko, search, masterBarangMap]);
 
-  // ==========================
-  // CARD KECIL PER TOKO + PER KATEGORI (FIX)
-  // ==========================
-  const cardStockPerToko = useMemo(() => {
-    return TOKO_LIST.map((toko) => {
-      const kategori = {};
+  // ===============================
+// 🔥 STOCK ENGINE UNIVERSAL
+// ===============================
+const getStockEffectUniversal = (t) => {
+  const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+  const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
 
-      transaksi.forEach((t) => {
-        if (t.STATUS !== "Approved") return;
-        if (t.NAMA_TOKO !== toko) return;
-        console.log(
-          "DEBUG:",
-          t.NAMA_TOKO,
-          t.PAYMENT_METODE,
-          t.KATEGORI_BRAND,
-          t.QTY
-        );
+  if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+    return qtyBase;
+  }
 
-        // ❌ HAPUS TOTAL KATEGORI LAINNYA
-        let kat = t.KATEGORI_BRAND;
+  if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+    return -qtyBase;
+  }
 
-        // =============================
-        // ✅ FIX FINAL NON IMEI CATEGORY
-        // =============================
-        if (!kat && !t.IMEI) {
-          // semua barang non IMEI dianggap accessories
-          kat = "ACCESSORIES";
-        }
+  return 0;
+};
 
-        if (!kat) return;
 
-        kat = normalize(kat);
+const cardStockPerToko = useMemo(() => {
+  return TOKO_LIST.map((toko) => {
+    const kategori = {};
 
-        // ✅ SAMAKAN PENULISAN KATEGORI
-        if (kat === "ACCESSORY") kat = "ACCESSORIES";
-        if (kat === "ACC") kat = "ACCESSORIES";
-        if (kat === "SPAREPART") kat = "SPARE PART";
+    transaksi.forEach((t) => {
+      if (t.STATUS !== "Approved") return;
+      if (normalize(t.NAMA_TOKO) !== normalize(toko)) return;
 
-        let qty = t.IMEI ? 1 : Number(t.QTY ?? t.qty ?? t.JUMLAH ?? 0);
-        console.log(kat, t.PAYMENT_METODE, t.QTY);
+      const kat =
+        normalize(t.KATEGORI_BRAND) ||
+        (t.IMEI ? "IMEI" : "ACCESSORIES");
 
-        // ✅ TAMBAHAN KHUSUS NON IMEI (ACCESSORIES / SPARE PART / JASA)
-        if (
-          !t.IMEI &&
-          qty === 0 &&
-          ["ACCESSORIES", "SPARE PART", "JASA"].includes(kat) &&
-          ["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)
-        ) {
-          qty = 1;
-        }
+      const effect = getStockEffect(t);
 
-        // ======================
-        // STOK MASUK
-        // ======================
-        if (["PEMBELIAN", "TRANSFER_MASUK"].includes(t.PAYMENT_METODE)) {
-          if (t.IMEI && imeiTerjual.has(String(t.IMEI))) return;
-
-          kategori[kat] = (kategori[kat] || 0) + qty;
-        }
-
-        // ======================
-        // STOK KELUAR (JUAL / TRANSFER)
-        // ======================
-        if (["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)) {
-          kategori[kat] = (kategori[kat] || 0) - qty;
-        }
-
-        // ======================
-        // REFUND → STOK KEMBALI
-        // ======================
-        if (t.PAYMENT_METODE === "REFUND") {
-          kategori[kat] = (kategori[kat] || 0) + qty;
-        }
-      });
-
-      // ======================
-      // HILANGKAN MINUS & NOL
-      // ======================
-      const kategoriFix = Object.fromEntries(
-        Object.entries(kategori).filter(([_, v]) => Number(v) > 0)
-      );
-
-      return {
-        toko,
-        kategori: kategoriFix,
-      };
+      kategori[kat] = (kategori[kat] || 0) + effect;
     });
-  }, [transaksi]);
 
+    const kategoriFix = Object.fromEntries(
+      Object.entries(kategori).filter(([_, v]) => Number(v) > 0)
+    );
+
+    return {
+      toko,
+      kategori: kategoriFix,
+    };
+  });
+}, [transaksi]);
+
+  
+  
+  
   // ==========================
   // TOTAL STOCK SEMUA TOKO (DARI CARD KECIL)
   // ==========================
   const totalStockSemuaToko = useMemo(() => {
-    return cardStockPerToko.reduce((grandTotal, toko) => {
-      const totalPerToko = Object.values(toko.kategori || {}).reduce(
-        (sum, qty) => sum + Number(qty || 0),
-        0
-      );
-
-      return grandTotal + totalPerToko;
+    return transaksi.reduce((total, t) => {
+      if (t.STATUS !== "Approved") return total;
+      if (!t.NAMA_BARANG) return total;
+  
+      return total + getStockEffect(t);
     }, 0);
-  }, [cardStockPerToko]);
-
+  }, [transaksi]);
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white">
       <div className="max-w-7xl mx-auto">

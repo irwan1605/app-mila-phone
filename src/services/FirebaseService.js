@@ -1088,7 +1088,7 @@ export const listenPenjualanHemat = (callback, options = {}) => {
 
 // Listen seluruh stok
 export const listenStockAll = (callback) => {
-  const r = ref(db, "stock");
+  const r = ref(db, "detail_stock"); // 🔥 GANTI INI
   const unsub = onValue(
     r,
     (snap) => callback(snap.val() || {}),
@@ -1099,6 +1099,7 @@ export const listenStockAll = (callback) => {
   );
   return () => unsub && unsub();
 };
+
 
 // Ambil stok per toko per SKU
 export const getStockForToko = async (tokoName, sku) => {

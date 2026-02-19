@@ -501,7 +501,8 @@ export default function TablePenjualan() {
         IMEI: row.imei,
         NOMOR_UNIK: row.imei,
   
-        QTY: 1,
+         // 🔥 FIX PENTING
+         QTY: Number(row.qty || 1),
   
         PAYMENT_METODE: "REFUND",
         STATUS: "Approved",
