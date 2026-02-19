@@ -197,16 +197,48 @@ const rows = useMemo(() => {
   const map = {};
 
   transaksi.forEach((t) => {
-    if (t.STATUS !== "Approved") return;
-    if (normalize(t.NAMA_TOKO) !== normalize(namaToko)) return;
+    if (!t) return;
 
-    const effect = getStockEffect(t);
+    // =====================================
+    // 1️⃣ TRANSAKSI STOK NORMAL
+    // =====================================
+    if (
+      t.STATUS === "Approved" &&
+      normalize(t.NAMA_TOKO) === normalize(namaToko) &&
+      t.PAYMENT_METODE
+    ) {
+      const effect = getStockEffect(t);
 
-    // ======================
-    // IMEI
-    // ======================
-    if (t.IMEI) {
-      const key = String(t.IMEI).trim();
+      // ========= IMEI =========
+      if (t.IMEI) {
+        const key = String(t.IMEI).trim();
+
+        if (!map[key]) {
+          map[key] = {
+            tanggal: t.TANGGAL_TRANSAKSI || "-",
+            noDo: t.NO_INVOICE || "-",
+            supplier: t.NAMA_SUPPLIER || "-",
+            namaToko: t.NAMA_TOKO || "-",
+            brand: t.NAMA_BRAND || "-",
+            barang: t.NAMA_BARANG || "-",
+            imei: key,
+            qty: 0,
+            hargaSRP:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
+            hargaGrosir:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
+            hargaReseller:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+            statusBarang: "TERSEDIA",
+          };
+        }
+
+        map[key].qty += effect;
+        return;
+      }
+
+      // ========= NON IMEI =========
+      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
 
       if (!map[key]) {
         map[key] = {
@@ -216,7 +248,7 @@ const rows = useMemo(() => {
           namaToko: t.NAMA_TOKO || "-",
           brand: t.NAMA_BRAND || "-",
           barang: t.NAMA_BARANG || "-",
-          imei: key,
+          imei: "",
           qty: 0,
           hargaSRP:
             masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
@@ -229,41 +261,48 @@ const rows = useMemo(() => {
       }
 
       map[key].qty += effect;
-      return;
     }
 
-    // ======================
-    // NON IMEI
-    // ======================
-    const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+    // =====================================
+    // 2️⃣ REFUND DARI PENJUALAN (NON IMEI)
+    // =====================================
+    if (
+      t.statusPembayaran === "REFUND" &&
+      Array.isArray(t.items) &&
+      normalize(t.toko) === normalize(namaToko)
+    ) {
+      t.items.forEach((it) => {
+        if (it.imeiList?.length) return; // IMEI sudah dihitung di atas
 
-    if (!map[key]) {
-      map[key] = {
-        tanggal: t.TANGGAL_TRANSAKSI || "-",
-        noDo: t.NO_INVOICE || "-",
-        supplier: t.NAMA_SUPPLIER || "-",
-        namaToko: t.NAMA_TOKO || "-",
-        brand: t.NAMA_BRAND || "-",
-        barang: t.NAMA_BARANG || "-",
-        imei: "",
-        qty: 0,
-        hargaSRP:
-          masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
-        hargaGrosir:
-          masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
-        hargaReseller:
-          masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
-        statusBarang: "TERSEDIA",
-      };
+        const key = `${it.namaBrand}|${it.namaBarang}`;
+
+        if (!map[key]) {
+          map[key] = {
+            tanggal: t.tanggal || "-",
+            noDo: t.invoice || "-",
+            supplier: "-",
+            namaToko: t.toko || "-",
+            brand: it.namaBrand || "-",
+            barang: it.namaBarang || "-",
+            imei: "",
+            qty: 0,
+            hargaSRP:
+              masterMap?.[`${it.namaBrand}|${it.namaBarang}`]?.hargaSRP || 0,
+            hargaGrosir:
+              masterMap?.[`${it.namaBrand}|${it.namaBarang}`]?.hargaGrosir || 0,
+            hargaReseller:
+              masterMap?.[`${it.namaBrand}|${it.namaBarang}`]?.hargaReseller || 0,
+            statusBarang: "TERSEDIA",
+          };
+        }
+
+        map[key].qty += Number(it.qty || 0);
+      });
     }
-
-    map[key].qty += effect;
   });
 
   return Object.values(map).filter((r) => r.qty > 0);
 }, [transaksi, masterMap, namaToko]);
-
-
 
 
   /* ======================
