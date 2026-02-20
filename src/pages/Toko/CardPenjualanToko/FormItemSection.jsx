@@ -615,13 +615,30 @@ export default function FormItemSection({
       )}
 
       {items.map((item, idx) => {
-        const isImeiValid =
-          !item.isImei ||
-          (item.imeiList &&
-            item.imeiList.length === 1 &&
-            imeiAvailableList.includes(item.imeiList[0]) === false);
+        // ===============================
+        // VALIDASI FINAL UNTUK TOTAL
+        // ===============================
+        const isImeiComplete =
+          item.isImei &&
+          item.imeiList &&
+          item.imeiList.length === 1 &&
+          item.namaBarang &&
+          item.hargaAktif &&
+          item.qty === 1;
 
-        const hargaAktif = isImeiValid ? Number(item.hargaAktif || 0) : 0;
+        const isNonImeiComplete =
+          !item.isImei &&
+          item.namaBarang &&
+          item.qty > 0 &&
+          item.hargaAktif > 0;
+
+        const isItemComplete = isImeiComplete || isNonImeiComplete;
+
+        const hargaAktif = isItemComplete ? Number(item.hargaAktif || 0) : 0;
+
+        const totalItem = isItemComplete
+          ? Number(item.qty || 0) * hargaAktif
+          : 0;
 
         const barangByKategori = masterBarang.filter((b) => {
           if (
@@ -1046,8 +1063,13 @@ export default function FormItemSection({
             )}
 
             <div className="text-right font-bold text-green-700">
-              TOTAL PENJUALAN: Rp{" "}
-              {(item.qty * hargaAktif).toLocaleString("id-ID")}
+              {isItemComplete ? (
+                <>TOTAL PENJUALAN: Rp {totalItem.toLocaleString("id-ID")}</>
+              ) : (
+                <span className="text-gray-400 text-xs">
+                  Lengkapi IMEI & harga terlebih dahulu
+                </span>
+              )}
             </div>
           </div>
         );
