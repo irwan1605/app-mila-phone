@@ -1082,6 +1082,26 @@ export const listenPenjualanHemat = (callback, options = {}) => {
   return () => unsub && unsub();
 };
 
+
+export const listenStockToko = (namaToko, callback) => {
+  if (!namaToko) return;
+
+  const stokRef = ref(db, `toko/${namaToko}/stok`);
+
+  const unsub = onValue(stokRef, (snapshot) => {
+    const data = snapshot.val();
+    if (!data) {
+      callback([]);
+      return;
+    }
+
+    const rows = Object.values(data);
+    callback(rows);
+  });
+
+  return () => unsub();
+};
+
 /* ============================================================
    STOCK MANAGEMENT + TRANSFER STOCK
 ============================================================ */
