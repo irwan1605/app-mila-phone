@@ -626,8 +626,6 @@ export default function TransferBarang() {
     const clean = normalizeImei(imeiInput);
     if (!imeiSource.includes(clean)) return;
 
-  
-
     setForm((f) => ({
       ...f,
       imeis: [...f.imeis, clean],
@@ -797,52 +795,48 @@ export default function TransferBarang() {
   // };
 
   // ================= FINAL CLEAN IMEI VALIDATOR =================
-const isImeiValid = (imei) => {
-  const clean = normalizeImei(imei);
-  if (!clean) return false;
+  const isImeiValid = (imei) => {
+    const clean = normalizeImei(imei);
+    if (!clean) return false;
 
-  const found = inventory.find(
-    (i) => normalizeImei(i.imei) === clean
-  );
+    const found = inventory.find((i) => normalizeImei(i.imei) === clean);
 
-  // ❌ tidak ada di inventory
-  if (!found) {
-    alert("❌ IMEI tidak ditemukan di stok");
-    return false;
-  }
+    // ❌ tidak ada di inventory
+    if (!found) {
+      alert("❌ IMEI tidak ditemukan di stok");
+      return false;
+    }
 
-  // ❌ sudah terjual
-  if (found.status === "SOLD") {
-    alert("❌ IMEI sudah TERJUAL");
-    return false;
-  }
+    // ❌ sudah terjual
+    if (found.status === "SOLD") {
+      alert("❌ IMEI sudah TERJUAL");
+      return false;
+    }
 
-  // ❌ bukan AVAILABLE
-  if (found.status !== "AVAILABLE") {
-    alert("❌ IMEI tidak tersedia");
-    return false;
-  }
+    // ❌ bukan AVAILABLE
+    if (found.status !== "AVAILABLE") {
+      alert("❌ IMEI tidak tersedia");
+      return false;
+    }
 
-  // ❌ duplikat di form
-  if (form.imeis.some((im) => normalizeImei(im) === clean)) {
-    alert("❌ IMEI sudah ada di form");
-    return false;
-  }
+    // ❌ duplikat di form
+    if (form.imeis.some((im) => normalizeImei(im) === clean)) {
+      alert("❌ IMEI sudah ada di form");
+      return false;
+    }
 
-  // ❌ duplikat di draft
-  if (
-    daftarTransfer.some((item) =>
-      (item.imeis || []).some(
-        (im) => normalizeImei(im) === clean
+    // ❌ duplikat di draft
+    if (
+      daftarTransfer.some((item) =>
+        (item.imeis || []).some((im) => normalizeImei(im) === clean)
       )
-    )
-  ) {
-    alert("❌ IMEI sudah ada di daftar transfer");
-    return false;
-  }
+    ) {
+      alert("❌ IMEI sudah ada di daftar transfer");
+      return false;
+    }
 
-  return true;
-};
+    return true;
+  };
 
   const handleAddImeiAuto = () => {
     const im = normalizeImei(imeiSearch);
@@ -853,9 +847,7 @@ const isImeiValid = (imei) => {
       return;
     }
 
-    const found = inventory.find(
-      (i) => normalizeImei(i.imei) === im
-    );
+    const found = inventory.find((i) => normalizeImei(i.imei) === im);
 
     // 🔥 CEK STOK TOKO (REAL TIME)
     const stokAvailable = inventory.filter(
@@ -864,6 +856,14 @@ const isImeiValid = (imei) => {
         i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
         i.namaBarang.toUpperCase() === found.namaBarang.toUpperCase()
     ).length;
+
+    // 🔥 VALIDASI TOKO ASAL
+    if (found.toko?.toUpperCase() !== form.tokoPengirim?.toUpperCase()) {
+      alert(
+        `❌ IMEI berada di toko ${found.toko}, bukan di ${form.tokoPengirim}`
+      );
+      return;
+    }
 
     if (stokAvailable <= 0) {
       alert("❌ Stok barang sudah HABIS (0)");
@@ -928,14 +928,13 @@ const isImeiValid = (imei) => {
       imeis: [...f.imeis, im],
       qty: (f.imeis?.length || 0) + 1,
     }));
-  
+
     setImeiSearch("");
   };
 
   const handleSearchByImei = () => {
     const im = normalizeImei(imeiSearch);
     if (!im) return;
-
 
     const found = inventory.find((i) => normalizeImei(i.imei) === im);
 
@@ -994,19 +993,87 @@ const isImeiValid = (imei) => {
   // ================= VALIDASI MASTER BARANG =================
   const isBarangValidDiMaster = () => {
     if (!form.brand || !form.barang) return false;
-
-    return masterBarang.some(
+  
+    const brandUpper = String(form.brand).toUpperCase().trim();
+    const barangUpper = String(form.barang).toUpperCase().trim();
+    const tokoUpper = String(form.tokoPengirim).toUpperCase().trim();
+  
+    // ✅ 1. CEK DI MASTER BARANG
+    const adaDiMaster = masterBarang.some(
       (b) =>
-        String(b.brand || "")
-          .toUpperCase()
-          .trim() === String(form.brand).toUpperCase().trim() &&
-        String(b.namaBarang || "")
-          .toUpperCase()
-          .trim() === String(form.barang).toUpperCase().trim()
+        String(b.brand || "").toUpperCase().trim() === brandUpper &&
+        String(b.namaBarang || "").toUpperCase().trim() === barangUpper
     );
+  
+    if (adaDiMaster) return true;
+  
+    // ✅ 2. CEK DI INVENTORY IMEI
+    const adaDiInventoryImei = inventory.some(
+      (i) =>
+        i.toko?.toUpperCase().trim() === tokoUpper &&
+        i.namaBrand?.toUpperCase().trim() === brandUpper &&
+        i.namaBarang?.toUpperCase().trim() === barangUpper
+    );
+  
+    if (adaDiInventoryImei) return true;
+  
+    // ✅ 3. CEK DI INVENTORY NON IMEI
+    const adaDiInventoryNonImei = inventoryAccessories.some(
+      (i) =>
+        i.toko?.toUpperCase().trim() === tokoUpper &&
+        i.namaBrand?.toUpperCase().trim() === brandUpper &&
+        i.namaBarang?.toUpperCase().trim() === barangUpper
+    );
+  
+    if (adaDiInventoryNonImei) return true;
+  
+    return false;
   };
 
   const handleTambahTransfer = () => {
+    // ==================================================
+// 🔥 HARD GLOBAL IMEI DUPLICATE CHECK (SEBELUM MASUK TABLE)
+// ==================================================
+if (Array.isArray(form.imeis) && form.imeis.length > 0) {
+
+  const normalized = form.imeis.map(i =>
+    String(i).trim().toUpperCase()
+  );
+
+  const uniqueSet = new Set(normalized);
+
+  // ❌ DUPLIKAT DALAM FORM SENDIRI
+  if (uniqueSet.size !== normalized.length) {
+    alert("❌ Terdapat IMEI duplikat dalam input ini");
+    return;
+  }
+
+  // ❌ DUPLIKAT DI daftarTransfer (yang sudah ada di table atas)
+  const imeiSudahDiTable = daftarTransfer
+    .flatMap(item => item.imeis || [])
+    .map(i => String(i).trim().toUpperCase());
+
+  for (const im of normalized) {
+    if (imeiSudahDiTable.includes(im)) {
+      alert(`❌ IMEI ${im} sudah ada di daftar transfer`);
+      return;
+    }
+  }
+
+  // ❌ DUPLIKAT DI HISTORY (Pending & Approved)
+  const imeiHistory = history
+    .filter(h => h.status !== "Voided")
+    .flatMap(h => h.imeis || [])
+    .map(i => String(i).trim().toUpperCase());
+
+  for (const im of normalized) {
+    if (imeiHistory.includes(im)) {
+      alert(`❌ IMEI ${im} sudah pernah digunakan dalam transfer`);
+      return;
+    }
+  }
+}
+
     const error = validateForm();
     if (error) {
       alert("❌ " + error);
@@ -1180,7 +1247,9 @@ const isImeiValid = (imei) => {
 
       for (const item of transferList) {
         for (const im of item.imeis || []) {
-          const found = inventory.find(i => normalizeImei(i.imei) === normalizeImei(im));
+          const found = inventory.find(
+            (i) => normalizeImei(i.imei) === normalizeImei(im)
+          );
           console.log("DEBUG INVENTORY IMEI:", found);
         }
       }
@@ -1219,12 +1288,11 @@ const isImeiValid = (imei) => {
 
       const normalized = allImeis.map(normalizeImei);
       const unique = new Set(normalized);
-      
+
       if (unique.size !== normalized.length) {
         alert("❌ Terdapat IMEI duplikat dalam daftar transfer");
         return;
       }
-     
 
       const uniqueCheck = new Set(allImeis);
 

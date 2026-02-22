@@ -2087,25 +2087,11 @@ export const approveTransferAndMoveStock = async ({
  */
 // ================= APPROVE TRANSFER (FINAL & REALTIME) =================
 // ================= APPROVE + SURAT JALAN =================
+// ================= APPROVE + SURAT JALAN (FINAL FIX 100%) =================
 export const approveTransferFINAL = async ({ transfer }) => {
   const sjRef = push(ref(db, "surat_jalan"));
 
-  // ✅ pastikan imeis selalu array
   const safeImeis = Array.isArray(transfer.imeis) ? transfer.imeis : [];
-
-  // ===============================
-  // 1. SIMPAN SURAT JALAN
-  // ===============================
-  await update(sjRef, {
-    noSuratJalan: transfer.noSuratJalan,
-    tanggal: transfer.tanggal,
-    tokoPengirim: transfer.tokoPengirim,
-    tokoTujuan: transfer.ke,
-    pengirim: transfer.pengirim,
-    barang: transfer.barang,
-    qty: Number(transfer.qty || safeImeis.length || 1),
-    imeis: safeImeis,
-  });
 
   const {
     tokoPengirim,
@@ -2122,47 +2108,139 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
   const approvedAt = Date.now();
 
-  // ===============================
-  // 2. TRANSAKSI STOK
-  // ===============================
+  // =====================================================
+  // 🔥 1. VALIDASI DUPLIKAT DALAM 1 TRANSFER
+  // =====================================================
+  if (safeImeis.length > 0) {
+    const normalized = safeImeis.map((i) =>
+      String(i).trim().toUpperCase()
+    );
 
-  // 🔹 KASUS BARANG PAKAI IMEI
+    const uniqueSet = new Set(normalized);
+
+    if (uniqueSet.size !== normalized.length) {
+      throw new Error("Terdapat IMEI duplikat dalam transfer ini");
+    }
+  }
+
+  // =====================================================
+  // 🔥 2. VALIDASI REALTIME STOK GLOBAL (BOLEH TRANSFER LAGI)
+  // =====================================================
+  if (safeImeis.length > 0) {
+    const allTokoSnap = await get(ref(db, "toko"));
+    const allTokoData = allTokoSnap.val() || {};
+
+    const imeiState = {};
+
+    Object.values(allTokoData).forEach((toko) => {
+      const transaksi = toko.transaksi || {};
+
+      Object.values(transaksi).forEach((trx) => {
+        if (!trx.IMEI) return;
+
+        const im = String(trx.IMEI).trim();
+        const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
+        const namaToko = trx.NAMA_TOKO;
+
+        if (!imeiState[im]) {
+          imeiState[im] = {
+            lokasi: namaToko,
+            status: "AVAILABLE",
+          };
+        }
+
+        if (metode === "PENJUALAN") {
+          imeiState[im].status = "SOLD";
+        }
+
+        if (metode === "TRANSFER_KELUAR") {
+          imeiState[im].status = "OUT";
+        }
+
+        if (metode === "TRANSFER_MASUK") {
+          imeiState[im].status = "AVAILABLE";
+          imeiState[im].lokasi = namaToko;
+        }
+
+        if (metode === "REFUND") {
+          imeiState[im].status = "AVAILABLE";
+        }
+      });
+    });
+
+    for (const imei of safeImeis) {
+      const data = imeiState[imei];
+
+      if (!data) {
+        throw new Error(`IMEI ${imei} tidak ditemukan di sistem`);
+      }
+
+      if (data.status === "SOLD") {
+        throw new Error(`IMEI ${imei} sudah TERJUAL`);
+      }
+
+      if (data.lokasi !== tokoPengirim) {
+        throw new Error(
+          `IMEI ${imei} berada di toko ${data.lokasi}, bukan di ${tokoPengirim}`
+        );
+      }
+
+      // 🔥 INI YANG PENTING
+      // OUT boleh transfer lagi kalau dia memang masih di tokoPengirim
+      if (data.status === "OUT" && data.lokasi !== tokoPengirim) {
+        throw new Error(`IMEI ${imei} tidak tersedia`);
+      }
+    }
+  }
+
+  // =====================================================
+  // 3. SIMPAN SURAT JALAN
+  // =====================================================
+  await update(sjRef, {
+    noSuratJalan,
+    tanggal,
+    tokoPengirim,
+    tokoTujuan: ke,
+    pengirim: transfer.pengirim,
+    barang,
+    qty: Number(qty || safeImeis.length || 1),
+    imeis: safeImeis,
+  });
+
+  // =====================================================
+  // 4. TRANSAKSI STOK
+  // =====================================================
+
   if (safeImeis.length > 0) {
     for (const imei of safeImeis) {
-      // 🔻 TRANSFER KELUAR (TOKO ASAL)
+      // 🔻 KELUAR
       await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
         NO_INVOICE: noDo,
         NO_SURAT_JALAN: noSuratJalan,
         NAMA_TOKO: tokoPengirim,
-
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
         KATEGORI_BRAND: kategori,
-
         IMEI: imei,
         QTY: 1,
-
         PAYMENT_METODE: "TRANSFER_KELUAR",
         SYSTEM_PAYMENT: "SYSTEM",
         STATUS: "Approved",
         CREATED_AT: approvedAt,
       });
 
-      // 🔺 TRANSFER MASUK (TOKO TUJUAN)  ⭐ INI YANG PENTING
+      // 🔺 MASUK
       await push(ref(db, `toko/${ke}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
-        NO_INVOICE: noSuratJalan, // pakai SJ agar unik
+        NO_INVOICE: noSuratJalan,
         NO_SURAT_JALAN: noSuratJalan,
         NAMA_TOKO: ke,
-
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
         KATEGORI_BRAND: kategori,
-
         IMEI: imei,
         QTY: 1,
-
         PAYMENT_METODE: "TRANSFER_MASUK",
         SYSTEM_PAYMENT: "SYSTEM",
         STATUS: "Approved",
@@ -2170,43 +2248,34 @@ export const approveTransferFINAL = async ({ transfer }) => {
       });
     }
   } else {
-    // 🔹 KASUS BARANG NON-IMEI (ACCESSORIES / QTY)
     const safeQty = Number(qty || 1);
 
-    // 🔻 TRANSFER KELUAR
     await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
       TANGGAL_TRANSAKSI: tanggal,
       NO_INVOICE: noDo,
       NO_SURAT_JALAN: noSuratJalan,
       NAMA_TOKO: tokoPengirim,
-
       NAMA_BRAND: brand,
       NAMA_BARANG: barang,
       KATEGORI_BRAND: kategori,
-
       IMEI: "",
       QTY: safeQty,
-
       PAYMENT_METODE: "TRANSFER_KELUAR",
       SYSTEM_PAYMENT: "SYSTEM",
       STATUS: "Approved",
       CREATED_AT: approvedAt,
     });
 
-    // 🔺 TRANSFER MASUK
     await push(ref(db, `toko/${ke}/transaksi`), {
       TANGGAL_TRANSAKSI: tanggal,
       NO_INVOICE: noSuratJalan,
       NO_SURAT_JALAN: noSuratJalan,
       NAMA_TOKO: ke,
-
       NAMA_BRAND: brand,
       NAMA_BARANG: barang,
       KATEGORI_BRAND: kategori,
-
       IMEI: "",
       QTY: safeQty,
-
       PAYMENT_METODE: "TRANSFER_MASUK",
       SYSTEM_PAYMENT: "SYSTEM",
       STATUS: "Approved",
@@ -2214,9 +2283,9 @@ export const approveTransferFINAL = async ({ transfer }) => {
     });
   }
 
-  // ===============================
-  // 3. UPDATE STATUS TRANSFER
-  // ===============================
+  // =====================================================
+  // 5. UPDATE STATUS TRANSFER
+  // =====================================================
   await update(ref(db, `transfer_barang/${id}`), {
     status: "Approved",
     suratJalanId: sjRef.key,
