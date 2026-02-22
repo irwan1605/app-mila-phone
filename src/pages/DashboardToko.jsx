@@ -255,6 +255,41 @@ export default function DashboardToko(props) {
     };
   }, [tokoId]);
 
+  const normalize = (v) =>
+    String(v || "")
+      .trim()
+      .toUpperCase();
+
+      // ===============================
+// 🔥 SUPPLIER LOOKUP UNIVERSAL
+// ===============================
+const supplierLookup = useMemo(() => {
+  const map = {};
+
+  transaksi.forEach((t) => {
+    if (t.STATUS !== "Approved") return;
+    if (!t.NAMA_BARANG || !t.NAMA_BRAND) return;
+
+    // IMEI
+    if (t.IMEI) {
+      const imeiKey = String(t.IMEI).trim();
+      if (t.PAYMENT_METODE === "PEMBELIAN") {
+        map[imeiKey] = t.NAMA_SUPPLIER || "-";
+      }
+    }
+
+    // NON IMEI
+    if (!t.IMEI) {
+      const skuKey = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+      if (t.PAYMENT_METODE === "PEMBELIAN") {
+        map[skuKey] = t.NAMA_SUPPLIER || "-";
+      }
+    }
+  });
+
+  return map;
+}, [transaksi]);
+
   
 
   // ======================= SUMMARY DASHBOARD TOKO =======================
@@ -379,74 +414,129 @@ export default function DashboardToko(props) {
     return map;
   }, [transaksi]);
 
-  /* ======================
-     BUILD ROWS
-  ====================== */
-  /* ======================
-   BUILD ROWS (FIX FINAL)
+ /* ======================
+   BUILD ROWS UNIVERSAL (SYNC DETAIL STOCK)
 ====================== */
-  /* ======================
-   BUILD ROWS (FINAL FIX)
-====================== */
-  const rows = useMemo(() => {
-    if (!namaToko) return [];
+const rows = useMemo(() => {
+  if (!namaToko) return [];
 
-    const map = {};
+  const map = {};
 
-    transaksi.forEach((t) => {
-      if (!t) return;
+  // 🔥 CLONE TRANSAKSI + HANDLE REFUND ITEM
+  const allEvents = [...transaksi];
 
-      const status = String(t.STATUS || "").toUpperCase();
-      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-      const tokoData = String(t.NAMA_TOKO || "").trim();
+  transaksi.forEach((t) => {
+    if (
+      t.statusPembayaran === "REFUND" &&
+      Array.isArray(t.items) &&
+      normalize(t.toko) === normalize(namaToko)
+    ) {
+      t.items.forEach((it) => {
+        if (it.imeiList?.length) return;
 
-      // ✅ hanya transaksi approved & toko ini
-      if (status !== "APPROVED") return;
-      if (tokoData !== namaToko) return;
+        allEvents.push({
+          STATUS: "Approved",
+          PAYMENT_METODE: "REFUND",
+          NAMA_TOKO: t.toko,
+          NAMA_BRAND: it.namaBrand,
+          NAMA_BARANG: it.namaBarang,
+          QTY: it.qty,
+          IMEI: "",
+          NO_INVOICE: t.invoice,
+          TANGGAL_TRANSAKSI: t.tanggal,
+          NAMA_SUPPLIER:
+            supplierLookup?.[
+              `${it.namaBrand}|${it.namaBarang}`
+            ] || "-",
+        });
+      });
+    }
+  });
 
-      // ======================
-      // KEY ITEM
-      // ======================
-      const key = t.IMEI
-        ? `IMEI-${t.IMEI}`
-        : `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+  // 🔥 HITUNG SEMUA EVENT
+  allEvents.forEach((t) => {
+    if (t.STATUS !== "Approved") return;
+    if (normalize(t.NAMA_TOKO) !== normalize(namaToko)) return;
 
-      // ======================
-      // HITUNG QTY
-      // ======================
-      let qty = 0;
+    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+    const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
 
-      if (["PEMBELIAN", "TRANSFER_MASUK"].includes(metode)) qty = 1;
-      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) qty = -1;
+    let effect = 0;
+
+    if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+      effect = qtyBase;
+    }
+
+    if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+      effect = -qtyBase;
+    }
+
+    // ======================
+    // IMEI
+    // ======================
+    if (t.IMEI) {
+      const key = String(t.IMEI).trim();
 
       if (!map[key]) {
-        const harga = masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`] || {};
-
         map[key] = {
           tanggal: t.TANGGAL_TRANSAKSI || "-",
           noDo: t.NO_INVOICE || "-",
-          supplier: t.NAMA_SUPPLIER || "-",
-          namaToko: tokoData,
+          supplier:
+            supplierLookup?.[key] ||
+            t.NAMA_SUPPLIER ||
+            "-",
+          namaToko: t.NAMA_TOKO || "-",
           brand: t.NAMA_BRAND || "-",
           barang: t.NAMA_BARANG || "-",
-          imei: t.IMEI || "",
+          imei: key,
           qty: 0,
-
-          hargaSRP: harga.hargaSRP || 0,
-          hargaGrosir: harga.hargaGrosir || 0,
-          hargaReseller: harga.hargaReseller || 0,
-
+          hargaSRP:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
+          hargaGrosir:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
+          hargaReseller:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
           statusBarang: "TERSEDIA",
           keterangan: "",
         };
       }
 
-      map[key].qty += qty;
-    });
+      map[key].qty += effect;
+      return;
+    }
 
-    // ✅ hanya stok yang masih ada
-    return Object.values(map).filter((r) => r.qty > 0);
-  }, [transaksi, masterMap, namaToko]);
+    // ======================
+    // NON IMEI
+    // ======================
+    const skuKey = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+    if (!map[skuKey]) {
+      map[skuKey] = {
+        tanggal: t.TANGGAL_TRANSAKSI || "-",
+        noDo: t.NO_INVOICE || "-",
+        supplier:
+          supplierLookup?.[skuKey] ||
+          t.NAMA_SUPPLIER ||
+          "-",
+        namaToko: t.NAMA_TOKO || "-",
+        brand: t.NAMA_BRAND || "-",
+        barang: t.NAMA_BARANG || "-",
+        imei: "",
+        qty: 0,
+        hargaSRP: masterMap?.[skuKey]?.hargaSRP || 0,
+        hargaGrosir: masterMap?.[skuKey]?.hargaGrosir || 0,
+        hargaReseller: masterMap?.[skuKey]?.hargaReseller || 0,
+        statusBarang: "TERSEDIA",
+        keterangan: "",
+      };
+    }
+
+    map[skuKey].qty += effect;
+  });
+
+  return Object.values(map).filter((r) => r.qty > 0);
+
+}, [transaksi, masterMap, namaToko, supplierLookup]);
 
   /* ======================
    SEARCH FILTER
