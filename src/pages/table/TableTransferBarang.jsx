@@ -46,12 +46,11 @@ export default function TableTransferBarang({ currentRole }) {
           // RULE MUTLAK
           if (metode === "REFUND") {
             map[imei].status = "AVAILABLE";
-          }
-          else if (metode === "PENJUALAN") {
+          } else if (metode === "PENJUALAN") {
             map[imei].status = "SOLD";
-          }
-           else if (metode === "TRANSFER_KELUAR") {
-            if (map[imei].status !== "SOLD") map[imei].status = "OUT";
+          } else if (metode === "TRANSFER_KELUAR") {
+            // Jangan matikan barang
+            if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
           } else if (metode === "TRANSFER_MASUK") {
             if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
           }
@@ -79,11 +78,9 @@ export default function TableTransferBarang({ currentRole }) {
             "AVAILABLE",
             "REFUND",
             "TRANSFER_MASUK",
-            "OUT" // ✅ ini yang bikin barang transfer bisa transfer lagi
+            "OUT", // ✅ ini yang bikin barang transfer bisa transfer lagi
           ].includes(found.status)
         );
-        
-        
       });
     });
   }, [rows, inventory]);
@@ -127,15 +124,11 @@ export default function TableTransferBarang({ currentRole }) {
             metode === "INPUT_STOK"
           ) {
             map[imei].status = "AVAILABLE";
-          }
-          else if (metode === "PENJUALAN") {
+          } else if (metode === "PENJUALAN") {
             map[imei].status = "SOLD";
+          } else if (metode === "TRANSFER_KELUAR") {
+            if (map[imei].status !== "SOLD") map[imei].status = "OUT";
           }
-          else if (metode === "TRANSFER_KELUAR") {
-            if (map[imei].status !== "SOLD")
-              map[imei].status = "OUT";
-          }
-          
         });
       });
 
@@ -154,20 +147,16 @@ export default function TableTransferBarang({ currentRole }) {
         const imeis = Array.isArray(val.imeis) ? val.imeis : [];
 
         const uniqueImeis = [...new Set(imeis.map((i) => String(i).trim()))];
-        
+
         arr.push({
           id: c.key,
           ...val,
           imeis: uniqueImeis,
-        
+
           // ✅ FIX QTY FINAL
           qty:
-            uniqueImeis.length > 0
-              ? uniqueImeis.length
-              : Number(val.qty || 0),
+            uniqueImeis.length > 0 ? uniqueImeis.length : Number(val.qty || 0),
         });
-        
-        
       });
 
       console.log("🔥 DATA TRANSFER TABLE:", arr);
@@ -180,15 +169,14 @@ export default function TableTransferBarang({ currentRole }) {
     if (safeImeis.length > 0) {
       return safeImeis.length;
     }
-  
+
     // ACCESSORIES
     const q = Number(transfer.qty);
-  
+
     if (!isNaN(q) && q > 0) return q;
-  
+
     return 1;
   };
-  
 
   const handleRejectAndRollback = async (r) => {
     if (!window.confirm("Yakin REJECT & kembalikan stok ke toko pengirim?"))
@@ -222,7 +210,6 @@ export default function TableTransferBarang({ currentRole }) {
         SOURCE: "REJECT_TRANSFER",
         CREATED_AT: now,
       });
-      
 
       // 🔁 3. UPDATE STATUS TRANSFER
       await update(ref(db, `transfer_barang/${r.id}`), {
@@ -277,17 +264,16 @@ export default function TableTransferBarang({ currentRole }) {
     const found = inventory.find(
       (i) => String(i.imei).trim() === String(imei).trim()
     );
-  
+
     // tidak ditemukan di inventory → anggap tidak valid
     if (!found) return true;
-  
+
     // ❌ HANYA SOLD yang tidak boleh
     if (found.status === "SOLD") return true;
-  
+
     // ✅ semua status selain SOLD boleh transfer lagi
     return false;
   };
-  
 
   return (
     <div
@@ -353,151 +339,141 @@ export default function TableTransferBarang({ currentRole }) {
           </thead>
 
           <tbody>
-  {rowsByToko
-    .filter(
-      (r) => filterStatus === "ALL" || r.status === filterStatus
-    )
-    .map((r, i) => {
+            {rowsByToko
+              .filter(
+                (r) => filterStatus === "ALL" || r.status === filterStatus
+              )
+              .map((r, i) => {
+                // ✅ CEK TOKO TUJUAN
+                const isTokoTujuan =
+                  String(r.ke || "").toUpperCase() === TOKO_LOGIN.toUpperCase();
 
-      // ✅ CEK TOKO TUJUAN
-      const isTokoTujuan =
-        String(r.ke || "").toUpperCase() ===
-        TOKO_LOGIN.toUpperCase();
+                // ✅ YANG BOLEH APPROVE
+                const canApprove =
+                  (isSuperAdmin || isTokoTujuan) && r.status === "Pending";
 
-      // ✅ YANG BOLEH APPROVE
-      const canApprove =
-        (isSuperAdmin || isTokoTujuan) &&
-        r.status === "Pending";
+                return (
+                  <tr
+                    key={r.id}
+                    className="hover:bg-indigo-50 transition-colors p-2"
+                  >
+                    <td className="border px-3 py-2">{i + 1}</td>
+                    <td className="border px-3 py-2">{r.tanggal || "-"}</td>
+                    <td className="border px-3 py-2">{r.noDo || "-"}</td>
+                    <td className="border px-3 py-2">
+                      {r.noSuratJalan || "-"}
+                    </td>
+                    <td className="border px-3 py-2">{r.pengirim || "-"}</td>
+                    <td className="border px-3 py-2">
+                      {r.tokoPengirim || "-"}
+                    </td>
+                    <td className="border px-3 py-2">{r.ke || "-"}</td>
+                    <td className="border px-3 py-2">{r.brand || "-"}</td>
+                    <td className="border px-3 py-2">{r.barang || "-"}</td>
 
-      return (
-        <tr
-          key={r.id}
-          className="hover:bg-indigo-50 transition-colors p-2"
-        >
-          <td className="border px-3 py-2">{i + 1}</td>
-          <td className="border px-3 py-2">{r.tanggal || "-"}</td>
-          <td className="border px-3 py-2">{r.noDo || "-"}</td>
-          <td className="border px-3 py-2">{r.noSuratJalan || "-"}</td>
-          <td className="border px-3 py-2">{r.pengirim || "-"}</td>
-          <td className="border px-3 py-2">{r.tokoPengirim || "-"}</td>
-          <td className="border px-3 py-2">{r.ke || "-"}</td>
-          <td className="border px-3 py-2">{r.brand || "-"}</td>
-          <td className="border px-3 py-2">{r.barang || "-"}</td>
+                    <td className="border px-3 py-2 text-xs">
+                      {Array.isArray(r.imeis)
+                        ? r.imeis.map((im) => {
+                            const found = inventory.find((i) => i.imei === im);
+                            return (
+                              <div key={im}>
+                                {im} ({found?.status || "?"})
+                              </div>
+                            );
+                          })
+                        : "-"}
+                    </td>
 
-          <td className="border px-3 py-2 text-xs">
-            {Array.isArray(r.imeis) ? r.imeis.join(", ") : "-"}
-          </td>
+                    <td className="border px-3 py-2 text-center font-semibold">
+                      {r.qty || 0}
+                    </td>
 
-          <td className="border px-3 py-2 text-center font-semibold">
-            {r.qty || 0}
-          </td>
-
-          <td className="border px-3 py-2 text-center">
-            <span
-              className={`px-2 py-1 rounded-full text-xs font-bold
-                ${
-                  r.status === "Approved"
-                    ? "bg-green-100 text-green-700"
-                    : ""
-                }
-                ${
-                  r.status === "Pending"
-                    ? "bg-yellow-100 text-yellow-700"
-                    : ""
-                }
-                ${
-                  r.status === "Rejected"
-                    ? "bg-red-100 text-red-700"
-                    : ""
-                }
-                ${
-                  r.status === "Voided"
-                    ? "bg-gray-200 text-gray-700"
-                    : ""
-                }
+                    <td className="border px-3 py-2 text-center">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-bold
+                ${r.status === "Approved" ? "bg-green-100 text-green-700" : ""}
+                ${r.status === "Pending" ? "bg-yellow-100 text-yellow-700" : ""}
+                ${r.status === "Rejected" ? "bg-red-100 text-red-700" : ""}
+                ${r.status === "Voided" ? "bg-gray-200 text-gray-700" : ""}
               `}
-            >
-              {r.status || "Pending"}
-            </span>
-          </td>
+                      >
+                        {r.status || "Pending"}
+                      </span>
+                    </td>
 
-          {/* ===== AKSI ===== */}
-          <td className="border px-3 py-2">
-            <div className="flex gap-2 justify-center">
+                    {/* ===== AKSI ===== */}
+                    <td className="border px-3 py-2">
+                      <div className="flex gap-2 justify-center">
+                        <button
+                          title="Approve Transfer"
+                          disabled={!canApprove}
+                          onClick={async () => {
+                            if (!canApprove) return;
 
-            <button
-  title="Approve Transfer"
-  disabled={!canApprove}
-  onClick={async () => {
-    if (!canApprove) return;
+                            for (const imei of r.imeis || []) {
+                              if (isImeiAlreadyUsed(imei)) {
+                                alert(`❌ IMEI ${imei} sudah pernah dipakai!`);
+                                return;
+                              }
+                            }
 
-    for (const imei of r.imeis || []) {
-      if (isImeiAlreadyUsed(imei)) {
-        alert(`❌ IMEI ${imei} sudah pernah dipakai!`);
-        return;
-      }
-    }
+                            const sjId =
+                              await FirebaseService.approveTransferFINAL({
+                                transfer: r,
+                              });
 
-    const sjId =
-      await FirebaseService.approveTransferFINAL({
-        transfer: r,
-      });
-
-    navigate(`/surat-jalan/${sjId}`);
-  }}
-  className={`px-3 py-2 rounded-lg text-[11px] font-bold
+                            navigate(`/surat-jalan/${sjId}`);
+                          }}
+                          className={`px-3 py-2 rounded-lg text-[11px] font-bold
     ${
       !canApprove
         ? "bg-gray-300 text-gray-500 cursor-not-allowed"
         : "bg-green-500 text-white hover:bg-green-600"
     }
   `}
->
-  ✔ Approve
-</button>
+                        >
+                          ✔ Approve
+                        </button>
 
-
-              {/* REJECT (SUPERADMIN ONLY) */}
-              <button
-                disabled={!isSuperAdmin || r.status !== "Pending"}
-                onClick={async () => {
-                  if (!isSuperAdmin) return;
-                  await FirebaseService.rejectTransferFINAL({
-                    transfer: r,
-                  });
-                  alert("Transfer ditolak");
-                }}
-                className={`px-3 py-2 rounded-lg text-[11px] font-bold
+                        {/* REJECT (SUPERADMIN ONLY) */}
+                        <button
+                          disabled={!isSuperAdmin || r.status !== "Pending"}
+                          onClick={async () => {
+                            if (!isSuperAdmin) return;
+                            await FirebaseService.rejectTransferFINAL({
+                              transfer: r,
+                            });
+                            alert("Transfer ditolak");
+                          }}
+                          className={`px-3 py-2 rounded-lg text-[11px] font-bold
                   ${
                     !isSuperAdmin || r.status !== "Pending"
                       ? "bg-gray-300 text-gray-500"
                       : "bg-red-500 text-white hover:bg-red-600"
                   }
                 `}
-              >
-                ✖ Reject
-              </button>
+                        >
+                          ✖ Reject
+                        </button>
 
-              {/* PRINT */}
-              <button
-                disabled={!isSuperAdmin}
-                onClick={() => {
-                  if (!isSuperAdmin) return;
-                  const sjId = r.suratJalanId || r.id;
-                  navigate(`/surat-jalan/${sjId}`);
-                }}
-                className="px-3 py-2 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600"
-              >
-                <FaPrint /> Print Surat Jalan
-              </button>
-
-            </div>
-          </td>
-        </tr>
-      );
-    })}
-</tbody>
-
+                        {/* PRINT */}
+                        <button
+                          disabled={!isSuperAdmin}
+                          onClick={() => {
+                            if (!isSuperAdmin) return;
+                            const sjId = r.suratJalanId || r.id;
+                            navigate(`/surat-jalan/${sjId}`);
+                          }}
+                          className="px-3 py-2 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600"
+                        >
+                          <FaPrint /> Print Surat Jalan
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+          </tbody>
         </table>
       </div>
     </div>
