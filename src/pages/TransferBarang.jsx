@@ -329,30 +329,48 @@ export default function TransferBarang() {
 
   const brandOptions = useMemo(() => {
     if (!form.kategori || !form.tokoPengirim) return [];
-
-    // ✅ KHUSUS ACCESSORIES → dari MASTER BARANG
+  
     // ================= ACCESSORIES =================
     if (form.kategori === "ACCESSORIES") {
-      return [
+      const brandsFromAccessories = [
         ...new Set(
           inventoryAccessories
             .filter(
-              (i) => i.toko.toUpperCase() === form.tokoPengirim.toUpperCase()
+              (i) =>
+                i.toko.toUpperCase() === form.tokoPengirim.toUpperCase()
             )
             .map((i) => i.namaBrand)
+            .filter(Boolean)
         ),
       ];
+  
+      // 🔥 fallback ke MASTER BARANG kalau kosong
+      if (brandsFromAccessories.length === 0) {
+        return [
+          ...new Set(
+            masterBarang
+              .filter(
+                (b) =>
+                  String(b.kategoriBarang || "")
+                    .toUpperCase()
+                    .trim() === form.kategori.toUpperCase().trim()
+              )
+              .map((b) => b.brand)
+              .filter(Boolean)
+          ),
+        ];
+      }
+  
+      return brandsFromAccessories;
     }
-
-    // 🔁 selain accessories → pakai inventory lama
-    if (!form.tokoPengirim) return [];
-
-    return [
+  
+    // ================= NON ACCESSORIES =================
+    const brandsFromInventory = [
       ...new Set(
         inventory
           .filter(
             (i) =>
-              i.status === "AVAILABLE" && // 🔥 HANYA AVAILABLE
+              i.status === "AVAILABLE" &&
               i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
               i.kategori.toUpperCase() === form.kategori.toUpperCase()
           )
@@ -360,7 +378,34 @@ export default function TransferBarang() {
           .filter(Boolean)
       ),
     ];
-  }, [inventory, masterBarang, form.tokoPengirim, form.kategori]);
+  
+    // 🔥 JANGAN UBAH LOGIC LAMA
+    // kalau ada stok → pakai ini
+    if (brandsFromInventory.length > 0) {
+      return brandsFromInventory;
+    }
+  
+    // 🔥 kalau tidak ada stok → ambil dari MASTER BARANG
+    return [
+      ...new Set(
+        masterBarang
+          .filter(
+            (b) =>
+              String(b.kategoriBarang || "")
+                .toUpperCase()
+                .trim() === form.kategori.toUpperCase().trim()
+          )
+          .map((b) => b.brand)
+          .filter(Boolean)
+      ),
+    ];
+  }, [
+    inventory,
+    inventoryAccessories,
+    masterBarang,
+    form.tokoPengirim,
+    form.kategori,
+  ]);
 
   // ================= REAL STOCK NON IMEI PER TOKO =================
   const stokNonImeiPerToko = useMemo(() => {
