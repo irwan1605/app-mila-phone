@@ -311,8 +311,8 @@ export default function FormPaymentSection({
 
     return paymentSplit.detail.every((p) => {
       if (p.metode === "CASH") return true;
-      if (p.metode === "TUKAR TAMBAH") return true; // bebas bank
-      return !!p.bankId; // DEBIT / QRIS wajib bank
+      if (p.metode === "TUKAR TAMBAH") return true;
+      return !!p.bankNama;
     });
   }, [
     paymentSplit,
@@ -404,29 +404,35 @@ export default function FormPaymentSection({
 
               {/* BANK */}
               {p.metode !== "CASH" && p.metode !== "TUKAR TAMBAH" && (
-                <select
-                  value={p.bankId}
-                  className="w-full border rounded px-2 py-1"
-                  onChange={(e) => {
-                    const bank = masterBank.find(
-                      (b) => b.id === e.target.value
-                    );
-                    const next = [...paymentSplit.detail];
-                    next[i] = {
-                      ...next[i],
-                      bankId: bank?.id || "",
-                      bankNama: bank?.namaBank || "",
-                    };
-                    setPaymentSplit({ ...paymentSplit, detail: next });
-                  }}
-                >
-                  <option value="">-- Bank --</option>
-                  {getBankByMetode(p.metode).map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.namaBank}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <input
+                    list={`bank-list-${i}`}
+                    type="text"
+                    placeholder="Pilih / ketik nama bank..."
+                    className="w-full border rounded px-2 py-1"
+                    value={p.bankNama || ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const bank = masterBank.find(
+                        (b) => b.namaBank.toUpperCase() === val.toUpperCase()
+                      );
+
+                      const next = [...paymentSplit.detail];
+                      next[i] = {
+                        ...next[i],
+                        bankId: bank?.id || "MANUAL",
+                        bankNama: val,
+                      };
+                      setPaymentSplit({ ...paymentSplit, detail: next });
+                    }}
+                  />
+
+                  <datalist id={`bank-list-${i}`}>
+                    {getBankByMetode(p.metode).map((b) => (
+                      <option key={b.id} value={b.namaBank} />
+                    ))}
+                  </datalist>
+                </>
               )}
 
               {p.metode === "TUKAR TAMBAH" && (
@@ -510,27 +516,33 @@ export default function FormPaymentSection({
               {/* BANK (khusus DEBIT / QRIS) */}
               {cashPayment.metode !== "CASH" &&
                 cashPayment.metode !== "TUKAR TAMBAH" && (
-                  <select
-                    className="w-full border rounded px-2 py-1"
-                    value={cashPayment.bankId}
-                    onChange={(e) => {
-                      const bank = masterBank.find(
-                        (b) => b.id === e.target.value
-                      );
-                      setCashPayment({
-                        ...cashPayment,
-                        bankId: bank?.id || "",
-                        bankNama: bank?.namaBank || "",
-                      });
-                    }}
-                  >
-                    <option value="">-- Bank --</option>
-                    {getBankByMetode(cashPayment.metode).map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.namaBank}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <input
+                      list="bank-list-cash"
+                      type="text"
+                      placeholder="Pilih / ketik nama bank..."
+                      className="w-full border rounded px-2 py-1"
+                      value={cashPayment.bankNama || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const bank = masterBank.find(
+                          (b) => b.namaBank.toUpperCase() === val.toUpperCase()
+                        );
+
+                        setCashPayment({
+                          ...cashPayment,
+                          bankId: bank?.id || "MANUAL",
+                          bankNama: val,
+                        });
+                      }}
+                    />
+
+                    <datalist id="bank-list-cash">
+                      {getBankByMetode(cashPayment.metode).map((b) => (
+                        <option key={b.id} value={b.namaBank} />
+                      ))}
+                    </datalist>
+                  </>
                 )}
 
               {/* NOMINAL */}

@@ -40,6 +40,8 @@ export default function FormItemSection({
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [imeiKeyword, setImeiKeyword] = useState("");
   const [stokToko, setStokToko] = useState([]);
+  const [editIndex, setEditIndex] = useState(null);
+  const [showTable, setShowTable] = useState(false);
 
   /* ================= HELPER CEK TOKO DARI TRANSFER ================= */
   const findTokoByTransfer = (imei) => {
@@ -311,6 +313,81 @@ export default function FormItemSection({
     );
 
     safeOnChange(newItems);
+  };
+
+  const handleShowTable = () => {
+    setShowTable(true);
+
+    const last = items[items.length - 1];
+
+    if (!last) {
+      safeOnChange([
+        {
+          id: Date.now(),
+          kategoriBarang: "",
+          namaBrand: "",
+          namaBarang: "",
+          imei: "",
+          imeiList: [],
+          qty: 0,
+          hargaAktif: 0,
+          isImei: false,
+        },
+      ]);
+      return;
+    }
+
+    // ================= VALIDASI =================
+    if (!last.namaBarang) {
+      alert("⚠ Pilih barang dulu");
+      return;
+    }
+
+    if (last.isImei && (!last.imeiList || last.imeiList.length === 0)) {
+      alert("⚠ IMEI wajib diisi");
+      return;
+    }
+
+    if (!last.isImei && (!last.qty || last.qty < 1)) {
+      alert("⚠ Qty tidak valid");
+      return;
+    }
+
+    // ================= TAMBAH ITEM BARU =================
+    const newItem = {
+      id: Date.now(),
+      kategoriBarang: "",
+      namaBrand: "",
+      namaBarang: "",
+      imei: "",
+      imeiList: [],
+      qty: 0,
+      hargaAktif: 0,
+      isImei: false,
+    };
+
+    safeOnChange([...items, newItem]);
+    setEditIndex(items.length); // langsung edit baris baru
+  };
+
+  const handleEdit = (index) => {
+    setEditIndex(index);
+  };
+
+  const handleDelete = (index) => {
+    const item = items[index];
+
+    // unlock IMEI jika ada
+    item?.imeiList?.forEach((im) =>
+      unlockImeiRealtime(im, userLogin.uid || userLogin.username)
+    );
+
+    const newItems = items.filter((_, i) => i !== index);
+    safeOnChange(newItems);
+
+    if (newItems.length === 0) {
+      setShowTable(false);
+    }
   };
 
   const kategoriList = useMemo(
@@ -597,6 +674,34 @@ export default function FormItemSection({
     return Object.keys(nonImeiStockMap);
   }, [nonImeiStockMap]);
 
+  const grandTotal = useMemo(() => {
+    return items.reduce((total, item) => {
+      const harga = Number(item.hargaAktif || 0);
+      const qty = Number(item.qty || 0);
+      return total + harga * qty;
+    }, 0);
+  }, [items]);
+
+  useEffect(() => {
+    if (!tahap1Valid) return;
+  
+    if (items.length === 0) {
+      safeOnChange([
+        {
+          id: Date.now(),
+          kategoriBarang: "",
+          namaBrand: "",
+          namaBarang: "",
+          imei: "",
+          imeiList: [],
+          qty: 0,
+          hargaAktif: 0,
+          isImei: false,
+        },
+      ]);
+    }
+  }, [tahap1Valid]);
+
   /* ================= RENDER ================= */
   return (
     <div
@@ -615,6 +720,10 @@ export default function FormItemSection({
       )}
 
       {items.map((item, idx) => {
+        // 🔥 jika sedang edit → tampilkan item yang diedit
+        if (editIndex !== null) {
+          if (editIndex !== idx) return null;
+        }
         // ===============================
         // VALIDASI FINAL UNTUK TOTAL
         // ===============================
@@ -1062,6 +1171,18 @@ export default function FormItemSection({
               </div>
             )}
 
+            {editIndex === idx && (
+              <button
+                className="btn btn-success w-full mt-4"
+                onClick={() => {
+                  setEditIndex(null); // tutup form
+                  setShowTable(true); // pastikan table tetap tampil
+                }}
+              >
+                ✅ Simpan Perubahan
+              </button>
+            )}
+
             <div className="text-right font-bold text-green-700">
               {isItemComplete ? (
                 <>TOTAL PENJUALAN: Rp {totalItem.toLocaleString("id-ID")}</>
@@ -1075,11 +1196,108 @@ export default function FormItemSection({
         );
       })}
 
+      {showTable && items.length > 0 && (
+        <div className="mt-6 border rounded-xl">
+          <div className="overflow-x-auto">
+            <table className="min-w-[900px] w-full text-sm border border-gray-300">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="border border-gray-300 p-2 text-center">No</th>
+                  <th className="border border-gray-300 p-2 text-left">
+                    Kategori
+                  </th>
+                  <th className="border border-gray-300 p-2 text-left">
+                    Brand
+                  </th>
+                  <th className="border border-gray-300 p-2 text-left">
+                    Barang
+                  </th>
+                  <th className="border border-gray-300 p-2 text-center">
+                    Qty
+                  </th>
+                  <th className="border border-gray-300 p-2 text-right">
+                    Harga
+                  </th>
+                  <th className="border border-gray-300 p-2 text-right">
+                    Total
+                  </th>
+                  <th className="border border-gray-300 p-2 text-center">
+                    AKSI
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, i) => {
+                  const total =
+                    Number(it.qty || 0) * Number(it.hargaAktif || 0);
+
+                  return (
+                    <tr key={it.id}>
+                      <td className="border border-gray-300 p-2 text-center font-semibold">
+                        {i + 1}
+                      </td>
+                      <td className="border border-gray-300 p-2">
+                        {it.kategoriBarang}
+                      </td>
+                      <td className="border border-gray-300 p-2">
+                        {it.namaBrand}
+                      </td>
+                      <td className="border border-gray-300 p-2">
+                        {it.namaBarang}
+                        {it.isImei && (
+                          <div className="text-xs text-gray-500">
+                            IMEI: {it.imeiList?.[0]}
+                          </div>
+                        )}
+                      </td>
+                      <td className="border border-gray-300 p-2 text-center">
+                        {it.qty}
+                      </td>
+                      <td className="border border-gray-300 p-2 text-right">
+                        Rp {Number(it.hargaAktif || 0).toLocaleString("id-ID")}
+                      </td>
+                      <td className="border border-gray-300 p-2 text-right font-semibold text-green-700">
+                        Rp {total.toLocaleString("id-ID")}
+                      </td>
+                      <td className="border border-gray-300 p-2 text-center">
+                        <div className="flex justify-center gap-2">
+                          <button
+                            className="btn btn-xs btn-warning"
+                            onClick={() => handleEdit(i)}
+                          >
+                            EDIT
+                          </button>
+                          <button
+                            className="btn btn-xs btn-error"
+                            onClick={() => handleDelete(i)}
+                          >
+                            DELETE
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {/* 🔥 GRAND TOTAL */}
+          <div className="flex justify-end p-4 bg-gray-50 border-t">
+            <div className="text-right">
+              <div className="text-sm text-gray-600">GRAND TOTAL</div>
+              <div className="text-2xl font-bold text-green-700">
+                Rp {grandTotal.toLocaleString("id-ID")}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2">
         <button
           className="btn btn-outline flex-1"
           disabled={!allowManual || !tahap1Valid}
-          onClick={handleTambahBarang}
+          onClick={handleShowTable}
         >
           ➕ Tambah Barang
         </button>
