@@ -60,6 +60,28 @@ const formatCurrency = (n) => {
 };
 
 // ===============================
+// Generate No Pre Order
+// ===============================
+const generateNoPreOrder = (tokoName, existingSetoran = []) => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const yyyymm = `${year}${month}`;
+
+  const kodeToko =
+    tokoName?.split(" ")[0]?.substring(0, 3).toUpperCase() || "TKS";
+
+  // filter hanya bulan ini
+  const bulanIni = existingSetoran.filter((s) =>
+    (s.NO_PRE_ORDER || "").includes(yyyymm)
+  );
+
+  const urut = String(bulanIni.length + 1).padStart(4, "0");
+
+  return `PO/${kodeToko}/${yyyymm}/${urut}`;
+};
+
+// ===============================
 // Normalizer Record Firebase
 // ===============================
 function normalizeRecord(r) {
@@ -124,6 +146,30 @@ export default function FinanceReport() {
 
   const isSPV = role.startsWith("spv_toko");
   const isSuper = role === "superadmin" || role === "admin" || isSPV;
+
+  const [masterBarang, setMasterBarang] = useState([]);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "master_barang"), (snap) => {
+      const arr = [];
+      snap.forEach((c) => {
+        const v = c.val();
+        if (!v) return;
+
+        arr.push({
+          kategori: v.kategori || "",
+          brand: v.brand || "",
+          nama: v.nama || "",
+        });
+      });
+
+      setMasterBarang(arr);
+    });
+
+    return () => unsub();
+  }, []);
+
+
 
   useEffect(() => {
     const unsub = listenAllTransaksi((items) => {
@@ -234,6 +280,23 @@ export default function FinanceReport() {
 
   const [form, setForm] = useState(formEmpty);
   const [editId, setEditId] = useState(null);
+  
+  // ===============================
+  // AUTO GENERATE NO PRE ORDER
+  // ===============================
+  useEffect(() => {
+    if (!editId && !form.NO_PRE_ORDER) {
+      const newNo = generateNoPreOrder(
+        form.NAMA_TOKO,
+        setoran
+      );
+  
+      setForm((prev) => ({
+        ...prev,
+        NO_PRE_ORDER: newNo,
+      }));
+    }
+  }, [form.NAMA_TOKO, setoran, editId]);
 
   const tableRef = useRef(null);
   const fileRef = useRef(null);
@@ -445,6 +508,14 @@ export default function FinanceReport() {
     setEditId(null);
   };
 
+  setTimeout(() => {
+    const newNo = generateNoPreOrder(form.NAMA_TOKO, setoran);
+    setForm((prev) => ({
+      ...formEmpty,
+      NO_PRE_ORDER: newNo,
+    }));
+  }, 200);
+
   const deleteSetoran = async (id, tokoName) => {
     if (!window.confirm("Hapus setoran ini?")) return;
     const tokoId = tokoNameToId(tokoName);
@@ -516,18 +587,23 @@ export default function FinanceReport() {
   // Export Excel
   // ===============================
   const exportExcel = (rows) => {
-    const data = rows.map((r) => ({
+    const data = rows.map((r, i) => ({
+      No: i + 1,
+      "No Pre Order": r.NO_PRE_ORDER,
       Tanggal: r.TANGGAL_TRANSAKSI,
       Toko: r.NAMA_TOKO,
-      Tipe: r.TIPE,
-      Kategori: r.KATEGORI_PEMBAYARAN,
-      Jumlah: r.JUMLAH_SETORAN,
-      Keterangan: r.KETERANGAN,
-      "No Ref": r.REF_SETORAN,
-      "Dibuat Oleh": r.DIBUAT_OLEH,
+      Pelanggan: r.NAMA_PELANGGAN,
+      "ID Pelanggan": r.ID_PELANGGAN,
+      "No TLP": r.NO_TLP,
+      Sales: r.NAMA_SALES,
+      Barang: r.NAMA_BARANG,
+      QTY: r.QTY,
+      Harga: r.HARGA,
+      DP: r.DP_PAYMENT,
+      Total: r.QTY * r.HARGA,
       Status: r.STATUS,
     }));
-
+  
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Setoran");
@@ -545,6 +621,18 @@ export default function FinanceReport() {
     pdf.addImage(img, "PNG", 0, 0, 297, (canvas.height * 297) / canvas.width);
     pdf.save("FinanceReport_Setoran.pdf");
   };
+
+  useEffect(() => {
+  const total =
+    Number(form.QTY || 0) *
+    Number(form.HARGA || 0);
+
+  setForm((prev) => ({
+    ...prev,
+    GRAND_TOTAL_BARANG: total,
+    JUMLAH_SETORAN: total,
+  }));
+}, [form.QTY, form.HARGA]);
 
   // =====================================================
   //                      JSX UI
@@ -643,20 +731,22 @@ export default function FinanceReport() {
               </select>
             </div>
 
+            {/* KATEGORI PAYMENT USER */}
             <div>
-              <label className="text-xs">Kategori</label>
+              <label className="text-xs">Kategori Payment User</label>
               <select
-                value={filter.kategori}
-                onChange={(e) => {
-                  setFilter((f) => ({ ...f, kategori: e.target.value }));
-                  setCurrentPage(1);
-                }}
+                value={form.KATEGORI_PEMBAYARAN || ""}
+                onChange={(e) =>
+                  setForm({ ...form, KATEGORI_PEMBAYARAN: e.target.value })
+                }
                 className="w-full border rounded p-1"
               >
-                <option value="ALL">Semua</option>
-                <option value="Cash">Cash</option>
-                <option value="QRIS">QRIS</option>
-                <option value="Transfer">Transfer</option>
+                <option value="">Pilih Kategori</option>
+                {paymentJenisOptions.map((j, i) => (
+                  <option key={i} value={j}>
+                    {j}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -677,439 +767,459 @@ export default function FinanceReport() {
 
         {/* Form */}
         <div className="border rounded-xl p-4 bg-white shadow md:col-span-2">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <h3 className="font-semibold mb-3">
-            {editId ? "Edit Setoran" : "Tambah SETORAN Pre ORDER PENJUALAN"}
-          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <h3 className="font-semibold mb-3">
+              {editId ? "Edit Setoran" : "Tambah SETORAN Pre ORDER PENJUALAN"}
+            </h3>
 
-          {/* NO PRE ORDER */}
-          <div>
-            <label className="text-xs">No Pre Order</label>
-            <input
-              value={form.NO_PRE_ORDER || ""}
-              onChange={(e) =>
-                setForm({ ...form, NO_PRE_ORDER: e.target.value })
-              }
-              className="w-full border rounded p-1"
-            />
-          </div>
+            {/* NO PRE ORDER */}
+            <div>
+              <label className="text-xs">No Pre Order</label>
+              <input
+                value={form.NO_PRE_ORDER || ""}
+                onChange={(e) =>
+                  setForm({ ...form, NO_PRE_ORDER: e.target.value })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
 
-          {/* TANGGAL */}
-          <div>
-            <label className="text-xs">Tanggal</label>
-            <input
-              type="date"
-              value={form.TANGGAL_TRANSAKSI}
-              onChange={(e) =>
-                setForm({ ...form, TANGGAL_TRANSAKSI: e.target.value })
-              }
-              className="w-full border rounded p-1"
-            />
-          </div>
+            {/* TANGGAL */}
+            <div>
+              <label className="text-xs">Tanggal</label>
+              <input
+                type="date"
+                value={form.TANGGAL_TRANSAKSI}
+                onChange={(e) =>
+                  setForm({ ...form, TANGGAL_TRANSAKSI: e.target.value })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
 
-          {/* TOKO */}
-          <div>
-            <label className="text-xs">Nama Toko</label>
-            <select
-              value={form.NAMA_TOKO}
-              onChange={(e) => setForm({ ...form, NAMA_TOKO: e.target.value })}
-              className="w-full border rounded p-1"
-            >
-              {ALL_TOKO.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* NAMA PELANGGAN */}
-          <div>
-            <label className="text-xs">Nama Pelanggan</label>
-            <input
-              value={form.NAMA_PELANGGAN || ""}
-              onChange={(e) =>
-                setForm({ ...form, NAMA_PELANGGAN: e.target.value })
-              }
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* ID PELANGGAN */}
-          <div>
-            <label className="text-xs">ID Pelanggan</label>
-            <input
-              value={form.ID_PELANGGAN || ""}
-              onChange={(e) =>
-                setForm({ ...form, ID_PELANGGAN: e.target.value })
-              }
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* NO TLP */}
-          <div>
-            <label className="text-xs">No TLP</label>
-            <input
-              value={form.NO_TLP || ""}
-              onChange={(e) => setForm({ ...form, NO_TLP: e.target.value })}
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* STORE HEAD */}
-          <div>
-            <label className="text-xs">Store Head</label>
-            <input
-              value={form.STORE_HEAD || ""}
-              onChange={(e) => setForm({ ...form, STORE_HEAD: e.target.value })}
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* SALES */}
-          <div>
-            <label className="text-xs">Nama Sales</label>
-            <input
-              value={form.NAMA_SALES || ""}
-              onChange={(e) => setForm({ ...form, NAMA_SALES: e.target.value })}
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* SALES HANDLE */}
-          <div>
-            <label className="text-xs">Sales Handle</label>
-            <input
-              value={form.SALES_HANDLE || ""}
-              onChange={(e) =>
-                setForm({ ...form, SALES_HANDLE: e.target.value })
-              }
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* KATEGORI BARANG */}
-          <div>
-            <label className="text-xs">Kategori Barang</label>
-            <input
-              value={form.KATEGORI_BARANG || ""}
-              onChange={(e) =>
-                setForm({ ...form, KATEGORI_BARANG: e.target.value })
-              }
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* BRAND */}
-          <div>
-            <label className="text-xs">Nama Brand</label>
-            <input
-              value={form.NAMA_BRAND || ""}
-              onChange={(e) => setForm({ ...form, NAMA_BRAND: e.target.value })}
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* BARANG */}
-          <div>
-            <label className="text-xs">Nama Barang</label>
-            <input
-              value={form.NAMA_BARANG || ""}
-              onChange={(e) =>
-                setForm({ ...form, NAMA_BARANG: e.target.value })
-              }
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* QTY */}
-          <div>
-            <label className="text-xs">QTY</label>
-            <input
-              type="number"
-              value={form.QTY || 0}
-              onChange={(e) =>
-                setForm({ ...form, QTY: Number(e.target.value) })
-              }
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* HARGA */}
-          <div>
-            <label className="text-xs">Harga</label>
-            <input
-              type="number"
-              value={form.HARGA || 0}
-              onChange={(e) =>
-                setForm({ ...form, HARGA: Number(e.target.value) })
-              }
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* DP */}
-          <div>
-            <label className="text-xs">DP Payment Metode User</label>
-            <input
-              type="number"
-              value={form.DP_PAYMENT || 0}
-              onChange={(e) =>
-                setForm({ ...form, DP_PAYMENT: Number(e.target.value) })
-              }
-              className="w-full border rounded p-1"
-            />
-          </div>
-
-          {/* TOTAL AUTO */}
-          <div>
-            <label className="text-xs">Total</label>
-            <input
-              readOnly
-              value={formatCurrency((form.QTY || 0) * (form.HARGA || 0))}
-              className="w-full border rounded p-1 bg-gray-100 font-semibold"
-            />
-          </div>
-
-          {/* BUTTONS */}
-          <div className="md:col-span-4 flex gap-2 mt-3">
-            {editId ? (
-              <>
-                <button
-                  onClick={saveEdit}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded"
-                >
-                  Simpan Perubahan
-                </button>
-                <button
-                  onClick={() => {
-                    setForm(formEmpty);
-                    setEditId(null);
-                  }}
-                  className="px-4 py-2 border rounded"
-                >
-                  Batal
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={addSetoran}
-                className="px-4 py-2 bg-blue-600 text-white rounded"
+            {/* TOKO */}
+            <div>
+              <label className="text-xs">Nama Toko</label>
+              <select
+                value={form.NAMA_TOKO}
+                onChange={(e) =>
+                  setForm({ ...form, NAMA_TOKO: e.target.value })
+                }
+                className="w-full border rounded p-1"
               >
-                Tambah SETORAN Pre ORDER PENJUALAN
-              </button>
-            )}
-          </div>
+                {ALL_TOKO.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* NAMA PELANGGAN */}
+            <div>
+              <label className="text-xs">Nama Pelanggan</label>
+              <input
+                value={form.NAMA_PELANGGAN || ""}
+                onChange={(e) =>
+                  setForm({ ...form, NAMA_PELANGGAN: e.target.value })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            {/* ID PELANGGAN */}
+            <div>
+              <label className="text-xs">ID Pelanggan</label>
+              <input
+                value={form.ID_PELANGGAN || ""}
+                onChange={(e) =>
+                  setForm({ ...form, ID_PELANGGAN: e.target.value })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            {/* NO TLP */}
+            <div>
+              <label className="text-xs">No TLP</label>
+              <input
+                value={form.NO_TLP || ""}
+                onChange={(e) => setForm({ ...form, NO_TLP: e.target.value })}
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            {/* STORE HEAD */}
+            <div>
+              <label className="text-xs">Store Head</label>
+              <input
+                value={form.STORE_HEAD || ""}
+                onChange={(e) =>
+                  setForm({ ...form, STORE_HEAD: e.target.value })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            {/* SALES */}
+            <div>
+              <label className="text-xs">Nama Sales</label>
+              <input
+                value={form.NAMA_SALES || ""}
+                onChange={(e) =>
+                  setForm({ ...form, NAMA_SALES: e.target.value })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            {/* SALES HANDLE */}
+            <div>
+              <label className="text-xs">Sales Handle</label>
+              <input
+                value={form.SALES_HANDLE || ""}
+                onChange={(e) =>
+                  setForm({ ...form, SALES_HANDLE: e.target.value })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            {/* KATEGORI BARANG */}
+            <div>
+              <label className="text-xs">Kategori Barang</label>
+              <input
+                value={form.KATEGORI_BARANG || ""}
+                onChange={(e) =>
+                  setForm({ ...form, KATEGORI_BARANG: e.target.value })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            {/* BRAND */}
+            <div>
+              <label className="text-xs">Nama Brand</label>
+              <input
+                list="brand-list"
+                value={form.NAMA_BRAND || ""}
+                onChange={(e) =>
+                  setForm({ ...form, NAMA_BRAND: e.target.value })
+                }
+                className="w-full border rounded p-1"
+              />
+
+              <datalist id="brand-list">
+                {[...new Set(masterBarang.map((b) => b.brand))].map((b, i) => (
+                  <option key={i} value={b} />
+                ))}
+              </datalist>
+            </div>
+
+            {/* BARANG */}
+            <div>
+              <label className="text-xs">Nama Barang</label>
+              <input
+                list="barang-list"
+                value={form.NAMA_BARANG || ""}
+                onChange={(e) =>
+                  setForm({ ...form, NAMA_BARANG: e.target.value })
+                }
+                className="w-full border rounded p-1"
+              />
+
+              <datalist id="barang-list">
+                {masterBarang
+                  .filter((b) =>
+                    form.NAMA_BRAND ? b.brand === form.NAMA_BRAND : true
+                  )
+                  .map((b, i) => (
+                    <option key={i} value={b.nama} />
+                  ))}
+              </datalist>
+            </div>
+
+            {/* QTY */}
+            <div>
+              <label className="text-xs">QTY</label>
+              <input
+                type="number"
+                value={form.QTY || 0}
+                onChange={(e) =>
+                  setForm({ ...form, QTY: Number(e.target.value) })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            {/* HARGA */}
+            <div>
+              <label className="text-xs">Harga</label>
+              <input
+                type="number"
+                value={form.HARGA || 0}
+                onChange={(e) =>
+                  setForm({ ...form, HARGA: Number(e.target.value) })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            {/* DP */}
+            <div>
+              <label className="text-xs">Kategori Payment Metode User</label>
+              <select
+                value={filter.kategori}
+                onChange={(e) => {
+                  setFilter((f) => ({ ...f, kategori: e.target.value }));
+                  setCurrentPage(1);
+                }}
+                className="w-full border rounded p-1"
+              >
+                <option value="ALL">Semua</option>
+                <option value="Cash">Cash</option>
+                <option value="QRIS">QRIS</option>
+                <option value="Transfer">Transfer</option>
+              </select>
+            </div>
+
+            {/* DP */}
+            <div>
+              <label className="text-xs">DP Payment Metode User</label>
+              <input
+                type="number"
+                value={form.DP_PAYMENT || 0}
+                onChange={(e) =>
+                  setForm({ ...form, DP_PAYMENT: Number(e.target.value) })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            {/* TOTAL AUTO */}
+            <div>
+              <label className="text-xs">Total</label>
+              <input
+                readOnly
+                value={formatCurrency((form.QTY || 0) * (form.HARGA || 0))}
+                className="w-full border rounded p-1 bg-gray-100 font-semibold"
+              />
+            </div>
+
+            {/* BUTTONS */}
+            <div className="md:col-span-4 flex gap-2 mt-3">
+              {editId ? (
+                <>
+                  <button
+                    onClick={saveEdit}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded"
+                  >
+                    Simpan Perubahan
+                  </button>
+                  <button
+                    onClick={() => {
+                      setForm(formEmpty);
+                      setEditId(null);
+                    }}
+                    className="px-4 py-2 border rounded"
+                  >
+                    Batal
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={addSetoran}
+                  className="px-4 py-2 bg-blue-600 text-white rounded"
+                >
+                  Tambah SETORAN Pre ORDER PENJUALAN
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
-{/* TABEL */}
-<div className="border rounded-xl p-4 bg-white shadow">
-  <h3 className="font-semibold mb-2">
-    Daftar SETORAN Pre ORDER PENJUALAN
-  </h3>
+      {/* TABEL */}
+      <div className="border rounded-xl p-4 bg-white shadow">
+        <h3 className="font-semibold mb-2">
+          Daftar SETORAN Pre ORDER PENJUALAN
+        </h3>
 
-  <div className="text-sm mb-2">
-    Menampilkan <b>{filteredSetoran.length}</b> data — Total:{" "}
-    {formatCurrency(totalFilteredSetoran)}
-  </div>
+        <div className="text-sm mb-2">
+          Menampilkan <b>{filteredSetoran.length}</b> data — Total:{" "}
+          {formatCurrency(totalFilteredSetoran)}
+        </div>
 
-  <div ref={tableRef} className="overflow-x-auto">
-    <table className="min-w-[1400px] w-full text-sm">
-      <thead className="bg-slate-100 text-slate-700">
-        <tr>
-          <th className="px-3 py-2 text-left">No Pre Order</th>
-          <th className="px-3 py-2 text-left">Tanggal</th>
-          <th className="px-3 py-2 text-left">Toko</th>
-          <th className="px-3 py-2 text-left">Nama Pelanggan</th>
-          <th className="px-3 py-2 text-left">ID Pelanggan</th>
-          <th className="px-3 py-2 text-left">No TLP</th>
-          <th className="px-3 py-2 text-left">Store Head</th>
-          <th className="px-3 py-2 text-left">Sales</th>
-          <th className="px-3 py-2 text-left">Sales Handle</th>
-          <th className="px-3 py-2 text-left">Kategori</th>
-          <th className="px-3 py-2 text-left">Brand</th>
-          <th className="px-3 py-2 text-left">Barang</th>
-          <th className="px-3 py-2 text-center">QTY</th>
-          <th className="px-3 py-2 text-right">Harga</th>
-          <th className="px-3 py-2 text-right">DP Payment</th>
-          <th className="px-3 py-2 text-right">Total</th>
-          <th className="px-3 py-2 text-left">Status</th>
-          <th className="px-3 py-2 text-left">Aksi</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {paginatedSetoran.length === 0 ? (
-          <tr>
-            <td
-              colSpan={18}
-              className="py-6 text-center text-slate-500"
-            >
-              Tidak ada data
-            </td>
-          </tr>
-        ) : (
-          paginatedSetoran.map((r) => {
-            const total = Number(r.QTY || 0) * Number(r.HARGA || 0);
-
-            return (
-              <tr key={r.id} className="border-b hover:bg-slate-50">
-                <td className="px-3 py-2 font-semibold">
-                  {r.NO_PRE_ORDER}
-                </td>
-
-                <td className="px-3 py-2">
-                  {r.TANGGAL_TRANSAKSI}
-                </td>
-
-                <td className="px-3 py-2">
-                  {r.NAMA_TOKO}
-                </td>
-
-                <td className="px-3 py-2">
-                  {r.NAMA_PELANGGAN}
-                </td>
-
-                <td className="px-3 py-2">
-                  {r.ID_PELANGGAN}
-                </td>
-
-                <td className="px-3 py-2">
-                  {r.NO_TLP}
-                </td>
-
-                <td className="px-3 py-2">
-                  {r.STORE_HEAD}
-                </td>
-
-                <td className="px-3 py-2">
-                  {r.NAMA_SALES}
-                </td>
-
-                <td className="px-3 py-2">
-                  {r.SALES_HANDLE}
-                </td>
-
-                <td className="px-3 py-2">
-                  {r.KATEGORI_BARANG}
-                </td>
-
-                <td className="px-3 py-2">
-                  {r.NAMA_BRAND}
-                </td>
-
-                <td className="px-3 py-2">
-                  {r.NAMA_BARANG}
-                </td>
-
-                <td className="px-3 py-2 text-center">
-                  {r.QTY}
-                </td>
-
-                <td className="px-3 py-2 text-right">
-                  {formatCurrency(r.HARGA)}
-                </td>
-
-                <td className="px-3 py-2 text-right">
-                  {formatCurrency(r.DP_PAYMENT)}
-                </td>
-
-                <td className="px-3 py-2 text-right font-bold text-green-700">
-                  {formatCurrency(total)}
-                </td>
-
-                <td className="px-3 py-2">
-                  <span
-                    className={`px-2 py-1 rounded text-xs font-semibold ${
-                      r.STATUS === "Approved"
-                        ? "bg-green-100 text-green-700"
-                        : r.STATUS === "Rejected"
-                        ? "bg-red-100 text-red-700"
-                        : "bg-yellow-100 text-yellow-700"
-                    }`}
-                  >
-                    {r.STATUS}
-                  </span>
-                </td>
-
-                <td className="px-3 py-2">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() =>
-                        updateStatus(r.id, r.NAMA_TOKO, "Approved")
-                      }
-                      className="px-2 py-1 text-xs bg-green-600 text-white rounded"
-                    >
-                      Approve
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        updateStatus(r.id, r.NAMA_TOKO, "Rejected")
-                      }
-                      className="px-2 py-1 text-xs bg-orange-600 text-white rounded"
-                    >
-                      Reject
-                    </button>
-
-                    <button
-                      onClick={() => beginEdit(r)}
-                      className="px-2 py-1 text-xs bg-blue-600 text-white rounded"
-                    >
-                      Edit
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        deleteSetoran(r.id, r.NAMA_TOKO)
-                      }
-                      className="px-2 py-1 text-xs bg-red-600 text-white rounded"
-                    >
-                      Hapus
-                    </button>
-                  </div>
-                </td>
+        <div ref={tableRef} className="overflow-x-auto">
+          <table className="min-w-[1400px] w-full text-sm">
+            <thead className="bg-slate-100 text-slate-700">
+              <tr>
+                <th className="px-3 py-2 text-center">No</th>
+                <th className="px-3 py-2 text-left">No Pre Order</th>
+                <th className="px-3 py-2 text-left">Tanggal</th>
+                <th className="px-3 py-2 text-left">Toko</th>
+                <th className="px-3 py-2 text-left">Nama Pelanggan</th>
+                <th className="px-3 py-2 text-left">ID Pelanggan</th>
+                <th className="px-3 py-2 text-left">No TLP</th>
+                <th className="px-3 py-2 text-left">Store Head</th>
+                <th className="px-3 py-2 text-left">Sales</th>
+                <th className="px-3 py-2 text-left">Sales Handle</th>
+                <th className="px-3 py-2 text-left">Kategori</th>
+                <th className="px-3 py-2 text-left">Brand</th>
+                <th className="px-3 py-2 text-left">Barang</th>
+                <th className="px-3 py-2 text-center">QTY</th>
+                <th className="px-3 py-2 text-right">Harga</th>
+                <th className="px-3 py-2 text-right">Kategori Payment</th>
+                <th className="px-3 py-2 text-right">DP Payment</th>
+                <th className="px-3 py-2 text-right">Total</th>
+                <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Aksi</th>
               </tr>
-            );
-          })
-        )}
-      </tbody>
-    </table>
-  </div>
+            </thead>
 
-  {/* Pagination */}
-  <div className="flex justify-between items-center mt-3 text-sm">
-    <div>
-      Halaman {currentPage} / {totalPages}
-    </div>
+            <tbody>
+              {paginatedSetoran.length === 0 ? (
+                <tr>
+                  <td colSpan={18} className="py-6 text-center text-slate-500">
+                    Tidak ada data
+                  </td>
+                </tr>
+              ) : (
+                paginatedSetoran.map((r, index) => {
+                  const total = Number(r.QTY || 0) * Number(r.HARGA || 0);
 
-    <div className="flex gap-2">
-      <button
-        onClick={() =>
-          setCurrentPage((p) => Math.max(1, p - 1))
-        }
-        disabled={currentPage === 1}
-        className="px-2 py-1 border rounded disabled:opacity-40"
-      >
-        Prev
-      </button>
+                  const nomor = (currentPage - 1) * rowsPerPage + index + 1;
 
-      <button
-        onClick={() =>
-          setCurrentPage((p) =>
-            Math.min(totalPages, p + 1)
-          )
-        }
-        disabled={currentPage === totalPages}
-        className="px-2 py-1 border rounded disabled:opacity-40"
-      >
-        Next
-      </button>
-    </div>
-  </div>
-</div>
+                  return (
+                    <tr key={r.id} className="border-b hover:bg-slate-50">
+                      <td className="px-3 py-2 text-center font-semibold">
+                        {nomor}
+                      </td>
+                      <td className="px-3 py-2 font-semibold">
+                        {r.NO_PRE_ORDER}
+                      </td>
+
+                      <td className="px-3 py-2">{r.TANGGAL_TRANSAKSI}</td>
+
+                      <td className="px-3 py-2">{r.NAMA_TOKO}</td>
+
+                      <td className="px-3 py-2">{r.NAMA_PELANGGAN}</td>
+
+                      <td className="px-3 py-2">{r.ID_PELANGGAN}</td>
+
+                      <td className="px-3 py-2">{r.NO_TLP}</td>
+
+                      <td className="px-3 py-2">{r.STORE_HEAD}</td>
+
+                      <td className="px-3 py-2">{r.NAMA_SALES}</td>
+
+                      <td className="px-3 py-2">{r.SALES_HANDLE}</td>
+
+                      <td className="px-3 py-2">{r.KATEGORI_BARANG}</td>
+
+                      <td className="px-3 py-2">{r.NAMA_BRAND}</td>
+
+                      <td className="px-3 py-2">{r.NAMA_BARANG}</td>
+
+                      <td className="px-3 py-2 text-center">{r.QTY}</td>
+
+                      <td className="px-3 py-2 text-right">
+                        {formatCurrency(r.HARGA)}
+                      </td>
+
+                      <td className="px-3 py-2 text-right">
+                        {r.KATEGORI_PEMBAYARAN}
+                      </td>
+
+                      <td className="px-3 py-2 text-right">
+                        {formatCurrency(r.DP_PAYMENT)}
+                      </td>
+
+                      <td className="px-3 py-2 text-right font-bold text-green-700">
+                        {formatCurrency(total)}
+                      </td>
+
+                      <td className="px-3 py-2">
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-semibold ${
+                            r.STATUS === "Approved"
+                              ? "bg-green-100 text-green-700"
+                              : r.STATUS === "Rejected"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-yellow-100 text-yellow-700"
+                          }`}
+                        >
+                          {r.STATUS}
+                        </span>
+                      </td>
+
+                      <td className="px-3 py-2">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() =>
+                              updateStatus(r.id, r.NAMA_TOKO, "Approved")
+                            }
+                            className="px-2 py-1 text-xs bg-green-600 text-white rounded"
+                          >
+                            Approve
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              updateStatus(r.id, r.NAMA_TOKO, "Rejected")
+                            }
+                            className="px-2 py-1 text-xs bg-orange-600 text-white rounded"
+                          >
+                            Reject
+                          </button>
+
+                          <button
+                            onClick={() => beginEdit(r)}
+                            className="px-2 py-1 text-xs bg-blue-600 text-white rounded"
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            onClick={() => deleteSetoran(r.id, r.NAMA_TOKO)}
+                            className="px-2 py-1 text-xs bg-red-600 text-white rounded"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex justify-between items-center mt-3 text-sm">
+          <div>
+            Halaman {currentPage} / {totalPages}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-2 py-1 border rounded disabled:opacity-40"
+            >
+              Prev
+            </button>
+
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-2 py-1 border rounded disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div className="flex items-center gap-2">
         <label className=" px-3 py-2 text-xl text-bold font-bold bg-white ">
