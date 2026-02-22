@@ -508,13 +508,13 @@ export default function FinanceReport() {
         </h1>
         <p className="text-sm text-slate-600">
           Semua setoran disimpan sebagai transaksi bertipe{" "}
-          <code>"SETORAN DAN PENGELUARAN"</code>.
+          <code>"SETORAN Pre ORDER DAN PENGELUARAN"</code>.
         </p>
       </div>
 
       <div className="flex items-center gap-2">
         <label className=" px-3 py-2 text-xl text-bold font-bold bg-white ">
-          SETORAN PENJUALAN
+          SETORAN Pre ORDER PENJUALAN
         </label>
 
         <label

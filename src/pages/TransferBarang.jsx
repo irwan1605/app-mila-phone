@@ -362,6 +362,35 @@ export default function TransferBarang() {
     ];
   }, [inventory, masterBarang, form.tokoPengirim, form.kategori]);
 
+  // ================= REAL STOCK NON IMEI PER TOKO =================
+  const stokNonImeiPerToko = useMemo(() => {
+    const map = {};
+
+    history
+      .filter((h) => h.status === "Approved")
+      .forEach((h) => {
+        const metodeMasuk = ["TRANSFER_MASUK"];
+        const metodeKeluar = ["TRANSFER_KELUAR"];
+
+        if (!Array.isArray(h.imeis) || h.imeis.length > 0) return; // skip IMEI
+
+        const key = `${h.tokoPengirim}|${h.brand}|${h.barang}`;
+        const qty = Number(h.qty || 0);
+
+        if (!map[key]) map[key] = 0;
+
+        if (metodeKeluar.includes("TRANSFER_KELUAR")) {
+          map[key] -= qty;
+        }
+
+        if (metodeMasuk.includes("TRANSFER_MASUK")) {
+          map[key] += qty;
+        }
+      });
+
+    return map;
+  }, [history]);
+
   // ================= BARANG OPTIONS (DARI STOK TOKO) =================
   const barangOptions = useMemo(() => {
     if (!form.kategori || !form.brand) return [];
@@ -417,19 +446,18 @@ export default function TransferBarang() {
       ).length;
     }
 
-    // =====================
-    // ACCESSORIES (FIX)
-    // =====================
-    const barangMaster = masterBarang.find(
-      (b) =>
-        String(b.namaBarang || "").toUpperCase() === form.barang.toUpperCase()
-    );
+     // =====================
+  // NON IMEI (REAL STOCK PER TOKO)
+  // =====================
+  const found = inventoryAccessories.find(
+    (i) =>
+      i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
+      i.namaBrand.toUpperCase() === form.brand.toUpperCase() &&
+      i.namaBarang.toUpperCase() === form.barang.toUpperCase()
+  );
 
-    // kalau tidak ada stok field → anggap unlimited sementara
-    if (!barangMaster) return 9999;
-
-    return Number(barangMaster.qty || barangMaster.stok || 9999);
-  }, [inventory, masterBarang, form, isKategoriImei]);
+  return found ? Number(found.qty || 0) : 0;
+}, [inventory, inventoryAccessories, form, isKategoriImei]);
 
   // ================= CEK FORM SUDAH LENGKAP =================
   const isFormComplete =
@@ -673,8 +701,6 @@ export default function TransferBarang() {
     setImeiSearch("");
   };
 
-
-
   // ================= VALIDASI MASTER BARANG =================
   const isBarangValidDiMaster = () => {
     if (!form.brand || !form.barang) return false;
@@ -700,6 +726,23 @@ export default function TransferBarang() {
     if (!isKategoriImei) {
       if (form.qty > stokTersedia) {
         alert(`❌ Qty melebihi stok tersedia.\nStok tersedia: ${stokTersedia}`);
+        return;
+      }
+    }
+
+    if (!isKategoriImei) {
+      const stokTokoIni = stokTersedia;
+
+      if (form.qty > stokTokoIni) {
+        alert(
+          `❌ Stok tidak mencukupi di toko ${form.tokoPengirim}\n` +
+            `Stok tersedia: ${stokTokoIni}`
+        );
+        return;
+      }
+
+      if (stokTokoIni <= 0) {
+        alert("❌ Barang tidak tersedia di toko ini");
         return;
       }
     }
@@ -772,26 +815,36 @@ export default function TransferBarang() {
     if (!form.kategori) return "Kategori wajib diisi";
     if (!form.brand) return "Brand wajib diisi";
     if (!form.barang) return "Nama barang wajib diisi";
-
+  
     if (isKategoriImei && form.imeis.length === 0)
       return "Minimal 1 IMEI harus dimasukkan";
-
-    if (!isKategoriImei && form.qty <= 0) return "Qty wajib diisi";
-
-    // ================= VALIDASI MASTER BARANG =================
+  
+    if (!isKategoriImei && form.qty <= 0)
+      return "Qty wajib diisi";
+  
     if (!isBarangValidDiMaster()) {
       return "Nama Brand atau Nama Barang tidak ada di Master Barang";
     }
-
-    // ================= WAJIB IMEI =================
+  
     if (
       KATEGORI_WAJIB_IMEI.includes(String(form.kategori || "").toUpperCase()) &&
       (!Array.isArray(form.imeis) || form.imeis.length === 0)
     ) {
       return "Kategori ini wajib menggunakan No IMEI";
     }
-
-    return null;
+  
+    // ================= VALIDASI NON IMEI WAJIB ADA STOK =================
+    if (!isKategoriImei) {
+      if (stokTersedia <= 0) {
+        return `Stok barang ${form.barang} di toko ${form.tokoPengirim} tidak tersedia`;
+      }
+  
+      if (Number(form.qty) > stokTersedia) {
+        return `Qty melebihi stok tersedia (${stokTersedia})`;
+      }
+    }
+  
+    return null; // ⬅️ tetap paling bawah
   };
 
   // ================= SUBMIT TRANSFER (FINAL 100%) =================
@@ -922,6 +975,35 @@ export default function TransferBarang() {
         // ======================================
         for (const imei of item.imeis || []) {
           const invRef = ref(db, `inventory/${item.tokoPengirim}/${imei}`);
+
+          // ===============================
+          // VALIDASI NON IMEI (WAJIB SESUAI STOK TOKO)
+          // ===============================
+          if (!Array.isArray(item.imeis) || item.imeis.length === 0) {
+            const stokTokoIni = inventoryAccessories.find(
+              (i) =>
+                i.toko.toUpperCase() === item.tokoPengirim.toUpperCase() &&
+                i.namaBrand.toUpperCase() === item.brand.toUpperCase() &&
+                i.namaBarang.toUpperCase() === item.barang.toUpperCase()
+            );
+
+            const stokReal = stokTokoIni ? Number(stokTokoIni.qty || 0) : 0;
+
+            if (stokReal <= 0) {
+              alert(
+                `❌ Barang ${item.barang} tidak tersedia di toko ${item.tokoPengirim}`
+              );
+              return;
+            }
+
+            if (Number(item.qty) > stokReal) {
+              alert(
+                `❌ Qty melebihi stok toko ${item.tokoPengirim}\n` +
+                  `Stok tersedia: ${stokReal}`
+              );
+              return;
+            }
+          }
 
           // ✅ FIX AUTO UNLOCK (REFUND / OLD TRANSFER)
           await update(invRef, {
