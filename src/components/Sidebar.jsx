@@ -52,13 +52,7 @@ const Sidebar = ({ role, toko, onLogout }) => {
   const { searchQuery } = useGlobalSearch();
 
   const isSPV = String(role || "").startsWith("spv_toko");
-const isSuper =
-  role === "superadmin" ||
-  role === "admin" ||
-  isSPV;
-
-
-
+  const isSuper = role === "superadmin" || role === "admin" || isSPV;
 
   const picMatch = /^pic_toko(\d+)$/i.exec(role || "");
   const picTokoId = picMatch ? Number(picMatch[1]) : toko ? Number(toko) : null;
@@ -483,7 +477,6 @@ const isSuper =
                   </Link>
                 </li>
 
-               
                 <li>
                   <Link
                     to="/laporan-summary-transfer"
@@ -654,6 +647,22 @@ const isSuper =
             >
               <BsTagsFill className="text-xl" />
               <span className="ml-2">LAPORAN PERSEDIAAN</span>
+            </Link>
+
+            {/* ✅ FINANCE REPORT SETORAN - PIC ONLY TOKO SENDIRI */}
+            <Link
+              to="/finance-report"
+              state={{
+                onlyMyToko: true,
+                tokoId: picTokoId,
+                tokoName: TOKO_LABELS[picTokoId],
+              }}
+              className={`flex items-center p-3 hover:bg-blue-500 ${
+                activePath === "/finance-report" ? "bg-blue-600" : ""
+              }`}
+            >
+              <FaMoneyCheckAlt className="text-xl" />
+              <span className="ml-2">LAPORAN KEUANGAN</span>
             </Link>
 
             <Link

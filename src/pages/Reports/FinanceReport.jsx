@@ -9,6 +9,7 @@ import { db } from "../../firebase/FirebaseInit";
 import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { useLocation } from "react-router-dom";
 
 // ===== Firebase Services =====
 import {
@@ -80,7 +81,6 @@ function normalizeRecord(r) {
   };
 }
 
-
 // =====================================================
 //                  MAIN COMPONENT
 // =====================================================
@@ -93,6 +93,16 @@ export default function FinanceReport() {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [paymentJenisList, setPaymentJenisList] = useState([]);
   const [masterPaymentMetode, setMasterPaymentMetode] = useState([]);
+  const location = useLocation();
+  const onlyMyToko = location.state?.onlyMyToko || false;
+  const tokoIdFromState = location.state?.tokoId || null;
+  const tokoNameFromState = location.state?.tokoName || null;
+
+  const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const role = String(loggedUser?.role || "").toLowerCase();
+
+  const isSPV = role.startsWith("spv_toko");
+  const isSuper = role === "superadmin" || role === "admin" || isSPV;
 
   useEffect(() => {
     const unsub = listenAllTransaksi((items) => {
@@ -191,21 +201,16 @@ export default function FinanceReport() {
   useEffect(() => {
     const unsub = listenAllTransaksi((items) => {
       const map = (items || []).map(normalizeRecord);
-  
+
       setAllData(map);
-  
-      setSetoran(
-        map.filter((x) => x.TIPE === "SETORAN")
-      );
-  
-      setPengeluaran(
-        map.filter((x) => x.TIPE === "PENGELUARAN")
-      );
+
+      setSetoran(map.filter((x) => x.TIPE === "SETORAN"));
+
+      setPengeluaran(map.filter((x) => x.TIPE === "PENGELUARAN"));
     });
-  
+
     return () => unsub && unsub();
   }, []);
-  
 
   useEffect(() => {
     const unsub = listenMasterPaymentMetode((data) => {
@@ -236,8 +241,17 @@ export default function FinanceReport() {
   // ===============================
   const filteredSetoran = useMemo(() => {
     return setoran.filter((s) => {
+      // ✅ PIC hanya lihat toko sendiri
+      if (!isSuper) {
+        const tokoLogin =
+          tokoNameFromState || loggedUser?.tokoNama || loggedUser?.toko;
+
+        if (s.NAMA_TOKO !== tokoLogin) return false;
+      }
+
       if (filter.toko !== "ALL" && s.NAMA_TOKO !== filter.toko) return false;
       if (filter.status !== "ALL" && s.STATUS !== filter.status) return false;
+
       if (
         filter.kategori !== "ALL" &&
         s.KATEGORI_PEMBAYARAN !== filter.kategori
@@ -254,9 +268,10 @@ export default function FinanceReport() {
           `${s.NAMA_TOKO} ${s.KETERANGAN} ${s.REF_SETORAN} ${s.DIBUAT_OLEH}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
+
       return true;
     });
-  }, [setoran, filter]);
+  }, [setoran, filter, isSuper, tokoNameFromState]);
 
   const filteredPengeluaran = useMemo(() => {
     return pengeluaran.filter((s) => {
@@ -397,19 +412,18 @@ export default function FinanceReport() {
       alert("Tanggal dan Toko wajib diisi");
       return;
     }
-  
+
     const payload = {
       ...form,
       TOTAL: toNum(form.JUMLAH_SETORAN),
       TIPE: "PENGELUARAN",
       STATUS: "Approved",
     };
-  
+
     const tokoId = tokoNameToId(form.NAMA_TOKO);
     await addTransaksi(tokoId, payload);
     setForm(formEmpty);
   };
-  
 
   // ===============================
   // Import Excel
@@ -549,11 +563,17 @@ export default function FinanceReport() {
                 className="w-full border rounded p-1"
               >
                 <option value="ALL">Semua</option>
-                {ALL_TOKO.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
+                {isSuper ? (
+                  ALL_TOKO.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))
+                ) : (
+                  <option value={loggedUser?.tokoNama || loggedUser?.toko}>
+                    {loggedUser?.tokoNama || loggedUser?.toko}
                   </option>
-                ))}
+                )}
               </select>
             </div>
 
@@ -1120,11 +1140,11 @@ export default function FinanceReport() {
                 </>
               ) : (
                 <button
-                onClick={addPengeluaran}
-                className="px-4 py-2 bg-red-600 text-white rounded"
-              >
-                Tambah Pengeluaran
-              </button>
+                  onClick={addPengeluaran}
+                  className="px-4 py-2 bg-red-600 text-white rounded"
+                >
+                  Tambah Pengeluaran
+                </button>
               )}
             </div>
           </div>
@@ -1136,8 +1156,7 @@ export default function FinanceReport() {
         <div className="border rounded-xl p-4 bg-white shadow">
           <div className="text-sm text-slate-500">Total Semua Pengeluaran</div>
           <div className="text-2xl font-bold">
-            {formatCurrency(totalAllPengeluaran)
-            }
+            {formatCurrency(totalAllPengeluaran)}
           </div>
         </div>
 
