@@ -66,15 +66,36 @@ function normalizeRecord(r) {
   return {
     id: r.id || r._id || r.key || r.ID || String(Date.now()) + Math.random(),
 
-    TIPE: String(r.TIPE || "").toUpperCase(), // ✅ WAJIB
+    TIPE: String(r.TIPE || "").toUpperCase(),
 
     TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || todayStr(),
     NAMA_TOKO: r.NAMA_TOKO || "CILANGKAP PUSAT",
+
+    // ===== TAHAP 1 =====
+    NAMA_PELANGGAN: r.NAMA_PELANGGAN || "",
+    ID_PELANGGAN: r.ID_PELANGGAN || "",
+    NO_TLP: r.NO_TLP || "",
+    STORE_HEAD: r.STORE_HEAD || "",
+    NAMA_SALES: r.NAMA_SALES || "",
+    SALES_HANDLE: r.SALES_HANDLE || "",
+
+    // ===== TAHAP 2 =====
+    DETAIL_BARANG: Array.isArray(r.DETAIL_BARANG) ? r.DETAIL_BARANG : [],
+    GRAND_TOTAL_BARANG: toNum(r.GRAND_TOTAL_BARANG || 0),
+
+    // ===== TAHAP 3 =====
+    PAYMENT_STATUS: r.PAYMENT_STATUS || "",
+    PAYMENT_METHOD: r.PAYMENT_METHOD || "",
+    MDR: toNum(r.MDR || 0),
+    DP_TALANGAN: toNum(r.DP_TALANGAN || 0),
+    TENOR: r.TENOR || "",
+    KETERANGAN_PAYMENT: r.KETERANGAN_PAYMENT || "",
+
+    // ===== SETORAN =====
     KATEGORI_PEMBAYARAN: r.KATEGORI_PEMBAYARAN || "",
     JUMLAH_SETORAN: toNum(r.JUMLAH_SETORAN || r.TOTAL || 0),
     REF_SETORAN: r.REF_SETORAN || "",
     DIBUAT_OLEH: r.DIBUAT_OLEH || "",
-    KETERANGAN: r.KETERANGAN || "",
     STATUS: r.STATUS || "Pending",
 
     TOTAL: toNum(r.TOTAL || r.JUMLAH_SETORAN || 0),
@@ -181,10 +202,32 @@ export default function FinanceReport() {
     TIPE: "SETORAN",
     TANGGAL_TRANSAKSI: todayStr(),
     NAMA_TOKO: "CILANGKAP PUSAT",
+
+    // ===== TAHAP 1 =====
+    NAMA_PELANGGAN: "",
+    ID_PELANGGAN: "",
+    NO_TLP: "",
+    STORE_HEAD: "",
+    NAMA_SALES: "",
+    SALES_HANDLE: "",
+
+    // ===== TAHAP 2 =====
+    DETAIL_BARANG: [], // array item
+    GRAND_TOTAL_BARANG: 0,
+
+    // ===== TAHAP 3 =====
+    PAYMENT_STATUS: "LUNAS",
+    PAYMENT_METHOD: "CASH",
+    PAYMENT_DETAIL: null,
+    MDR: 0,
+    DP_TALANGAN: 0,
+    TENOR: "",
+    KETERANGAN_PAYMENT: "",
+
+    // ===== SETORAN CORE =====
     KATEGORI_PEMBAYARAN: "",
     JUMLAH_SETORAN: 0,
     REF_SETORAN: "",
-    KETERANGAN: "",
     DIBUAT_OLEH: "",
     STATUS: "Pending",
   };
@@ -371,12 +414,18 @@ export default function FinanceReport() {
 
     const payload = {
       ...form,
-      TOTAL: toNum(form.JUMLAH_SETORAN),
+
+      GRAND_TOTAL_BARANG: toNum(form.GRAND_TOTAL_BARANG),
+
+      JUMLAH_SETORAN: toNum(form.GRAND_TOTAL_BARANG),
+      TOTAL: toNum(form.GRAND_TOTAL_BARANG),
+
       TIPE: "SETORAN",
     };
 
     const tokoId = tokoNameToId(form.NAMA_TOKO);
     await addTransaksi(tokoId, payload);
+
     setForm(formEmpty);
   };
 
@@ -628,290 +677,439 @@ export default function FinanceReport() {
 
         {/* Form */}
         <div className="border rounded-xl p-4 bg-white shadow md:col-span-2">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <h3 className="font-semibold mb-3">
-            {editId ? "Edit Setoran" : "Tambah Setoran"}
+            {editId ? "Edit Setoran" : "Tambah SETORAN Pre ORDER PENJUALAN"}
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs">Tanggal</label>
-              <input
-                type="date"
-                value={form.TANGGAL_TRANSAKSI}
-                onChange={(e) =>
-                  setForm({ ...form, TANGGAL_TRANSAKSI: e.target.value })
-                }
-                className="w-full border rounded p-1"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs">Toko</label>
-              <select
-                value={form.NAMA_TOKO}
-                onChange={(e) =>
-                  setForm({ ...form, NAMA_TOKO: e.target.value })
-                }
-                className="w-full border rounded p-1"
-              >
-                {ALL_TOKO.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs">Kategori</label>
-              <input
-                list="paymentJenisList"
-                value={form.KATEGORI_PEMBAYARAN}
-                onChange={(e) =>
-                  setForm({ ...form, KATEGORI_PEMBAYARAN: e.target.value })
-                }
-                placeholder="Pilih / ketik metode"
-                className="w-full border rounded p-1"
-              />
-
-              <datalist id="paymentJenisList">
-                {paymentJenisOptions.map((j, i) => (
-                  <option key={i} value={j} />
-                ))}
-              </datalist>
-            </div>
-
-            <div>
-              <label className="text-xs">Jumlah</label>
-              <input
-                type="number"
-                value={form.JUMLAH_SETORAN}
-                onChange={(e) =>
-                  setForm({ ...form, JUMLAH_SETORAN: toNum(e.target.value) })
-                }
-                className="w-full border rounded p-1 text-right"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs">No Ref</label>
-              <input
-                value={form.REF_SETORAN}
-                onChange={(e) =>
-                  setForm({ ...form, REF_SETORAN: e.target.value })
-                }
-                className="w-full border rounded p-1"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs">Dibuat Oleh</label>
-              <input
-                value={form.DIBUAT_OLEH}
-                onChange={(e) =>
-                  setForm({ ...form, DIBUAT_OLEH: e.target.value })
-                }
-                className="w-full border rounded p-1"
-              />
-            </div>
-
-            <div className="md:col-span-3">
-              <label className="text-xs">Keterangan</label>
-              <input
-                value={form.KETERANGAN}
-                onChange={(e) =>
-                  setForm({ ...form, KETERANGAN: e.target.value })
-                }
-                className="w-full border rounded p-1"
-              />
-            </div>
-
-            {/* Buttons */}
-            <div className="md:col-span-3 flex gap-2">
-              {editId ? (
-                <>
-                  <button
-                    onClick={saveEdit}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded"
-                  >
-                    Simpan Perubahan
-                  </button>
-                  <button
-                    onClick={() => {
-                      setForm(formEmpty);
-                      setEditId(null);
-                    }}
-                    className="px-4 py-2 border rounded"
-                  >
-                    Batal
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={addSetoran}
-                  className="px-4 py-2 bg-blue-600 text-white rounded"
-                >
-                  Tambah Setoran
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="border rounded-xl p-4 bg-white shadow">
-          <div className="text-sm text-slate-500">Total Semua Setoran</div>
-          <div className="text-2xl font-bold">
-            {formatCurrency(totalAllSetoran)}
-          </div>
-        </div>
-
-        <div className="border rounded-xl p-4 bg-white shadow md:col-span-3">
-          <div className="text-sm text-slate-600">Total (Filter)</div>
-          <div className="text-xl font-bold">
-            {formatCurrency(totalFilteredSetoran)}
-          </div>
-        </div>
-      </div>
-
-      {/* Per Toko */}
-      <div className="border rounded-xl p-4 bg-white shadow">
-        <h2 className="font-semibold mb-3">Total Per Toko</h2>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-          {totalPerTokoAll.map((t) => (
-            <div key={t.tokoName} className="p-3 border rounded bg-white">
-              <div className="text-xs">{t.tokoName}</div>
-              <div className="text-lg font-bold">{formatCurrency(t.total)}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* TABEL */}
-      <div className="border rounded-xl p-4 bg-white shadow">
-        <h3 className="font-semibold mb-2">Daftar Setoran</h3>
-
-        <div className="text-sm mb-2">
-          Menampilkan <b>{filteredSetoran.length}</b> data — Total:{" "}
-          {formatCurrency(totalFilteredSetoran)}
-        </div>
-
-        <div ref={tableRef} className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th className="px-3 py-2 text-left">Tanggal</th>
-                <th className="px-3 py-2 text-left">Toko</th>
-                <th className="px-3 py-2 text-left">Kategori</th>
-                <th className="px-3 py-2 text-right">Jumlah</th>
-                <th className="px-3 py-2 text-left">Ref</th>
-                <th className="px-3 py-2 text-left">Keterangan</th>
-                <th className="px-3 py-2 text-left">Dibuat Oleh</th>
-                <th className="px-3 py-2 text-left">Status</th>
-                <th className="px-3 py-2 text-left">Aksi</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {paginatedSetoran.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="py-6 text-center text-slate-500">
-                    Tidak ada data
-                  </td>
-                </tr>
-              ) : (
-                paginatedSetoran.map((r) => (
-                  <tr key={r.id} className="border-b hover:bg-slate-50">
-                    <td className="px-3 py-2">{r.TANGGAL_TRANSAKSI}</td>
-                    <td className="px-3 py-2">{r.NAMA_TOKO}</td>
-                    <td className="px-3 py-2">{r.KATEGORI_PEMBAYARAN}</td>
-                    <td className="px-3 py-2 text-right">
-                      {formatCurrency(r.JUMLAH_SETORAN)}
-                    </td>
-                    <td className="px-3 py-2">{r.REF_SETORAN || "-"}</td>
-                    <td className="px-3 py-2">{r.KETERANGAN || "-"}</td>
-                    <td className="px-3 py-2">{r.DIBUAT_OLEH || "-"}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-semibold ${
-                          r.STATUS === "Approved"
-                            ? "bg-green-100 text-green-700"
-                            : r.STATUS === "Rejected"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-yellow-100 text-yellow-700"
-                        }`}
-                      >
-                        {r.STATUS}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() =>
-                            updateStatus(r.id, r.NAMA_TOKO, "Approved")
-                          }
-                          className="px-2 py-1 text-xs bg-green-600 text-white rounded"
-                        >
-                          Approve
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            updateStatus(r.id, r.NAMA_TOKO, "Rejected")
-                          }
-                          className="px-2 py-1 text-xs bg-orange-600 text-white rounded"
-                        >
-                          Reject
-                        </button>
-
-                        <button
-                          onClick={() => beginEdit(r)}
-                          className="px-2 py-1 text-xs bg-blue-600 text-white rounded"
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          onClick={() => deleteSetoran(r.id, r.NAMA_TOKO)}
-                          className="px-2 py-1 text-xs bg-red-600 text-white rounded"
-                        >
-                          Hapus
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        <div className="flex justify-between items-center mt-3 text-sm">
+          {/* NO PRE ORDER */}
           <div>
-            Halaman {currentPage} / {totalPages}
+            <label className="text-xs">No Pre Order</label>
+            <input
+              value={form.NO_PRE_ORDER || ""}
+              onChange={(e) =>
+                setForm({ ...form, NO_PRE_ORDER: e.target.value })
+              }
+              className="w-full border rounded p-1"
+            />
           </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="px-2 py-1 border rounded disabled:opacity-40"
+          {/* TANGGAL */}
+          <div>
+            <label className="text-xs">Tanggal</label>
+            <input
+              type="date"
+              value={form.TANGGAL_TRANSAKSI}
+              onChange={(e) =>
+                setForm({ ...form, TANGGAL_TRANSAKSI: e.target.value })
+              }
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* TOKO */}
+          <div>
+            <label className="text-xs">Nama Toko</label>
+            <select
+              value={form.NAMA_TOKO}
+              onChange={(e) => setForm({ ...form, NAMA_TOKO: e.target.value })}
+              className="w-full border rounded p-1"
             >
-              Prev
-            </button>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="px-2 py-1 border rounded disabled:opacity-40"
-            >
-              Next
-            </button>
+              {ALL_TOKO.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* NAMA PELANGGAN */}
+          <div>
+            <label className="text-xs">Nama Pelanggan</label>
+            <input
+              value={form.NAMA_PELANGGAN || ""}
+              onChange={(e) =>
+                setForm({ ...form, NAMA_PELANGGAN: e.target.value })
+              }
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* ID PELANGGAN */}
+          <div>
+            <label className="text-xs">ID Pelanggan</label>
+            <input
+              value={form.ID_PELANGGAN || ""}
+              onChange={(e) =>
+                setForm({ ...form, ID_PELANGGAN: e.target.value })
+              }
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* NO TLP */}
+          <div>
+            <label className="text-xs">No TLP</label>
+            <input
+              value={form.NO_TLP || ""}
+              onChange={(e) => setForm({ ...form, NO_TLP: e.target.value })}
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* STORE HEAD */}
+          <div>
+            <label className="text-xs">Store Head</label>
+            <input
+              value={form.STORE_HEAD || ""}
+              onChange={(e) => setForm({ ...form, STORE_HEAD: e.target.value })}
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* SALES */}
+          <div>
+            <label className="text-xs">Nama Sales</label>
+            <input
+              value={form.NAMA_SALES || ""}
+              onChange={(e) => setForm({ ...form, NAMA_SALES: e.target.value })}
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* SALES HANDLE */}
+          <div>
+            <label className="text-xs">Sales Handle</label>
+            <input
+              value={form.SALES_HANDLE || ""}
+              onChange={(e) =>
+                setForm({ ...form, SALES_HANDLE: e.target.value })
+              }
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* KATEGORI BARANG */}
+          <div>
+            <label className="text-xs">Kategori Barang</label>
+            <input
+              value={form.KATEGORI_BARANG || ""}
+              onChange={(e) =>
+                setForm({ ...form, KATEGORI_BARANG: e.target.value })
+              }
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* BRAND */}
+          <div>
+            <label className="text-xs">Nama Brand</label>
+            <input
+              value={form.NAMA_BRAND || ""}
+              onChange={(e) => setForm({ ...form, NAMA_BRAND: e.target.value })}
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* BARANG */}
+          <div>
+            <label className="text-xs">Nama Barang</label>
+            <input
+              value={form.NAMA_BARANG || ""}
+              onChange={(e) =>
+                setForm({ ...form, NAMA_BARANG: e.target.value })
+              }
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* QTY */}
+          <div>
+            <label className="text-xs">QTY</label>
+            <input
+              type="number"
+              value={form.QTY || 0}
+              onChange={(e) =>
+                setForm({ ...form, QTY: Number(e.target.value) })
+              }
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* HARGA */}
+          <div>
+            <label className="text-xs">Harga</label>
+            <input
+              type="number"
+              value={form.HARGA || 0}
+              onChange={(e) =>
+                setForm({ ...form, HARGA: Number(e.target.value) })
+              }
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* DP */}
+          <div>
+            <label className="text-xs">DP Payment Metode User</label>
+            <input
+              type="number"
+              value={form.DP_PAYMENT || 0}
+              onChange={(e) =>
+                setForm({ ...form, DP_PAYMENT: Number(e.target.value) })
+              }
+              className="w-full border rounded p-1"
+            />
+          </div>
+
+          {/* TOTAL AUTO */}
+          <div>
+            <label className="text-xs">Total</label>
+            <input
+              readOnly
+              value={formatCurrency((form.QTY || 0) * (form.HARGA || 0))}
+              className="w-full border rounded p-1 bg-gray-100 font-semibold"
+            />
+          </div>
+
+          {/* BUTTONS */}
+          <div className="md:col-span-4 flex gap-2 mt-3">
+            {editId ? (
+              <>
+                <button
+                  onClick={saveEdit}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded"
+                >
+                  Simpan Perubahan
+                </button>
+                <button
+                  onClick={() => {
+                    setForm(formEmpty);
+                    setEditId(null);
+                  }}
+                  className="px-4 py-2 border rounded"
+                >
+                  Batal
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={addSetoran}
+                className="px-4 py-2 bg-blue-600 text-white rounded"
+              >
+                Tambah SETORAN Pre ORDER PENJUALAN
+              </button>
+            )}
+          </div>
           </div>
         </div>
       </div>
+{/* TABEL */}
+<div className="border rounded-xl p-4 bg-white shadow">
+  <h3 className="font-semibold mb-2">
+    Daftar SETORAN Pre ORDER PENJUALAN
+  </h3>
+
+  <div className="text-sm mb-2">
+    Menampilkan <b>{filteredSetoran.length}</b> data — Total:{" "}
+    {formatCurrency(totalFilteredSetoran)}
+  </div>
+
+  <div ref={tableRef} className="overflow-x-auto">
+    <table className="min-w-[1400px] w-full text-sm">
+      <thead className="bg-slate-100 text-slate-700">
+        <tr>
+          <th className="px-3 py-2 text-left">No Pre Order</th>
+          <th className="px-3 py-2 text-left">Tanggal</th>
+          <th className="px-3 py-2 text-left">Toko</th>
+          <th className="px-3 py-2 text-left">Nama Pelanggan</th>
+          <th className="px-3 py-2 text-left">ID Pelanggan</th>
+          <th className="px-3 py-2 text-left">No TLP</th>
+          <th className="px-3 py-2 text-left">Store Head</th>
+          <th className="px-3 py-2 text-left">Sales</th>
+          <th className="px-3 py-2 text-left">Sales Handle</th>
+          <th className="px-3 py-2 text-left">Kategori</th>
+          <th className="px-3 py-2 text-left">Brand</th>
+          <th className="px-3 py-2 text-left">Barang</th>
+          <th className="px-3 py-2 text-center">QTY</th>
+          <th className="px-3 py-2 text-right">Harga</th>
+          <th className="px-3 py-2 text-right">DP Payment</th>
+          <th className="px-3 py-2 text-right">Total</th>
+          <th className="px-3 py-2 text-left">Status</th>
+          <th className="px-3 py-2 text-left">Aksi</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {paginatedSetoran.length === 0 ? (
+          <tr>
+            <td
+              colSpan={18}
+              className="py-6 text-center text-slate-500"
+            >
+              Tidak ada data
+            </td>
+          </tr>
+        ) : (
+          paginatedSetoran.map((r) => {
+            const total = Number(r.QTY || 0) * Number(r.HARGA || 0);
+
+            return (
+              <tr key={r.id} className="border-b hover:bg-slate-50">
+                <td className="px-3 py-2 font-semibold">
+                  {r.NO_PRE_ORDER}
+                </td>
+
+                <td className="px-3 py-2">
+                  {r.TANGGAL_TRANSAKSI}
+                </td>
+
+                <td className="px-3 py-2">
+                  {r.NAMA_TOKO}
+                </td>
+
+                <td className="px-3 py-2">
+                  {r.NAMA_PELANGGAN}
+                </td>
+
+                <td className="px-3 py-2">
+                  {r.ID_PELANGGAN}
+                </td>
+
+                <td className="px-3 py-2">
+                  {r.NO_TLP}
+                </td>
+
+                <td className="px-3 py-2">
+                  {r.STORE_HEAD}
+                </td>
+
+                <td className="px-3 py-2">
+                  {r.NAMA_SALES}
+                </td>
+
+                <td className="px-3 py-2">
+                  {r.SALES_HANDLE}
+                </td>
+
+                <td className="px-3 py-2">
+                  {r.KATEGORI_BARANG}
+                </td>
+
+                <td className="px-3 py-2">
+                  {r.NAMA_BRAND}
+                </td>
+
+                <td className="px-3 py-2">
+                  {r.NAMA_BARANG}
+                </td>
+
+                <td className="px-3 py-2 text-center">
+                  {r.QTY}
+                </td>
+
+                <td className="px-3 py-2 text-right">
+                  {formatCurrency(r.HARGA)}
+                </td>
+
+                <td className="px-3 py-2 text-right">
+                  {formatCurrency(r.DP_PAYMENT)}
+                </td>
+
+                <td className="px-3 py-2 text-right font-bold text-green-700">
+                  {formatCurrency(total)}
+                </td>
+
+                <td className="px-3 py-2">
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                      r.STATUS === "Approved"
+                        ? "bg-green-100 text-green-700"
+                        : r.STATUS === "Rejected"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-yellow-100 text-yellow-700"
+                    }`}
+                  >
+                    {r.STATUS}
+                  </span>
+                </td>
+
+                <td className="px-3 py-2">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() =>
+                        updateStatus(r.id, r.NAMA_TOKO, "Approved")
+                      }
+                      className="px-2 py-1 text-xs bg-green-600 text-white rounded"
+                    >
+                      Approve
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        updateStatus(r.id, r.NAMA_TOKO, "Rejected")
+                      }
+                      className="px-2 py-1 text-xs bg-orange-600 text-white rounded"
+                    >
+                      Reject
+                    </button>
+
+                    <button
+                      onClick={() => beginEdit(r)}
+                      className="px-2 py-1 text-xs bg-blue-600 text-white rounded"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        deleteSetoran(r.id, r.NAMA_TOKO)
+                      }
+                      className="px-2 py-1 text-xs bg-red-600 text-white rounded"
+                    >
+                      Hapus
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })
+        )}
+      </tbody>
+    </table>
+  </div>
+
+  {/* Pagination */}
+  <div className="flex justify-between items-center mt-3 text-sm">
+    <div>
+      Halaman {currentPage} / {totalPages}
+    </div>
+
+    <div className="flex gap-2">
+      <button
+        onClick={() =>
+          setCurrentPage((p) => Math.max(1, p - 1))
+        }
+        disabled={currentPage === 1}
+        className="px-2 py-1 border rounded disabled:opacity-40"
+      >
+        Prev
+      </button>
+
+      <button
+        onClick={() =>
+          setCurrentPage((p) =>
+            Math.min(totalPages, p + 1)
+          )
+        }
+        disabled={currentPage === totalPages}
+        className="px-2 py-1 border rounded disabled:opacity-40"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</div>
 
       <div className="flex items-center gap-2">
         <label className=" px-3 py-2 text-xl text-bold font-bold bg-white ">
