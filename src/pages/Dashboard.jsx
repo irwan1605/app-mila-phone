@@ -202,8 +202,8 @@ export default function Dashboard() {
         NAMA_PIC_TOKO: r.NAMA_PIC_TOKO || "",
         NAMA_SALES: r.NAMA_SALES || "",
         TITIPAN_REFERENSI: r.TITIPAN_REFERENSI || "",
-        NAMA_TOKO: r.NAMA_TOKO || r.TOKO || "",
-        TOKO: r.NAMA_TOKO || r.TOKO || "",
+        NAMA_TOKO: String(r.NAMA_TOKO || r.TOKO || ""),
+        TOKO: String(r.NAMA_TOKO || r.TOKO || ""),
         NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "",
         NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "",
         QTY: Number(r.QTY || 0),
@@ -380,19 +380,24 @@ export default function Dashboard() {
 
   const omzetPerToko = useMemo(() => {
     const map = {};
-
+  
     filteredData.forEach((x) => {
-      const tokoRaw = x.NAMA_TOKO || x.TOKO;
-      if (!tokoRaw) return;
-
+      let tokoRaw = x.NAMA_TOKO ?? x.TOKO;
+  
+      // 🔥 FORCE STRING + SAFETY
+      if (typeof tokoRaw !== "string") {
+        if (tokoRaw === null || tokoRaw === undefined) return;
+        tokoRaw = String(tokoRaw);
+      }
+  
       const toko = tokoRaw.toUpperCase().trim();
-
+  
       // 🔥 FILTER TOKO RESMI SAJA
       if (!registeredTokoSet.has(toko)) return;
-
+  
       map[toko] = (map[toko] || 0) + Number(x.TOTAL || 0);
     });
-
+  
     return Object.entries(map).map(([toko, omzet]) => ({
       toko,
       omzet,

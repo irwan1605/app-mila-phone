@@ -184,7 +184,7 @@ export default function FormUserSection({ value = {}, onChange }) {
         <input
           type="tel"
           className="w-full border rounded-lg px-2 py-1 text-sm"
-          placeholder="0857-8282-8928"
+          placeholder="0822-1117-4447"
           value={form.noTlpPelanggan}
           onChange={(e) =>
             update({

@@ -86,14 +86,14 @@ const generateNoPreOrder = (tokoName, existingSetoran = []) => {
 // ===============================
 function normalizeRecord(r) {
   return {
-    id: r.id || r._id || r.key || r.ID || String(Date.now()) + Math.random(),
+    id: r.id || r._id || r.key || r.ID || "",
 
     NO_PRE_ORDER: r.NO_PRE_ORDER || "",
 
     TIPE: String(r.TIPE || "").toUpperCase(),
 
     TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || todayStr(),
-    NAMA_TOKO: r.NAMA_TOKO || "CILANGKAP PUSAT",
+    NAMA_TOKO: r.NAMA_TOKO || "",
 
     NAMA_PELANGGAN: r.NAMA_PELANGGAN || "",
     ID_PELANGGAN: r.ID_PELANGGAN || "",
@@ -102,17 +102,18 @@ function normalizeRecord(r) {
     NAMA_SALES: r.NAMA_SALES || "",
     SALES_HANDLE: r.SALES_HANDLE || "",
 
-    // 🔥 TAMBAHKAN INI
     KATEGORI_BARANG: r.KATEGORI_BARANG || "",
     NAMA_BRAND: r.NAMA_BRAND || "",
     NAMA_BARANG: r.NAMA_BARANG || "",
-    QTY: toNum(r.QTY || 0),
-    HARGA: toNum(r.HARGA || 0),
-    DP_PAYMENT: toNum(r.DP_PAYMENT || 0),
 
-    GRAND_TOTAL_BARANG: toNum(r.GRAND_TOTAL_BARANG || 0),
+    QTY: Number(r.QTY || 0),
+    HARGA: Number(r.HARGA || 0),
 
-  
+    KATEGORI_PEMBAYARAN: r.KATEGORI_PEMBAYARAN || "",
+    DP_PAYMENT: Number(r.DP_PAYMENT || 0),
+
+    JUMLAH_SETORAN: Number(r.JUMLAH_SETORAN || 0),
+    STATUS: r.STATUS || "Pending",
   };
 }
 
@@ -139,27 +140,44 @@ export default function FinanceReport() {
   const isSPV = role.startsWith("spv_toko");
   const isSuper = role === "superadmin" || role === "admin" || isSPV;
 
+  const isPicToko = role.startsWith("pic");
+
+  let tokoLogin = "";
+
+  if (loggedUser?.tokoNama) {
+    tokoLogin = loggedUser.tokoNama;
+  } else if (loggedUser?.toko) {
+    const id = Number(loggedUser.toko);
+    tokoLogin = ALL_TOKO[id - 1] || "";
+  } else if (loggedUser?.tokoId) {
+    const id = Number(loggedUser.tokoId);
+    tokoLogin = ALL_TOKO[id - 1] || "";
+  }
+
+  // masterToko pakai ALL_TOKO
+  const masterToko = ALL_TOKO;
+
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
   const [masterKategori, setMasterKategori] = useState([]);
 
+  useEffect(() => {
+    if (isPicToko && tokoLogin) {
+      setForm((prev) => ({
+        ...prev,
+        NAMA_TOKO: tokoLogin,
+      }));
+
+      setFilter((prev) => ({
+        ...prev,
+        toko: tokoLogin,
+      }));
+    }
+  }, [isPicToko, tokoLogin]);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "master_karyawan"), (snap) => {
       const arr = [];
-      snap.forEach((c) => {
-        arr.push(c.val());
-      });
-      setMasterKaryawan(arr);
-    });
-  
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsub = onValue(ref(db, "master_karyawan"), (snap) => {
-      const arr = [];
-
       snap.forEach((c) => {
         const v = c.val();
         if (!v) return;
@@ -168,6 +186,7 @@ export default function FinanceReport() {
           nama: v.nama || "",
           jabatan: v.jabatan || "",
           toko: v.toko || "",
+          handle: v.handle || "",
         });
       });
 
@@ -220,9 +239,9 @@ export default function FinanceReport() {
         if (!v) return;
 
         arr.push({
-          kategori: v.kategori || "",
-          brand: v.brand || "",
-          nama: v.nama || "",
+          kategori: v.kategoriBarang || v.kategori || "",
+          brand: v.namaBrand || v.brand || "",
+          nama: v.namaBarang || v.nama || "",
         });
       });
 
@@ -342,6 +361,23 @@ export default function FinanceReport() {
   const [form, setForm] = useState(formEmpty);
   const [editId, setEditId] = useState(null);
 
+  useEffect(() => {
+    if (!form.KATEGORI_PEMBAYARAN) return;
+    if (!form.QTY || !form.HARGA) return;
+
+    const total = Number(form.QTY) * Number(form.HARGA);
+    console.log("FORM:", form);
+    console.log("ALL DATA:", allData);
+    console.log("SETORAN:", setoran);
+
+    setForm((prev) => ({
+      ...prev,
+      GRAND_TOTAL_BARANG: total,
+      JUMLAH_SETORAN: total,
+      STATUS: "Pending",
+    }));
+  }, [form.KATEGORI_PEMBAYARAN, form.QTY, form.HARGA]);
+
   // ===============================
   // AUTO GENERATE NO PRE ORDER
   // ===============================
@@ -384,6 +420,17 @@ export default function FinanceReport() {
     return () => unsub && unsub();
   }, []);
 
+  /* ================= FORMAT TELP ================= */
+
+  const formatPhone = (val) => {
+    const num = val.replace(/\D/g, "").slice(0, 13);
+
+    if (num.length <= 4) return num;
+    if (num.length <= 8) return num.replace(/(\d{4})(\d+)/, "$1-$2");
+
+    return num.replace(/(\d{4})(\d{4})(\d+)/, "$1-$2-$3");
+  };
+
   const paymentJenisOptions = useMemo(() => {
     return [
       ...new Set(
@@ -399,32 +446,53 @@ export default function FinanceReport() {
   }, [masterPaymentMetode]);
 
   useEffect(() => {
+    if (!form.NAMA_SALES) return;
+
     const sales = masterKaryawan.find((k) => k.nama === form.NAMA_SALES);
 
     if (sales) {
       setForm((prev) => ({
         ...prev,
-        SALES_HANDLE: sales.handle || "",
+        SALES_HANDLE: sales.handle || sales.nama,
       }));
     }
   }, [form.NAMA_SALES, masterKaryawan]);
 
   const tokoNameToId = (name) => ALL_TOKO.findIndex((t) => t === name) + 1 || 1;
 
+  const storeHeadList = useMemo(() => {
+    return masterKaryawan.filter(
+      (k) =>
+        String(k.jabatan).toLowerCase().includes("store head") &&
+        String(k.toko).toUpperCase() === String(form.NAMA_TOKO).toUpperCase()
+    );
+  }, [masterKaryawan, form.NAMA_TOKO]);
+
+  const salesList = useMemo(() => {
+    return masterKaryawan.filter(
+      (k) =>
+        String(k.jabatan).toLowerCase().includes("sales") &&
+        String(k.toko).toUpperCase() === String(form.NAMA_TOKO).toUpperCase()
+    );
+  }, [masterKaryawan, form.NAMA_TOKO]);
+
+  const salesHandleList = useMemo(() => {
+    return masterKaryawan;
+  }, [masterKaryawan]);
+
   // ===============================
   // Filtering
   // ===============================
   const filteredSetoran = useMemo(() => {
     return setoran.filter((s) => {
-      // ✅ PIC hanya lihat toko sendiri
-      if (!isSuper) {
-        const tokoLogin =
-          tokoNameFromState || loggedUser?.tokoNama || loggedUser?.toko;
-
-        if (s.NAMA_TOKO !== tokoLogin) return false;
+      // 🔥 PIC hanya lihat toko sendiri
+      if (isPicToko && s.NAMA_TOKO !== tokoLogin) {
+        return false;
       }
 
-      if (filter.toko !== "ALL" && s.NAMA_TOKO !== filter.toko) return false;
+      if (!isPicToko && filter.toko !== "ALL" && s.NAMA_TOKO !== filter.toko)
+        return false;
+
       if (filter.status !== "ALL" && s.STATUS !== filter.status) return false;
 
       if (
@@ -432,21 +500,25 @@ export default function FinanceReport() {
         s.KATEGORI_PEMBAYARAN !== filter.kategori
       )
         return false;
+      console.log("ROLE:", role);
+      console.log("IS PIC:", isPicToko);
+      console.log("TOKO LOGIN:", tokoLogin);
 
       if (filter.dateFrom && s.TANGGAL_TRANSAKSI < filter.dateFrom)
         return false;
+
       if (filter.dateTo && s.TANGGAL_TRANSAKSI > filter.dateTo) return false;
 
       if (filter.search) {
         const q = filter.search.toLowerCase();
         const hay =
-          `${s.NAMA_TOKO} ${s.KETERANGAN} ${s.REF_SETORAN} ${s.DIBUAT_OLEH}`.toLowerCase();
+          `${s.NAMA_TOKO} ${s.REF_SETORAN} ${s.NAMA_PELANGGAN}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
 
       return true;
     });
-  }, [setoran, filter, isSuper, tokoNameFromState]);
+  }, [setoran, filter, isPicToko, tokoLogin]);
 
   const filteredPengeluaran = useMemo(() => {
     return pengeluaran.filter((s) => {
@@ -543,22 +615,49 @@ export default function FinanceReport() {
       alert("Tanggal dan Toko wajib diisi");
       return;
     }
-  
+
+    if (!form.KATEGORI_PEMBAYARAN) {
+      alert("Kategori Payment User wajib dipilih");
+      return;
+    }
+
     const total = Number(form.QTY || 0) * Number(form.HARGA || 0);
-  
+
     const payload = {
-      ...form,
-  
-      GRAND_TOTAL_BARANG: total,
-      JUMLAH_SETORAN: total,
-      TOTAL: total,
-  
       TIPE: "SETORAN",
+      NO_PRE_ORDER: form.NO_PRE_ORDER,
+      TANGGAL_TRANSAKSI: form.TANGGAL_TRANSAKSI,
+      NAMA_TOKO: isPicToko ? tokoLogin : form.NAMA_TOKO,
+
+      // ===== TAHAP 1 =====
+      NAMA_PELANGGAN: form.NAMA_PELANGGAN || "",
+      ID_PELANGGAN: form.ID_PELANGGAN || "",
+      NO_TLP: form.NO_TLP || "",
+      STORE_HEAD: form.STORE_HEAD || "",
+      NAMA_SALES: form.NAMA_SALES || "",
+      SALES_HANDLE: form.SALES_HANDLE || "",
+
+      // ===== TAHAP 2 =====
+      KATEGORI_BARANG: form.KATEGORI_BARANG || "",
+      NAMA_BRAND: form.NAMA_BRAND || "",
+      NAMA_BARANG: form.NAMA_BARANG || "",
+      QTY: Number(form.QTY || 0),
+      HARGA: Number(form.HARGA || 0),
+      GRAND_TOTAL_BARANG: total,
+
+      // ===== PAYMENT =====
+      KATEGORI_PEMBAYARAN: form.KATEGORI_PEMBAYARAN,
+      DP_PAYMENT: Number(form.DP_PAYMENT || 0),
+
+      JUMLAH_SETORAN: total,
+      STATUS: "Pending",
+      CREATED_AT: Date.now(),
     };
-  
-    const tokoId = tokoNameToId(form.NAMA_TOKO);
+
+    const tokoId = tokoNameToId(payload.NAMA_TOKO);
+
     await addTransaksi(tokoId, payload);
-  
+
     setForm(formEmpty);
   };
 
@@ -752,24 +851,27 @@ export default function FinanceReport() {
             <div>
               <label className="text-xs">Toko</label>
               <select
-                value={filter.toko}
+                value={isPicToko ? tokoLogin : filter.toko}
+                disabled={isPicToko}
                 onChange={(e) => {
-                  setFilter((f) => ({ ...f, toko: e.target.value }));
-                  setCurrentPage(1);
+                  if (!isPicToko) {
+                    setFilter((f) => ({ ...f, toko: e.target.value }));
+                    setCurrentPage(1);
+                  }
                 }}
                 className="w-full border rounded p-1"
               >
-                <option value="ALL">Semua</option>
-                {isSuper ? (
-                  ALL_TOKO.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))
+                {isPicToko ? (
+                  <option value={tokoLogin}>{tokoLogin}</option>
                 ) : (
-                  <option value={loggedUser?.tokoNama || loggedUser?.toko}>
-                    {loggedUser?.tokoNama || loggedUser?.toko}
-                  </option>
+                  <>
+                    <option value="ALL">Semua</option>
+                    {ALL_TOKO.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </>
                 )}
               </select>
             </div>
@@ -856,23 +958,35 @@ export default function FinanceReport() {
                 className="w-full border rounded p-1"
               />
             </div>
-
             {/* TOKO */}
             <div>
               <label className="text-xs">Nama Toko</label>
-              <select
-                value={form.NAMA_TOKO}
-                onChange={(e) =>
-                  setForm({ ...form, NAMA_TOKO: e.target.value })
-                }
-                className="w-full border rounded p-1"
-              >
-                {ALL_TOKO.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+
+              {isPicToko ? (
+                <input
+                  type="text"
+                  value={tokoLogin}
+                  readOnly
+                  className="w-full border rounded p-1 bg-gray-100 cursor-not-allowed"
+                />
+              ) : (
+                <select
+                  value={form.NAMA_TOKO}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      NAMA_TOKO: e.target.value,
+                    }))
+                  }
+                  className="w-full border rounded p-1"
+                >
+                  {ALL_TOKO.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* NAMA PELANGGAN */}
@@ -901,165 +1015,162 @@ export default function FinanceReport() {
 
             {/* NO TLP */}
             <div>
-              <label className="text-xs">No TLP</label>
+              <label className="text-xs font-semibold">No Tlp Pelanggan</label>
               <input
+                type="tel"
+                className="w-full border rounded-lg px-2 py-1 text-sm"
+                placeholder="0857-8282-8928"
                 value={form.NO_TLP || ""}
-                onChange={(e) => setForm({ ...form, NO_TLP: e.target.value })}
-                className="w-full border rounded p-1"
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    NO_TLP: formatPhone(e.target.value),
+                  }))
+                }
               />
             </div>
 
             {/* STORE HEAD */}
             <div>
-              <label className="text-xs">Store Head</label>
+              <label className="text-xs font-semibold">Store Head</label>
               <input
-  list="store-head-list"
-  value={form.STORE_HEAD || ""}
-  onChange={(e) =>
-    setForm({ ...form, STORE_HEAD: e.target.value })
-  }
-  className="w-full border rounded p-1"
-/>
+                list="store-head-list"
+                value={form.STORE_HEAD || ""}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    STORE_HEAD: e.target.value,
+                  }))
+                }
+                className="w-full border rounded p-1"
+              />
 
-<datalist id="store-head-list">
-  {masterKaryawan
-    .filter((k) => k.jabatan === "STORE HEAD")
-    .map((k, i) => (
-      <option key={i} value={k.nama} />
-    ))}
-</datalist>
+              <datalist id="store-head-list">
+                {storeHeadList.map((k, i) => (
+                  <option key={i} value={k.nama} />
+                ))}
+              </datalist>
             </div>
 
             {/* SALES */}
             <div>
-              <label className="text-xs">Nama Sales</label>
-              <input
-  list="store-head-list"
-  value={form.STORE_HEAD || ""}
-  onChange={(e) =>
-    setForm({ ...form, STORE_HEAD: e.target.value })
-  }
-  className="w-full border rounded p-1"
-/>
-
-<datalist id="store-head-list">
-  {masterKaryawan
-    .filter((k) => k.jabatan === "STORE HEAD")
-    .map((k, i) => (
-      <option key={i} value={k.nama} />
-    ))}
-</datalist>
-            </div>
-
-            {/* SALES HANDLE */}
-            <div>
-              <label className="text-xs">Sales Handle</label>
+              <label className="text-xs font-semibold">Nama Sales</label>
               <input
                 list="sales-list"
                 value={form.NAMA_SALES || ""}
                 onChange={(e) =>
-                  setForm({ ...form, NAMA_SALES: e.target.value })
+                  setForm((prev) => ({
+                    ...prev,
+                    NAMA_SALES: e.target.value,
+                  }))
                 }
                 className="w-full border rounded p-1"
               />
 
               <datalist id="sales-list">
-                {masterKaryawan
-                  .filter((k) => k.jabatan?.toLowerCase().includes("sales"))
-                  .map((k, i) => (
-                    <option key={i} value={k.nama} />
-                  ))}
+                {salesList.map((k, i) => (
+                  <option key={i} value={k.nama} />
+                ))}
+              </datalist>
+            </div>
+
+            {/* SALES HANDLE */}
+            <div>
+              <label className="text-xs font-semibold">Sales Handle</label>
+              <input
+                list="handle-list"
+                value={form.SALES_HANDLE || ""}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    SALES_HANDLE: e.target.value,
+                  }))
+                }
+                className="w-full border rounded p-1"
+              />
+
+              <datalist id="handle-list">
+                {salesHandleList.map((k, i) => (
+                  <option key={i} value={k.nama} />
+                ))}
               </datalist>
             </div>
 
             {/* KATEGORI BARANG */}
             <div>
-              <label className="text-xs">Kategori Barang</label>
+              <label className="text-xs font-semibold">Kategori Barang</label>
               <input
-                list="sales-handle-list"
-                value={form.SALES_HANDLE || ""}
+                list="kategori-list"
+                value={form.KATEGORI_BARANG || ""}
                 onChange={(e) =>
-                  setForm({ ...form, SALES_HANDLE: e.target.value })
+                  setForm((prev) => ({
+                    ...prev,
+                    KATEGORI_BARANG: e.target.value,
+                    NAMA_BRAND: "",
+                    NAMA_BARANG: "",
+                  }))
                 }
                 className="w-full border rounded p-1"
               />
-
-              <datalist id="sales-handle-list">
-                {masterKaryawan
-                  .filter((k) => k.jabatan?.toLowerCase().includes("sales"))
-                  .map((k, i) => (
-                    <option key={i} value={k.nama} />
-                  ))}
+              <datalist id="kategori-list">
+                {Array.isArray(masterBarang) &&
+                  [
+                    ...new Set(
+                      masterBarang.map((b) => b.kategori).filter(Boolean)
+                    ),
+                  ].map((k, i) => <option key={i} value={k} />)}
               </datalist>
             </div>
 
             {/* BRAND */}
             <div>
-              <label className="text-xs">Nama Brand</label>
-              <select
+              <label className="text-xs font-semibold">Nama Brand</label>
+              <input
+                list="brand-list"
                 value={form.NAMA_BRAND || ""}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
+                  setForm((prev) => ({
+                    ...prev,
                     NAMA_BRAND: e.target.value,
                     NAMA_BARANG: "",
-                  })
+                  }))
                 }
                 className="w-full border rounded p-1"
-              >
-                <option value="">Pilih Brand</option>
-                {[
-                  ...new Set(
-                    masterBarang
-                      .filter((b) => b.kategori === form.KATEGORI_BARANG)
-                      .map((b) => b.brand)
-                  ),
-                ].map((b, i) => (
-                  <option key={i} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-              <datalist id="brand-list">
-                {masterBarang
-                  .filter((b) =>
-                    form.KATEGORI_BARANG
-                      ? b.kategori === form.KATEGORI_BARANG
-                      : true
-                  )
-                  .map((b, i) => (
-                    <option key={i} value={b.brand} />
-                  ))}
+              />
+              <datalist id="barang-list">
+                {Array.isArray(masterBarang) &&
+                  masterBarang
+                    .filter(
+                      (b) =>
+                        b.kategori === form.KATEGORI_BARANG &&
+                        b.brand === form.NAMA_BRAND &&
+                        b.nama
+                    )
+                    .map((b, i) => <option key={i} value={b.nama} />)}
               </datalist>
             </div>
 
             {/* BARANG */}
             <div>
-              <label className="text-xs">Nama Barang</label>
-              <select
+              <label className="text-xs font-semibold">Nama Barang</label>
+              <input
+                list="barang-list"
                 value={form.NAMA_BARANG || ""}
                 onChange={(e) =>
-                  setForm({ ...form, NAMA_BARANG: e.target.value })
+                  setForm((prev) => ({
+                    ...prev,
+                    NAMA_BARANG: e.target.value,
+                  }))
                 }
                 className="w-full border rounded p-1"
-              >
-                <option value="">Pilih Barang</option>
+              />
+
+              <datalist id="barang-list">
                 {masterBarang
                   .filter(
                     (b) =>
                       b.kategori === form.KATEGORI_BARANG &&
                       b.brand === form.NAMA_BRAND
-                  )
-                  .map((b, i) => (
-                    <option key={i} value={b.nama}>
-                      {b.nama}
-                    </option>
-                  ))}
-              </select>
-              <datalist id="barang-list">
-                {masterBarang
-                  .filter((b) =>
-                    form.NAMA_BRAND ? b.brand === form.NAMA_BRAND : true
                   )
                   .map((b, i) => (
                     <option key={i} value={b.nama} />
