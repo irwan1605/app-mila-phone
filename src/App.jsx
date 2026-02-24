@@ -73,6 +73,7 @@ import useAutoLogout from "./hooks/useAutoLogout";
 import SummaryPembelianReport from "./pages/Reports/SummaryPembelianReport ";
 import SummaryTransferReport from "./pages/Reports/SummaryTransferReport ";
 import RefundReport from "./pages/RefundReport";
+import CetakSetoranPrePo from "./pages/Print/CetakSetoranPrePo";
 
 /* ===========================
     Utility role → toko
@@ -101,7 +102,6 @@ function TokoWrapper({ user }) {
     user.role === "admin" ||
     user.role?.startsWith("spv_toko")
   )
-  
     return <DashboardToko tokoId={tokoId} user={user} />;
 
   if (user.role?.startsWith("pic_toko")) {
@@ -219,8 +219,9 @@ export default function App() {
                           replace
                         />
                       ) : (
-                        <ProtectedRoute allowedRoles={["superadmin", "admin", "spv_toko"]}>
-
+                        <ProtectedRoute
+                          allowedRoles={["superadmin", "admin", "spv_toko"]}
+                        >
                           <Dashboard user={user} />
                         </ProtectedRoute>
                       )
@@ -232,13 +233,12 @@ export default function App() {
                     path="/toko/:id"
                     element={
                       <ProtectedRoute
-                      allowedRoles={[
-                        "superadmin",
-                        "admin",
-                        "pic_toko",
-                        "spv_toko",
-                      ]}
-                      
+                        allowedRoles={[
+                          "superadmin",
+                          "admin",
+                          "pic_toko",
+                          "spv_toko",
+                        ]}
                       >
                         <TokoWrapper user={user} />
                       </ProtectedRoute>
@@ -351,6 +351,11 @@ export default function App() {
 
                   {/* Invoice PRO MAX (utama) */}
                   <Route path="/invoice" element={<Invoice />} />
+
+                  <Route
+                    path="/cetak-setoran-prepo"
+                    element={<CetakSetoranPrePo />}
+                  />
 
                   {/* Alias tambahan untuk mode PRO & Preview */}
                   <Route path="/invoice-pro" element={<Invoice />} />

@@ -6,10 +6,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ref, onValue } from "firebase/database";
 import { db } from "../../firebase/FirebaseInit";
+// import {
+//   getStorage,
+//   ref as storageRef,
+//   uploadBytes,
+//   getDownloadURL,
+// } from "firebase/storage";
+// import { v4 as uuidv4 } from "uuid";
 import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 // ===== Firebase Services =====
 import {
@@ -86,7 +93,7 @@ const generateNoPreOrder = (tokoName, existingSetoran = []) => {
 // ===============================
 function normalizeRecord(r) {
   return {
-    id: r.id || r._id || r.key || r.ID || "",
+    id: r.id || r._id || r.key || r.ID || String(Date.now()) + Math.random(),
 
     NO_PRE_ORDER: r.NO_PRE_ORDER || "",
 
@@ -114,6 +121,11 @@ function normalizeRecord(r) {
 
     JUMLAH_SETORAN: Number(r.JUMLAH_SETORAN || 0),
     STATUS: r.STATUS || "Pending",
+    REF_SETORAN: r.REF_SETORAN || "",
+    KETERANGAN: r.KETERANGAN || "",
+    DIBUAT_OLEH: r.DIBUAT_OLEH || "",
+
+    // BUKTI_URL: r.BUKTI_URL || "",
   };
 }
 
@@ -130,9 +142,11 @@ export default function FinanceReport() {
   const [paymentJenisList, setPaymentJenisList] = useState([]);
   const [masterPaymentMetode, setMasterPaymentMetode] = useState([]);
   const location = useLocation();
+  const navigate = useNavigate();
   const onlyMyToko = location.state?.onlyMyToko || false;
   const tokoIdFromState = location.state?.tokoId || null;
   const tokoNameFromState = location.state?.tokoName || null;
+  const [uploading, setUploading] = useState(false);
 
   const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
   const role = String(loggedUser?.role || "").toLowerCase();
@@ -688,6 +702,35 @@ export default function FinanceReport() {
     await updateTransaksi(tokoId, id, { STATUS: status });
   };
 
+  // const handleUploadBukti = async (file) => {
+  //   if (!file) return;
+
+  //   try {
+  //     setUploading(true);
+
+  //     const storage = getStorage();
+  //     const fileRef = storageRef(
+  //       storage,
+  //       `bukti_pengeluaran/${uuidv4()}_${file.name}`
+  //     );
+
+  //     await uploadBytes(fileRef, file);
+  //     const url = await getDownloadURL(fileRef);
+
+  //     setForm((prev) => ({
+  //       ...prev,
+  //       BUKTI_URL: url,
+  //     }));
+
+  //     alert("Upload berhasil!");
+  //   } catch (err) {
+  //     console.error(err);
+  //     alert("Upload gagal");
+  //   } finally {
+  //     setUploading(false);
+  //   }
+  // };
+
   const addPengeluaran = async () => {
     if (!form.TANGGAL_TRANSAKSI || !form.NAMA_TOKO) {
       alert("Tanggal dan Toko wajib diisi");
@@ -696,13 +739,16 @@ export default function FinanceReport() {
 
     const payload = {
       ...form,
-      TOTAL: toNum(form.JUMLAH_SETORAN),
       TIPE: "PENGELUARAN",
-      STATUS: "Approved",
+      STATUS: "Pending", // 🔥 default pending
+      JUMLAH_SETORAN: Number(form.JUMLAH_SETORAN || 0),
+      TOTAL: Number(form.JUMLAH_SETORAN || 0),
+      // BUKTI_URL: form.BUKTI_URL || "",
     };
 
     const tokoId = tokoNameToId(form.NAMA_TOKO);
     await addTransaksi(tokoId, payload);
+
     setForm(formEmpty);
   };
 
@@ -747,28 +793,78 @@ export default function FinanceReport() {
   // ===============================
   // Export Excel
   // ===============================
-  const exportExcel = (rows) => {
+  const exportExcelSetoranPreOrder = (rows) => {
+    if (!rows || rows.length === 0) {
+      alert("Tidak ada data untuk di export");
+      return;
+    }
+
+    const data = rows.map((r, i) => {
+      const total = Number(r.QTY || 0) * Number(r.HARGA || 0);
+
+      return {
+        No: i + 1,
+        "No Pre Order": r.NO_PRE_ORDER || "-",
+        Tanggal: r.TANGGAL_TRANSAKSI || "-",
+        Toko: r.NAMA_TOKO || "-",
+        "Nama Pelanggan": r.NAMA_PELANGGAN || "-",
+        "ID Pelanggan": r.ID_PELANGGAN || "-",
+        "No TLP": r.NO_TLP || "-",
+        "Store Head": r.STORE_HEAD || "-",
+        Sales: r.NAMA_SALES || "-",
+        "Sales Handle": r.SALES_HANDLE || "-",
+        Kategori: r.KATEGORI_BARANG || "-",
+        Brand: r.NAMA_BRAND || "-",
+        Barang: r.NAMA_BARANG || "-",
+        QTY: Number(r.QTY || 0),
+        Harga: Number(r.HARGA || 0),
+        "Kategori Payment": r.KATEGORI_PEMBAYARAN || "-",
+        "DP Payment": Number(r.DP_PAYMENT || 0),
+        Total: total,
+        Status: r.STATUS || "Pending",
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+
+    // 🔥 Auto width kolom
+    const colWidths = Object.keys(data[0]).map(() => ({ wch: 18 }));
+    ws["!cols"] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Setoran Pre Order Penjualan");
+
+    XLSX.writeFile(
+      wb,
+      `Setoran_Pre_Order_${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
+  };
+
+  const exportExcelPengeluaran = (rows) => {
+    if (!rows || rows.length === 0) {
+      alert("Tidak ada data untuk di export");
+      return;
+    }
+
     const data = rows.map((r, i) => ({
       No: i + 1,
-      "No Pre Order": r.NO_PRE_ORDER,
       Tanggal: r.TANGGAL_TRANSAKSI,
       Toko: r.NAMA_TOKO,
-      Pelanggan: r.NAMA_PELANGGAN,
-      "ID Pelanggan": r.ID_PELANGGAN,
-      "No TLP": r.NO_TLP,
-      Sales: r.NAMA_SALES,
-      Barang: r.NAMA_BARANG,
-      QTY: r.QTY,
-      Harga: r.HARGA,
-      DP: r.DP_PAYMENT,
-      Total: r.QTY * r.HARGA,
+      Kategori: r.KATEGORI_PEMBAYARAN,
+      Jumlah: r.JUMLAH_SETORAN,
+      "No Ref": r.REF_SETORAN || "-",
+      Keterangan: r.KETERANGAN || "-",
+      "Dibuat Oleh": r.DIBUAT_OLEH || "-",
+      // "Bukti Upload Foto": r.BUKTI_URL || "-",
       Status: r.STATUS,
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Setoran");
-    XLSX.writeFile(wb, "FinanceReport_Setoran.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, "Laporan Pengeluaran");
+
+    XLSX.writeFile(wb, "Laporan_Pengeluaran.xlsx");
   };
 
   // ===============================
@@ -777,9 +873,9 @@ export default function FinanceReport() {
   const exportPDF = async () => {
     if (!tableRef.current) return;
     const canvas = await html2canvas(tableRef.current, { scale: 1.5 });
-    const img = canvas.toDataURL("image/png");
+    // const img = canvas.toDataURL("image/png");
     const pdf = new jsPDF("l", "mm", "a4");
-    pdf.addImage(img, "PNG", 0, 0, 297, (canvas.height * 297) / canvas.width);
+    // pdf.addImage(img, "PNG", 0, 0, 297, (canvas.height * 297) / canvas.width);
     pdf.save("FinanceReport_Setoran.pdf");
   };
 
@@ -809,26 +905,8 @@ export default function FinanceReport() {
       </div>
 
       <div className="flex items-center gap-2">
-        <label className=" px-3 py-2 text-xl text-bold font-bold bg-white ">
-          SETORAN Pre ORDER PENJUALAN
-        </label>
-
-        <label
-          onClick={() => exportExcel(filteredSetoran)}
-          className="cursor-pointer px-3 py-2 border bg-white rounded"
-        >
-          Import Excel
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            ref={fileRef}
-            onChange={handleImport}
-            className="hidden"
-          />
-        </label>
-
         <button
-          onClick={() => exportExcel(filteredSetoran)}
+          onClick={() => exportExcelSetoranPreOrder(filteredSetoran)}
           className="px-3 py-2 border bg-white rounded"
         >
           Export Excel
@@ -1416,6 +1494,17 @@ export default function FinanceReport() {
                           </button>
 
                           <button
+                            onClick={() =>
+                              navigate("/cetak-setoran-prepo", {
+                                state: { data: r },
+                              })
+                            }
+                            className="px-2 py-1 text-xs bg-purple-600 text-white rounded"
+                          >
+                            Print
+                          </button>
+
+                          <button
                             onClick={() => beginEdit(r)}
                             className="px-2 py-1 text-xs bg-blue-600 text-white rounded"
                           >
@@ -1465,23 +1554,8 @@ export default function FinanceReport() {
       </div>
 
       <div className="flex items-center gap-2">
-        <label className=" px-3 py-2 text-xl text-bold font-bold bg-white ">
-          LAPORAN PENGELUARAN
-        </label>
-
-        <label className="cursor-pointer px-3 py-2 border bg-white rounded">
-          Import Excel
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            ref={fileRef}
-            onChange={handleImport}
-            className="hidden"
-          />
-        </label>
-
         <button
-          onClick={() => exportExcel(filteredPengeluaran)}
+          onClick={() => exportExcelPengeluaran(filteredPengeluaran)}
           className="px-3 py-2 border bg-white rounded"
         >
           Export Excel
@@ -1690,12 +1764,24 @@ export default function FinanceReport() {
                   </button>
                 </>
               ) : (
-                <button
-                  onClick={addPengeluaran}
-                  className="px-4 py-2 bg-red-600 text-white rounded"
-                >
-                  Tambah Pengeluaran
-                </button>
+                <div className="flex gap-2">
+                  {/* <label className="px-4 py-2 bg-gray-700 text-white rounded cursor-pointer">
+                    {uploading ? "Uploading..." : "Upload Bukti"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) => handleUploadBukti(e.target.files[0])}
+                    />
+                  </label> */}
+
+                  <button
+                    onClick={addPengeluaran}
+                    className="px-4 py-2 bg-red-600 text-white rounded"
+                  >
+                    Tambah Pengeluaran
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1705,7 +1791,9 @@ export default function FinanceReport() {
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="border rounded-xl p-4 bg-white shadow">
-          <div className="text-sm text-slate-500">Total Semua Pengeluaran</div>
+          <div className="text-sm text-slate-500">
+            Total Semua Pengeluaran TOKO
+          </div>
           <div className="text-2xl font-bold">
             {formatCurrency(totalAllPengeluaran)}
           </div>
@@ -1719,32 +1807,15 @@ export default function FinanceReport() {
         </div>
       </div>
 
-      {/* Per Toko */}
-      <div className="border rounded-xl p-4 bg-white shadow">
-        <h2 className="font-semibold mb-3">Total Pengeluaran Per Toko</h2>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-          {totalPerTokoAll.map((t) => (
-            <div key={t.tokoName} className="p-3 border rounded bg-white">
-              <div className="text-xs">{t.tokoName}</div>
-              <div className="text-lg font-bold">{formatCurrency(t.total)}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* TABEL */}
       <div className="border rounded-xl p-4 bg-white shadow">
         <h3 className="font-semibold mb-2">Daftar Pengeluaran</h3>
-
-        <div className="text-sm mb-2">
-          Menampilkan <b>{filteredSetoran.length}</b> data — Total:{" "}
-          {formatCurrency(totalFilteredSetoran)}
-        </div>
 
         <div ref={tableRef} className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
+                <th className="px-3 py-2 text-center">No</th>
                 <th className="px-3 py-2 text-left">Tanggal</th>
                 <th className="px-3 py-2 text-left">Toko</th>
                 <th className="px-3 py-2 text-left">Kategori</th>
@@ -1752,6 +1823,7 @@ export default function FinanceReport() {
                 <th className="px-3 py-2 text-left">Ref</th>
                 <th className="px-3 py-2 text-left">Keterangan</th>
                 <th className="px-3 py-2 text-left">Dibuat Oleh</th>
+                {/* <th className="px-3 py-2 text-left">Bukti</th> */}
                 <th className="px-3 py-2 text-left">Status</th>
                 <th className="px-3 py-2 text-left">Aksi</th>
               </tr>
@@ -1760,72 +1832,95 @@ export default function FinanceReport() {
             <tbody>
               {paginatedPengeluaran.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-6 text-center text-slate-500">
+                  <td colSpan={10} className="py-6 text-center text-slate-500">
                     Tidak ada data
                   </td>
                 </tr>
               ) : (
-                paginatedPengeluaran.map((r) => (
-                  <tr key={r.id} className="border-b hover:bg-slate-50">
-                    <td className="px-3 py-2">{r.TANGGAL_TRANSAKSI}</td>
-                    <td className="px-3 py-2">{r.NAMA_TOKO}</td>
-                    <td className="px-3 py-2">{r.KATEGORI_PEMBAYARAN}</td>
-                    <td className="px-3 py-2 text-right">
-                      {formatCurrency(r.JUMLAH_SETORAN)}
-                    </td>
-                    <td className="px-3 py-2">{r.REF_SETORAN || "-"}</td>
-                    <td className="px-3 py-2">{r.KETERANGAN || "-"}</td>
-                    <td className="px-3 py-2">{r.DIBUAT_OLEH || "-"}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-semibold ${
-                          r.STATUS === "Approved"
-                            ? "bg-green-100 text-green-700"
-                            : r.STATUS === "Rejected"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-yellow-100 text-yellow-700"
-                        }`}
-                      >
-                        {r.STATUS}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() =>
-                            updateStatus(r.id, r.NAMA_TOKO, "Approved")
-                          }
-                          className="px-2 py-1 text-xs bg-green-600 text-white rounded"
-                        >
-                          Approve
-                        </button>
+                paginatedPengeluaran.map((r, index) => {
+                  const nomor = (currentPage - 1) * rowsPerPage + index + 1;
 
-                        <button
-                          onClick={() =>
-                            updateStatus(r.id, r.NAMA_TOKO, "Rejected")
-                          }
-                          className="px-2 py-1 text-xs bg-orange-600 text-white rounded"
-                        >
-                          Reject
-                        </button>
+                  return (
+                    <tr key={r.id} className="border-b hover:bg-slate-50">
+                      <td className="px-3 py-2 text-center font-semibold">
+                        {nomor}
+                      </td>
 
-                        <button
-                          onClick={() => beginEdit(r)}
-                          className="px-2 py-1 text-xs bg-blue-600 text-white rounded"
+                      <td className="px-3 py-2">{r.TANGGAL_TRANSAKSI}</td>
+                      <td className="px-3 py-2">{r.NAMA_TOKO}</td>
+                      <td className="px-3 py-2">{r.KATEGORI_PEMBAYARAN}</td>
+                      <td className="px-3 py-2 text-right">
+                        {formatCurrency(r.JUMLAH_SETORAN)}
+                      </td>
+                      <td className="px-3 py-2">{r.REF_SETORAN || "-"}</td>
+                      <td className="px-3 py-2">{r.KETERANGAN || "-"}</td>
+                      <td className="px-3 py-2">{r.DIBUAT_OLEH || "-"}</td>
+                      {/* <td className="px-3 py-2">
+                      {r.BUKTI_URL ? (
+                        <a
+                          href={r.BUKTI_URL}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 underline text-xs"
                         >
-                          Edit
-                        </button>
+                          Lihat Foto
+                        </a>
+                      ) : (
+                        "-"
+                      )}
+                    </td> */}
+                      <td className="px-3 py-2">
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-semibold ${
+                            r.STATUS === "Approved"
+                              ? "bg-green-100 text-green-700"
+                              : r.STATUS === "Rejected"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-yellow-100 text-yellow-700"
+                          }`}
+                        >
+                          {r.STATUS}
+                        </span>
+                      </td>
 
-                        <button
-                          onClick={() => deleteSetoran(r.id, r.NAMA_TOKO)}
-                          className="px-2 py-1 text-xs bg-red-600 text-white rounded"
-                        >
-                          Hapus
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      <td className="px-3 py-2">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() =>
+                              updateStatus(r.id, r.NAMA_TOKO, "Approved")
+                            }
+                            className="px-2 py-1 text-xs bg-green-600 text-white rounded"
+                          >
+                            Approve
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              updateStatus(r.id, r.NAMA_TOKO, "Rejected")
+                            }
+                            className="px-2 py-1 text-xs bg-orange-600 text-white rounded"
+                          >
+                            Reject
+                          </button>
+
+                          <button
+                            onClick={() => beginEdit(r)}
+                            className="px-2 py-1 text-xs bg-blue-600 text-white rounded"
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            onClick={() => deleteSetoran(r.id, r.NAMA_TOKO)}
+                            className="px-2 py-1 text-xs bg-red-600 text-white rounded"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

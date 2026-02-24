@@ -15,7 +15,7 @@
 .logo:hover {
   box-shadow: 1 4px 8px rgba(249, 241, 9, 0.4),
               1 6px 20px rgba(220, 253, 4, 0.883),
-              0 0 15px rgba(255, 255, 255, 0.6);
+              0 0 15px rgba(216, 192, 192, 0.6);
 }
 
 /* ===========================
@@ -30,7 +30,7 @@
   padding: 12px 14px;
   border-radius: 12px;
   background: linear-gradient(135deg, #ff00d4, #ff3bcb);
-  color: #fff;
+  color: #f9f5f5;
   font-weight: 700;
   letter-spacing: 0.3px;
   border: 0;

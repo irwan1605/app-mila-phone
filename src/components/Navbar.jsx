@@ -329,18 +329,18 @@ const Navbar = ({ user, onLogout }) => {
         <div className="relative">
           <button
             onClick={() => setShowWhatsAppDropdown(!showWhatsAppDropdown)}
-            className="wa-btn px-4 py-2 bg-green-500 text-white hover:bg-green-600 rounded-lg shadow-md transition"
+            className="wa-btn px-4 py-2 bg-green-500 text-black hover:bg-green-600 rounded-lg shadow-md transition"
           >
             Chat WhatsApp
           </button>
 
           {showWhatsAppDropdown && (
-            <div className="dropdown-animate absolute right-0 mt-2 w-64 bg-white text-black border rounded-lg shadow-xl z-10">
+            <div className="dropdown-animate absolute right-0 mt-2 w-64 bg-black text-white border rounded-lg shadow-xl z-10">
               {picContacts.map((pic, index) => (
                 <button
                   key={index}
                   onClick={() => handleWhatsAppClick(pic.phone)}
-                  className="block w-full text-left px-4 py-2 hover:bg-gray-200 transition"
+                  className="block w-full text-left px-4 py-2 hover:bg-gray-700 transition"
                 >
                   {pic.name}
                 </button>
