@@ -74,7 +74,31 @@ export default function FormPaymentSection({
   useEffect(() => {
     const u1 = listenMasterMDR(setMasterMdr);
     const u2 = listenMasterTenor(setMasterTenor);
-    const u3 = listenMasterBank(setMasterBank);
+    const u3 = listenMasterBank((data) => {
+      if (!data) {
+        setMasterBank([]);
+        return;
+      }
+
+      const arr = Array.isArray(data)
+        ? data
+        : Object.keys(data).map((key) => ({
+            id: key,
+            ...data[key],
+          }));
+
+      const clean = arr.map((b) => ({
+        id: b.id,
+        namaBank: b.namaBank || b.NAMA_BANK || "",
+        status: b.status || b.STATUS || "",
+        jenis: b.jenis || b.JENIS || "",
+      }));
+
+      console.log("MASTER BANK CLEAN:", clean);
+
+      setMasterBank(clean);
+    });
+
     return () => {
       u1 && u1();
       u2 && u2();
@@ -82,8 +106,14 @@ export default function FormPaymentSection({
     };
   }, []);
 
-  const getBankByMetode = (metode) =>
-    masterBank.filter((b) => b.status === "AKTIF" && b.jenis === metode);
+  useEffect(() => {
+    console.log("MASTER BANK RAW:", masterBank);
+  }, [masterBank]);
+
+  const getBankByMetode = () => {
+    if (!Array.isArray(masterBank)) return [];
+    return masterBank;
+  };
 
   /* ================= SAFE PAYMENT ================= */
   const paymentSafe = useMemo(
@@ -349,6 +379,16 @@ export default function FormPaymentSection({
     rumusDpTalangan,
   ]);
 
+  const findBankByNama = (nama) => {
+    if (!nama || typeof nama !== "string") return null;
+
+    return masterBank.find(
+      (b) =>
+        typeof b?.namaBank === "string" &&
+        b.namaBank.toLowerCase() === nama.toLowerCase()
+    );
+  };
+
   /* ================= RENDER ================= */
   return (
     <fieldset
@@ -413,9 +453,7 @@ export default function FormPaymentSection({
                     value={p.bankNama || ""}
                     onChange={(e) => {
                       const val = e.target.value;
-                      const bank = masterBank.find(
-                        (b) => b.namaBank.toUpperCase() === val.toUpperCase()
-                      );
+                      const bank = findBankByNama(val);
 
                       const next = [...paymentSplit.detail];
                       next[i] = {
@@ -423,14 +461,16 @@ export default function FormPaymentSection({
                         bankId: bank?.id || "MANUAL",
                         bankNama: val,
                       };
+
                       setPaymentSplit({ ...paymentSplit, detail: next });
                     }}
                   />
 
                   <datalist id={`bank-list-${i}`}>
-                    {getBankByMetode(p.metode).map((b) => (
-                      <option key={b.id} value={b.namaBank} />
-                    ))}
+                    {Array.isArray(masterBank) &&
+                      masterBank.map((b) => (
+                        <option key={b.id} value={b.namaBank || ""} />
+                      ))}
                   </datalist>
                 </>
               )}
@@ -525,9 +565,7 @@ export default function FormPaymentSection({
                       value={cashPayment.bankNama || ""}
                       onChange={(e) => {
                         const val = e.target.value;
-                        const bank = masterBank.find(
-                          (b) => b.namaBank.toUpperCase() === val.toUpperCase()
-                        );
+                        const bank = findBankByNama(val);
 
                         setCashPayment({
                           ...cashPayment,
@@ -536,11 +574,11 @@ export default function FormPaymentSection({
                         });
                       }}
                     />
-
                     <datalist id="bank-list-cash">
-                      {getBankByMetode(cashPayment.metode).map((b) => (
-                        <option key={b.id} value={b.namaBank} />
-                      ))}
+                      {Array.isArray(masterBank) &&
+                        masterBank.map((b) => (
+                          <option key={b.id} value={b.namaBank || ""} />
+                        ))}
                     </datalist>
                   </>
                 )}
