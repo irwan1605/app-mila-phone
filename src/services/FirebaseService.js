@@ -2091,7 +2091,9 @@ export const approveTransferAndMoveStock = async ({
 export const approveTransferFINAL = async ({ transfer }) => {
   const sjRef = push(ref(db, "surat_jalan"));
 
-  const safeImeis = Array.isArray(transfer.imeis) ? transfer.imeis : [];
+  const safeImeis = Array.isArray(transfer.imeis)
+    ? transfer.imeis.map(i => String(i).trim())
+    : [];
 
   const {
     tokoPengirim,
@@ -2108,137 +2110,73 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
   const approvedAt = Date.now();
 
-
-// ===============================
-// 🔥 VALIDASI IMEI REALTIME FINAL FIX
-// ===============================
-if (safeImeis.length > 0) {
-
-  const allTokoSnap = await get(ref(db, "toko"));
-  const allTokoData = allTokoSnap.val() || {};
-
-  const imeiState = {};
-
-  Object.values(allTokoData).forEach((toko) => {
-    const transaksi = toko.transaksi || {};
-
-    Object.values(transaksi).forEach((trx) => {
-      if (!trx.IMEI) return;
-
-      const im = String(trx.IMEI).trim();
-      const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
-
-      // 🔥 Ambil timestamp paling aman
-      const time =
-        trx.CREATED_AT ||
-        trx.createdAt ||
-        trx.UPDATED_AT ||
-        0;
-
-      if (
-        !imeiState[im] ||
-        time >= imeiState[im].time
-      ) {
-        imeiState[im] = {
-          lokasi: trx.NAMA_TOKO,
-          metode,
-          time,
-        };
-      }
-    });
-  });
-
-  for (const imei of safeImeis) {
-    const data = imeiState[imei];
-
-    if (!data) {
-      throw new Error(`IMEI ${imei} tidak ditemukan di sistem`);
-    }
-
-    if (data.metode === "PENJUALAN") {
-      throw new Error(`IMEI ${imei} sudah TERJUAL`);
-    }
-
-    if (data.lokasi !== tokoPengirim) {
-      throw new Error(
-        `IMEI ${imei} berada di toko ${data.lokasi}, bukan di ${tokoPengirim}`
-      );
-    }
-  }
-}
-
   // =====================================================
-  // 🔥 2. VALIDASI REALTIME STOK GLOBAL (BOLEH TRANSFER LAGI)
+  // 🔥 VALIDASI FINAL — BERDASARKAN HISTORI TRANSAKSI
   // =====================================================
   if (safeImeis.length > 0) {
+
     const allTokoSnap = await get(ref(db, "toko"));
     const allTokoData = allTokoSnap.val() || {};
 
-    const imeiState = {};
-
-    Object.values(allTokoData).forEach((toko) => {
-      const transaksi = toko.transaksi || {};
-
-      Object.values(transaksi).forEach((trx) => {
-        if (!trx.IMEI) return;
-
-        const im = String(trx.IMEI).trim();
-        const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
-        const namaToko = trx.NAMA_TOKO;
-
-        if (!imeiState[im]) {
-          imeiState[im] = {
-            lokasi: namaToko,
-            status: "AVAILABLE",
-          };
-        }
-
-        if (metode === "PENJUALAN") {
-          imeiState[im].status = "SOLD";
-        }
-
-        if (metode === "TRANSFER_KELUAR") {
-          imeiState[im].status = "OUT";
-        }
-
-        if (metode === "TRANSFER_MASUK") {
-          imeiState[im].status = "AVAILABLE";
-          imeiState[im].lokasi = namaToko;
-        }
-
-        if (metode === "REFUND") {
-          imeiState[im].status = "AVAILABLE";
-        }
-      });
-    });
-
     for (const imei of safeImeis) {
-      const data = imeiState[imei];
 
-      if (!data) {
-        throw new Error(`IMEI ${imei} tidak ditemukan di sistem`);
-      }
+      let saldo = 0;
+      let lokasiTerakhir = null;
+      let waktuTerakhir = 0;
+      let sudahTerjual = false;
 
-      if (data.status === "SOLD") {
+      Object.values(allTokoData).forEach((toko) => {
+        const transaksi = toko.transaksi || {};
+
+        Object.values(transaksi).forEach((trx) => {
+          if (String(trx.IMEI).trim() !== imei) return;
+          if (trx.STATUS !== "Approved") return;
+
+          const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
+          const waktu =
+            trx.CREATED_AT ||
+            trx.createdAt ||
+            0;
+
+          // 🔥 update lokasi terakhir berdasarkan waktu terbesar
+          if (waktu >= waktuTerakhir) {
+            waktuTerakhir = waktu;
+            lokasiTerakhir = trx.NAMA_TOKO;
+          }
+
+          if (metode === "PEMBELIAN") saldo += 1;
+          if (metode === "TRANSFER_MASUK") saldo += 1;
+          if (metode === "REFUND") saldo += 1;
+
+          if (metode === "TRANSFER_KELUAR") saldo -= 1;
+          if (metode === "PENJUALAN") {
+            saldo -= 1;
+            sudahTerjual = true;
+          }
+        });
+      });
+
+      // ❌ BLOK HANYA JIKA SUDAH TERJUAL
+      if (sudahTerjual) {
         throw new Error(`IMEI ${imei} sudah TERJUAL`);
       }
 
-      if (data.lokasi !== tokoPengirim) {
-        throw new Error(
-          `IMEI ${imei} berada di toko ${data.lokasi}, bukan di ${tokoPengirim}`
-        );
+      // ❌ BLOK JIKA SALDO TIDAK ADA
+      if (saldo <= 0) {
+        throw new Error(`IMEI ${imei} tidak tersedia`);
       }
 
-      // 🔥 INI YANG PENTING
-      // OUT boleh transfer lagi kalau dia memang masih di tokoPengirim
-      if (data.status === "OUT" && data.lokasi !== tokoPengirim) {
-        throw new Error(`IMEI ${imei} tidak tersedia`);
+      // ❌ BLOK JIKA BUKAN DI TOKO PENGIRIM
+      if (lokasiTerakhir !== tokoPengirim) {
+        throw new Error(
+          `IMEI ${imei} berada di toko ${lokasiTerakhir}, bukan di ${tokoPengirim}`
+        );
       }
     }
   }
 
   // =====================================================
-  // 3. SIMPAN SURAT JALAN
+  // 2️⃣ SIMPAN SURAT JALAN
   // =====================================================
   await update(sjRef, {
     noSuratJalan,
@@ -2252,12 +2190,13 @@ if (safeImeis.length > 0) {
   });
 
   // =====================================================
-  // 4. TRANSAKSI STOK
+  // 3️⃣ TRANSAKSI STOK
   // =====================================================
-
   if (safeImeis.length > 0) {
+
     for (const imei of safeImeis) {
-      // 🔻 KELUAR
+
+      // 🔻 TRANSFER KELUAR
       await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
         NO_INVOICE: noDo,
@@ -2274,7 +2213,7 @@ if (safeImeis.length > 0) {
         CREATED_AT: approvedAt,
       });
 
-      // 🔺 MASUK
+      // 🔺 TRANSFER MASUK
       await push(ref(db, `toko/${ke}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
         NO_INVOICE: noSuratJalan,
@@ -2291,7 +2230,9 @@ if (safeImeis.length > 0) {
         CREATED_AT: approvedAt,
       });
     }
+
   } else {
+
     const safeQty = Number(qty || 1);
 
     await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
@@ -2328,7 +2269,7 @@ if (safeImeis.length > 0) {
   }
 
   // =====================================================
-  // 5. UPDATE STATUS TRANSFER
+  // 4️⃣ UPDATE STATUS TRANSFER
   // =====================================================
   await update(ref(db, `transfer_barang/${id}`), {
     status: "Approved",

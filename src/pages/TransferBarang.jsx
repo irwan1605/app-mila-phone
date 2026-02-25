@@ -993,20 +993,24 @@ export default function TransferBarang() {
   // ================= VALIDASI MASTER BARANG =================
   const isBarangValidDiMaster = () => {
     if (!form.brand || !form.barang) return false;
-  
+
     const brandUpper = String(form.brand).toUpperCase().trim();
     const barangUpper = String(form.barang).toUpperCase().trim();
     const tokoUpper = String(form.tokoPengirim).toUpperCase().trim();
-  
+
     // ✅ 1. CEK DI MASTER BARANG
     const adaDiMaster = masterBarang.some(
       (b) =>
-        String(b.brand || "").toUpperCase().trim() === brandUpper &&
-        String(b.namaBarang || "").toUpperCase().trim() === barangUpper
+        String(b.brand || "")
+          .toUpperCase()
+          .trim() === brandUpper &&
+        String(b.namaBarang || "")
+          .toUpperCase()
+          .trim() === barangUpper
     );
-  
+
     if (adaDiMaster) return true;
-  
+
     // ✅ 2. CEK DI INVENTORY IMEI
     const adaDiInventoryImei = inventory.some(
       (i) =>
@@ -1014,9 +1018,9 @@ export default function TransferBarang() {
         i.namaBrand?.toUpperCase().trim() === brandUpper &&
         i.namaBarang?.toUpperCase().trim() === barangUpper
     );
-  
+
     if (adaDiInventoryImei) return true;
-  
+
     // ✅ 3. CEK DI INVENTORY NON IMEI
     const adaDiInventoryNonImei = inventoryAccessories.some(
       (i) =>
@@ -1024,55 +1028,55 @@ export default function TransferBarang() {
         i.namaBrand?.toUpperCase().trim() === brandUpper &&
         i.namaBarang?.toUpperCase().trim() === barangUpper
     );
-  
+
     if (adaDiInventoryNonImei) return true;
-  
+
     return false;
   };
 
   const handleTambahTransfer = () => {
     // ==================================================
-// 🔥 HARD GLOBAL IMEI DUPLICATE CHECK (SEBELUM MASUK TABLE)
-// ==================================================
-if (Array.isArray(form.imeis) && form.imeis.length > 0) {
+    // 🔥 HARD GLOBAL IMEI DUPLICATE CHECK (SEBELUM MASUK TABLE)
+    // ==================================================
+    if (Array.isArray(form.imeis) && form.imeis.length > 0) {
+      const normalized = form.imeis.map((i) => String(i).trim().toUpperCase());
 
-  const normalized = form.imeis.map(i =>
-    String(i).trim().toUpperCase()
-  );
+      const uniqueSet = new Set(normalized);
 
-  const uniqueSet = new Set(normalized);
+      // ❌ DUPLIKAT DALAM FORM SENDIRI
+      if (uniqueSet.size !== normalized.length) {
+        alert("❌ Terdapat IMEI duplikat dalam input ini");
+        return;
+      }
 
-  // ❌ DUPLIKAT DALAM FORM SENDIRI
-  if (uniqueSet.size !== normalized.length) {
-    alert("❌ Terdapat IMEI duplikat dalam input ini");
-    return;
-  }
+      // ❌ DUPLIKAT DI daftarTransfer (yang sudah ada di table atas)
+      const imeiSudahDiTable = daftarTransfer
+        .flatMap((item) => item.imeis || [])
+        .map((i) => String(i).trim().toUpperCase());
 
-  // ❌ DUPLIKAT DI daftarTransfer (yang sudah ada di table atas)
-  const imeiSudahDiTable = daftarTransfer
-    .flatMap(item => item.imeis || [])
-    .map(i => String(i).trim().toUpperCase());
+      for (const im of normalized) {
+        if (imeiSudahDiTable.includes(im)) {
+          alert(`❌ IMEI ${im} sudah ada di daftar transfer`);
+          return;
+        }
+      }
 
-  for (const im of normalized) {
-    if (imeiSudahDiTable.includes(im)) {
-      alert(`❌ IMEI ${im} sudah ada di daftar transfer`);
-      return;
+      // ================================================
+      // 🔥 CEK STATUS TERAKHIR IMEI (BOLEH TRANSFER LAGI)
+      // ================================================
+
+      const imeiSold = history
+        .filter((h) => h.status === "SOLD") // hanya yg sudah dijual
+        .flatMap((h) => h.imeis || [])
+        .map((i) => String(i).trim().toUpperCase());
+
+      for (const im of normalized) {
+        if (imeiSold.includes(im)) {
+          alert(`❌ IMEI ${im} sudah TERJUAL dan tidak bisa ditransfer`);
+          return;
+        }
+      }
     }
-  }
-
-  // ❌ DUPLIKAT DI HISTORY (Pending & Approved)
-  const imeiHistory = history
-    .filter(h => h.status !== "Voided")
-    .flatMap(h => h.imeis || [])
-    .map(i => String(i).trim().toUpperCase());
-
-  for (const im of normalized) {
-    if (imeiHistory.includes(im)) {
-      alert(`❌ IMEI ${im} sudah pernah digunakan dalam transfer`);
-      return;
-    }
-  }
-}
 
     const error = validateForm();
     if (error) {
@@ -1166,27 +1170,27 @@ if (Array.isArray(form.imeis) && form.imeis.length > 0) {
     );
   }, [history, filterStatus]);
 
-// ================= REAL STOCK FINAL (IMEI + NON IMEI) =================
-const realStock = useMemo(() => {
-  const map = {};
+  // ================= REAL STOCK FINAL (IMEI + NON IMEI) =================
+  const realStock = useMemo(() => {
+    const map = {};
 
-  // 🔹 HITUNG IMEI (AVAILABLE saja)
-  inventory.forEach((item) => {
-    if (item.status === "AVAILABLE") {
+    // 🔹 HITUNG IMEI (AVAILABLE saja)
+    inventory.forEach((item) => {
+      if (item.status === "AVAILABLE") {
+        const key = `${item.toko}|${item.namaBrand}|${item.namaBarang}`;
+        if (!map[key]) map[key] = 0;
+        map[key]++;
+      }
+    });
+
+    // 🔹 TAMBAH NON IMEI (ACCESSORIES)
+    inventoryAccessories.forEach((item) => {
       const key = `${item.toko}|${item.namaBrand}|${item.namaBarang}`;
-      if (!map[key]) map[key] = 0;
-      map[key]++;
-    }
-  });
+      map[key] = Number(item.qty || 0);
+    });
 
-  // 🔹 TAMBAH NON IMEI (ACCESSORIES)
-  inventoryAccessories.forEach((item) => {
-    const key = `${item.toko}|${item.namaBrand}|${item.namaBarang}`;
-    map[key] = Number(item.qty || 0);
-  });
-
-  return map;
-}, [inventory, inventoryAccessories]);
+    return map;
+  }, [inventory, inventoryAccessories]);
 
   // ================= HITUNG STOK TOKO (REALTIME) =================
   const stokPengirim = useMemo(() => {
@@ -1199,8 +1203,6 @@ const realStock = useMemo(() => {
         i.namaBarang.toUpperCase() === form.barang.toUpperCase()
     ).length;
   }, [inventory, form.tokoPengirim, form.barang]);
-
-  
 
   const validateForm = () => {
     if (!form.tokoPengirim) return "Toko Pengirim wajib diisi";
