@@ -1166,6 +1166,28 @@ if (Array.isArray(form.imeis) && form.imeis.length > 0) {
     );
   }, [history, filterStatus]);
 
+// ================= REAL STOCK FINAL (IMEI + NON IMEI) =================
+const realStock = useMemo(() => {
+  const map = {};
+
+  // 🔹 HITUNG IMEI (AVAILABLE saja)
+  inventory.forEach((item) => {
+    if (item.status === "AVAILABLE") {
+      const key = `${item.toko}|${item.namaBrand}|${item.namaBarang}`;
+      if (!map[key]) map[key] = 0;
+      map[key]++;
+    }
+  });
+
+  // 🔹 TAMBAH NON IMEI (ACCESSORIES)
+  inventoryAccessories.forEach((item) => {
+    const key = `${item.toko}|${item.namaBrand}|${item.namaBarang}`;
+    map[key] = Number(item.qty || 0);
+  });
+
+  return map;
+}, [inventory, inventoryAccessories]);
+
   // ================= HITUNG STOK TOKO (REALTIME) =================
   const stokPengirim = useMemo(() => {
     if (!form.tokoPengirim || !form.barang) return 0;
@@ -1177,6 +1199,8 @@ if (Array.isArray(form.imeis) && form.imeis.length > 0) {
         i.namaBarang.toUpperCase() === form.barang.toUpperCase()
     ).length;
   }, [inventory, form.tokoPengirim, form.barang]);
+
+  
 
   const validateForm = () => {
     if (!form.tokoPengirim) return "Toko Pengirim wajib diisi";

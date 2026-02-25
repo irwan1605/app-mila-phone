@@ -2108,20 +2108,64 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
   const approvedAt = Date.now();
 
-  // =====================================================
-  // 🔥 1. VALIDASI DUPLIKAT DALAM 1 TRANSFER
-  // =====================================================
-  if (safeImeis.length > 0) {
-    const normalized = safeImeis.map((i) =>
-      String(i).trim().toUpperCase()
-    );
 
-    const uniqueSet = new Set(normalized);
+// ===============================
+// 🔥 VALIDASI IMEI REALTIME FINAL FIX
+// ===============================
+if (safeImeis.length > 0) {
 
-    if (uniqueSet.size !== normalized.length) {
-      throw new Error("Terdapat IMEI duplikat dalam transfer ini");
+  const allTokoSnap = await get(ref(db, "toko"));
+  const allTokoData = allTokoSnap.val() || {};
+
+  const imeiState = {};
+
+  Object.values(allTokoData).forEach((toko) => {
+    const transaksi = toko.transaksi || {};
+
+    Object.values(transaksi).forEach((trx) => {
+      if (!trx.IMEI) return;
+
+      const im = String(trx.IMEI).trim();
+      const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
+
+      // 🔥 Ambil timestamp paling aman
+      const time =
+        trx.CREATED_AT ||
+        trx.createdAt ||
+        trx.UPDATED_AT ||
+        0;
+
+      if (
+        !imeiState[im] ||
+        time >= imeiState[im].time
+      ) {
+        imeiState[im] = {
+          lokasi: trx.NAMA_TOKO,
+          metode,
+          time,
+        };
+      }
+    });
+  });
+
+  for (const imei of safeImeis) {
+    const data = imeiState[imei];
+
+    if (!data) {
+      throw new Error(`IMEI ${imei} tidak ditemukan di sistem`);
+    }
+
+    if (data.metode === "PENJUALAN") {
+      throw new Error(`IMEI ${imei} sudah TERJUAL`);
+    }
+
+    if (data.lokasi !== tokoPengirim) {
+      throw new Error(
+        `IMEI ${imei} berada di toko ${data.lokasi}, bukan di ${tokoPengirim}`
+      );
     }
   }
+}
 
   // =====================================================
   // 🔥 2. VALIDASI REALTIME STOK GLOBAL (BOLEH TRANSFER LAGI)
