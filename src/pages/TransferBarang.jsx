@@ -327,6 +327,17 @@ export default function TransferBarang() {
       .replace(/\s+/g, "")
       .toUpperCase();
 
+  // ================= GET LAST OWNER TOKO =================
+  const getLastOwnerToko = (imei) => {
+    const clean = normalizeImei(imei);
+
+    const found = inventory.find((i) => normalizeImei(i.imei) === clean);
+
+    if (!found) return null;
+
+    return found.toko;
+  };
+
   // ================= GLOBAL HARD LOCK ENGINE =================
   // const isImeiGloballyLocked = (imei) => {
   //   const clean = normalizeImei(imei);
@@ -393,7 +404,7 @@ export default function TransferBarang() {
   const globalImeiSet = useMemo(() => {
     const set = new Set();
 
-    // history transfer (kecuali Voided)
+    // ================= HISTORY TRANSFER =================
     history.forEach((trx) => {
       if (trx.status === "Voided") return;
 
@@ -402,15 +413,15 @@ export default function TransferBarang() {
       });
     });
 
-    // draft transfer
+    // ================= DRAFT TRANSFER =================
     daftarTransfer.forEach((item) => {
       (item.imeis || []).forEach((im) => {
         set.add(normalizeImei(im));
       });
     });
 
-    // form sekarang
-    form.imeis.forEach((im) => {
+    // ================= FORM SEKARANG =================
+    (form.imeis || []).forEach((im) => {
       set.add(normalizeImei(im));
     });
 
@@ -801,21 +812,30 @@ export default function TransferBarang() {
 
     const found = inventory.find((i) => normalizeImei(i.imei) === clean);
 
-    // ❌ tidak ada di inventory
     if (!found) {
       alert("❌ IMEI tidak ditemukan di stok");
       return false;
     }
 
-    // ❌ sudah terjual
+    // ❌ jika sudah terjual
     if (found.status === "SOLD") {
       alert("❌ IMEI sudah TERJUAL");
       return false;
     }
 
-    // ❌ bukan AVAILABLE
-    if (found.status !== "AVAILABLE") {
-      alert("❌ IMEI tidak tersedia");
+    // ==============================
+    // STATUS YANG BOLEH TRANSFER LAGI
+    // ==============================
+    const allowedStatus = [
+      "AVAILABLE",
+      "TRANSFER_MASUK",
+      "REFUND",
+      "PEMBELIAN",
+      "OUT",
+    ];
+
+    if (!allowedStatus.includes(found.status)) {
+      alert("❌ IMEI tidak tersedia untuk transfer");
       return false;
     }
 
@@ -825,13 +845,25 @@ export default function TransferBarang() {
       return false;
     }
 
-    // ❌ duplikat di draft
+    // ❌ duplikat di daftar transfer
     if (
       daftarTransfer.some((item) =>
         (item.imeis || []).some((im) => normalizeImei(im) === clean)
       )
     ) {
       alert("❌ IMEI sudah ada di daftar transfer");
+      return false;
+    }
+
+    // ❌ IMEI sedang pending di transfer lain
+    const imeiPending = history.some(
+      (trx) =>
+        trx.status === "Pending" &&
+        (trx.imeis || []).some((im) => normalizeImei(im) === clean)
+    );
+
+    if (imeiPending) {
+      alert("❌ IMEI sedang dalam proses transfer lain");
       return false;
     }
 
@@ -842,12 +874,32 @@ export default function TransferBarang() {
     const im = normalizeImei(imeiSearch);
     if (!im) return;
 
+    // ❌ HARD BLOCK DUPLICATE IMEI
+    if (globalImeiSet.has(im)) {
+      alert(`❌ IMEI ${im} sudah digunakan pada transfer lain`);
+      setImeiSearch("");
+      return;
+    }
+
     if (!isImeiValid(im)) {
       setImeiSearch("");
       return;
     }
 
     const found = inventory.find((i) => normalizeImei(i.imei) === im);
+
+    // ================= CEK TOKO PEMILIK TERAKHIR =================
+    const lastOwner = getLastOwnerToko(im);
+
+    if (
+      lastOwner &&
+      lastOwner.toUpperCase() !== form.tokoPengirim.toUpperCase()
+    ) {
+      alert(
+        `❌ IMEI berada di toko ${lastOwner}, bukan di ${form.tokoPengirim}`
+      );
+      return;
+    }
 
     // 🔥 CEK STOK TOKO (REAL TIME)
     const stokAvailable = inventory.filter(
@@ -920,6 +972,35 @@ export default function TransferBarang() {
       return;
     }
 
+    // ❌ GLOBAL DUPLICATE CHECK
+    const allImeisGlobal = [
+      ...form.imeis,
+      ...daftarTransfer.flatMap((i) => i.imeis || []),
+    ].map(normalizeImei);
+
+    // if (allImeisGlobal.includes(im)) {
+    //   alert(`❌ IMEI ${im} sudah ada dalam daftar transfer`);
+    //   setImeiSearch("");
+    //   return;
+    // }
+
+    if (allImeisGlobal.includes(im)) {
+      alert(`❌ IMEI ${im} sudah ada dalam daftar transfer`);
+      return;
+    }
+
+    // ================= HARD DUPLICATE CHECK =================
+    const allImeis = [
+      ...form.imeis,
+      ...daftarTransfer.flatMap((i) => i.imeis || []),
+    ].map(normalizeImei);
+
+    if (allImeis.includes(im)) {
+      alert(`❌ IMEI ${im} sudah ada dalam daftar transfer`);
+      setImeiSearch("");
+      return;
+    }
+
     setForm((f) => ({
       ...f,
       brand: found.namaBrand,
@@ -935,6 +1016,11 @@ export default function TransferBarang() {
   const handleSearchByImei = () => {
     const im = normalizeImei(imeiSearch);
     if (!im) return;
+
+    if (globalImeiSet.has(im)) {
+      alert(`❌ IMEI ${im} sudah ada di transfer`);
+      return;
+    }
 
     const found = inventory.find((i) => normalizeImei(i.imei) === im);
 
@@ -953,6 +1039,7 @@ export default function TransferBarang() {
       "TRANSFER_MASUK",
       "REFUND",
       "PEMBELIAN",
+      "OUT"
     ];
 
     if (!allowedStatus.includes(found.status)) {
@@ -966,15 +1053,19 @@ export default function TransferBarang() {
       return;
     }
 
-    const imeiPending = history.some(
-      (trx) =>
-        trx.status === "Pending" && (trx.imeis || []).includes(found.imei)
-    );
+  // ================= CEK IMEI DI TRANSFER PENDING SAJA =================
+const imeiPending = history.some(
+  (trx) =>
+    trx.status === "Pending" &&
+    (trx.imeis || []).some(
+      (im) => normalizeImei(im) === normalizeImei(found.imei)
+    )
+);
 
-    if (imeiPending) {
-      alert("❌ IMEI sedang dalam proses transfer lain");
-      return;
-    }
+if (imeiPending) {
+  alert("❌ IMEI sedang dalam proses transfer lain");
+  return;
+}
 
     // ✅ FIX UTAMA
     // tokoPengirim tidak berubah
