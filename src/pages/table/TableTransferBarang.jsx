@@ -23,6 +23,19 @@ export default function TableTransferBarang({ currentRole }) {
 
   const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "";
 
+  // ================= CEK KEPEMILIKAN IMEI =================
+const isImeiMilikToko = (imei, toko) => {
+  const found = inventory.find(
+    (i) => String(i.imei).trim() === String(imei).trim()
+  );
+
+  if (!found) return false;
+
+  const tokoOwner = String(found.toko || "").toUpperCase();
+
+  return tokoOwner === String(toko).toUpperCase();
+};
+
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {
       const map = {}; // key = imei
@@ -344,13 +357,12 @@ export default function TableTransferBarang({ currentRole }) {
                 (r) => filterStatus === "ALL" || r.status === filterStatus
               )
               .map((r, i) => {
-                // ✅ CEK TOKO TUJUAN
+
                 const isTokoTujuan =
                   String(r.ke || "").toUpperCase() === TOKO_LOGIN.toUpperCase();
-
-                // ✅ YANG BOLEH APPROVE
-                const canApprove =
-                  (isSuperAdmin || isTokoTujuan) && r.status === "Pending";
+              
+                // 🔥 APPROVE HANYA SUPERADMIN
+                const canApprove = isSuperAdmin && r.status === "Pending";
 
                 return (
                   <tr
@@ -409,19 +421,40 @@ export default function TableTransferBarang({ currentRole }) {
                           disabled={!canApprove}
                           onClick={async () => {
                             if (!canApprove) return;
-
+                          
+                            // ================= VALIDASI IMEI =================
                             for (const imei of r.imeis || []) {
-                              if (isImeiAlreadyUsed(imei)) {
-                                alert(`❌ IMEI ${imei} sudah pernah dipakai!`);
+                          
+                              const found = inventory.find(
+                                (i) => String(i.imei).trim() === String(imei).trim()
+                              );
+                          
+                              // ❌ tidak ditemukan
+                              if (!found) {
+                                alert(`❌ IMEI ${imei} tidak ditemukan di inventory`);
+                                return;
+                              }
+                          
+                              // ❌ sudah terjual
+                              if (found.status === "SOLD") {
+                                alert(`❌ IMEI ${imei} sudah TERJUAL`);
+                                return;
+                              }
+                          
+                              // ❌ bukan milik toko pengirim
+                              if (!isImeiMilikToko(imei, r.tokoPengirim)) {
+                                alert(
+                                  `❌ IMEI ${imei} bukan milik toko ${r.tokoPengirim}`
+                                );
                                 return;
                               }
                             }
-
+                          
                             const sjId =
                               await FirebaseService.approveTransferFINAL({
                                 transfer: r,
                               });
-
+                          
                             navigate(`/surat-jalan/${sjId}`);
                           }}
                           className={`px-3 py-2 rounded-lg text-[11px] font-bold
