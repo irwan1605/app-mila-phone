@@ -244,14 +244,11 @@ export const getUserRole = async (username) => {
 export const updateTransaksiPenjualan = async (trxId, payload, userLogin) => {
   if (!trxId) throw new Error("ID transaksi kosong");
 
-  const role =
-  userLogin?.role ||
-  userLogin?.ROLE ||
-  "";
+  const role = userLogin?.role || userLogin?.ROLE || "";
 
-if (!["superadmin", "admin"].includes(role.toLowerCase())) {
-  throw new Error("Akses ditolak");
-}
+  if (!["superadmin", "admin"].includes(role.toLowerCase())) {
+    throw new Error("Akses ditolak");
+  }
 
   const tokoSnap = await get(ref(db, "toko"));
 
@@ -456,12 +453,7 @@ export const refundPenjualan = async (row, userLogin) => {
 /* ===============================
    LOCK IMEI
 =============================== */
-export const lockImeiTransfer = async ({
-  imei,
-  transferId,
-  tokoAsal,
-}) => {
-
+export const lockImeiTransfer = async ({ imei, transferId, tokoAsal }) => {
   const lockRef = ref(db, `imei_lock/${imei}`);
   const snap = await get(lockRef);
 
@@ -477,10 +469,7 @@ export const lockImeiTransfer = async ({
     }
 
     // ✅ cek apakah transfer lama masih pending
-    const oldTransferRef = ref(
-      db,
-      `transfer_barang/${lockData.transferId}`
-    );
+    const oldTransferRef = ref(db, `transfer_barang/${lockData.transferId}`);
 
     const oldTransferSnap = await get(oldTransferRef);
 
@@ -491,15 +480,11 @@ export const lockImeiTransfer = async ({
     // -------------------------------------
     if (
       !oldTransferSnap.exists() ||
-      ["Approved", "Rejected", "Voided"].includes(
-        oldTransferSnap.val()?.status
-      )
+      ["Approved", "Rejected", "Voided"].includes(oldTransferSnap.val()?.status)
     ) {
       await remove(lockRef);
     } else {
-      throw new Error(
-        `IMEI ${imei} sedang digunakan / terkunci`
-      );
+      throw new Error(`IMEI ${imei} sedang digunakan / terkunci`);
     }
   }
 
@@ -513,7 +498,6 @@ export const lockImeiTransfer = async ({
     createdAt: Date.now(),
   });
 };
-
 
 export const unlockImeiTransfer = async (imei) => {
   await remove(ref(db, `imei_lock/${imei}`));
@@ -1082,7 +1066,6 @@ export const listenPenjualanHemat = (callback, options = {}) => {
   return () => unsub && unsub();
 };
 
-
 export const listenStockToko = (namaToko, callback) => {
   if (!namaToko) return;
 
@@ -1119,7 +1102,6 @@ export const listenStockAll = (callback) => {
   );
   return () => unsub && unsub();
 };
-
 
 // Ambil stok per toko per SKU
 export const getStockForToko = async (tokoName, sku) => {
@@ -2092,7 +2074,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
   const sjRef = push(ref(db, "surat_jalan"));
 
   const safeImeis = Array.isArray(transfer.imeis)
-    ? transfer.imeis.map(i => String(i).trim())
+    ? transfer.imeis.map((i) => String(i).trim())
     : [];
 
   const {
@@ -2114,12 +2096,10 @@ export const approveTransferFINAL = async ({ transfer }) => {
   // 🔥 VALIDASI FINAL — BERDASARKAN HISTORI TRANSAKSI
   // =====================================================
   if (safeImeis.length > 0) {
-
     const allTokoSnap = await get(ref(db, "toko"));
     const allTokoData = allTokoSnap.val() || {};
 
     for (const imei of safeImeis) {
-
       let saldo = 0;
       let lokasiTerakhir = null;
       let waktuTerakhir = 0;
@@ -2133,10 +2113,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
           if (trx.STATUS !== "Approved") return;
 
           const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
-          const waktu =
-            trx.CREATED_AT ||
-            trx.createdAt ||
-            0;
+          const waktu = trx.CREATED_AT || trx.createdAt || 0;
 
           // 🔥 update lokasi terakhir berdasarkan waktu terbesar
           if (waktu >= waktuTerakhir) {
@@ -2166,12 +2143,18 @@ export const approveTransferFINAL = async ({ transfer }) => {
         throw new Error(`IMEI ${imei} tidak tersedia`);
       }
 
-      // ❌ BLOK JIKA BUKAN DI TOKO PENGIRIM
-      if (lokasiTerakhir !== tokoPengirim) {
-        throw new Error(
-          `IMEI ${imei} berada di toko ${lokasiTerakhir}, bukan di ${tokoPengirim}`
-        );
+      // ❌ BLOK HANYA JIKA SUDAH TERJUAL
+      if (sudahTerjual) {
+        throw new Error(`IMEI ${imei} sudah TERJUAL`);
       }
+
+      // ❌ BLOK JIKA SALDO TIDAK ADA
+      if (saldo <= 0) {
+        throw new Error(`IMEI ${imei} tidak tersedia`);
+      }
+
+      // 🔥 TIDAK PERLU CEK TOKO LAGI
+      // karena sistem mendukung transfer berantai
     }
   }
 
@@ -2193,9 +2176,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
   // 3️⃣ TRANSAKSI STOK
   // =====================================================
   if (safeImeis.length > 0) {
-
     for (const imei of safeImeis) {
-
       // 🔻 TRANSFER KELUAR
       await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
@@ -2230,9 +2211,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
         CREATED_AT: approvedAt,
       });
     }
-
   } else {
-
     const safeQty = Number(qty || 1);
 
     await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
@@ -2742,7 +2721,6 @@ export const listenPenjualanRealtime = (callback) => {
   });
 };
 
-
 export async function createRefundTransaksi(trx) {
   if (!trx) throw new Error("Data transaksi tidak valid");
 
@@ -2768,21 +2746,16 @@ export const refundRestorePenjualan = async (trx) => {
     // =========================
     // 1. UPDATE STATUS TRANSAKSI
     // =========================
-    updates[
-      `toko/${trx.tokoId}/transaksi/${trx.trxKey}/statusPembayaran`
-    ] = "REFUND";
+    updates[`toko/${trx.tokoId}/transaksi/${trx.trxKey}/statusPembayaran`] =
+      "REFUND";
 
-    updates[
-      `toko/${trx.tokoId}/transaksi/${trx.trxKey}/refundAt`
-    ] = Date.now();
+    updates[`toko/${trx.tokoId}/transaksi/${trx.trxKey}/refundAt`] = Date.now();
 
     // =========================
     // 2. KEMBALIKAN STOCK + BUAT RETUR
     // =========================
     if (Array.isArray(trx.items)) {
-
       trx.items.forEach((item) => {
-
         if (!item?.imei) return;
 
         const imei = String(item.imei).trim();
@@ -2799,14 +2772,10 @@ export const refundRestorePenjualan = async (trx) => {
         // =========================
         // ✅ BUAT TRANSAKSI RETUR
         // =========================
-        const returKey = push(
-          ref(db, `transaksi/${trx.tokoId}`)
-        ).key;
+        const returKey = push(ref(db, `transaksi/${trx.tokoId}`)).key;
 
         updates[`transaksi/${trx.tokoId}/${returKey}`] = {
-          TANGGAL_TRANSAKSI: new Date()
-            .toISOString()
-            .slice(0, 10),
+          TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
 
           NO_INVOICE: `RET-${Date.now()}`,
 
@@ -2832,14 +2801,11 @@ export const refundRestorePenjualan = async (trx) => {
     console.log("✅ REFUND RESTORE STOCK BERHASIL");
 
     return true;
-
   } catch (err) {
     console.error("REFUND ERROR:", err);
     return false;
   }
 };
-
-
 
 /* =========================================================
    LIST IMEI TOKO (AUTOCOMPLETE SAAT KETIK)
@@ -2878,7 +2844,6 @@ export const getImeiListByToko = async (namaToko, keyword = "") => {
 // 🔥 KHUSUS PENJUALAN
 export const listenPenjualan = (cb) => {
   const r = ref(db, "toko");
-  
 
   onValue(r, (snap) => {
     const val = snap.val();
@@ -2894,13 +2859,13 @@ export const listenPenjualan = (cb) => {
           .toUpperCase()
           .trim();
 
-          if (
-            String(trx.statusPembayaran || "")
-              .toUpperCase()
-              .trim() === "REFUND"
-          ) {
-            return;
-          }
+        if (
+          String(trx.statusPembayaran || "")
+            .toUpperCase()
+            .trim() === "REFUND"
+        ) {
+          return;
+        }
 
         result.push({
           id: key,
@@ -3013,7 +2978,6 @@ export const deleteMasterSales = async (id) => {
   return remove(ref(db, `dataManagement/masterSales/${id}`));
 };
 
-
 export const listenMasterPaymentMetode = (callback) => {
   return onValue(ref(db, "master_payment_metode"), (snap) => {
     const data = snap.val() || {};
@@ -3027,7 +2991,6 @@ export const listenMasterPaymentMetode = (callback) => {
   });
 };
 
-
 export const addMasterPaymentMetode = async (payload) => {
   const newRef = push(ref(db, "master_payment_metode"));
   await set(newRef, payload);
@@ -3040,8 +3003,6 @@ export const updateMasterPaymentMetode = async (id, payload) => {
 export const deleteMasterPaymentMetode = async (id) => {
   await remove(ref(db, `master_payment_metode/${id}`));
 };
-
-
 
 export const generateIdPelanggan = async (nama, telp) => {
   const snap = await get(ref(db, "masterPelanggan"));

@@ -9,7 +9,13 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 export default function TableTransferBarang({ currentRole }) {
-  const isSuperAdmin = String(currentRole || "").toLowerCase() === "superadmin";
+  const role = String(currentRole || "").toLowerCase();
+
+  const isSuperAdmin = role === "superadmin";
+  const isSpv = role === "spv" || role === "spv_toko" || role === "supervisor";
+
+  // 🔥 role yang boleh approve
+  const canRoleApprove = isSuperAdmin || isSpv;
   console.log("ROLE USER:", currentRole);
   console.log("IS SUPERADMIN:", isSuperAdmin);
   const [rows, setRows] = useState([]);
@@ -24,17 +30,22 @@ export default function TableTransferBarang({ currentRole }) {
   const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "";
 
   // ================= CEK KEPEMILIKAN IMEI =================
-const isImeiMilikToko = (imei, toko) => {
-  const found = inventory.find(
-    (i) => String(i.imei).trim() === String(imei).trim()
-  );
+  const isImeiMilikToko = (imei, toko) => {
+    const found = inventory.find(
+      (i) => String(i.imei).trim() === String(imei).trim()
+    );
 
-  if (!found) return false;
+    if (!found) return false;
 
-  const tokoOwner = String(found.toko || "").toUpperCase();
+    const owner = String(found.toko || "").toUpperCase();
+    const tokoPengirim = String(toko || "").toUpperCase();
 
-  return tokoOwner === String(toko).toUpperCase();
-};
+    console.log("IMEI:", imei);
+    console.log("OWNER:", owner);
+    console.log("TOKO PENGIRIM:", tokoPengirim);
+
+    return owner === tokoPengirim;
+  };
 
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {
@@ -53,7 +64,11 @@ const isImeiMilikToko = (imei, toko) => {
 
           // DEFAULT
           if (!map[imei]) {
-            map[imei] = { imei, status: "AVAILABLE" };
+            map[imei] = {
+              imei,
+              status: "AVAILABLE",
+              toko: String(v.NAMA_TOKO || "").toUpperCase(), // 🔥 FIX OWNER
+            };
           }
 
           // RULE MUTLAK
@@ -65,7 +80,10 @@ const isImeiMilikToko = (imei, toko) => {
             // Jangan matikan barang
             if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
           } else if (metode === "TRANSFER_MASUK") {
-            if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
+            if (map[imei].status !== "SOLD") {
+              map[imei].status = "AVAILABLE";
+              map[imei].toko = String(v.NAMA_TOKO || "").toUpperCase(); // 🔥 pindah owner
+            }
           }
         });
       });
@@ -357,12 +375,11 @@ const isImeiMilikToko = (imei, toko) => {
                 (r) => filterStatus === "ALL" || r.status === filterStatus
               )
               .map((r, i) => {
-
                 const isTokoTujuan =
                   String(r.ke || "").toUpperCase() === TOKO_LOGIN.toUpperCase();
-              
+
                 // 🔥 APPROVE HANYA SUPERADMIN
-                const canApprove = isSuperAdmin && r.status === "Pending";
+                const canApprove = canRoleApprove && r.status === "Pending";
 
                 return (
                   <tr
@@ -422,31 +439,32 @@ const isImeiMilikToko = (imei, toko) => {
                           onClick={async () => {
                             if (!canApprove) return;
                           
-                            // ================= VALIDASI IMEI =================
                             for (const imei of r.imeis || []) {
                           
                               const found = inventory.find(
                                 (i) => String(i.imei).trim() === String(imei).trim()
                               );
                           
-                              // ❌ tidak ditemukan
                               if (!found) {
                                 alert(`❌ IMEI ${imei} tidak ditemukan di inventory`);
                                 return;
                               }
                           
-                              // ❌ sudah terjual
+                              // ❌ tidak boleh jika SOLD
                               if (found.status === "SOLD") {
                                 alert(`❌ IMEI ${imei} sudah TERJUAL`);
                                 return;
                               }
                           
-                              // ❌ bukan milik toko pengirim
-                              if (!isImeiMilikToko(imei, r.tokoPengirim)) {
-                                alert(
-                                  `❌ IMEI ${imei} bukan milik toko ${r.tokoPengirim}`
-                                );
-                                return;
+                              // 🔥 hanya cek owner jika bukan superadmin / spv
+                              if (!canRoleApprove) {
+                                const owner = String(found.toko || "").toUpperCase();
+                                const tokoPengirim = String(r.tokoPengirim || "").toUpperCase();
+                          
+                                if (owner && owner !== tokoPengirim) {
+                                  alert(`❌ IMEI ${imei} bukan milik toko ${r.tokoPengirim}`);
+                                  return;
+                                }
                               }
                             }
                           
