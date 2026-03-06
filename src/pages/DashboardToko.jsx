@@ -31,7 +31,7 @@ const TOKO_LIST = [
   { id: "2", tokoName: "CIBINONG", code: "cibinong" },
   { id: "3", tokoName: "GAS ALAM", code: "gas-alam" },
   { id: "4", tokoName: "CITEUREUP", code: "citeureup" },
-  { id: "5", tokoName: "CIRACAS", code: "ciracas" },
+  { id: "5", tokoName: "MARKETPLACE", code: "marketplace" },
   { id: "6", tokoName: "METLAND 1", code: "metland-1" },
   { id: "7", tokoName: "METLAND 2", code: "metland-2" },
   { id: "8", tokoName: "PITARA", code: "pitara" },
