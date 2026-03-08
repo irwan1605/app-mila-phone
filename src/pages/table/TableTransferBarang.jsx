@@ -12,10 +12,13 @@ export default function TableTransferBarang({ currentRole }) {
   const role = String(currentRole || "").toLowerCase();
 
   const isSuperAdmin = role === "superadmin";
+
   const isSpv = role === "spv" || role === "spv_toko" || role === "supervisor";
 
+  const isPic = role === "pic" || role === "pic_toko" || role === "kepala_toko";
+
   // 🔥 role yang boleh approve
-  const canRoleApprove = isSuperAdmin || isSpv;
+  const canRoleApprove = isSuperAdmin || isSpv || isPic;
   console.log("ROLE USER:", currentRole);
   console.log("IS SUPERADMIN:", isSuperAdmin);
   const [rows, setRows] = useState([]);
@@ -395,11 +398,12 @@ export default function TableTransferBarang({ currentRole }) {
           <tbody>
             {currentRows.map((r, i) => {
               const isTokoTujuan =
-                String(r.ke || "").toUpperCase() === TOKO_LOGIN.toUpperCase();
-
-              // 🔥 APPROVE HANYA SUPERADMIN
-              const canApprove = canRoleApprove && r.status === "Pending";
-
+              String(r.ke || "").toUpperCase() === TOKO_LOGIN.toUpperCase();
+            
+            // 🔥 RULE APPROVE
+            const canApprove =
+              (isSuperAdmin || ((isSpv || isPic) && isTokoTujuan)) &&
+              r.status === "Pending";
               return (
                 <tr
                   key={r.id}
