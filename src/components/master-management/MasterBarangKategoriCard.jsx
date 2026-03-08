@@ -25,6 +25,11 @@ export default function MasterBarangKategoriCard({ kategori }) {
   const [listBarang, setListBarang] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editId, setEditId] = useState(null);
+  // ===============================
+  // PAGINATION TABLE
+  // ===============================
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10;
 
   // ===============================
   // REALTIME LISTENER
@@ -36,9 +41,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
       const data = snap.val() || {};
       const filtered = Object.entries(data)
         .map(([id, v]) => ({ id, ...v }))
-        .filter(
-          (b) => b.kategoriBarang === kategori.trim().toUpperCase()
-        );
+        .filter((b) => b.kategoriBarang === kategori.trim().toUpperCase());
 
       setListBarang(filtered);
     });
@@ -147,10 +150,15 @@ export default function MasterBarangKategoriCard({ kategori }) {
     if (!window.confirm("Yakin hapus data ini?")) return;
     await deleteMasterBarangMasing(id);
   };
+  // ===============================
+  // HITUNG DATA PAGINATION
+  // ===============================
+  const indexOfLastRow = currentPage * rowsPerPage;
+  const indexOfFirstRow = indexOfLastRow - rowsPerPage;
 
-  // ===============================
-  // RENDER
-  // ===============================
+  const currentRows = listBarang.slice(indexOfFirstRow, indexOfLastRow);
+
+  const totalPages = Math.ceil(listBarang.length / rowsPerPage);
   return (
     <div className="space-y-6">
       {/* HEADER */}
@@ -189,9 +197,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
           className="border p-2 rounded"
           placeholder="Nama Barang"
           value={barang.namaBarang}
-          onChange={(e) =>
-            setBarang({ ...barang, namaBarang: e.target.value })
-          }
+          onChange={(e) => setBarang({ ...barang, namaBarang: e.target.value })}
         />
 
         <input
@@ -266,7 +272,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
             </tr>
           </thead>
           <tbody>
-            {listBarang.map((b) => (
+            {currentRows.map((b) => (
               <tr key={b.id}>
                 <td className="border px-3 py-2">{b.brand}</td>
                 <td className="border px-3 py-2">{b.namaBarang}</td>
@@ -304,6 +310,36 @@ export default function MasterBarangKategoriCard({ kategori }) {
               </tr>
             )}
           </tbody>
+          <div className="flex justify-center items-center gap-2 mt-4">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs font-semibold"
+            >
+              ◀ Prev
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentPage(i + 1)}
+                className={`px-3 py-1 rounded text-xs font-semibold
+        ${
+          currentPage === i + 1
+            ? "bg-indigo-600 text-white"
+            : "bg-gray-200 hover:bg-gray-300"
+        }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs font-semibold"
+            >
+              Next ▶
+            </button>
+          </div>
         </table>
       </div>
     </div>

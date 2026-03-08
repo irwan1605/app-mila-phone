@@ -47,6 +47,12 @@ export default function TableTransferBarang({ currentRole }) {
     return owner === tokoPengirim;
   };
 
+  // ===============================
+  // PAGINATION TABLE TRANSFER
+  // ===============================
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10; // jumlah data per halaman
+
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {
       const map = {}; // key = imei
@@ -306,6 +312,23 @@ export default function TableTransferBarang({ currentRole }) {
     return false;
   };
 
+  // ===============================
+  // DATA FINAL SETELAH FILTER
+  // ===============================
+  const filteredRows = rowsByToko.filter(
+    (r) => filterStatus === "ALL" || r.status === filterStatus
+  );
+
+  // ===============================
+  // HITUNG DATA PAGINATION
+  // ===============================
+  const indexOfLastRow = currentPage * rowsPerPage;
+  const indexOfFirstRow = indexOfLastRow - rowsPerPage;
+
+  const currentRows = filteredRows.slice(indexOfFirstRow, indexOfLastRow);
+
+  const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
+
   return (
     <div
       id="table-transfer-barang"
@@ -370,162 +393,194 @@ export default function TableTransferBarang({ currentRole }) {
           </thead>
 
           <tbody>
-            {rowsByToko
-              .filter(
-                (r) => filterStatus === "ALL" || r.status === filterStatus
-              )
-              .map((r, i) => {
-                const isTokoTujuan =
-                  String(r.ke || "").toUpperCase() === TOKO_LOGIN.toUpperCase();
+            {currentRows.map((r, i) => {
+              const isTokoTujuan =
+                String(r.ke || "").toUpperCase() === TOKO_LOGIN.toUpperCase();
 
-                // 🔥 APPROVE HANYA SUPERADMIN
-                const canApprove = canRoleApprove && r.status === "Pending";
+              // 🔥 APPROVE HANYA SUPERADMIN
+              const canApprove = canRoleApprove && r.status === "Pending";
 
-                return (
-                  <tr
-                    key={r.id}
-                    className="hover:bg-indigo-50 transition-colors p-2"
-                  >
-                    <td className="border px-3 py-2">{i + 1}</td>
-                    <td className="border px-3 py-2">{r.tanggal || "-"}</td>
-                    <td className="border px-3 py-2">{r.noDo || "-"}</td>
-                    <td className="border px-3 py-2">
-                      {r.noSuratJalan || "-"}
-                    </td>
-                    <td className="border px-3 py-2">{r.pengirim || "-"}</td>
-                    <td className="border px-3 py-2">
-                      {r.tokoPengirim || "-"}
-                    </td>
-                    <td className="border px-3 py-2">{r.ke || "-"}</td>
-                    <td className="border px-3 py-2">{r.brand || "-"}</td>
-                    <td className="border px-3 py-2">{r.barang || "-"}</td>
+              return (
+                <tr
+                  key={r.id}
+                  className="hover:bg-indigo-50 transition-colors p-2"
+                >
+                  <td className="border px-3 py-2">
+                    {indexOfFirstRow + i + 1}
+                  </td>
+                  <td className="border px-3 py-2">{r.tanggal || "-"}</td>
+                  <td className="border px-3 py-2">{r.noDo || "-"}</td>
+                  <td className="border px-3 py-2">{r.noSuratJalan || "-"}</td>
+                  <td className="border px-3 py-2">{r.pengirim || "-"}</td>
+                  <td className="border px-3 py-2">{r.tokoPengirim || "-"}</td>
+                  <td className="border px-3 py-2">{r.ke || "-"}</td>
+                  <td className="border px-3 py-2">{r.brand || "-"}</td>
+                  <td className="border px-3 py-2">{r.barang || "-"}</td>
 
-                    <td className="border px-3 py-2 text-xs">
-                      {Array.isArray(r.imeis)
-                        ? r.imeis.map((im) => {
-                            const found = inventory.find((i) => i.imei === im);
-                            return (
-                              <div key={im}>
-                                {im} ({found?.status || "?"})
-                              </div>
-                            );
-                          })
-                        : "-"}
-                    </td>
+                  <td className="border px-3 py-2 text-xs">
+                    {Array.isArray(r.imeis)
+                      ? r.imeis.map((im) => {
+                          const found = inventory.find((i) => i.imei === im);
+                          return (
+                            <div key={im}>
+                              {im} ({found?.status || "?"})
+                            </div>
+                          );
+                        })
+                      : "-"}
+                  </td>
 
-                    <td className="border px-3 py-2 text-center font-semibold">
-                      {r.qty || 0}
-                    </td>
+                  <td className="border px-3 py-2 text-center font-semibold">
+                    {r.qty || 0}
+                  </td>
 
-                    <td className="border px-3 py-2 text-center">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-bold
+                  <td className="border px-3 py-2 text-center">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-bold
                 ${r.status === "Approved" ? "bg-green-100 text-green-700" : ""}
                 ${r.status === "Pending" ? "bg-yellow-100 text-yellow-700" : ""}
                 ${r.status === "Rejected" ? "bg-red-100 text-red-700" : ""}
                 ${r.status === "Voided" ? "bg-gray-200 text-gray-700" : ""}
               `}
-                      >
-                        {r.status || "Pending"}
-                      </span>
-                    </td>
+                    >
+                      {r.status || "Pending"}
+                    </span>
+                  </td>
 
-                    {/* ===== AKSI ===== */}
-                    <td className="border px-3 py-2">
-                      <div className="flex gap-2 justify-center">
-                        <button
-                          title="Approve Transfer"
-                          disabled={!canApprove}
-                          onClick={async () => {
-                            if (!canApprove) return;
-                          
-                            for (const imei of r.imeis || []) {
-                          
-                              const found = inventory.find(
-                                (i) => String(i.imei).trim() === String(imei).trim()
+                  {/* ===== AKSI ===== */}
+                  <td className="border px-3 py-2">
+                    <div className="flex gap-2 justify-center">
+                      <button
+                        title="Approve Transfer"
+                        disabled={!canApprove}
+                        onClick={async () => {
+                          if (!canApprove) return;
+
+                          for (const imei of r.imeis || []) {
+                            const found = inventory.find(
+                              (i) =>
+                                String(i.imei).trim() === String(imei).trim()
+                            );
+
+                            if (!found) {
+                              alert(
+                                `❌ IMEI ${imei} tidak ditemukan di inventory`
                               );
-                          
-                              if (!found) {
-                                alert(`❌ IMEI ${imei} tidak ditemukan di inventory`);
+                              return;
+                            }
+
+                            // ❌ tidak boleh jika SOLD
+                            if (found.status === "SOLD") {
+                              alert(`❌ IMEI ${imei} sudah TERJUAL`);
+                              return;
+                            }
+
+                            // 🔥 hanya cek owner jika bukan superadmin / spv
+                            if (!canRoleApprove) {
+                              const owner = String(
+                                found.toko || ""
+                              ).toUpperCase();
+                              const tokoPengirim = String(
+                                r.tokoPengirim || ""
+                              ).toUpperCase();
+
+                              if (owner && owner !== tokoPengirim) {
+                                alert(
+                                  `❌ IMEI ${imei} bukan milik toko ${r.tokoPengirim}`
+                                );
                                 return;
-                              }
-                          
-                              // ❌ tidak boleh jika SOLD
-                              if (found.status === "SOLD") {
-                                alert(`❌ IMEI ${imei} sudah TERJUAL`);
-                                return;
-                              }
-                          
-                              // 🔥 hanya cek owner jika bukan superadmin / spv
-                              if (!canRoleApprove) {
-                                const owner = String(found.toko || "").toUpperCase();
-                                const tokoPengirim = String(r.tokoPengirim || "").toUpperCase();
-                          
-                                if (owner && owner !== tokoPengirim) {
-                                  alert(`❌ IMEI ${imei} bukan milik toko ${r.tokoPengirim}`);
-                                  return;
-                                }
                               }
                             }
-                          
-                            const sjId =
-                              await FirebaseService.approveTransferFINAL({
-                                transfer: r,
-                              });
-                          
-                            navigate(`/surat-jalan/${sjId}`);
-                          }}
-                          className={`px-3 py-2 rounded-lg text-[11px] font-bold
+                          }
+
+                          const sjId =
+                            await FirebaseService.approveTransferFINAL({
+                              transfer: r,
+                            });
+
+                          navigate(`/surat-jalan/${sjId}`);
+                        }}
+                        className={`px-3 py-2 rounded-lg text-[11px] font-bold
     ${
       !canApprove
         ? "bg-gray-300 text-gray-500 cursor-not-allowed"
         : "bg-green-500 text-white hover:bg-green-600"
     }
   `}
-                        >
-                          ✔ Approve
-                        </button>
+                      >
+                        ✔ Approve
+                      </button>
 
-                        {/* REJECT (SUPERADMIN ONLY) */}
-                        <button
-                          disabled={!isSuperAdmin || r.status !== "Pending"}
-                          onClick={async () => {
-                            if (!isSuperAdmin) return;
-                            await FirebaseService.rejectTransferFINAL({
-                              transfer: r,
-                            });
-                            alert("Transfer ditolak");
-                          }}
-                          className={`px-3 py-2 rounded-lg text-[11px] font-bold
+                      {/* REJECT (SUPERADMIN ONLY) */}
+                      <button
+                        disabled={!isSuperAdmin || r.status !== "Pending"}
+                        onClick={async () => {
+                          if (!isSuperAdmin) return;
+                          await FirebaseService.rejectTransferFINAL({
+                            transfer: r,
+                          });
+                          alert("Transfer ditolak");
+                        }}
+                        className={`px-3 py-2 rounded-lg text-[11px] font-bold
                   ${
                     !isSuperAdmin || r.status !== "Pending"
                       ? "bg-gray-300 text-gray-500"
                       : "bg-red-500 text-white hover:bg-red-600"
                   }
                 `}
-                        >
-                          ✖ Reject
-                        </button>
+                      >
+                        ✖ Reject
+                      </button>
 
-                        {/* PRINT */}
-                        <button
-                          disabled={!isSuperAdmin}
-                          onClick={() => {
-                            if (!isSuperAdmin) return;
-                            const sjId = r.suratJalanId || r.id;
-                            navigate(`/surat-jalan/${sjId}`);
-                          }}
-                          className="px-3 py-2 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600"
-                        >
-                          <FaPrint /> Print Surat Jalan
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      {/* PRINT */}
+                      <button
+                        disabled={!isSuperAdmin}
+                        onClick={() => {
+                          if (!isSuperAdmin) return;
+                          const sjId = r.suratJalanId || r.id;
+                          navigate(`/surat-jalan/${sjId}`);
+                        }}
+                        className="px-3 py-2 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600"
+                      >
+                        <FaPrint /> Print Surat Jalan
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        <div className="flex justify-center items-center gap-2 mt-4">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+            className="px-3 py-1 rounded-lg bg-gray-200 hover:bg-gray-300 text-xs font-bold"
+          >
+            ◀ Prev
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentPage(i + 1)}
+              className={`px-3 py-1 rounded-lg text-xs font-bold
+        ${
+          currentPage === i + 1
+            ? "bg-indigo-500 text-white"
+            : "bg-gray-200 hover:bg-gray-300"
+        }`}
+            >
+              {i + 1}
+            </button>
+          ))}
+
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+            className="px-3 py-1 rounded-lg bg-gray-200 hover:bg-gray-300 text-xs font-bold"
+          >
+            Next ▶
+          </button>
+        </div>
       </div>
     </div>
   );
