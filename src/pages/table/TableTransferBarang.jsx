@@ -9,20 +9,38 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 export default function TableTransferBarang({ currentRole }) {
-  const role = String(currentRole || "").toLowerCase();
+  // ================= NORMALIZE ROLE =================
+const role = String(currentRole || "")
+.toLowerCase()
+.trim()
+.replace(/\s+/g, "_");
 
-  const isSuperAdmin = role === "superadmin";
+// DEBUG
+console.log("ROLE RAW:", currentRole);
+console.log("ROLE NORMALIZED:", role);
 
-  const isSpv = role === "spv" || role === "spv_toko" || role === "supervisor";
+// ================= ROLE ENGINE =================
+const isSuperAdmin = role === "superadmin";
 
-  const isPic = role === "pic" || role === "pic_toko" || role === "kepala_toko";
+const isSpv =
+role === "spv" ||
+role === "spv_toko" ||
+role === "supervisor";
 
-  // 🔥 role yang boleh approve
-  const canRoleApprove = isSuperAdmin || isSpv || isPic;
-  console.log("ROLE LOGIN:", role);
-  console.log("IS SUPERADMIN:", isSuperAdmin);
-  console.log("IS SPV:", isSpv);
-  console.log("IS PIC:", isPic);
+// ================= ROLE PIC TOKO =================
+const isPic =
+role === "pic" ||
+role === "pic_toko" ||
+role === "kepala_toko" ||
+role.startsWith("pic_toko");
+
+// 🔥 ROLE YANG BOLEH APPROVE
+const canRoleApprove = isSuperAdmin || isSpv || isPic;
+
+console.log("IS SUPERADMIN:", isSuperAdmin);
+console.log("IS SPV:", isSpv);
+console.log("IS PIC:", isPic);
+
   const [rows, setRows] = useState([]);
 
   const [inventory, setInventory] = useState([]);
@@ -456,66 +474,58 @@ export default function TableTransferBarang({ currentRole }) {
                   {/* ===== AKSI ===== */}
                   <td className="border px-3 py-2">
                     <div className="flex gap-2 justify-center">
-                      <button
-                        title="Approve Transfer"
-                        disabled={!canApprove}
-                        onClick={async () => {
-                          if (!canApprove) return;
+                    <button
+  title="Approve Transfer"
+  disabled={!canApprove}
+  onClick={async () => {
+    if (!canApprove) return;
 
-                          for (const imei of r.imeis || []) {
-                            const found = inventory.find(
-                              (i) =>
-                                String(i.imei).trim() === String(imei).trim()
-                            );
+    for (const imei of r.imeis || []) {
+      const found = inventory.find(
+        (i) => String(i.imei).trim() === String(imei).trim()
+      );
 
-                            if (!found) {
-                              alert(
-                                `❌ IMEI ${imei} tidak ditemukan di inventory`
-                              );
-                              return;
-                            }
+      if (!found) {
+        alert(`❌ IMEI ${imei} tidak ditemukan di inventory`);
+        return;
+      }
 
-                            // ❌ tidak boleh jika SOLD
-                            if (found.status === "SOLD") {
-                              alert(`❌ IMEI ${imei} sudah TERJUAL`);
-                              return;
-                            }
+      if (found.status === "SOLD") {
+        alert(`❌ IMEI ${imei} sudah TERJUAL`);
+        return;
+      }
 
-                            // 🔥 hanya cek owner jika bukan superadmin / spv
-                            if (!canRoleApprove) {
-                              const owner = String(
-                                found.toko || ""
-                              ).toUpperCase();
-                              const tokoPengirim = String(
-                                r.tokoPengirim || ""
-                              ).toUpperCase();
+      // 🔒 cek owner hanya untuk user biasa
+      if (!canRoleApprove) {
+        const owner = String(found.toko || "").toUpperCase();
+        const tokoPengirim = String(r.tokoPengirim || "").toUpperCase();
 
-                              if (owner && owner !== tokoPengirim) {
-                                alert(
-                                  `❌ IMEI ${imei} bukan milik toko ${r.tokoPengirim}`
-                                );
-                                return;
-                              }
-                            }
-                          }
+        if (owner && owner !== tokoPengirim) {
+          alert(`❌ IMEI ${imei} bukan milik toko ${r.tokoPengirim}`);
+          return;
+        }
+      }
+    }
 
-                          const sjId =
-                            await FirebaseService.approveTransferFINAL({
-                              transfer: r,
-                            });
+    const sjId = await FirebaseService.approveTransferFINAL({
+      transfer: r,
+    });
 
-                          navigate(`/surat-jalan/${sjId}`);
-                        }}
-                        className={`px-3 py-2 rounded-lg text-[11px] font-bold
+    navigate(`/surat-jalan/${sjId}`);
+  }}
+  className={`px-3 py-2 rounded-lg text-[11px] font-bold
     ${
       !canApprove
         ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-        : "bg-green-500 text-white hover:bg-green-600"
-    }
-  `}
-                      >
-                        ✔ Approve
-                      </button>
+        : isPic
+        ? "bg-green-400 text-white hover:bg-green-500"
+        : isSpv
+        ? "bg-green-500 text-white hover:bg-green-600"
+        : "bg-emerald-600 text-white hover:bg-emerald-700"
+    }`}
+>
+  ✔ Approve
+</button>
 
                       {/* REJECT (SUPERADMIN ONLY) */}
                       <button

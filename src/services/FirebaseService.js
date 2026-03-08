@@ -2071,6 +2071,14 @@ export const approveTransferAndMoveStock = async ({
 // ================= APPROVE + SURAT JALAN =================
 // ================= APPROVE + SURAT JALAN (FINAL FIX 100%) =================
 export const approveTransferFINAL = async ({ transfer }) => {
+
+  // =====================================================
+  // 🔐 USER APPROVAL INFO
+  // =====================================================
+  const approvedBy = localStorage.getItem("USERNAME_LOGIN") || "SYSTEM";
+  const approvedRole = localStorage.getItem("ROLE_LOGIN") || "UNKNOWN";
+  const approvedToko = localStorage.getItem("TOKO_LOGIN") || "";
+
   const sjRef = push(ref(db, "surat_jalan"));
 
   const safeImeis = Array.isArray(transfer.imeis)
@@ -2093,6 +2101,20 @@ export const approveTransferFINAL = async ({ transfer }) => {
   const approvedAt = Date.now();
 
   // =====================================================
+  // 🔒 CEK DOUBLE APPROVE
+  // =====================================================
+  const transferSnap = await get(ref(db, `transfer_barang/${id}`));
+  const transferData = transferSnap.val();
+
+  if (!transferData) {
+    throw new Error("Transfer tidak ditemukan");
+  }
+
+  if (transferData.status === "Approved") {
+    throw new Error("Transfer sudah di-approve sebelumnya");
+  }
+
+  // =====================================================
   // 🔥 VALIDASI FINAL — BERDASARKAN HISTORI TRANSAKSI
   // =====================================================
   if (safeImeis.length > 0) {
@@ -2100,22 +2122,25 @@ export const approveTransferFINAL = async ({ transfer }) => {
     const allTokoData = allTokoSnap.val() || {};
 
     for (const imei of safeImeis) {
+
       let saldo = 0;
       let lokasiTerakhir = null;
       let waktuTerakhir = 0;
       let sudahTerjual = false;
 
       Object.values(allTokoData).forEach((toko) => {
+
         const transaksi = toko.transaksi || {};
 
         Object.values(transaksi).forEach((trx) => {
+
           if (String(trx.IMEI).trim() !== imei) return;
           if (trx.STATUS !== "Approved") return;
 
           const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
           const waktu = trx.CREATED_AT || trx.createdAt || 0;
 
-          // 🔥 update lokasi terakhir berdasarkan waktu terbesar
+          // update lokasi terakhir
           if (waktu >= waktuTerakhir) {
             waktuTerakhir = waktu;
             lokasiTerakhir = trx.NAMA_TOKO;
@@ -2126,35 +2151,26 @@ export const approveTransferFINAL = async ({ transfer }) => {
           if (metode === "REFUND") saldo += 1;
 
           if (metode === "TRANSFER_KELUAR") saldo -= 1;
+
           if (metode === "PENJUALAN") {
             saldo -= 1;
             sudahTerjual = true;
           }
+
         });
+
       });
 
-      // ❌ BLOK HANYA JIKA SUDAH TERJUAL
+      // ❌ BLOK JIKA SUDAH TERJUAL
       if (sudahTerjual) {
         throw new Error(`IMEI ${imei} sudah TERJUAL`);
       }
 
-      // ❌ BLOK JIKA SALDO TIDAK ADA
+      // ❌ BLOK JIKA SALDO HABIS
       if (saldo <= 0) {
         throw new Error(`IMEI ${imei} tidak tersedia`);
       }
 
-      // ❌ BLOK HANYA JIKA SUDAH TERJUAL
-      if (sudahTerjual) {
-        throw new Error(`IMEI ${imei} sudah TERJUAL`);
-      }
-
-      // ❌ BLOK JIKA SALDO TIDAK ADA
-      if (saldo <= 0) {
-        throw new Error(`IMEI ${imei} tidak tersedia`);
-      }
-
-      // 🔥 TIDAK PERLU CEK TOKO LAGI
-      // karena sistem mendukung transfer berantai
     }
   }
 
@@ -2170,13 +2186,21 @@ export const approveTransferFINAL = async ({ transfer }) => {
     barang,
     qty: Number(qty || safeImeis.length || 1),
     imeis: safeImeis,
+
+    // 🔥 AUDIT APPROVAL
+    approvedBy,
+    approvedRole,
+    approvedToko,
+    approvedAt,
   });
 
   // =====================================================
   // 3️⃣ TRANSAKSI STOK
   // =====================================================
   if (safeImeis.length > 0) {
+
     for (const imei of safeImeis) {
+
       // 🔻 TRANSFER KELUAR
       await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
@@ -2210,8 +2234,26 @@ export const approveTransferFINAL = async ({ transfer }) => {
         STATUS: "Approved",
         CREATED_AT: approvedAt,
       });
+
+      // =====================================================
+      // 🔥 HISTORY PERPINDAHAN IMEI
+      // =====================================================
+      await push(ref(db, `imei_history/${imei}`), {
+        imei,
+        dari: tokoPengirim,
+        ke,
+        noSuratJalan,
+        tanggal,
+        approvedBy,
+        approvedRole,
+        approvedToko,
+        createdAt: approvedAt,
+      });
+
     }
+
   } else {
+
     const safeQty = Number(qty || 1);
 
     await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
@@ -2245,6 +2287,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
       STATUS: "Approved",
       CREATED_AT: approvedAt,
     });
+
   }
 
   // =====================================================
@@ -2253,10 +2296,15 @@ export const approveTransferFINAL = async ({ transfer }) => {
   await update(ref(db, `transfer_barang/${id}`), {
     status: "Approved",
     suratJalanId: sjRef.key,
+
     approvedAt,
+    approvedBy,
+    approvedRole,
+    approvedToko,
   });
 
   return noSuratJalan;
+
 };
 
 export const editTransferFINAL = async (id, data) => {
