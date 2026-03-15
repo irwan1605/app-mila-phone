@@ -104,6 +104,10 @@ export default function CardPenjualanToko() {
   
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    console.log("PENJUALAN LIST:", penjualanList);
+  }, [penjualanList]);
   
 
 
@@ -519,13 +523,13 @@ export default function CardPenjualanToko() {
       /* =================================================
          🔥 3B — LANGSUNG MASUK KE TABLE (REALTIME)
       ================================================= */
-      setPenjualanList((prev) => [
-        {
-          ...transaksi,
-          id: key,
-        },
-        ...prev,
-      ]);
+      // setPenjualanList((prev) => [
+      //   {
+      //     ...transaksi,
+      //     id: key,
+      //   },
+      //   ...prev,
+      // ]);
 
       /* =================================================
          4️⃣ POTONG STOK

@@ -43,6 +43,7 @@ import {
   startAt,
   endAt,
   child,
+  off ,
 } from "firebase/database";
 
 /* ============================================================
@@ -975,9 +976,29 @@ export const cekImeiSudahTerjual = async (imei) => {
   return false;
 };
 
-export const addPenjualan = async (tokoId, data) => {
-  const res = await push(ref(db, `${tokoId}/penjualan`), data);
-  return res.key; // 🔥 KUNCI
+export const addPenjualan = async (tokoId, transaksi) => {
+  try {
+    if (!tokoId) throw new Error("TOKO ID TIDAK ADA");
+
+    const r = ref(db, `toko/${tokoId}/transaksi`);
+    const newRef = push(r);
+
+    const payload = {
+      ...transaksi,
+      trxKey: newRef.key,
+      tokoId,
+      createdAt: Date.now(),
+    };
+
+    await set(newRef, payload);
+
+    console.log("✅ PENJUALAN TERSIMPAN:", payload);
+
+    return newRef.key;
+  } catch (e) {
+    console.error("❌ ADD PENJUALAN ERROR:", e);
+    return null;
+  }
 };
 
 export const updatePenjualan = (id, data) => {
@@ -2886,27 +2907,23 @@ export const getImeiListByToko = async (namaToko, keyword = "") => {
   return [...new Set(list)].slice(0, 20);
 };
 
-// =====================================================
-// 🔥 LISTEN PENJUALAN (FINAL – AUTO TAMPIL DI TABLE)
-// =====================================================
-// 🔥 KHUSUS PENJUALAN
 export const listenPenjualan = (cb) => {
   const r = ref(db, "toko");
 
-  onValue(r, (snap) => {
-    const val = snap.val();
-    if (!val) return cb([]);
+  const unsubscribe = onValue(r, (snap) => {
+    const data = snap.val();
+
+    if (!data) {
+      cb([]);
+      return;
+    }
 
     const result = [];
 
-    Object.entries(val).forEach(([tokoId, toko]) => {
+    Object.entries(data).forEach(([tokoId, toko]) => {
       const transaksi = toko?.transaksi || {};
 
       Object.entries(transaksi).forEach(([key, trx]) => {
-        const statusPembayaran = String(trx.statusPembayaran || "")
-          .toUpperCase()
-          .trim();
-
         if (
           String(trx.statusPembayaran || "")
             .toUpperCase()
@@ -2924,11 +2941,17 @@ export const listenPenjualan = (cb) => {
       });
     });
 
-    // debug (WAJIB SEMENTARA)
-    console.log("DATA TABLE PENJUALAN:", result);
+    // 🔥 SORT TERBARU DI ATAS
+    result.sort((a, b) => {
+      return Number(b.createdAt || 0) - Number(a.createdAt || 0);
+    });
+
+    console.log("🔥 TABLE PENJUALAN:", result);
 
     cb(result);
   });
+
+  return () => off(r);
 };
 
 export const voidTransaksiPenjualan = async (penjualanId) => {

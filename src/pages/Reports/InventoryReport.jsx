@@ -156,22 +156,26 @@ const getStockEffect = (t) => {
 
   const imeiTerjual = useMemo(() => {
     const sold = new Set();
-
+  
     transaksi.forEach((t) => {
       if (
         t.STATUS === "Approved" &&
-        t.PAYMENT_METODE === "PENJUALAN" &&
+        String(t.PAYMENT_METODE).toUpperCase() === "PENJUALAN" &&
         t.IMEI
       ) {
         sold.add(String(t.IMEI));
       }
-
-      // ✅ REFUND → keluarkan dari sold
-      if (t.STATUS === "Approved" && t.PAYMENT_METODE === "REFUND" && t.IMEI) {
+  
+      // refund → kembalikan imei
+      if (
+        t.STATUS === "Approved" &&
+        String(t.PAYMENT_METODE).toUpperCase() === "REFUND" &&
+        t.IMEI
+      ) {
         sold.delete(String(t.IMEI));
       }
     });
-
+  
     return sold;
   }, [transaksi]);
 
@@ -234,89 +238,121 @@ const getStockEffect = (t) => {
   // ===============================
 // 🔥 STOCK ENGINE UNIVERSAL
 // ===============================
+// ===============================
+// 🔥 UNIVERSAL STOCK ENGINE FINAL
+// ===============================
 const getStockEffectUniversal = (t) => {
   const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-  const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
+  const qty = t.IMEI ? 1 : Number(t.QTY || 0);
 
-  if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
-    return qtyBase;
-  }
+  if (metode === "PEMBELIAN") return qty;
+  if (metode === "TRANSFER_MASUK") return qty;
+  if (metode === "REFUND") return qty;
 
-  if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
-    return -qtyBase;
-  }
+  if (metode === "PENJUALAN") return -qty;
+  if (metode === "TRANSFER_KELUAR") return -qty;
 
   return 0;
 };
 
+
+
+
 const cardStockPerToko = useMemo(() => {
+
   const result = {};
 
-  // init semua toko
+  // init toko
   TOKO_LIST.forEach((toko) => {
     result[normalize(toko)] = {};
   });
 
   transaksi.forEach((t) => {
-    if (!t) return;
 
-    // ======================================
-    // 1️⃣ ENGINE UTAMA (APPROVED SAJA)
-    // ======================================
-    if (
-      t.STATUS === "Approved" &&
-      t.PAYMENT_METODE &&
-      t.NAMA_TOKO
-    ) {
-      const toko = normalize(t.NAMA_TOKO);
-      if (!result[toko]) return;
+    if (!t || t.STATUS !== "Approved") return;
 
-      let kategori = normalize(t.KATEGORI_BRAND);
-
-      if (!kategori && !t.IMEI) kategori = "ACCESSORIES";
-      if (!kategori) return;
-
-      if (kategori === "ACCESSORY") kategori = "ACCESSORIES";
-      if (kategori === "SPAREPART") kategori = "SPARE PART";
-
-      const effect = getStockEffectUniversal(t);
-
-      result[toko][kategori] =
-        (result[toko][kategori] || 0) + effect;
+    // 🔥 SKIP IMEI YANG SUDAH TERJUAL
+    if (t.IMEI && imeiTerjual.has(String(t.IMEI))) {
+      return;
     }
 
-    // ======================================
-    // 2️⃣ REFUND DARI PENJUALAN (NON IMEI ONLY)
-    // ======================================
-    if (
-      t.statusPembayaran === "REFUND" &&
-      Array.isArray(t.items)
-    ) {
-      const toko = normalize(t.toko || t.NAMA_TOKO);
-      if (!result[toko]) return;
+    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
-      t.items.forEach((it) => {
-        // ❌ SKIP IMEI
-        if (it.imeiList?.length) return;
+    const tokoAsal = normalize(
+      t.NAMA_TOKO || t.tokoPengirim || t.dari
+    );
 
-        let kategori = normalize(it.kategoriBarang);
+    const tokoTujuan = normalize(
+      t.ke || t.NAMA_TOKO
+    );
 
-        if (!kategori) kategori = "ACCESSORIES";
-        if (kategori === "ACCESSORY") kategori = "ACCESSORIES";
-        if (kategori === "SPAREPART") kategori = "SPARE PART";
+    let kategori = normalize(t.KATEGORI_BRAND);
 
-        result[toko][kategori] =
-          (result[toko][kategori] || 0) +
-          Number(it.qty || 0);
-      });
+    if (!kategori && !t.IMEI) kategori = "ACCESSORIES";
+    if (!kategori) return;
+
+    if (kategori === "ACCESSORY") kategori = "ACCESSORIES";
+    if (kategori === "SPAREPART") kategori = "SPARE PART";
+
+    const qty = t.IMEI ? 1 : Number(t.QTY || 0);
+
+    // =========================
+    // PEMBELIAN
+    // =========================
+    if (metode === "PEMBELIAN") {
+
+      result[tokoAsal][kategori] =
+        (result[tokoAsal][kategori] || 0) + qty;
+
     }
+
+    // =========================
+    // PENJUALAN
+    // =========================
+    if (metode === "PENJUALAN") {
+
+      result[tokoAsal][kategori] =
+        (result[tokoAsal][kategori] || 0) - qty;
+
+    }
+
+    // =========================
+    // TRANSFER KELUAR
+    // =========================
+    if (metode === "TRANSFER_KELUAR") {
+
+      result[tokoAsal][kategori] =
+        (result[tokoAsal][kategori] || 0) - qty;
+
+    }
+
+    // =========================
+    // TRANSFER MASUK
+    // =========================
+    if (metode === "TRANSFER_MASUK") {
+
+      result[tokoTujuan][kategori] =
+        (result[tokoTujuan][kategori] || 0) + qty;
+
+    }
+
+    // =========================
+    // REFUND
+    // =========================
+    if (metode === "REFUND") {
+
+      result[tokoAsal][kategori] =
+        (result[tokoAsal][kategori] || 0) + qty;
+
+    }
+
   });
 
-  // ============================
-  // HANYA TAMPILKAN > 0
-  // ============================
+  // hilangkan minus
   return TOKO_LIST.map((toko) => {
+
     const norm = normalize(toko);
+
     return {
       toko,
       kategori: Object.fromEntries(
@@ -325,7 +361,9 @@ const cardStockPerToko = useMemo(() => {
         )
       ),
     };
+
   });
+
 }, [transaksi]);
 
 

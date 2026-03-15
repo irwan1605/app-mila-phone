@@ -42,8 +42,8 @@ const TOKO_MAP = {
   10: "SAWANGAN",
 };
 
-export default function TablePenjualan() {
-  const [rows, setRows] = useState([]);
+export default function TablePenjualan({ data = [] }) {
+  const rows = data;
   const [refundLoading, setRefundLoading] = useState(null);
   const [page, setPage] = useState(1);
   const [printData, setPrintData] = useState(null);
@@ -85,34 +85,42 @@ export default function TablePenjualan() {
     getUserRole(loginKey).then(setRoleDb);
   }, [userLogin]);
 
-  const isSuperAdmin = String(roleDb || "").toLowerCase() === "superadmin";
+  const roleFinal = roleDb || userLogin?.role || "";
+
+const isSuperAdmin =
+  String(roleFinal).toLowerCase() === "superadmin";
 
   const tokoLogin = useMemo(() => {
-    // jika superadmin → kosong (tidak filter)
-    if (isSuperAdmin) return "";
 
-    // PIC TOKO → ambil dari role
-    if (roleDb?.startsWith("pic_toko")) {
-      const id = roleDb.replace("pic_toko", "");
+    const roleFinal = roleDb || userLogin?.role || "";
+  
+    // SUPERADMIN lihat semua
+    if (String(roleFinal).toLowerCase() === "superadmin") {
+      return "";
+    }
+  
+    // PIC TOKO
+    if (String(roleFinal).startsWith("pic_toko")) {
+      const id = roleFinal.replace("pic_toko", "");
       return TOKO_MAP[id] || "";
     }
-
-    // fallback
-    return userLogin?.toko || userLogin?.namaToko || userLogin?.nama_toko || "";
-  }, [roleDb, userLogin, isSuperAdmin]);
+  
+    // fallback dari login
+    return userLogin?.toko || userLogin?.namaToko || "";
+  }, [roleDb, userLogin]);
 
   /* ================= LOAD DATA ================= */
-  useEffect(() => {
-    const unsub = listenPenjualan((data) => {
-      console.log("DATA PENJUALAN:", data); // 👈 DEBUG
+  // useEffect(() => {
+  //   const unsub = listenPenjualan((data) => {
+  //     console.log("DATA PENJUALAN:", data); // 👈 DEBUG
 
-      setRows(Array.isArray(data) ? data : []);
-    });
+  //     setRows(Array.isArray(data) ? data : []);
+  //   });
 
-    return () => {
-      if (unsub) unsub();
-    };
-  }, []);
+  //   return () => {
+  //     if (unsub) unsub();
+  //   };
+  // }, []);
 
   useEffect(() => {
     setPage(1);
