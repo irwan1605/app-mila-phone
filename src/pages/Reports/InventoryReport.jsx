@@ -57,6 +57,12 @@ const normalize = (v) =>
 // ======================================================================
 export default function InventoryReport() {
   const navigate = useNavigate();
+  const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
+
+  const isSuperAdmin =
+    loggedUser?.role === "superadmin" || loggedUser?.level === "superadmin";
+
+  const tokoUser = loggedUser?.toko || localStorage.getItem("TOKO_LOGIN") || "";
   const tableRef = useRef(null);
 
   const [transaksi, setTransaksi] = useState([]);
@@ -92,25 +98,23 @@ export default function InventoryReport() {
     };
   }, []);
 
-  
-// ===============================
-// 🔥 UNIVERSAL STOCK ENGINE
-// ===============================
-const getStockEffect = (t) => {
-  const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-  const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
+  // ===============================
+  // 🔥 UNIVERSAL STOCK ENGINE
+  // ===============================
+  const getStockEffect = (t) => {
+    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+    const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
 
-  if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
-    return qtyBase;
-  }
+    if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+      return qtyBase;
+    }
 
-  if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
-    return -qtyBase;
-  }
+    if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+      return -qtyBase;
+    }
 
-  return 0;
-};
-
+    return 0;
+  };
 
   // ======================
   // MAP TRANSAKSI
@@ -156,7 +160,7 @@ const getStockEffect = (t) => {
 
   const imeiTerjual = useMemo(() => {
     const sold = new Set();
-  
+
     transaksi.forEach((t) => {
       if (
         t.STATUS === "Approved" &&
@@ -165,7 +169,7 @@ const getStockEffect = (t) => {
       ) {
         sold.add(String(t.IMEI));
       }
-  
+
       // refund → kembalikan imei
       if (
         t.STATUS === "Approved" &&
@@ -175,7 +179,7 @@ const getStockEffect = (t) => {
         sold.delete(String(t.IMEI));
       }
     });
-  
+
     return sold;
   }, [transaksi]);
 
@@ -236,153 +240,121 @@ const getStockEffect = (t) => {
   }, [transaksi, selectedToko, search, masterBarangMap]);
 
   // ===============================
-// 🔥 STOCK ENGINE UNIVERSAL
-// ===============================
-// ===============================
-// 🔥 UNIVERSAL STOCK ENGINE FINAL
-// ===============================
-const getStockEffectUniversal = (t) => {
-  const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-  const qty = t.IMEI ? 1 : Number(t.QTY || 0);
-
-  if (metode === "PEMBELIAN") return qty;
-  if (metode === "TRANSFER_MASUK") return qty;
-  if (metode === "REFUND") return qty;
-
-  if (metode === "PENJUALAN") return -qty;
-  if (metode === "TRANSFER_KELUAR") return -qty;
-
-  return 0;
-};
-
-
-
-
-const cardStockPerToko = useMemo(() => {
-
-  const result = {};
-
-  // init toko
-  TOKO_LIST.forEach((toko) => {
-    result[normalize(toko)] = {};
-  });
-
-  transaksi.forEach((t) => {
-
-    if (!t || t.STATUS !== "Approved") return;
-
-    // 🔥 SKIP IMEI YANG SUDAH TERJUAL
-    if (t.IMEI && imeiTerjual.has(String(t.IMEI))) {
-      return;
-    }
-
+  // 🔥 STOCK ENGINE UNIVERSAL
+  // ===============================
+  // ===============================
+  // 🔥 UNIVERSAL STOCK ENGINE FINAL
+  // ===============================
+  const getStockEffectUniversal = (t) => {
     const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-
-    const tokoAsal = normalize(
-      t.NAMA_TOKO || t.tokoPengirim || t.dari
-    );
-
-    const tokoTujuan = normalize(
-      t.ke || t.NAMA_TOKO
-    );
-
-    let kategori = normalize(t.KATEGORI_BRAND);
-
-    if (!kategori && !t.IMEI) kategori = "ACCESSORIES";
-    if (!kategori) return;
-
-    if (kategori === "ACCESSORY") kategori = "ACCESSORIES";
-    if (kategori === "SPAREPART") kategori = "SPARE PART";
-
     const qty = t.IMEI ? 1 : Number(t.QTY || 0);
 
-    // =========================
-    // PEMBELIAN
-    // =========================
-    if (metode === "PEMBELIAN") {
+    if (metode === "PEMBELIAN") return qty;
+    if (metode === "TRANSFER_MASUK") return qty;
+    if (metode === "REFUND") return qty;
 
-      result[tokoAsal][kategori] =
-        (result[tokoAsal][kategori] || 0) + qty;
+    if (metode === "PENJUALAN") return -qty;
+    if (metode === "TRANSFER_KELUAR") return -qty;
 
-    }
+    return 0;
+  };
 
-    // =========================
-    // PENJUALAN
-    // =========================
-    if (metode === "PENJUALAN") {
+  const cardStockPerToko = useMemo(() => {
+    const result = {};
 
-      result[tokoAsal][kategori] =
-        (result[tokoAsal][kategori] || 0) - qty;
+    // init toko
+    TOKO_LIST.forEach((toko) => {
+      result[normalize(toko)] = {};
+    });
 
-    }
+    transaksi.forEach((t) => {
+      if (!t || t.STATUS !== "Approved") return;
 
-    // =========================
-    // TRANSFER KELUAR
-    // =========================
-    if (metode === "TRANSFER_KELUAR") {
+      // 🔥 SKIP IMEI YANG SUDAH TERJUAL
+      if (t.IMEI && imeiTerjual.has(String(t.IMEI))) {
+        return;
+      }
 
-      result[tokoAsal][kategori] =
-        (result[tokoAsal][kategori] || 0) - qty;
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
-    }
+      const tokoAsal = normalize(t.NAMA_TOKO || t.tokoPengirim || t.dari);
 
-    // =========================
-    // TRANSFER MASUK
-    // =========================
-    if (metode === "TRANSFER_MASUK") {
+      const tokoTujuan = normalize(t.ke || t.NAMA_TOKO);
 
-      result[tokoTujuan][kategori] =
-        (result[tokoTujuan][kategori] || 0) + qty;
+      let kategori = normalize(t.KATEGORI_BRAND);
 
-    }
+      if (!kategori && !t.IMEI) kategori = "ACCESSORIES";
+      if (!kategori) return;
 
-    // =========================
-    // REFUND
-    // =========================
-    if (metode === "REFUND") {
+      if (kategori === "ACCESSORY") kategori = "ACCESSORIES";
+      if (kategori === "SPAREPART") kategori = "SPARE PART";
 
-      result[tokoAsal][kategori] =
-        (result[tokoAsal][kategori] || 0) + qty;
+      const qty = t.IMEI ? 1 : Number(t.QTY || 0);
 
-    }
+      // =========================
+      // PEMBELIAN
+      // =========================
+      if (metode === "PEMBELIAN") {
+        result[tokoAsal][kategori] = (result[tokoAsal][kategori] || 0) + qty;
+      }
 
-  });
+      // =========================
+      // PENJUALAN
+      // =========================
+      if (metode === "PENJUALAN") {
+        result[tokoAsal][kategori] = (result[tokoAsal][kategori] || 0) - qty;
+      }
 
-  // hilangkan minus
-  return TOKO_LIST.map((toko) => {
+      // =========================
+      // TRANSFER KELUAR
+      // =========================
+      if (metode === "TRANSFER_KELUAR") {
+        result[tokoAsal][kategori] = (result[tokoAsal][kategori] || 0) - qty;
+      }
 
-    const norm = normalize(toko);
+      // =========================
+      // TRANSFER MASUK
+      // =========================
+      if (metode === "TRANSFER_MASUK") {
+        result[tokoTujuan][kategori] =
+          (result[tokoTujuan][kategori] || 0) + qty;
+      }
 
-    return {
-      toko,
-      kategori: Object.fromEntries(
-        Object.entries(result[norm] || {}).filter(
-          ([_, v]) => v > 0
-        )
-      ),
-    };
+      // =========================
+      // REFUND
+      // =========================
+      if (metode === "REFUND") {
+        result[tokoAsal][kategori] = (result[tokoAsal][kategori] || 0) + qty;
+      }
+    });
 
-  });
+    // hilangkan minus
+    return TOKO_LIST.map((toko) => {
+      const norm = normalize(toko);
 
-}, [transaksi]);
+      return {
+        toko,
+        kategori: Object.fromEntries(
+          Object.entries(result[norm] || {}).filter(([_, v]) => v > 0)
+        ),
+      };
+    });
+  }, [transaksi]);
 
+  // ==========================
+  // TOTAL STOCK SEMUA TOKO (FIX FINAL)
+  // ==========================
+  const totalStockSemuaToko = useMemo(() => {
+    return cardStockPerToko.reduce((grandTotal, toko) => {
+      const totalPerToko = Object.values(toko.kategori || {}).reduce(
+        (sum, qty) => sum + Number(qty || 0),
+        0
+      );
 
+      return grandTotal + totalPerToko;
+    }, 0);
+  }, [cardStockPerToko]);
 
-// ==========================
-// TOTAL STOCK SEMUA TOKO (FIX FINAL)
-// ==========================
-const totalStockSemuaToko = useMemo(() => {
-  return cardStockPerToko.reduce((grandTotal, toko) => {
-    const totalPerToko = Object.values(toko.kategori || {})
-      .reduce((sum, qty) => sum + Number(qty || 0), 0);
-
-    return grandTotal + totalPerToko;
-  }, 0);
-}, [cardStockPerToko]);
-
-
-  
-  
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white">
       <div className="max-w-7xl mx-auto">
@@ -424,30 +396,39 @@ const totalStockSemuaToko = useMemo(() => {
         {/* ================================================================== */}
         {/* CARD KECIL */}
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-          {cardStockPerToko.map((t, i) => (
-            <div
-              key={t.toko}
-              onClick={() =>
-                navigate("/table/detail-stock-toko", {
-                  state: {
-                    namaToko: t.toko,
-                    title: `Detail Stok Toko : ${t.toko}`,
-                  },
-                })
-              }
-              className={`cursor-pointer rounded-2xl p-4 bg-gradient-to-br ${
-                CARD_COLORS[i % CARD_COLORS.length]
-              }`}
-            >
-              <div className="font-bold mb-2">{t.toko}</div>
-              {Object.entries(t.kategori).map(([k, v]) => (
-                <div key={k} className="flex justify-between text-sm">
-                  <span>{k}</span>
-                  <span className="font-bold">{v}</span>
-                </div>
-              ))}
-            </div>
-          ))}
+          {cardStockPerToko
+            .filter((t) => {
+              if (isSuperAdmin) return true;
+
+              // PIC hanya lihat tokonya sendiri
+              return normalize(t.toko) === normalize(tokoUser);
+            })
+            .map((t, i) => (
+              <div
+                key={t.toko}
+                onClick={() => {
+                  if (!isSuperAdmin && normalize(t.toko) !== normalize(tokoUser)) return;
+                
+                  navigate("/table/detail-stock-toko", {
+                    state: {
+                      namaToko: t.toko,
+                      title: `Detail Stok Toko : ${t.toko}`,
+                    },
+                  });
+                }}
+                className={`cursor-pointer rounded-2xl p-4 bg-gradient-to-br ${
+                  CARD_COLORS[i % CARD_COLORS.length]
+                }`}
+              >
+                <div className="font-bold mb-2">{t.toko}</div>
+                {Object.entries(t.kategori).map(([k, v]) => (
+                  <div key={k} className="flex justify-between text-sm">
+                    <span>{k}</span>
+                    <span className="font-bold">{v}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
         </div>
       </div>
     </div>
