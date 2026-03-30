@@ -52,7 +52,7 @@ const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
 // ===============================
 // KATEGORI TANPA IMEI
 // ===============================
-const KATEGORI_NON_IMEI = ["ACCESSORIES", "SPARE PART"];
+const KATEGORI_NON_IMEI = ["ACCESSORIES","JASA", "SPARE PART"];
 
 const fmt = (n) => {
   try {
@@ -1764,7 +1764,7 @@ export default function MasterPembelian() {
             </div>
 
             {/* IMEI */}
-            {!["ACCESSORIES", "SPARE PART"].includes(
+            {!["ACCESSORIES", "JASA","SPARE PART"].includes(
               String(tambahForm.kategoriBrand || "").toUpperCase()
             ) && (
               <div className="mt-3">
