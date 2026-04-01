@@ -128,160 +128,126 @@ const isSuperAdmin =
 
   /* ================= FLATTEN DATA ================= */
   const tableRows = useMemo(() => {
-    const result = [];
-
+    const map = {};
+  
     (rows || []).forEach((trx) => {
       if (trx.statusPembayaran === "REFUND") return;
-
       if (!Array.isArray(trx.items)) return;
-
-      trx.items.forEach((item) => {
-        /* ================= PAYMENT METODE ================= */
-        let paymentMetode = "-";
-        let namaBank = "-";
-        let nominalPaymentMetode = 0;
-
-        // ✅ PRIORITAS: splitPayment
-        if (
-          Array.isArray(trx.payment?.splitPayment) &&
-          trx.payment.splitPayment.length
-        ) {
-          paymentMetode = trx.payment.splitPayment
-            .map((p) => p.metode)
-            .join(" + ");
-
-          namaBank = trx.payment.splitPayment
-            .map((p) => p.bankNama || "-")
-            .join(" + ");
-
-          nominalPaymentMetode = trx.payment.splitPayment.reduce(
-            (s, p) => s + Number(p.nominal || 0),
-            0
-          );
-        } else {
-          // ✅ FALLBACK: single payment
-          paymentMetode = trx.payment?.metode || trx.payment?.status || "-";
-          namaBank = trx.payment?.bankNama || trx.payment?.namaBank || "-";
-          nominalPaymentMetode =
-            Number(trx.payment?.nominalPayment || 0) ||
-            Number(trx.payment?.nominal || 0) ||
-            0;
-        }
-
-        /* ================= GRAND TOTAL ================= */
-        /* ================= KURANG BAYAR & KEMBALIAN ================= */
-
-        /* ================= GRAND TOTAL ================= */
-
-        // ✅ GRAND TOTAL ASLI (RUMUS SISTEM)
-        const grandTotalFix =
-          Number(trx.payment?.grandTotal || 0) > 0
-            ? Number(trx.payment.grandTotal)
-            : (trx.items || []).reduce(
-                (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-                0
-              ) + Number(trx.payment?.nominalMdr || 0);
-
-        // ✅ DEFAULT TAMPILAN = TOTAL INVOICE
-        let grandTotalDisplay = grandTotalFix;
-
-        const kategoriUpper = String(item.kategoriBarang || "")
-          .trim()
-          .toUpperCase();
-
-        if (kategoriUpper === "ACCESSORIES") {
-          // ambil harga aktif sesuai skema
-          const hargaAccessories =
-            Number(
-              item.skemaHarga === "srp"
-                ? item.hargaAktif
-                : item.skemaHarga === "grosir"
-                ? item.hargaAktif
-                : item.skemaHarga === "reseller"
-                ? item.hargaAktif
-                : 0
-            ) || 0;
-
-          const totalAccessories = hargaAccessories * Number(item.qty || 1);
-
-          // hanya ubah tampilan, bukan rumus invoice
-          grandTotalDisplay = totalAccessories;
-        }
-
-        const totalBayarFix = Number(nominalPaymentMetode || 0);
-
-        const kurangBayar =
-          totalBayarFix < grandTotalFix ? grandTotalFix - totalBayarFix : 0;
-
-        const sisaKembalian =
-          totalBayarFix > grandTotalFix ? totalBayarFix - grandTotalFix : 0;
-
-        result.push({
-          id: trx.id, // id transaksi
-          trxKey: trx.trxKey, // firebase key
+  
+      /* ================= PAYMENT ================= */
+      let paymentMetode = "-";
+      let namaBank = "-";
+      let nominalPaymentMetode = 0;
+  
+      if (
+        Array.isArray(trx.payment?.splitPayment) &&
+        trx.payment.splitPayment.length
+      ) {
+        paymentMetode = trx.payment.splitPayment
+          .map((p) => p.metode)
+          .join(" + ");
+  
+        namaBank = trx.payment.splitPayment
+          .map((p) => p.bankNama || "-")
+          .join(" + ");
+  
+        nominalPaymentMetode = trx.payment.splitPayment.reduce(
+          (s, p) => s + Number(p.nominal || 0),
+          0
+        );
+      } else {
+        paymentMetode = trx.payment?.metode || trx.payment?.status || "-";
+        namaBank = trx.payment?.bankNama || trx.payment?.namaBank || "-";
+        nominalPaymentMetode =
+          Number(trx.payment?.nominalPayment || 0) ||
+          Number(trx.payment?.nominal || 0) ||
+          0;
+      }
+  
+      /* ================= GRAND TOTAL ================= */
+      const grandTotalFix =
+        Number(trx.payment?.grandTotal || 0) > 0
+          ? Number(trx.payment.grandTotal)
+          : (trx.items || []).reduce(
+              (s, it) =>
+                s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+              0
+            ) + Number(trx.payment?.nominalMdr || 0);
+  
+      /* ================= AGREGASI ITEM ================= */
+      const allBarang = trx.items.map(i => i.namaBarang).join(", ");
+      const allIMEI = trx.items
+        .flatMap(i => i.imeiList || [])
+        .join(", ");
+      const totalQty = trx.items.reduce(
+        (s, i) => s + Number(i.qty || 0),
+        0
+      );
+  
+      const totalBayarFix = Number(nominalPaymentMetode || 0);
+  
+      const kurangBayar =
+        totalBayarFix < grandTotalFix ? grandTotalFix - totalBayarFix : 0;
+  
+      const sisaKembalian =
+        totalBayarFix > grandTotalFix ? totalBayarFix - grandTotalFix : 0;
+  
+      /* ================= PUSH HANYA 1X PER INVOICE ================= */
+      if (!map[trx.invoice]) {
+        map[trx.invoice] = {
+          id: trx.id,
+          trxKey: trx.trxKey,
           tokoId: trx.tokoId,
+  
           tanggal: trx.tanggal || trx.createdAt,
           invoice: trx.invoice,
           toko: trx.toko || "-",
-          keterangan: trx.payment?.keterangan || "-",
-
+  
           pelanggan: trx.user?.namaPelanggan || "-",
           idPelanggan: trx.user?.idPelanggan || "-",
-
           telp: trx.user?.noTlpPelanggan || "-",
+  
           storeHead: trx.user?.storeHead || "-",
           sales: trx.user?.namaSales || "-",
           salesHandle: trx.user?.salesHandle || "-",
-
-          /* 🔥 FIXED PAYMENT FIELD */
+  
           paymentMetode,
           namaBank,
           nominalPaymentMetode,
-
+  
           namaMdr: trx.payment?.namaMdr || "-",
           dpTalangan: Number(trx.payment?.dpTalangan || 0),
-          paymentKredit: trx.payment?.status === "PIUTANG" ? "KREDIT" : "LUNAS",
-
-          kategoriBarang: item.kategoriBarang || "-",
-          namaBrand: item.namaBrand || "-",
-          namaBarang: item.namaBarang || "-",
-
-          imei: Array.isArray(item.imeiList) ? item.imeiList.join(", ") : "-",
-          qty: Number(item.qty || 0),
-
-          hargaSRP:
-            item.skemaHarga === "srp" ? Number(item.hargaAktif || 0) : 0,
-          hargaGrosir:
-            item.skemaHarga === "grosir" ? Number(item.hargaAktif || 0) : 0,
-          hargaReseller:
-            item.skemaHarga === "reseller" ? Number(item.hargaAktif || 0) : 0,
-
+          paymentKredit:
+            trx.payment?.status === "PIUTANG" ? "KREDIT" : "LUNAS",
+  
+          /* 🔥 AGREGASI */
+          kategoriBarang: "MULTI ITEM",
+          namaBrand: "-",
+          namaBarang: allBarang,
+          imei: allIMEI,
+          qty: totalQty,
+  
+          hargaSRP: 0,
+          hargaGrosir: 0,
+          hargaReseller: 0,
+  
           statusBayar: trx.payment?.status || "-",
           nominalMdr: trx.payment?.nominalMdr || 0,
           tenor: trx.payment?.tenor || "-",
           cicilan: trx.payment?.cicilan || 0,
-
+  
           KURANG_BAYAR: kurangBayar,
           SISA_KEMBALIAN: sisaKembalian,
-
-          grandTotal: grandTotalFix, // dipakai sistem
-          grandTotalDisplay: grandTotalDisplay, // dipakai tabel
-
-          // grandTotal:
-          //   Number(trx.payment?.grandTotal || 0) > 0
-          //     ? Number(trx.payment.grandTotal)
-          //     : (trx.items || []).reduce(
-          //         (s, it) =>
-          //           s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-          //         0
-          //       ) + Number(trx.payment?.nominalMdr || 0),
-
+  
+          grandTotal: grandTotalFix,
+          grandTotalDisplay: grandTotalFix,
+  
           status: trx.statusPembayaran || "OK",
-        });
-      });
+        };
+      }
     });
-
-    return result;
+  
+    return Object.values(map);
   }, [rows]);
 
   /* ================= FILTER ================= */
