@@ -665,6 +665,8 @@ export default function FinanceReport() {
 
       JUMLAH_SETORAN: total,
       STATUS: "Pending",
+
+      KETERANGAN: form.KETERANGAN || "",
       CREATED_AT: Date.now(),
     };
 
@@ -1327,6 +1329,28 @@ export default function FinanceReport() {
               />
             </div>
 
+               {/* KETERANGAN */}
+               <div>
+              <label className="text-xs font-semibold">KETERANGAN</label>
+              <input
+                list="sales-list"
+                value={form.NAMA_SALES || ""}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    NAMA_SALES: e.target.value,
+                  }))
+                }
+                className="w-full border rounded p-1"
+              />
+
+              <datalist id="sales-list">
+                {salesList.map((k, i) => (
+                  <option key={i} value={k.nama} />
+                ))}
+              </datalist>
+            </div>
+
             {/* BUTTONS */}
             <div className="md:col-span-4 flex gap-2 mt-3">
               {editId ? (
@@ -1392,6 +1416,7 @@ export default function FinanceReport() {
                 <th className="px-3 py-2 text-right">Kategori Payment</th>
                 <th className="px-3 py-2 text-right">DP Payment</th>
                 <th className="px-3 py-2 text-right">Total</th>
+                <th className="px-3 py-2 text-left">Keterangan</th>
                 <th className="px-3 py-2 text-left">Status</th>
                 <th className="px-3 py-2 text-left">Aksi</th>
               </tr>
@@ -1458,6 +1483,8 @@ export default function FinanceReport() {
                       <td className="px-3 py-2 text-right font-bold text-green-700">
                         {formatCurrency(total)}
                       </td>
+
+                      <td className="px-3 py-2">{r.KETERANGAN || "-"}</td>
 
                       <td className="px-3 py-2">
                         <span
