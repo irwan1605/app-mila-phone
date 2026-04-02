@@ -67,104 +67,109 @@ export default function SalesReport() {
     const unsub = listenPenjualan((data = []) => {
       console.log("🔥 SALES REPORT RAW:", data);
   
-      const result = [];
-  
-      (data || []).forEach((trx) => {
-        if (!Array.isArray(trx.items)) return;
-  
-        trx.items.forEach((item, idx) => {
-  
-          /* ================= PAYMENT (SAMA TABLE PENJUALAN) ================= */
-          const payment = trx.payment || {};
-  
-          let paymentMetode = "-";
-          let namaBank = "-";
-          let nominalPayment = 0;
-  
-          if (Array.isArray(payment.splitPayment) && payment.splitPayment.length) {
-            paymentMetode = payment.splitPayment.map(p => p.metode).join(" + ");
-            namaBank = payment.splitPayment.map(p => p.bankNama || "-").join(" + ");
-            nominalPayment = payment.splitPayment.reduce(
-              (s, p) => s + Number(p.nominal || 0),
-              0
-            );
-          } else {
-            paymentMetode = payment.metode || payment.status || "-";
-            namaBank = payment.bankNama || "-";
-            nominalPayment =
-              Number(payment.nominalPayment || 0) ||
-              Number(payment.nominal || 0);
-          }
-  
-          /* ================= HARGA (SAMA TABLE PENJUALAN) ================= */
-          let hargaSRP = 0;
-          let hargaGrosir = 0;
-          let hargaReseller = 0;
-  
-          if (item.skemaHarga === "srp") {
-            hargaSRP = Number(item.hargaAktif || 0);
-          }
-  
-          if (item.skemaHarga === "grosir") {
-            hargaGrosir = Number(item.hargaAktif || 0);
-          }
-  
-          if (item.skemaHarga === "reseller") {
-            hargaReseller = Number(item.hargaAktif || 0);
-          }
-  
-          result.push({
-            id: `${trx.id || trx._key}-${idx}`,
-  
-            /* ===== HEADER ===== */
-            TANGGAL_TRANSAKSI: trx.tanggal || trx.createdAt,
-            NO_INVOICE: trx.invoice,
-            NAMA_TOKO: trx.toko || "-",
-  
-            NAMA_USER: trx.user?.namaPelanggan || "-",
-            ID_USER: trx.user?.idPelanggan || "-",
-            NO_TLP: trx.user?.noTlpPelanggan || "-",
-            STORE_HEAD: trx.user?.storeHead || "-",
-            NAMA_SALES: trx.user?.namaSales || "-",
-            SALES_HANDLE: trx.user?.salesHandle || "-",
-  
-            /* ===== BARANG ===== */
-            KATEGORI: item.kategoriBarang || "-",
-            NAMA_BRAND: item.namaBrand || "-",
-            NAMA_BARANG: item.namaBarang || "-",
-            IMEI: Array.isArray(item.imeiList)
-              ? item.imeiList.join(", ")
-              : "NON-IMEI",
-  
-            QTY: Number(item.qty || 1),
-  
-            HARGA_SRP: hargaSRP,
-            HARGA_GROSIR: hargaGrosir,
-            HARGA_RESELLER: hargaReseller,
-  
-            /* ===== PAYMENT ===== */
-            STATUS_BAYAR: payment.status || "-",
-            PAYMENT_METODE: paymentMetode,
-            NAMA_BANK: namaBank,
-            NOMINAL_PAYMENT: nominalPayment,
-  
-            DP_TALANGAN: Number(payment.dpTalangan || 0),
-            NAMA_MDR: payment.namaMdr || "-",
-            NOMINAL_MDR: Number(payment.nominalMdr || 0),
-  
-            PAYMENT_KREDIT:
-              payment.status === "PIUTANG" ? "KREDIT" : "LUNAS",
-  
-            TENOR: payment.tenor || "-",
-  
-            KETERANGAN:
-              payment.keterangan || trx.keterangan || "-",
-  
-            STATUS: trx.statusPembayaran || "OK",
-            GRAND_TOTAL: Number(payment.grandTotal || 0),
-          });
-        });
-      });
+      const mapInvoice = {};
+
+(data || []).forEach((trx) => {
+  if (!Array.isArray(trx.items)) return;
+
+  /* ================= PAYMENT ================= */
+  const payment = trx.payment || {};
+
+  let paymentMetode = "-";
+  let namaBank = "-";
+  let nominalPayment = 0;
+
+  if (Array.isArray(payment.splitPayment) && payment.splitPayment.length) {
+    paymentMetode = payment.splitPayment.map(p => p.metode).join(" + ");
+    namaBank = payment.splitPayment.map(p => p.bankNama || "-").join(" + ");
+    nominalPayment = payment.splitPayment.reduce(
+      (s, p) => s + Number(p.nominal || 0),
+      0
+    );
+  } else {
+    paymentMetode = payment.metode || payment.status || "-";
+    namaBank = payment.bankNama || "-";
+    nominalPayment =
+      Number(payment.nominalPayment || 0) ||
+      Number(payment.nominal || 0);
+  }
+
+  /* ================= AGREGASI ITEM ================= */
+  const allBarang = trx.items.map(i => i.namaBarang).join(", ");
+  const allIMEI = trx.items
+    .flatMap(i => i.imeiList || [])
+    .join(", ");
+
+  const totalQty = trx.items.reduce(
+    (s, i) => s + Number(i.qty || 0),
+    0
+  );
+
+  const totalSRP = trx.items.reduce(
+    (s, i) => i.skemaHarga === "srp" ? s + Number(i.hargaAktif || 0) : s,
+    0
+  );
+
+  const totalGrosir = trx.items.reduce(
+    (s, i) => i.skemaHarga === "grosir" ? s + Number(i.hargaAktif || 0) : s,
+    0
+  );
+
+  const totalReseller = trx.items.reduce(
+    (s, i) => i.skemaHarga === "reseller" ? s + Number(i.hargaAktif || 0) : s,
+    0
+  );
+
+  /* ================= PUSH 1 DATA PER INVOICE ================= */
+  if (!mapInvoice[trx.invoice]) {
+    mapInvoice[trx.invoice] = {
+      id: trx.id || trx._key,
+
+      TANGGAL_TRANSAKSI: trx.tanggal || trx.createdAt,
+      NO_INVOICE: trx.invoice,
+      NAMA_TOKO: trx.toko || "-",
+
+      NAMA_USER: trx.user?.namaPelanggan || "-",
+      ID_USER: trx.user?.idPelanggan || "-",
+      NO_TLP: trx.user?.noTlpPelanggan || "-",
+      STORE_HEAD: trx.user?.storeHead || "-",
+      NAMA_SALES: trx.user?.namaSales || "-",
+      SALES_HANDLE: trx.user?.salesHandle || "-",
+
+      /* 🔥 AGREGASI */
+      KATEGORI: "MULTI ITEM",
+      NAMA_BRAND: "-",
+      NAMA_BARANG: allBarang,
+      IMEI: allIMEI || "NON-IMEI",
+      QTY: totalQty,
+
+      HARGA_SRP: totalSRP,
+      HARGA_GROSIR: totalGrosir,
+      HARGA_RESELLER: totalReseller,
+
+      STATUS_BAYAR: payment.status || "-",
+      PAYMENT_METODE: paymentMetode,
+      NAMA_BANK: namaBank,
+      NOMINAL_PAYMENT: nominalPayment,
+
+      DP_TALANGAN: Number(payment.dpTalangan || 0),
+      NAMA_MDR: payment.namaMdr || "-",
+      NOMINAL_MDR: Number(payment.nominalMdr || 0),
+
+      PAYMENT_KREDIT:
+        payment.status === "PIUTANG" ? "KREDIT" : "LUNAS",
+
+      TENOR: payment.tenor || "-",
+      KETERANGAN: payment.keterangan || "-",
+
+      STATUS: trx.statusPembayaran || "OK",
+      GRAND_TOTAL: Number(payment.grandTotal || 0),
+      
+    };
+  }
+});
+
+const result = Object.values(mapInvoice);
   
       setAllData(result);
       setCurrentPage(1);

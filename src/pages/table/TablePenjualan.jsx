@@ -127,128 +127,128 @@ const isSuperAdmin =
   }, [keyword, dateFrom, dateTo]);
 
   /* ================= FLATTEN DATA ================= */
-  const tableRows = useMemo(() => {
-    const map = {};
-  
-    (rows || []).forEach((trx) => {
-      if (trx.statusPembayaran === "REFUND") return;
-      if (!Array.isArray(trx.items)) return;
-  
-      /* ================= PAYMENT ================= */
-      let paymentMetode = "-";
-      let namaBank = "-";
-      let nominalPaymentMetode = 0;
-  
-      if (
-        Array.isArray(trx.payment?.splitPayment) &&
-        trx.payment.splitPayment.length
-      ) {
-        paymentMetode = trx.payment.splitPayment
-          .map((p) => p.metode)
-          .join(" + ");
-  
-        namaBank = trx.payment.splitPayment
-          .map((p) => p.bankNama || "-")
-          .join(" + ");
-  
-        nominalPaymentMetode = trx.payment.splitPayment.reduce(
-          (s, p) => s + Number(p.nominal || 0),
-          0
-        );
-      } else {
-        paymentMetode = trx.payment?.metode || trx.payment?.status || "-";
-        namaBank = trx.payment?.bankNama || trx.payment?.namaBank || "-";
-        nominalPaymentMetode =
-          Number(trx.payment?.nominalPayment || 0) ||
-          Number(trx.payment?.nominal || 0) ||
-          0;
-      }
-  
-      /* ================= GRAND TOTAL ================= */
-      const grandTotalFix =
-        Number(trx.payment?.grandTotal || 0) > 0
-          ? Number(trx.payment.grandTotal)
-          : (trx.items || []).reduce(
-              (s, it) =>
-                s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-              0
-            ) + Number(trx.payment?.nominalMdr || 0);
-  
-      /* ================= AGREGASI ITEM ================= */
-      const allBarang = trx.items.map(i => i.namaBarang).join(", ");
-      const allIMEI = trx.items
-        .flatMap(i => i.imeiList || [])
-        .join(", ");
-      const totalQty = trx.items.reduce(
-        (s, i) => s + Number(i.qty || 0),
+const tableRows = useMemo(() => {
+  const map = {};
+
+  (rows || []).forEach((trx) => {
+    if (trx.statusPembayaran === "REFUND") return;
+    if (!Array.isArray(trx.items)) return;
+
+    /* ================= PAYMENT ================= */
+    let paymentMetode = "-";
+    let namaBank = "-";
+    let nominalPaymentMetode = 0;
+
+    if (
+      Array.isArray(trx.payment?.splitPayment) &&
+      trx.payment.splitPayment.length
+    ) {
+      paymentMetode = trx.payment.splitPayment
+        .map((p) => p.metode)
+        .join(" + ");
+
+      namaBank = trx.payment.splitPayment
+        .map((p) => p.bankNama || "-")
+        .join(" + ");
+
+      nominalPaymentMetode = trx.payment.splitPayment.reduce(
+        (s, p) => s + Number(p.nominal || 0),
         0
       );
-  
-      const totalBayarFix = Number(nominalPaymentMetode || 0);
-  
-      const kurangBayar =
-        totalBayarFix < grandTotalFix ? grandTotalFix - totalBayarFix : 0;
-  
-      const sisaKembalian =
-        totalBayarFix > grandTotalFix ? totalBayarFix - grandTotalFix : 0;
-  
-      /* ================= PUSH HANYA 1X PER INVOICE ================= */
-      if (!map[trx.invoice]) {
-        map[trx.invoice] = {
-          id: trx.id,
-          trxKey: trx.trxKey,
-          tokoId: trx.tokoId,
-  
-          tanggal: trx.tanggal || trx.createdAt,
-          invoice: trx.invoice,
-          toko: trx.toko || "-",
-  
-          pelanggan: trx.user?.namaPelanggan || "-",
-          idPelanggan: trx.user?.idPelanggan || "-",
-          telp: trx.user?.noTlpPelanggan || "-",
-  
-          storeHead: trx.user?.storeHead || "-",
-          sales: trx.user?.namaSales || "-",
-          salesHandle: trx.user?.salesHandle || "-",
-  
-          paymentMetode,
-          namaBank,
-          nominalPaymentMetode,
-  
-          namaMdr: trx.payment?.namaMdr || "-",
-          dpTalangan: Number(trx.payment?.dpTalangan || 0),
-          paymentKredit:
-            trx.payment?.status === "PIUTANG" ? "KREDIT" : "LUNAS",
-  
-          /* 🔥 AGREGASI */
-          kategoriBarang: "MULTI ITEM",
-          namaBrand: "-",
-          namaBarang: allBarang,
-          imei: allIMEI,
-          qty: totalQty,
-  
-          hargaSRP: 0,
-          hargaGrosir: 0,
-          hargaReseller: 0,
-  
-          statusBayar: trx.payment?.status || "-",
-          nominalMdr: trx.payment?.nominalMdr || 0,
-          tenor: trx.payment?.tenor || "-",
-          cicilan: trx.payment?.cicilan || 0,
-  
-          KURANG_BAYAR: kurangBayar,
-          SISA_KEMBALIAN: sisaKembalian,
-  
-          grandTotal: grandTotalFix,
-          grandTotalDisplay: grandTotalFix,
-  
-          status: trx.statusPembayaran || "OK",
-        };
-      }
-    });
-  
-    return Object.values(map);
-  }, [rows]);
+    } else {
+      paymentMetode = trx.payment?.metode || trx.payment?.status || "-";
+      namaBank = trx.payment?.bankNama || trx.payment?.namaBank || "-";
+      nominalPaymentMetode =
+        Number(trx.payment?.nominalPayment || 0) ||
+        Number(trx.payment?.nominal || 0) ||
+        0;
+    }
+
+    /* ================= GRAND TOTAL ================= */
+    const grandTotalFix =
+      Number(trx.payment?.grandTotal || 0) > 0
+        ? Number(trx.payment.grandTotal)
+        : (trx.items || []).reduce(
+            (s, it) =>
+              s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+            0
+          ) + Number(trx.payment?.nominalMdr || 0);
+
+    /* ================= AGREGASI ITEM ================= */
+    const allBarang = trx.items.map(i => i.namaBarang).join(", ");
+    const allIMEI = trx.items
+      .flatMap(i => i.imeiList || [])
+      .join(", ");
+    const totalQty = trx.items.reduce(
+      (s, i) => s + Number(i.qty || 0),
+      0
+    );
+
+    const totalBayarFix = Number(nominalPaymentMetode || 0);
+
+    const kurangBayar =
+      totalBayarFix < grandTotalFix ? grandTotalFix - totalBayarFix : 0;
+
+    const sisaKembalian =
+      totalBayarFix > grandTotalFix ? totalBayarFix - grandTotalFix : 0;
+
+    /* ================= PUSH HANYA 1X PER INVOICE ================= */
+    if (!map[trx.invoice]) {
+      map[trx.invoice] = {
+        id: trx.id,
+        trxKey: trx.trxKey,
+        tokoId: trx.tokoId,
+
+        tanggal: trx.tanggal || trx.createdAt,
+        invoice: trx.invoice,
+        toko: trx.toko || "-",
+
+        pelanggan: trx.user?.namaPelanggan || "-",
+        idPelanggan: trx.user?.idPelanggan || "-",
+        telp: trx.user?.noTlpPelanggan || "-",
+
+        storeHead: trx.user?.storeHead || "-",
+        sales: trx.user?.namaSales || "-",
+        salesHandle: trx.user?.salesHandle || "-",
+
+        paymentMetode,
+        namaBank,
+        nominalPaymentMetode,
+
+        namaMdr: trx.payment?.namaMdr || "-",
+        dpTalangan: Number(trx.payment?.dpTalangan || 0),
+        paymentKredit:
+          trx.payment?.status === "PIUTANG" ? "KREDIT" : "LUNAS",
+
+        /* 🔥 AGREGASI */
+        kategoriBarang: "MULTI ITEM",
+        namaBrand: "-",
+        namaBarang: allBarang,
+        imei: allIMEI,
+        qty: totalQty,
+
+        hargaSRP: 0,
+        hargaGrosir: 0,
+        hargaReseller: 0,
+
+        statusBayar: trx.payment?.status || "-",
+        nominalMdr: trx.payment?.nominalMdr || 0,
+        tenor: trx.payment?.tenor || "-",
+        cicilan: trx.payment?.cicilan || 0,
+
+        KURANG_BAYAR: kurangBayar,
+        SISA_KEMBALIAN: sisaKembalian,
+
+        grandTotal: grandTotalFix,
+        grandTotalDisplay: grandTotalFix,
+
+        status: trx.statusPembayaran || "OK",
+      };
+    }
+  });
+
+  return Object.values(map);
+}, [rows]);
 
   /* ================= FILTER ================= */
   const filteredRows = useMemo(() => {

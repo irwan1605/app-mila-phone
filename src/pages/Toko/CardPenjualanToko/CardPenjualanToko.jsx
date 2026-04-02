@@ -20,7 +20,7 @@ import TablePenjualan from "../../table/TablePenjualan";
 import ExportExcelButton from "../../../components/ExportExcelButton";
 import CetakInvoicePenjualan from "../../Print/CetakInvoicePenjualan";
 import { useLocation } from "react-router-dom";
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, get, update, remove, set } from "firebase/database";
 import { db } from "../../../firebase/FirebaseInit";
 
 import {
@@ -46,11 +46,10 @@ const genInvoice = () =>
     .slice(0, 10)
     .replaceAll("-", "")}-${Math.floor(Math.random() * 10000)}`;
 
-    const normalizeText = (v) =>
-      String(v || "")
-        .trim()
-        .toUpperCase();
-    
+const normalizeText = (v) =>
+  String(v || "")
+    .trim()
+    .toUpperCase();
 
 // ================= COMPONENT =================
 export default function CardPenjualanToko() {
@@ -97,7 +96,9 @@ export default function CardPenjualanToko() {
   const [detailStockLookup, setDetailStockLookup] = useState({});
 
   useEffect(() => {
-    const unsub = onValue(ref(db, "detail_stock"), (snap) => {
+    const dbRef = ref(db, "detail_stock");
+  
+    const unsub = onValue(dbRef, (snap) => {
       const data = snap.val() || {};
       setDetailStockLookup(data);
     });
@@ -108,8 +109,6 @@ export default function CardPenjualanToko() {
   useEffect(() => {
     console.log("PENJUALAN LIST:", penjualanList);
   }, [penjualanList]);
-  
-
 
   useEffect(() => {
     if (!location.state?.fastSale) return;
@@ -200,7 +199,7 @@ export default function CardPenjualanToko() {
       user: {
         namaSales: formUser.namaSales,
         namaPelanggan: formUser.namaPelanggan,
-        idPelanggan : formUser.idPelanggan ,
+        idPelanggan: formUser.idPelanggan,
         noTlpPelanggan: formUser.noTlpPelanggan,
       },
       items: items.map((it) => ({
@@ -335,44 +334,44 @@ export default function CardPenjualanToko() {
 
   const validateStockOwnership = (items, tokoAktif, detailStockLookup) => {
     if (!detailStockLookup) return null; // 🔥 jangan blok transaksi kalau data belum siap
-  
-    const tokoFix = String(tokoAktif || "").trim().toUpperCase();
-  
+
+    const tokoFix = String(tokoAktif || "")
+      .trim()
+      .toUpperCase();
+
     for (const item of items) {
       if (!item.isImei) continue;
-  
+
       const imei = item.imeiList?.[0];
       if (!imei) continue;
-  
+
       const stock = detailStockLookup?.[imei];
-  
+
       if (!stock) continue; // 🔥 jangan error
-  
+
       const tokoStock = String(stock.toko || "")
         .trim()
         .toUpperCase();
-  
+
       if (tokoStock !== tokoFix) {
         return `IMEI ${imei} bukan milik toko ${tokoAktif}`;
       }
     }
-  
+
     return null;
   };
-  
-  
 
   const handleSubmitPenjualan = useCallback(async () => {
     if (loading || submitting) return;
     if (!validate()) return;
-  
+
     const sisa = Number(payment?.sisaBayar || 0);
     if (sisa > 0) {
       alert("❌ Pembayaran belum lengkap");
       return;
     }
 
-  console.log("PAYMENT:", payment);
+    console.log("PAYMENT:", payment);
 
     const tokoIdFix = normalizeTokoId(tokoAktifId);
 
@@ -386,6 +385,38 @@ export default function CardPenjualanToko() {
 
     try {
       setSubmitting(true);
+
+      // =================================================
+      // 🔥 VALIDASI STOK REALTIME (ANTI JUAL STOK KOSONG)
+      // =================================================
+      for (const item of items) {
+        if (!item.isImei) {
+          const stokDb = stockRealtime?.[formUser.namaToko]?.[item.namaBarang];
+
+          if (!stokDb || Number(stokDb.qty || 0) < Number(item.qty)) {
+            throw new Error(
+              `Stok tidak cukup untuk ${item.namaBarang} (Sisa: ${
+                stokDb?.qty || 0
+              })`
+            );
+          }
+        }
+      }
+
+      // =================================================
+      // 🔥 CEK LOCK GLOBAL (ANTI DOUBLE JUAL)
+      // =================================================
+      for (const item of items) {
+        if (item.isImei) {
+          for (const imei of item.imeiList || []) {
+            const lockSnap = await get(ref(db, `imeiLock/${imei}`));
+
+            if (lockSnap.exists()) {
+              throw new Error(`IMEI ${imei} sedang digunakan transaksi lain`);
+            }
+          }
+        }
+      }
 
       /* =================================================
          1️⃣ VALIDASI & LOCK IMEI
@@ -432,6 +463,21 @@ export default function CardPenjualanToko() {
         }
       }
 
+      // =================================================
+      // 🔥 GLOBAL CEK IMEI DI FIREBASE (FINAL)
+      // =================================================
+      for (const item of items) {
+        if (item.isImei) {
+          for (const imei of item.imeiList || []) {
+            const snap = await get(ref(db, `imeiTerjual/${imei}`));
+
+            if (snap.exists()) {
+              throw new Error(`IMEI ${imei} SUDAH TERJUAL (GLOBAL CHECK)`);
+            }
+          }
+        }
+      }
+
       /* =================================================
          2️⃣ BENTUK TRANSAKSI
       ================================================= */
@@ -444,7 +490,7 @@ export default function CardPenjualanToko() {
 
         user: {
           namaPelanggan: formUser.namaPelanggan,
-          idPelanggan : formUser.idPelanggan ,
+          idPelanggan: formUser.idPelanggan,
           noTlpPelanggan: formUser.noTlpPelanggan,
           storeHead: formUser.storeHead,
           namaSales: formUser.namaSales,
@@ -476,17 +522,13 @@ export default function CardPenjualanToko() {
         }),
       };
 
-      const errorOwnership = validateStockOwnership(
-        items,
-        formUser.namaToko
-      );
-      
-      
+      const errorOwnership = validateStockOwnership(items, formUser.namaToko);
+
       if (errorOwnership) {
         alert("❌ " + errorOwnership);
         return;
       }
-      
+
       /* =================================================
          3️⃣ SIMPAN TRANSAKSI KE FIREBASE
       ================================================= */
@@ -531,22 +573,42 @@ export default function CardPenjualanToko() {
       //   ...prev,
       // ]);
 
-      /* =================================================
-         4️⃣ POTONG STOK
-      ================================================= */
-      await kurangiStokSetelahPenjualan({
-        toko: formUser.namaToko,
-        items,
-      });
-
-      items.forEach((item) => {
+      // =================================================
+      // 🔥 POTONG STOK + VALIDASI FINAL
+      // =================================================
+      for (const item of items) {
         if (!item.isImei) {
-          stokRollback.push({
-            sku: item.sku,
-            qty: Number(item.qty),
+          const stokRef = ref(
+            db,
+            `stok/${formUser.namaToko}/${item.namaBarang}`
+          );
+
+          const snap = await get(stokRef);
+          const current = Number(snap.val()?.qty || 0);
+
+          if (current < item.qty) {
+            throw new Error(`Stok race condition untuk ${item.namaBarang}`);
+          }
+
+          await update(stokRef, {
+            qty: current - Number(item.qty),
+            lastUpdate: Date.now(),
           });
         }
-      });
+      }
+
+      // =================================================
+      // 🔥 HAPUS IMEI DARI STOCK (BIAR GA MUNCUL LAGI)
+      // =================================================
+      for (const item of items) {
+        if (item.isImei) {
+          for (const imei of item.imeiList || []) {
+            try {
+              await remove(ref(db, `detail_stock/${imei}`));
+            } catch {}
+          }
+        }
+      }
 
       /* =================================================
          5️⃣ AUDIT IMEI
@@ -560,6 +622,9 @@ export default function CardPenjualanToko() {
             tokoId: tokoIdFix,
             invoice: formUser.noFaktur,
             user: userLogin?.email || "",
+            timestamp: Date.now(),
+            device: navigator.userAgent,
+            status: "SUCCESS",
           });
         } catch {}
       }
