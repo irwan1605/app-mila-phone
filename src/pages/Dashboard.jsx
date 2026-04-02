@@ -35,7 +35,7 @@ import {
   listenAllTransaksi,
   listenStockAll,
   forceDeleteTransaksi,
-  listenPenjualan ,
+  listenPenjualan,
 } from "../services/FirebaseService";
 
 // 🔥 TAMBAHKAN DISINI
@@ -80,11 +80,9 @@ export default function Dashboard() {
       console.log("🔥 DATA PENJUALAN DARI listenPenjualan:", data);
       setPenjualanList(Array.isArray(data) ? data : []);
     });
-  
+
     return () => unsub && unsub();
   }, []);
-  
-  
 
   console.log("DATA PENJUALAN:", penjualanList);
 
@@ -114,42 +112,101 @@ export default function Dashboard() {
   const totalPenjualanHariIni = useMemo(() => {
     const mapInvoice = {};
     const today = new Date().toISOString().slice(0, 10);
-  
+
     penjualanList.forEach((trx) => {
       const tanggalRaw = trx.tanggal || trx.createdAt;
       if (!tanggalRaw) return;
-  
-      const tanggal = new Date(tanggalRaw).toISOString().slice(0, 10);
-      if (tanggal !== today) return;
-  
+
+      const formatDate = (d) => {
+        if (!d) return "";
+        return new Date(d).toLocaleDateString("en-CA"); 
+        // hasil: YYYY-MM-DD (format aman)
+      };
+      
+      const tanggal = formatDate(trx.tanggal || trx.createdAt);
+
       const inv = String(trx.invoice || "").trim();
       if (!inv) return;
-  
+
       if (!mapInvoice[inv]) {
         let total = 0;
-  
+
         // 🔥 PERSIS seperti TablePenjualan
         if (Number(trx.payment?.grandTotal || 0) > 0) {
           total = Number(trx.payment.grandTotal);
         } else if (Array.isArray(trx.items)) {
           total =
             trx.items.reduce(
-              (s, it) =>
-                s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+              (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
               0
             ) + Number(trx.payment?.nominalMdr || 0);
         }
-  
+
         mapInvoice[inv] = total;
       }
     });
-  
+
     return Object.values(mapInvoice).reduce((s, v) => s + v, 0);
   }, [penjualanList]);
+
+  // ================= 🔥 MASTER KPI (SUMBER: TABLE PENJUALAN) =================
+  const dashboardPenjualan = useMemo(() => {
+    const mapInvoice = {};
   
+    const formatDate = (d) => {
+      if (!d) return "";
+      return new Date(d).toLocaleDateString("en-CA");
+    };
   
+    const todayLocal = new Date().toLocaleDateString("en-CA");
   
+    penjualanList.forEach((trx) => {
+      if (!Array.isArray(trx.items)) return;
+      if (trx.statusPembayaran === "REFUND") return;
   
+      const invoice = String(
+        trx.invoice || trx.NO_INVOICE || trx.noInvoice || ""
+      ).trim();
+      if (!invoice) return;
+  
+      if (!mapInvoice[invoice]) {
+        const total =
+          Number(trx.payment?.grandTotal || 0) > 0
+            ? Number(trx.payment.grandTotal)
+            : (trx.items || []).reduce(
+                (s, it) =>
+                  s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+                0
+              ) + Number(trx.payment?.nominalMdr || 0);
+  
+        const qty = (trx.items || []).reduce(
+          (s, it) => s + Number(it.qty || 0),
+          0
+        );
+  
+        const tanggal = formatDate(trx.tanggal || trx.createdAt);
+        const rawDate = trx.tanggal || trx.createdAt || trx.TANGGAL_TRANSAKSI;
+  
+        mapInvoice[invoice] = {
+          total,
+          qty,
+          tanggal,
+        };
+      }
+    });
+  
+    const list = Object.values(mapInvoice);
+  
+    return {
+      totalTransaksi: list.length,
+      totalQty: list.reduce((s, x) => s + x.qty, 0),
+      totalOmzet: list.reduce((s, x) => s + x.total, 0),
+  
+      totalHariIni: list
+        .filter((x) => x.tanggal === todayLocal)
+        .reduce((s, x) => s + x.total, 0),
+    };
+  }, [penjualanList]);
 
   /* ================= LISTENER ================= */
 
@@ -380,24 +437,24 @@ export default function Dashboard() {
 
   const omzetPerToko = useMemo(() => {
     const map = {};
-  
+
     filteredData.forEach((x) => {
       let tokoRaw = x.NAMA_TOKO ?? x.TOKO;
-  
+
       // 🔥 FORCE STRING + SAFETY
       if (typeof tokoRaw !== "string") {
         if (tokoRaw === null || tokoRaw === undefined) return;
         tokoRaw = String(tokoRaw);
       }
-  
+
       const toko = tokoRaw.toUpperCase().trim();
-  
+
       // 🔥 FILTER TOKO RESMI SAJA
       if (!registeredTokoSet.has(toko)) return;
-  
+
       map[toko] = (map[toko] || 0) + Number(x.TOTAL || 0);
     });
-  
+
     return Object.entries(map).map(([toko, omzet]) => ({
       toko,
       omzet,
@@ -631,10 +688,10 @@ export default function Dashboard() {
           </div>
 
           <div className="text-xl font-bold text-blue-600">
-            {totalTransaksi} Transaksi
+            {dashboardPenjualan.totalTransaksi} Transaksi
           </div>
 
-          <p className="text-[11px] text-gray-500">Jumlah Transaksi berhasil</p>
+          <p className="text-[11px] text-gray-500">C</p>
         </div>
 
         {/* 3. TRANSAKSI PENDING */}
@@ -679,7 +736,7 @@ export default function Dashboard() {
           </div>
 
           <div className="text-xl font-bold text-indigo-600">
-            Rp {totalPenjualanHariIni.toLocaleString("id-ID")}
+            Rp {dashboardPenjualan.totalHariIni.toLocaleString("id-ID")}
           </div>
 
           <p className="text-[11px] text-gray-500">
@@ -786,13 +843,7 @@ export default function Dashboard() {
           </div>
 
           <div className="text-xl font-bold text-sky-600">
-            {
-              dataTransaksi.filter(
-                (x) =>
-                  String(x.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN"
-              ).length
-            }{" "}
-            Unit
+            {dashboardPenjualan.totalQty} Unit
           </div>
 
           <p className="text-[11px] text-gray-500">
