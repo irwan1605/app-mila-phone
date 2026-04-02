@@ -119,10 +119,10 @@ export default function Dashboard() {
 
       const formatDate = (d) => {
         if (!d) return "";
-        return new Date(d).toLocaleDateString("en-CA"); 
+        return new Date(d).toLocaleDateString("en-CA");
         // hasil: YYYY-MM-DD (format aman)
       };
-      
+
       const tanggal = formatDate(trx.tanggal || trx.createdAt);
 
       const inv = String(trx.invoice || "").trim();
@@ -152,41 +152,47 @@ export default function Dashboard() {
   // ================= 🔥 MASTER KPI (SUMBER: TABLE PENJUALAN) =================
   const dashboardPenjualan = useMemo(() => {
     const mapInvoice = {};
-  
+
     const formatDate = (d) => {
       if (!d) return "";
       return new Date(d).toLocaleDateString("en-CA");
     };
-  
+
     const todayLocal = new Date().toLocaleDateString("en-CA");
-  
+
     penjualanList.forEach((trx) => {
       if (!Array.isArray(trx.items)) return;
       if (trx.statusPembayaran === "REFUND") return;
-  
+
       const invoice = String(
         trx.invoice || trx.NO_INVOICE || trx.noInvoice || ""
       ).trim();
       if (!invoice) return;
-  
+
+      
+
       if (!mapInvoice[invoice]) {
+        const rawDate =
+        trx.tanggal || trx.createdAt || trx.TANGGAL_TRANSAKSI;
         const total =
-          Number(trx.payment?.grandTotal || 0) > 0
-            ? Number(trx.payment.grandTotal)
-            : (trx.items || []).reduce(
-                (s, it) =>
-                  s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-                0
-              ) + Number(trx.payment?.nominalMdr || 0);
-  
+        Number(trx.payment?.grandTotal || 0) ||
+        Number(trx.GRAND_TOTAL || 0) ||
+        (Array.isArray(trx.items)
+          ? trx.items.reduce(
+              (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+              0
+            )
+          : 0);
+
         const qty = (trx.items || []).reduce(
           (s, it) => s + Number(it.qty || 0),
           0
         );
-  
+
         const tanggal = formatDate(trx.tanggal || trx.createdAt);
-        const rawDate = trx.tanggal || trx.createdAt || trx.TANGGAL_TRANSAKSI;
-  
+       
+        console.log("DEBUG DASHBOARD:", penjualanList);
+
         mapInvoice[invoice] = {
           total,
           qty,
@@ -194,14 +200,14 @@ export default function Dashboard() {
         };
       }
     });
-  
+
     const list = Object.values(mapInvoice);
-  
+
     return {
       totalTransaksi: list.length,
       totalQty: list.reduce((s, x) => s + x.qty, 0),
       totalOmzet: list.reduce((s, x) => s + x.total, 0),
-  
+
       totalHariIni: list
         .filter((x) => x.tanggal === todayLocal)
         .reduce((s, x) => s + x.total, 0),
