@@ -46,6 +46,7 @@ export default function SalesReport() {
   const [filterStart, setFilterStart] = useState("");
   const [filterEnd, setFilterEnd] = useState("");
   const [search, setSearch] = useState("");
+  const [rows, setRows] = useState([]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 12;
@@ -61,6 +62,51 @@ export default function SalesReport() {
 
   const isSuper =
     loggedUser?.role === "superadmin" || loggedUser?.role === "admin";
+
+    useEffect(() => {
+      const unsub = listenAllTransaksi((data = []) => {
+    
+        // =========================
+        // 1. Ambil semua data refund
+        // =========================
+        const refundList = data.filter((t) =>
+          t.PAYMENT_METODE === "RETUR" ||
+          t.PAYMENT_METODE === "REFUND" ||
+          t.STATUS === "REFUND"
+        );
+    
+        // =========================
+        // 2. Ambil invoice yang direfund
+        // =========================
+        const refundInvoiceSet = new Set(
+          refundList.map((r) =>
+            r.INVOICE_ASAL || r.NO_INVOICE
+          )
+        );
+    
+        // =========================
+        // 3. Ambil penjualan normal (yang belum direfund)
+        // =========================
+        const penjualanBersih = data.filter((t) => {
+    
+          const isRefund =
+            t.PAYMENT_METODE === "RETUR" ||
+            t.PAYMENT_METODE === "REFUND";
+    
+          const kenaRefund = refundInvoiceSet.has(t.NO_INVOICE);
+    
+          return !isRefund && !kenaRefund;
+        });
+    
+        // =========================
+        // 4. tetap pakai state lama
+        // =========================
+        setRows(penjualanBersih);
+    
+      });
+    
+      return () => unsub && unsub();
+    }, []);
 
   /* ===================== REALTIME ===================== */
   useEffect(() => {
@@ -168,6 +214,7 @@ export default function SalesReport() {
     };
   }
 });
+
 
 const result = Object.values(mapInvoice);
   
