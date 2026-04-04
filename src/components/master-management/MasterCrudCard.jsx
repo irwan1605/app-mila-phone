@@ -25,6 +25,7 @@ export default function MasterCrudCard({
   const [form, setForm] = useState({});
   const [editId, setEditId] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [search, setSearch] = useState("");
 
   // PAGINATION
   const [page, setPage] = useState(1);
@@ -59,12 +60,11 @@ export default function MasterCrudCard({
 
   const handleSubmit = async () => {
     try {
-
-       // ✅ VALIDASI CUSTOM (ANTI DUPLIKAT DLL)
-    if (validateBeforeSave) {
-      const valid = validateBeforeSave(form, rows, editId);
-      if (!valid) return;
-    }
+      // ✅ VALIDASI CUSTOM (ANTI DUPLIKAT DLL)
+      if (validateBeforeSave) {
+        const valid = validateBeforeSave(form, rows, editId);
+        if (!valid) return;
+      }
       if (editId && updateFn) {
         await updateFn(editId, {
           ...form,
@@ -85,6 +85,17 @@ export default function MasterCrudCard({
       alert("Gagal menyimpan data");
     }
   };
+
+  const filteredRows = rows.filter((row) => {
+    const q = search.toLowerCase();
+    if (!q) return true;
+
+    return Object.values(row).some((val) =>
+      String(val || "")
+        .toLowerCase()
+        .includes(q)
+    );
+  });
 
   const handleDelete = async (id) => {
     if (!deleteFn) return;
@@ -173,6 +184,17 @@ export default function MasterCrudCard({
         </div>
       )}
 
+      <div className="mb-3">
+        <h2 className="font-bold text-lg">FILTER PENCARIAN DATA</h2>
+        <input
+          type="text"
+          placeholder="Cari semua kolom..."
+          className="border px-3 py-2 rounded-lg text-sm w-full md:w-80"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
       {/* TABLE MODERN */}
       <div className="overflow-x-auto rounded-xl border">
         <table className="min-w-full text-sm">
@@ -188,11 +210,8 @@ export default function MasterCrudCard({
             </tr>
           </thead>
           <tbody>
-            {pagedRows.map((r, i) => (
-              <tr
-                key={r.id}
-                className="border-t hover:bg-slate-50 transition"
-              >
+            {filteredRows.map((r, i) => (
+              <tr key={r.id} className="border-t hover:bg-slate-50 transition">
                 <td className="p-3">{start + i + 1}</td>
                 {fields.map((f) => (
                   <td key={f.name} className="p-3 whitespace-nowrap">

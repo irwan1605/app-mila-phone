@@ -4,6 +4,7 @@ import MasterCrudCard from "./MasterCrudCard";
 import { exportToExcel } from "../../utils/exportToExcel";
 
 export default function MasterSupplierCard() {
+  
   const fields = [
     { name: "namaSupplier", label: "Nama Supplier", required: true },
     { name: "noTelpon", label: "No. Telpon" },

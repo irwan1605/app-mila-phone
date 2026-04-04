@@ -30,6 +30,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
   // ===============================
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
+  const [search, setSearch] = useState("");
 
   // ===============================
   // REALTIME LISTENER
@@ -156,13 +157,41 @@ export default function MasterBarangKategoriCard({ kategori }) {
   const indexOfLastRow = currentPage * rowsPerPage;
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
 
-  const currentRows = listBarang.slice(indexOfFirstRow, indexOfLastRow);
+  const filteredBarang = listBarang.filter((b) => {
+    const q = search.toLowerCase();
 
-  const totalPages = Math.ceil(listBarang.length / rowsPerPage);
+    if (!q) return true;
+
+    return (
+      String(b.brand || "")
+        .toLowerCase()
+        .includes(q) ||
+      String(b.namaBarang || "")
+        .toLowerCase()
+        .includes(q) ||
+      String(b.harga?.srp || "")
+        .toString()
+        .toLowerCase()
+        .includes(q) ||
+      String(b.harga?.grosir || "")
+        .toString()
+        .toLowerCase()
+        .includes(q) ||
+      String(b.harga?.reseller || "")
+        .toString()
+        .toLowerCase()
+        .includes(q)
+    );
+  });
+
+  const currentRows = filteredBarang.slice(indexOfFirstRow, indexOfLastRow);
+
+  const totalPages = Math.ceil(filteredBarang.length / rowsPerPage);
+
   return (
     <div className="space-y-6">
       {/* HEADER */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-center gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-800">
             MASTER BARANG — {kategori}
@@ -171,6 +200,8 @@ export default function MasterBarangKategoriCard({ kategori }) {
             Simpan, Edit, Delete langsung realtime ke Firebase
           </p>
         </div>
+
+      
 
         <button
           onClick={handleExport}
@@ -258,6 +289,24 @@ export default function MasterBarangKategoriCard({ kategori }) {
         )}
       </form>
 
+      <div className="flex flex-wrap gap-2 mt-2 text-lg font-bold text-slate-800 ">
+        <h2 className="">
+            FILTER PENCARIAN DATA 
+          </h2>
+      
+
+        <input
+          type="text"
+          placeholder="Cari semua kolom: brand, barang, harga..."
+          className="border px-3 py-2 rounded-lg text-sm w-full md:w-82"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setCurrentPage(1);
+          }}
+        />
+          </div>
+
       {/* TABLE */}
       <div className="overflow-x-auto">
         <table className="min-w-full border text-sm">
@@ -302,7 +351,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
               </tr>
             ))}
 
-            {listBarang.length === 0 && (
+            {filteredBarang.length === 0 && (
               <tr>
                 <td colSpan={6} className="text-center py-4 text-slate-400">
                   Belum ada data

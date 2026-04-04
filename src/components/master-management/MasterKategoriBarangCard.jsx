@@ -13,6 +13,7 @@ export default function MasterKategoriBarangCard() {
   const [namaKategori, setNamaKategori] = useState("");
   const [keterangan, setKeterangan] = useState("");
   const [editId, setEditId] = useState(null);
+  const [search, setSearch] = useState("");
 
   // ===============================
   // LISTENER FIREBASE
@@ -25,6 +26,17 @@ export default function MasterKategoriBarangCard() {
     return () => unsubscribe && unsubscribe();
   }, []);
 
+  const filteredRows = rows.filter((r) => {
+    const q = search.toLowerCase();
+  
+    if (!q) return true;
+  
+    return (
+      String(r.namaKategori || "").toLowerCase().includes(q) ||
+      String(r.keterangan || "").toLowerCase().includes(q)
+    );
+  });
+
   // ===============================
   // EXPORT EXCEL (SESUAI TABEL)
   // ===============================
@@ -33,6 +45,8 @@ export default function MasterKategoriBarangCard() {
       alert("❌ Data kosong, tidak bisa export");
       return;
     }
+
+    
 
     // 🔥 FORMAT SESUAI KOLOM TABLE
     const formattedData = rows.map((r) => ({
@@ -87,6 +101,8 @@ export default function MasterKategoriBarangCard() {
         </button>
       </div>
 
+      
+
       {/* ================= FORM ================= */}
       <div className="grid md:grid-cols-2 gap-3 mb-3">
         <input
@@ -110,6 +126,19 @@ export default function MasterKategoriBarangCard() {
         <FaPlus /> Simpan
       </button>
 
+      <div className="mb-3">
+      <h2 className="font-bold text-lg">
+            FILTER PENCARIAN DATA 
+          </h2>
+        <input
+          type="text"
+          placeholder="Cari kategori / keterangan..."
+          className="border px-3 py-2 rounded-lg text-sm w-full md:w-80"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
       {/* ================= TABLE ================= */}
       <table className="w-full text-sm border">
         <thead className="bg-slate-200">
@@ -121,7 +150,7 @@ export default function MasterKategoriBarangCard() {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
+        {filteredRows.map((r, i) => (
             <tr key={r.id} className="border-t">
               <td className="p-2 text-center">{i + 1}</td>
               <td className="p-2">{r.namaKategori}</td>
@@ -136,9 +165,7 @@ export default function MasterKategoriBarangCard() {
                 >
                   <FaEdit />
                 </button>
-                <button
-                  onClick={() => deleteMasterKategoriBarang(r.id)}
-                >
+                <button onClick={() => deleteMasterKategoriBarang(r.id)}>
                   <FaTrash />
                 </button>
               </td>
