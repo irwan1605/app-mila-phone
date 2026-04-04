@@ -682,9 +682,44 @@ export default function FormItemSection({
     }, 0);
   }, [items]);
 
+  const findBarangUniversal = (imei) => {
+    const imeiFix = String(imei || "").trim();
+  
+    // 1. CEK PEMBELIAN TOKO (EXISTING)
+    let trx = allTransaksi.find(
+      (t) =>
+        String(t.IMEI || "").trim() === imeiFix &&
+        String(t.STATUS || "").toUpperCase() === "APPROVED"
+    );
+  
+    // 2. CEK GLOBAL STOCK (🔥 TAMBAHAN)
+    if (!trx && globalStockMap[imeiFix]) {
+      trx = allTransaksi.find(
+        (t) => String(t.IMEI || "").trim() === imeiFix
+      );
+    }
+  
+    if (!trx) return null;
+  
+    const barang = masterBarang.find(
+      (b) =>
+        String(b.namaBarang || "").toUpperCase() ===
+        String(trx.NAMA_BARANG || "").toUpperCase()
+    );
+  
+    if (!barang) return null;
+  
+    return {
+      kategoriBarang: barang.kategoriBarang,
+      namaBrand: barang.namaBrand || barang.brand,
+      namaBarang: barang.namaBarang,
+      hargaMap: barang.harga || {},
+    };
+  };
+
   useEffect(() => {
     if (!tahap1Valid) return;
-  
+
     if (items.length === 0) {
       safeOnChange([
         {
@@ -1122,12 +1157,16 @@ export default function FormItemSection({
                        1. PEMBELIAN (LOGIC LAMA)
                        2. TRANSFER
                     =============================== */
-
                     let autoBarang = findBarangByImei(imei);
 
                     // fallback transfer
                     if (!autoBarang) {
                       autoBarang = findBarangByTransfer(imei);
+                    }
+                    
+                    // 🔥 SUPER FIX
+                    if (!autoBarang) {
+                      autoBarang = findBarangUniversal(imei);
                     }
 
                     if (!autoBarang) {
@@ -1152,6 +1191,26 @@ export default function FormItemSection({
                     });
                   }}
                 />
+
+                {item.imei && (
+                  <div className="text-xs mt-1 space-y-1">
+                    <div className="text-blue-600">
+                      🔍 Status IMEI:{" "}
+                      {globalStockMap[item.imei]?.available
+                        ? "READY"
+                        : "TIDAK TERSEDIA"}
+                    </div>
+
+                    {globalStockMap[item.imei] && (
+                      <div className="text-gray-500">
+                        Source:{" "}
+                        {globalStockMap[item.imei]?.type === "IMEI"
+                          ? "STOK GLOBAL"
+                          : "UNKNOWN"}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <datalist id={`imei-${idx}`}>
                   {imeiByBarang

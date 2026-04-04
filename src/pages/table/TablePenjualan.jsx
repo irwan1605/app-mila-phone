@@ -55,6 +55,7 @@ export default function TablePenjualan({ data = [] }) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [showRefund, setShowRefund] = useState(false);
+  const [localHiddenRefund, setLocalHiddenRefund] = useState({});
 
   const pageSize = 10;
 
@@ -87,24 +88,22 @@ export default function TablePenjualan({ data = [] }) {
 
   const roleFinal = roleDb || userLogin?.role || "";
 
-const isSuperAdmin =
-  String(roleFinal).toLowerCase() === "superadmin";
+  const isSuperAdmin = String(roleFinal).toLowerCase() === "superadmin";
 
   const tokoLogin = useMemo(() => {
-
     const roleFinal = roleDb || userLogin?.role || "";
-  
+
     // SUPERADMIN lihat semua
     if (String(roleFinal).toLowerCase() === "superadmin") {
       return "";
     }
-  
+
     // PIC TOKO
     if (String(roleFinal).startsWith("pic_toko")) {
       const id = roleFinal.replace("pic_toko", "");
       return TOKO_MAP[id] || "";
     }
-  
+
     // fallback dari login
     return userLogin?.toko || userLogin?.namaToko || "";
   }, [roleDb, userLogin]);
@@ -127,128 +126,121 @@ const isSuperAdmin =
   }, [keyword, dateFrom, dateTo]);
 
   /* ================= FLATTEN DATA ================= */
-const tableRows = useMemo(() => {
-  const map = {};
+  const tableRows = useMemo(() => {
+    const map = {};
 
-  (rows || []).forEach((trx) => {
-    if (trx.statusPembayaran === "REFUND") return;
-    if (!Array.isArray(trx.items)) return;
+    (rows || []).forEach((trx) => {
+      if (trx.statusPembayaran === "REFUND") return;
+      if (!Array.isArray(trx.items)) return;
 
-    /* ================= PAYMENT ================= */
-    let paymentMetode = "-";
-    let namaBank = "-";
-    let nominalPaymentMetode = 0;
+      /* ================= PAYMENT ================= */
+      let paymentMetode = "-";
+      let namaBank = "-";
+      let nominalPaymentMetode = 0;
 
-    if (
-      Array.isArray(trx.payment?.splitPayment) &&
-      trx.payment.splitPayment.length
-    ) {
-      paymentMetode = trx.payment.splitPayment
-        .map((p) => p.metode)
-        .join(" + ");
+      if (
+        Array.isArray(trx.payment?.splitPayment) &&
+        trx.payment.splitPayment.length
+      ) {
+        paymentMetode = trx.payment.splitPayment
+          .map((p) => p.metode)
+          .join(" + ");
 
-      namaBank = trx.payment.splitPayment
-        .map((p) => p.bankNama || "-")
-        .join(" + ");
+        namaBank = trx.payment.splitPayment
+          .map((p) => p.bankNama || "-")
+          .join(" + ");
 
-      nominalPaymentMetode = trx.payment.splitPayment.reduce(
-        (s, p) => s + Number(p.nominal || 0),
-        0
-      );
-    } else {
-      paymentMetode = trx.payment?.metode || trx.payment?.status || "-";
-      namaBank = trx.payment?.bankNama || trx.payment?.namaBank || "-";
-      nominalPaymentMetode =
-        Number(trx.payment?.nominalPayment || 0) ||
-        Number(trx.payment?.nominal || 0) ||
-        0;
-    }
+        nominalPaymentMetode = trx.payment.splitPayment.reduce(
+          (s, p) => s + Number(p.nominal || 0),
+          0
+        );
+      } else {
+        paymentMetode = trx.payment?.metode || trx.payment?.status || "-";
+        namaBank = trx.payment?.bankNama || trx.payment?.namaBank || "-";
+        nominalPaymentMetode =
+          Number(trx.payment?.nominalPayment || 0) ||
+          Number(trx.payment?.nominal || 0) ||
+          0;
+      }
 
-    /* ================= GRAND TOTAL ================= */
-    const grandTotalFix =
-      Number(trx.payment?.grandTotal || 0) > 0
-        ? Number(trx.payment.grandTotal)
-        : (trx.items || []).reduce(
-            (s, it) =>
-              s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-            0
-          ) + Number(trx.payment?.nominalMdr || 0);
+      /* ================= GRAND TOTAL ================= */
+      const grandTotalFix =
+        Number(trx.payment?.grandTotal || 0) > 0
+          ? Number(trx.payment.grandTotal)
+          : (trx.items || []).reduce(
+              (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+              0
+            ) + Number(trx.payment?.nominalMdr || 0);
 
-    /* ================= AGREGASI ITEM ================= */
-    const allBarang = trx.items.map(i => i.namaBarang).join(", ");
-    const allIMEI = trx.items
-      .flatMap(i => i.imeiList || [])
-      .join(", ");
-    const totalQty = trx.items.reduce(
-      (s, i) => s + Number(i.qty || 0),
-      0
-    );
+      /* ================= AGREGASI ITEM ================= */
+      const allBarang = trx.items.map((i) => i.namaBarang).join(", ");
+      const allIMEI = trx.items.flatMap((i) => i.imeiList || []).join(", ");
+      const totalQty = trx.items.reduce((s, i) => s + Number(i.qty || 0), 0);
 
-    const totalBayarFix = Number(nominalPaymentMetode || 0);
+      const totalBayarFix = Number(nominalPaymentMetode || 0);
 
-    const kurangBayar =
-      totalBayarFix < grandTotalFix ? grandTotalFix - totalBayarFix : 0;
+      const kurangBayar =
+        totalBayarFix < grandTotalFix ? grandTotalFix - totalBayarFix : 0;
 
-    const sisaKembalian =
-      totalBayarFix > grandTotalFix ? totalBayarFix - grandTotalFix : 0;
+      const sisaKembalian =
+        totalBayarFix > grandTotalFix ? totalBayarFix - grandTotalFix : 0;
 
-    /* ================= PUSH HANYA 1X PER INVOICE ================= */
-    if (!map[trx.invoice]) {
-      map[trx.invoice] = {
-        id: trx.id,
-        trxKey: trx.trxKey,
-        tokoId: trx.tokoId,
+      /* ================= PUSH HANYA 1X PER INVOICE ================= */
+      if (!map[trx.invoice]) {
+        map[trx.invoice] = {
+          id: trx.id,
+          trxKey: trx.trxKey,
+          tokoId: trx.tokoId,
 
-        tanggal: trx.tanggal || trx.createdAt,
-        invoice: trx.invoice,
-        toko: trx.toko || "-",
+          tanggal: trx.tanggal || trx.createdAt,
+          invoice: trx.invoice,
+          toko: trx.toko || "-",
 
-        pelanggan: trx.user?.namaPelanggan || "-",
-        idPelanggan: trx.user?.idPelanggan || "-",
-        telp: trx.user?.noTlpPelanggan || "-",
+          pelanggan: trx.user?.namaPelanggan || "-",
+          idPelanggan: trx.user?.idPelanggan || "-",
+          telp: trx.user?.noTlpPelanggan || "-",
 
-        storeHead: trx.user?.storeHead || "-",
-        sales: trx.user?.namaSales || "-",
-        salesHandle: trx.user?.salesHandle || "-",
+          storeHead: trx.user?.storeHead || "-",
+          sales: trx.user?.namaSales || "-",
+          salesHandle: trx.user?.salesHandle || "-",
 
-        paymentMetode,
-        namaBank,
-        nominalPaymentMetode,
+          paymentMetode,
+          namaBank,
+          nominalPaymentMetode,
 
-        namaMdr: trx.payment?.namaMdr || "-",
-        dpTalangan: Number(trx.payment?.dpTalangan || 0),
-        paymentKredit:
-          trx.payment?.status === "PIUTANG" ? "KREDIT" : "LUNAS",
+          namaMdr: trx.payment?.namaMdr || "-",
+          dpTalangan: Number(trx.payment?.dpTalangan || 0),
+          paymentKredit: trx.payment?.status === "PIUTANG" ? "KREDIT" : "LUNAS",
 
-        /* 🔥 AGREGASI */
-        kategoriBarang: "MULTI ITEM",
-        namaBrand: "-",
-        namaBarang: allBarang,
-        imei: allIMEI,
-        qty: totalQty,
+          /* 🔥 AGREGASI */
+          kategoriBarang: "MULTI ITEM",
+          namaBrand: "-",
+          namaBarang: allBarang,
+          imei: allIMEI,
+          qty: totalQty,
 
-        hargaSRP: 0,
-        hargaGrosir: 0,
-        hargaReseller: 0,
+          hargaSRP: 0,
+          hargaGrosir: 0,
+          hargaReseller: 0,
 
-        statusBayar: trx.payment?.status || "-",
-        nominalMdr: trx.payment?.nominalMdr || 0,
-        tenor: trx.payment?.tenor || "-",
-        cicilan: trx.payment?.cicilan || 0,
+          statusBayar: trx.payment?.status || "-",
+          nominalMdr: trx.payment?.nominalMdr || 0,
+          tenor: trx.payment?.tenor || "-",
+          cicilan: trx.payment?.cicilan || 0,
 
-        KURANG_BAYAR: kurangBayar,
-        SISA_KEMBALIAN: sisaKembalian,
+          KURANG_BAYAR: kurangBayar,
+          SISA_KEMBALIAN: sisaKembalian,
 
-        grandTotal: grandTotalFix,
-        grandTotalDisplay: grandTotalFix,
+          grandTotal: grandTotalFix,
+          grandTotalDisplay: grandTotalFix,
 
-        status: trx.statusPembayaran || "OK",
-      };
-    }
-  });
+          status: trx.statusPembayaran || "OK",
+        };
+      }
+    });
 
-  return Object.values(map);
-}, [rows]);
+    return Object.values(map);
+  }, [rows]);
 
   /* ================= FILTER ================= */
   const filteredRows = useMemo(() => {
@@ -256,6 +248,11 @@ const tableRows = useMemo(() => {
       const status = String(r.status || "")
         .trim()
         .toUpperCase();
+
+      // 🔥 HILANGKAN LANGSUNG SAAT KLIK REFUND
+      if (localHiddenRefund[r.id]) {
+        return false;
+      }
 
       // ✅ REFUND HILANG OTOMATIS
       if (!showRefund && status === "REFUND") {
@@ -420,28 +417,29 @@ const tableRows = useMemo(() => {
     SAWANGAN: "10",
   };
 
-
-
   const handleRefund = async (row) => {
+    // 🔥 PREVENT DOUBLE CLICK
+    if (localHiddenRefund[row.id]) return;
+
     if (!isSuperAdmin) {
       alert("Refund hanya bisa dilakukan oleh Superadmin");
       return;
     }
-  
+
     if (refundLoading === row.id) return;
-  
+
     const statusNow = String(row.status || "")
       .toUpperCase()
       .trim();
-  
+
     if (statusNow === "REFUND") {
       return alert("Barang ini sudah pernah di Refund");
     }
-  
+
     if (!window.confirm("Yakin ingin RETUR / REFUND barang ini?")) return;
-  
+
     setRefundLoading(row.id);
-  
+
     try {
       // ===============================
       // 1️⃣ UPDATE STATUS PENJUALAN
@@ -451,7 +449,7 @@ const tableRows = useMemo(() => {
         { statusPembayaran: "REFUND" },
         userLogin
       );
-  
+
       // ===============================
       // 2️⃣ UNLOCK IMEI
       // ===============================
@@ -460,35 +458,39 @@ const tableRows = useMemo(() => {
           await remove(ref(db, `imeiLock/${row.imei}`));
         } catch {}
       }
-  
+
       // ===============================
       // 3️⃣ BUAT TRANSAKSI REFUND STOCK
       // ===============================
       await addTransaksi(row.tokoId, {
         TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
         NO_INVOICE: `REF-${Date.now()}`,
-  
+
         NAMA_TOKO: row.toko,
         NAMA_BRAND: row.namaBrand,
         NAMA_BARANG: row.namaBarang,
-  
+
         IMEI: row.imei,
         NOMOR_UNIK: row.imei,
-  
-         // 🔥 FIX PENTING
-         QTY: Number(row.qty || 1),
-  
+
+        // 🔥 FIX PENTING
+        QTY: row.imei ? 1 : Number(row.qty || 0),
+
         PAYMENT_METODE: "REFUND",
         STATUS: "Approved",
-  
+
         KETERANGAN: "REFUND PENJUALAN",
         CREATED_AT: Date.now(),
         REFUND_FROM: row.trxKey,
         USER_REFUND: userLogin?.name || "SYSTEM",
       });
-  
+
       alert("✅ Refund berhasil");
-  
+      // 🔥 LANGSUNG HILANGKAN DARI TABLE
+      setLocalHiddenRefund((prev) => ({
+        ...prev,
+        [row.id]: true,
+      }));
     } catch (e) {
       console.error(e);
       alert("❌ Refund gagal: " + e.message);
@@ -496,9 +498,6 @@ const tableRows = useMemo(() => {
       setRefundLoading(null);
     }
   };
-  
-  
-  
 
   /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {
@@ -664,9 +663,6 @@ const tableRows = useMemo(() => {
                 Sisa Kembalian
               </th>
               <th className="px-3 py-2 border border-gray-400">DP Talangan</th>
-              
-             
-             
               <th className="px-3 py-2 border border-gray-400">Keterangan</th>
               <th className="px-3 py-2 border border-gray-400">Grand Total</th>
               <th className="px-3 py-2 border border-gray-400">Status</th>
@@ -772,8 +768,7 @@ const tableRows = useMemo(() => {
                 <td className="px-3 py-2 border border-gray-300">
                   {rupiah(row.dpTalangan)}
                 </td>
-              
-             
+
                 <td className="px-3 py-2 border border-gray-300">
                   {row.keterangan}
                 </td>
@@ -824,10 +819,20 @@ const tableRows = useMemo(() => {
                     {isSuperAdmin && (
                       <button
                         onClick={() => handleRefund(row)}
-                        disabled={refundLoading === row.id}
-                        className="btn-refund bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600"
+                        disabled={
+                          refundLoading === row.id || localHiddenRefund[row.id]
+                        }
+                        className={`px-2 py-1 rounded text-white ${
+                          localHiddenRefund[row.id]
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-orange-500 hover:bg-orange-600"
+                        }`}
                       >
-                        {refundLoading === row.id ? "Processing..." : "Refund"}
+                        {refundLoading === row.id
+                          ? "Processing..."
+                          : localHiddenRefund[row.id]
+                          ? "Refunded"
+                          : "Refund"}
                       </button>
                     )}
                     {/* {isSuperAdmin && row.status !== "REFUND" && (
