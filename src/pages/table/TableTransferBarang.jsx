@@ -338,9 +338,19 @@ console.log("IS PIC:", isPic);
   // ===============================
   // DATA FINAL SETELAH FILTER
   // ===============================
-  const filteredRows = rowsByToko.filter(
-    (r) => filterStatus === "ALL" || r.status === filterStatus
-  );
+  const filteredRows = useMemo(() => {
+    const filtered = rowsByToko.filter(
+      (r) => filterStatus === "ALL" || r.status === filterStatus
+    );
+  
+    // 🔥 SORT TERBARU DI ATAS
+    return filtered.sort((a, b) => {
+      const timeA = a.createdAt || a.approvedAt || 0;
+      const timeB = b.createdAt || b.approvedAt || 0;
+  
+      return timeB - timeA; // DESC (terbaru dulu)
+    });
+  }, [rowsByToko, filterStatus]);
 
   // ===============================
   // HITUNG DATA PAGINATION
@@ -427,7 +437,10 @@ console.log("IS PIC:", isPic);
               return (
                 <tr
                   key={r.id}
-                  className="hover:bg-indigo-50 transition-colors p-2"
+                  className={`
+                    hover:bg-indigo-50 transition-colors
+                    ${i === 0 ? "bg-green-50 font-semibold" : ""}
+                  `}
                 >
                   <td className="border px-3 py-2">
                     {indexOfFirstRow + i + 1}
