@@ -74,6 +74,7 @@ export default function Dashboard() {
   const [penjualan, setPenjualan] = useState([]);
 
   const [penjualanList, setPenjualanList] = useState([]);
+  
 
   useEffect(() => {
     const unsub = listenPenjualan((data) => {
@@ -169,20 +170,17 @@ export default function Dashboard() {
       ).trim();
       if (!invoice) return;
 
-      
-
       if (!mapInvoice[invoice]) {
-        const rawDate =
-        trx.tanggal || trx.createdAt || trx.TANGGAL_TRANSAKSI;
+        const rawDate = trx.tanggal || trx.createdAt || trx.TANGGAL_TRANSAKSI;
         const total =
-        Number(trx.payment?.grandTotal || 0) ||
-        Number(trx.GRAND_TOTAL || 0) ||
-        (Array.isArray(trx.items)
-          ? trx.items.reduce(
-              (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-              0
-            )
-          : 0);
+          Number(trx.payment?.grandTotal || 0) ||
+          Number(trx.GRAND_TOTAL || 0) ||
+          (Array.isArray(trx.items)
+            ? trx.items.reduce(
+                (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+                0
+              )
+            : 0);
 
         const qty = (trx.items || []).reduce(
           (s, it) => s + Number(it.qty || 0),
@@ -190,7 +188,7 @@ export default function Dashboard() {
         );
 
         const tanggal = formatDate(trx.tanggal || trx.createdAt);
-       
+
         console.log("DEBUG DASHBOARD:", penjualanList);
 
         mapInvoice[invoice] = {
@@ -479,6 +477,31 @@ export default function Dashboard() {
   // ================= TOTAL PENJUALAN HARI INI =================
   const today = new Date().toISOString().slice(0, 10);
 
+  const totalNominalPenjualan = useMemo(() => {
+    if (!Array.isArray(penjualanList)) return 0;
+  
+    const mapInvoice = {};
+  
+    penjualanList.forEach((trx) => {
+      if (!trx?.invoice) return;
+  
+      const total =
+        Number(trx.payment?.grandTotal || 0) > 0
+          ? Number(trx.payment.grandTotal)
+          : (trx.items || []).reduce(
+              (s, it) =>
+                s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+              0
+            ) + Number(trx.payment?.nominalMdr || 0);
+  
+      if (!mapInvoice[trx.invoice]) {
+        mapInvoice[trx.invoice] = total;
+      }
+    });
+  
+    return Object.values(mapInvoice).reduce((s, v) => s + v, 0);
+  }, [penjualanList]);
+
   const omzetPerHari = useMemo(() => {
     const map = {};
     filteredData.forEach((x) => {
@@ -697,34 +720,32 @@ export default function Dashboard() {
             {dashboardPenjualan.totalTransaksi} Transaksi
           </div>
 
-          <p className="text-[11px] text-gray-500">C</p>
+          <p className="text-[11px] text-gray-500">Total Transaksi Hari Ini</p>
         </div>
 
-        {/* 3. TRANSAKSI PENDING */}
+        {/* 3. TOTAL NOMINAL PENJUALAN */}
         <div
           onClick={() =>
             navigate("/toko/:tokoId/penjualan", {
-              state: { status: "Pending" },
+              state: { type: "ALL" },
             })
           }
-          className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-yellow-50"
+          className="cursor-pointer bg-white rounded-xl shadow p-4 hover:bg-green-50 transition"
         >
           <div className="flex items-center gap-2">
-            <FaClock className="text-yellow-500" />
-            <span className="text-xs text-gray-500">Transaksi Pending</span>
+            <FaMoneyBillWave className="text-green-600" />
+            <span className="text-xs text-gray-500">
+              Total Nominal Penjualan
+            </span>
           </div>
 
-          <div className="text-xl font-bold text-yellow-600">
-            {
-              dataTransaksi.filter(
-                (x) =>
-                  String(x.PAYMENT_METODE || "").toUpperCase() ===
-                    "PENJUALAN" && x.STATUS === "Pending"
-              ).length
-            }
+          <div className="mt-2 text-lg font-bold text-green-700">
+            {totalNominalPenjualan.toLocaleString("id-ID", {
+              style: "currency",
+              currency: "IDR",
+              maximumFractionDigits: 0,
+            })}
           </div>
-
-          <p className="text-[11px] text-gray-500">Menunggu Proses</p>
         </div>
 
         {/* 4. PENJUALAN HARI INI */}
@@ -857,64 +878,6 @@ export default function Dashboard() {
           </p>
         </div>
       </div>
-
-      {/* FILTER (UNTUK CHART & ANALYTIC)
-      <div className="bg-white rounded-2xl shadow p-4 mb-4">
-        <div className="flex flex-wrap gap-2 items-center mb-3">
-          <FaFilter className="text-gray-500" />
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="p-2 border rounded text-sm"
-          >
-            <option value="semua">Semua Periode</option>
-            <option value="hari">Per Hari</option>
-            <option value="bulan">Per Bulan</option>
-            <option value="tahun">Per Tahun</option>
-          </select>
-
-          {filterType !== "semua" && (
-            <input
-              type="date"
-              className="p-2 border rounded text-sm"
-              onChange={(e) => setFilterValue(e.target.value)}
-            />
-          )}
-
-          <select
-            value={filterToko}
-            onChange={(e) => setFilterToko(e.target.value)}
-            className="p-2 border rounded text-sm"
-          >
-            <option value="semua">Semua Toko</option>
-            {tokoList.map((t, i) => (
-              <option key={i} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={filterSales}
-            onChange={(e) => setFilterSales(e.target.value)}
-            className="p-2 border rounded text-sm"
-          >
-            <option value="semua">Semua Sales</option>
-            {salesList.map((s, i) => (
-              <option key={i} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-
-          <button
-            onClick={exportExcel}
-            className="ml-auto px-3 py-2 rounded bg-green-600 text-white text-xs sm:text-sm flex items-center gap-1"
-          >
-            <FaFileExcel /> Export Excel
-          </button>
-        </div>
-      </div> */}
 
       {/* CHARTS (TETAP, TANPA TABLE) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
