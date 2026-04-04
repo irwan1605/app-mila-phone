@@ -458,32 +458,40 @@ export default function TablePenjualan({ data = [] }) {
           await remove(ref(db, `imeiLock/${row.imei}`));
         } catch {}
       }
+      // ===============================
+      // HANYA UPDATE STATUS
+      // ===============================
+      await updateTransaksiPenjualan(
+        row.trxKey,
+        { statusPembayaran: "REFUND" },
+        userLogin
+      );
 
       // ===============================
       // 3️⃣ BUAT TRANSAKSI REFUND STOCK
       // ===============================
-      await addTransaksi(row.tokoId, {
-        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
-        NO_INVOICE: `REF-${Date.now()}`,
+      // await addTransaksi(row.tokoId, {
+      //   TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+      //   NO_INVOICE: `REF-${Date.now()}`,
 
-        NAMA_TOKO: row.toko,
-        NAMA_BRAND: row.namaBrand,
-        NAMA_BARANG: row.namaBarang,
+      //   NAMA_TOKO: row.toko,
+      //   NAMA_BRAND: row.namaBrand,
+      //   NAMA_BARANG: row.namaBarang,
 
-        IMEI: row.imei,
-        NOMOR_UNIK: row.imei,
+      //   IMEI: row.imei,
+      //   NOMOR_UNIK: row.imei,
 
-        // 🔥 FIX PENTING
-        QTY: row.imei ? 1 : Number(row.qty || 0),
+      //   // 🔥 FIX PENTING
+      //   QTY: row.imei ? 1 : Number(row.qty || 0),
 
-        PAYMENT_METODE: "REFUND",
-        STATUS: "Approved",
+      //   PAYMENT_METODE: "REFUND",
+      //   STATUS: "Approved",
 
-        KETERANGAN: "REFUND PENJUALAN",
-        CREATED_AT: Date.now(),
-        REFUND_FROM: row.trxKey,
-        USER_REFUND: userLogin?.name || "SYSTEM",
-      });
+      //   KETERANGAN: "REFUND PENJUALAN",
+      //   CREATED_AT: Date.now(),
+      //   REFUND_FROM: row.trxKey,
+      //   USER_REFUND: userLogin?.name || "SYSTEM",
+      // });
 
       alert("✅ Refund berhasil");
       // 🔥 LANGSUNG HILANGKAN DARI TABLE

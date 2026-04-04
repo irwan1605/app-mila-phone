@@ -111,10 +111,9 @@ export default function DetailStockAllToko() {
         if (metode === "PENJUALAN") {
           map[key].qty -= qty;
         }
-  
-        // 🔁 REFUND = TAMBAH KEMBALI SESUAI QTY (FIX UTAMA 🔥)
         if (metode === "REFUND") {
-          map[key].qty += qty;
+          // ❌ JANGAN TAMBAH STOK
+          // karena refund hanya membatalkan penjualan
         }
   
         // 🛡️ SAFETY (ANTI MINUS)
