@@ -52,7 +52,7 @@ const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
 // ===============================
 // KATEGORI TANPA IMEI
 // ===============================
-const KATEGORI_NON_IMEI = ["ACCESSORIES","JASA", "SPARE PART"];
+const KATEGORI_NON_IMEI = ["ACCESSORIES", "JASA", "SPARE PART"];
 
 const fmt = (n) => {
   try {
@@ -108,6 +108,7 @@ export default function MasterPembelian() {
   const [editDraftId, setEditDraftId] = useState(null);
   const [showDraftTable, setShowDraftTable] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
+  const [filterToko, setFilterToko] = useState("");
 
   const masterBarangMap = useMemo(() => {
     const map = {};
@@ -592,10 +593,13 @@ export default function MasterPembelian() {
 
   const filteredPurchases = useMemo(() => {
     const q = String(search || "").toLowerCase();
-    if (!q) return groupedPembelian;
 
     return groupedPembelian.filter((v) => {
-      return (
+      // =========================
+      // FILTER TEXT (EXISTING)
+      // =========================
+      const matchSearch =
+        !q ||
         String(v.tanggal || "")
           .toLowerCase()
           .includes(q) ||
@@ -618,11 +622,16 @@ export default function MasterPembelian() {
           String(im || "")
             .toLowerCase()
             .includes(q)
-        )
-      );
-    });
-  }, [groupedPembelian, search]);
+        );
 
+      // =========================
+      // 🔥 FILTER TOKO (BARU)
+      // =========================
+      const matchToko = !filterToko || v.namaToko === filterToko;
+
+      return matchSearch && matchToko;
+    });
+  }, [groupedPembelian, search, filterToko]);
   const totalPages =
     Math.ceil((filteredPurchases.length || 1) / itemsPerPage) || 1;
 
@@ -1303,6 +1312,24 @@ export default function MasterPembelian() {
               />
             </div>
 
+            <div className="text-[11px] text-slate-500">Filter Toko</div>
+
+            <select
+              className="border border-slate-200 rounded-full px-3 py-2 text-xs md:text-sm bg-slate-50 shadow-sm"
+              value={filterToko}
+              onChange={(e) => {
+                setFilterToko(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="">Semua Toko</option>
+              {masterToko.map((t) => (
+                <option key={t.id} value={t.nama}>
+                  {t.nama}
+                </option>
+              ))}
+            </select>
+
             <button
               onClick={() => setShowTambah(true)}
               className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center text-xs md:text-sm shadow-md transition transform hover:-translate-y-[1px]"
@@ -1764,7 +1791,7 @@ export default function MasterPembelian() {
             </div>
 
             {/* IMEI */}
-            {!["ACCESSORIES", "JASA","SPARE PART"].includes(
+            {!["ACCESSORIES", "JASA", "SPARE PART"].includes(
               String(tambahForm.kategoriBrand || "").toUpperCase()
             ) && (
               <div className="mt-3">
