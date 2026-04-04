@@ -17,7 +17,6 @@ import { db } from "../firebase/FirebaseInit";
 import TableTransferBarang from "./table/TableTransferBarang";
 import PrintSuratJalan from "./Print/PrintSuratJalan";
 
-
 const initialForm = {
   tanggal: new Date().toISOString().slice(0, 10),
   noDo: "",
@@ -105,8 +104,6 @@ export default function TransferBarang() {
     return byKategori;
   }, [form.kategori, inventory, form.imeis]);
 
-  
-
   const isNonImeiKategori = useMemo(() => {
     return NON_IMEI_KATEGORI.includes(
       String(form.kategori || "").toUpperCase()
@@ -117,20 +114,26 @@ export default function TransferBarang() {
   const isKategoriImeiFinal = isKategoriImei && !isNonImeiKategori;
 
   const getSafeStokNonImei = () => {
-    const toko = String(form.tokoPengirim || "").toUpperCase().trim();
-    const brand = String(form.brand || "").toUpperCase().trim();
-    const barang = String(form.barang || "").toUpperCase().trim();
-  
+    const toko = String(form.tokoPengirim || "")
+      .toUpperCase()
+      .trim();
+    const brand = String(form.brand || "")
+      .toUpperCase()
+      .trim();
+    const barang = String(form.barang || "")
+      .toUpperCase()
+      .trim();
+
     // =========================
     // 1. PRIORITAS: stok_toko
     // =========================
     const stokDb =
       stokAccessories?.[form.tokoPengirim]?.[form.brand]?.[form.barang];
-  
+
     if (stokDb && Number(stokDb) > 0) {
       return Number(stokDb);
     }
-  
+
     // =========================
     // 2. PRIORITAS: inventoryAccessories
     // =========================
@@ -140,25 +143,29 @@ export default function TransferBarang() {
         i.namaBrand?.toUpperCase().trim() === brand &&
         i.namaBarang?.toUpperCase().trim() === barang
     );
-  
+
     if (found && Number(found.qty || 0) > 0) {
       return Number(found.qty);
     }
-  
+
     // =========================
     // 🔥 3. FIX TERAKHIR (WAJIB)
     // =========================
     // kalau barang ada di master → anggap stok tersedia minimal 999
     const existInMaster = masterBarang.some(
       (b) =>
-        String(b.brand || "").toUpperCase().trim() === brand &&
-        String(b.namaBarang || "").toUpperCase().trim() === barang
+        String(b.brand || "")
+          .toUpperCase()
+          .trim() === brand &&
+        String(b.namaBarang || "")
+          .toUpperCase()
+          .trim() === barang
     );
-  
+
     if (existInMaster) {
       return 999; // 🔥 BIAR BISA TRANSFER
     }
-  
+
     return 0;
   };
 
@@ -599,8 +606,6 @@ export default function TransferBarang() {
     return lastOwner;
   };
 
-  
-
   // ==========================================================
   // 🔒 GLOBAL STOCK & IMEI LOCK ENGINE (FINAL PROTECTION)
   // ==========================================================
@@ -853,6 +858,23 @@ export default function TransferBarang() {
   }, [masterToko]);
 
   const brandOptions = useMemo(() => {
+    // ================= ACCESSORIES (MASTER ONLY) =================
+    if (form.kategori === "ACCESSORIES") {
+      return [
+        ...new Set(
+          masterBarang
+            .filter(
+              (b) =>
+                String(b.kategoriBarang || "")
+                  .toUpperCase()
+                  .trim() === "ACCESSORIES"
+            )
+            .map((b) => b.brand)
+            .filter(Boolean)
+        ),
+      ];
+    }
+
     if (!form.kategori || !form.tokoPengirim) return [];
 
     // ================= ACCESSORIES =================
@@ -962,6 +984,29 @@ export default function TransferBarang() {
 
   // ================= BARANG OPTIONS (DARI STOK TOKO) =================
   const barangOptions = useMemo(() => {
+    // ================= ACCESSORIES (MASTER ONLY) =================
+    if (form.kategori === "ACCESSORIES") {
+      return [
+        ...new Set(
+          masterBarang
+            .filter(
+              (b) =>
+                String(b.kategoriBarang || "")
+                  .toUpperCase()
+                  .trim() === "ACCESSORIES" &&
+                String(b.brand || "")
+                  .toUpperCase()
+                  .trim() ===
+                  String(form.brand || "")
+                    .toUpperCase()
+                    .trim()
+            )
+            .map((b) => b.namaBarang)
+            .filter(Boolean)
+        ),
+      ];
+    }
+
     if (!form.kategori || !form.brand) return [];
 
     if (form.kategori === "ACCESSORIES") {
@@ -1002,11 +1047,17 @@ export default function TransferBarang() {
 
   const stokTersedia = useMemo(() => {
     if (!form.tokoPengirim || !form.barang) return 0;
-  
-    const toko = String(form.tokoPengirim || "").toUpperCase().trim();
-    const brand = String(form.brand || "").toUpperCase().trim();
-    const barang = String(form.barang || "").toUpperCase().trim();
-  
+
+    const toko = String(form.tokoPengirim || "")
+      .toUpperCase()
+      .trim();
+    const brand = String(form.brand || "")
+      .toUpperCase()
+      .trim();
+    const barang = String(form.barang || "")
+      .toUpperCase()
+      .trim();
+
     // =====================
     // 🔥 IMEI
     // =====================
@@ -1018,19 +1069,19 @@ export default function TransferBarang() {
           i.namaBarang.toUpperCase() === barang
       ).length;
     }
-  
+
     // =====================
     // 🔥 NON IMEI (FIX TOTAL)
     // =====================
-  
+
     // 1. cek stok_toko
     const stokDb =
       stokAccessories?.[form.tokoPengirim]?.[form.brand]?.[form.barang];
-  
+
     if (stokDb && Number(stokDb) > 0) {
       return Number(stokDb);
     }
-  
+
     // 2. cek inventoryAccessories
     const found = inventoryAccessories.find(
       (i) =>
@@ -1038,22 +1089,26 @@ export default function TransferBarang() {
         i.namaBrand?.toUpperCase().trim() === brand &&
         i.namaBarang?.toUpperCase().trim() === barang
     );
-  
+
     if (found && Number(found.qty || 0) > 0) {
       return Number(found.qty);
     }
-  
+
     // 3. 🔥 fallback master barang (WAJIB)
     const existInMaster = masterBarang.some(
       (b) =>
-        String(b.brand || "").toUpperCase().trim() === brand &&
-        String(b.namaBarang || "").toUpperCase().trim() === barang
+        String(b.brand || "")
+          .toUpperCase()
+          .trim() === brand &&
+        String(b.namaBarang || "")
+          .toUpperCase()
+          .trim() === barang
     );
-  
+
     if (existInMaster) {
       return 999; // 🔥 biar tidak 0
     }
-  
+
     return 0;
   }, [
     inventory,
@@ -1715,7 +1770,7 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
 
     if (!isKategoriImeiFinal) {
       const stokFinal = getSafeStokNonImei();
-    
+
       if (form.qty > stokFinal) {
         alert(`❌ Qty melebihi stok tersedia (${stokFinal})`);
         return;
