@@ -343,12 +343,47 @@ console.log("IS PIC:", isPic);
       (r) => filterStatus === "ALL" || r.status === filterStatus
     );
   
+    // =========================
+    // 🔥 DEDUPLICATE ENGINE
+    // =========================
+    const map = new Map();
+  
+    filtered.forEach((r) => {
+      // 🔥 KEY UNIK (AMAN)
+      const key = [
+        r.tokoPengirim,
+        r.ke,
+        r.brand,
+        r.barang,
+        (r.imeis || []).join(","), // IMEI jadi pembeda utama
+        r.qty,
+      ].join("|");
+  
+      // 🔥 ambil yang PALING BARU
+      const existing = map.get(key);
+  
+      if (!existing) {
+        map.set(key, r);
+      } else {
+        const timeA = existing.createdAt || existing.approvedAt || 0;
+        const timeB = r.createdAt || r.approvedAt || 0;
+  
+        if (timeB > timeA) {
+          map.set(key, r); // replace dengan yang terbaru
+        }
+      }
+    });
+  
+    const uniqueRows = Array.from(map.values());
+  
+    // =========================
     // 🔥 SORT TERBARU DI ATAS
-    return filtered.sort((a, b) => {
+    // =========================
+    return uniqueRows.sort((a, b) => {
       const timeA = a.createdAt || a.approvedAt || 0;
       const timeB = b.createdAt || b.approvedAt || 0;
   
-      return timeB - timeA; // DESC (terbaru dulu)
+      return timeB - timeA;
     });
   }, [rowsByToko, filterStatus]);
 
