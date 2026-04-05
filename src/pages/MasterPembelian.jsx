@@ -837,7 +837,7 @@ export default function MasterPembelian() {
     const sku = makeSku(editData.brand, editData.barang);
 
     const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(editData.kategoriBrand);
-    const isAccessories = editData.kategoriBrand === "ACCESORIES";
+    const isAccessories = editData.kategoriBrand === "ACCESSORIES";
 
     // ===============================
     // AMBIL DATA TRANSAKSI LAMA
@@ -876,7 +876,8 @@ export default function MasterPembelian() {
       }
 
       newQty = imeis.length;
-    } else if (isAccessories) {
+    } else {
+      // 🔥 SEMUA NON IMEI MASUK SINI
       newQty = Number(editData.totalQty || originalQty);
     }
 
@@ -910,10 +911,7 @@ export default function MasterPembelian() {
         TANGGAL_TRANSAKSI: editData.tanggal,
       });
 
-  
       const sku = makeSku(editData.brand, editData.barang);
-
-    
     }
 
     // ==================================================
@@ -2217,9 +2215,21 @@ export default function MasterPembelian() {
                   Qty Total (informasi)
                 </label>
                 <input
-                  disabled
-                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-100 text-slate-500"
+                  type="number"
+                  min={1}
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
                   value={editData.totalQty}
+                  onChange={(e) => {
+                    const val = Number(e.target.value || 0);
+
+                    // ===============================
+                    // UPDATE QTY MANUAL
+                    // ===============================
+                    setEditData((prev) => ({
+                      ...prev,
+                      totalQty: val,
+                    }));
+                  }}
                 />
               </div>
             </div>
