@@ -897,6 +897,33 @@ export default function MasterPembelian() {
     // ===============================
     const diffQty = newQty - originalQty;
 
+    // ===============================
+// NON IMEI → UPDATE QTY LANGSUNG
+// ===============================
+if (!isKategoriImei) {
+  const r = rows[0];
+
+  await updateTransaksi(r.tokoId || 1, r.id, {
+    ...r,
+    QTY: Number(editData.totalQty),
+    TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
+    TANGGAL_TRANSAKSI: editData.tanggal,
+  });
+
+  const diff = Number(editData.totalQty) - Number(r.QTY || 0);
+  const sku = makeSku(editData.brand, editData.barang);
+
+  if (diff > 0) {
+    await addStock(editData.namaToko, sku, {
+      namaBrand: editData.brand,
+      namaBarang: editData.barang,
+      qty: diff,
+    });
+  } else if (diff < 0) {
+    await reduceStock(editData.namaToko, sku, Math.abs(diff));
+  }
+}
+
     // ==================================================
     // ⛔ PASANG KODE VALIDASI STOK DI SINI (WAJIB)
     // ==================================================
@@ -921,83 +948,83 @@ export default function MasterPembelian() {
       });
     }
 
-  // ===============================
-// SMART EDIT IMEI (TAMBAH / HAPUS TANPA RESET)
-// ===============================
-if (isKategoriImei) {
-  const oldImeis = rows.map((r) => String(r.IMEI || "").trim());
-  const newImeis = imeis;
+    // ===============================
+    // SMART EDIT IMEI (TAMBAH / HAPUS TANPA RESET)
+    // ===============================
+    if (isKategoriImei) {
+      const oldImeis = rows.map((r) => String(r.IMEI || "").trim());
+      const newImeis = imeis;
 
-  const toAdd = newImeis.filter((im) => !oldImeis.includes(im));
-  const toDelete = oldImeis.filter((im) => !newImeis.includes(im));
-  const toKeep = newImeis.filter((im) => oldImeis.includes(im));
+      const toAdd = newImeis.filter((im) => !oldImeis.includes(im));
+      const toDelete = oldImeis.filter((im) => !newImeis.includes(im));
+      const toKeep = newImeis.filter((im) => oldImeis.includes(im));
 
-  // =========================
-  // DELETE IMEI YANG DIHAPUS
-  // =========================
-  for (const im of toDelete) {
-    const row = rows.find((r) => String(r.IMEI) === im);
-    if (row?.id) {
-      await deleteTransaksi(row.tokoId || 1, row.id);
+      // =========================
+      // DELETE IMEI YANG DIHAPUS
+      // =========================
+      for (const im of toDelete) {
+        const row = rows.find((r) => String(r.IMEI) === im);
+        if (row?.id) {
+          await deleteTransaksi(row.tokoId || 1, row.id);
+        }
+      }
+
+      // =========================
+      // TAMBAH IMEI BARU
+      // =========================
+      for (const im of toAdd) {
+        await addTransaksi(rows[0].tokoId || 1, {
+          ...rows[0],
+          IMEI: im,
+          QTY: 1,
+          CREATED_AT: Date.now(),
+        });
+      }
+
+      // =========================
+      // UPDATE DATA EXISTING
+      // =========================
+      for (const r of rows) {
+        if (toKeep.includes(String(r.IMEI))) {
+          await updateTransaksi(r.tokoId || 1, r.id, {
+            ...r,
+            TANGGAL_TRANSAKSI: editData.tanggal,
+            NO_INVOICE: editData.noDo,
+            NAMA_SUPPLIER: editData.supplier,
+            NAMA_TOKO: newToko,
+            HARGA_SUPLAYER: Number(editData.hargaSup),
+          });
+        }
+      }
     }
-  }
-
-  // =========================
-  // TAMBAH IMEI BARU
-  // =========================
-  for (const im of toAdd) {
-    await addTransaksi(rows[0].tokoId || 1, {
-      ...rows[0],
-      IMEI: im,
-      QTY: 1,
-      CREATED_AT: Date.now(),
-    });
-  }
-
-  // =========================
-  // UPDATE DATA EXISTING
-  // =========================
-  for (const r of rows) {
-    if (toKeep.includes(String(r.IMEI))) {
-      await updateTransaksi(r.tokoId || 1, r.id, {
-        ...r,
-        TANGGAL_TRANSAKSI: editData.tanggal,
-        NO_INVOICE: editData.noDo,
-        NAMA_SUPPLIER: editData.supplier,
-        NAMA_TOKO: newToko,
-        HARGA_SUPLAYER: Number(editData.hargaSup),
-      });
-    }
-  }
-}
-
-// ===============================
-// NON IMEI → UPDATE QTY LANGSUNG
-// ===============================
-if (!isKategoriImei) {
-  const r = rows[0];
-
-  await updateTransaksi(r.tokoId || 1, r.id, {
-    ...r,
-    QTY: Number(editData.totalQty),
-    TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
-    TANGGAL_TRANSAKSI: editData.tanggal,
-  });
-}
 
     // ===============================
-// NON IMEI → UPDATE QTY LANGSUNG
-// ===============================
-if (!isKategoriImei) {
-  const r = rows[0];
+    // NON IMEI → UPDATE QTY LANGSUNG
+    // ===============================
+    if (!isKategoriImei) {
+      const r = rows[0];
 
-  await updateTransaksi(r.tokoId || 1, r.id, {
-    ...r,
-    QTY: Number(editData.totalQty),
-    TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
-    TANGGAL_TRANSAKSI: editData.tanggal,
-  });
-}
+      await updateTransaksi(r.tokoId || 1, r.id, {
+        ...r,
+        QTY: Number(editData.totalQty),
+        TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
+        TANGGAL_TRANSAKSI: editData.tanggal,
+      });
+    }
+
+    // ===============================
+    // NON IMEI → UPDATE QTY LANGSUNG
+    // ===============================
+    if (!isKategoriImei) {
+      const r = rows[0];
+
+      await updateTransaksi(r.tokoId || 1, r.id, {
+        ...r,
+        QTY: Number(editData.totalQty),
+        TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
+        TANGGAL_TRANSAKSI: editData.tanggal,
+      });
+    }
 
     await addLogPembelian({
       action: "EDIT_PEMBELIAN",
@@ -2209,9 +2236,20 @@ if (!isKategoriImei) {
                   rows={5}
                   className="w-full border rounded-lg px-2 py-2 text-xs font-mono bg-slate-50"
                   value={editData.imeiList}
-                  onChange={(e) =>
-                    setEditData((p) => ({ ...p, imeiList: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+
+                    const imeis = val
+                      .split("\n")
+                      .map((x) => x.trim())
+                      .filter(Boolean);
+
+                    setEditData((p) => ({
+                      ...p,
+                      imeiList: val,
+                      totalQty: imeis.length, // 🔥 AUTO QTY
+                    }));
+                  }}
                 />
                 <p className="text-[10px] text-gray-500 mt-1">
                   • Jumlah baris IMEI sebaiknya sama dengan total Qty.
