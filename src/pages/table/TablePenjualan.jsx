@@ -3,7 +3,7 @@
 // Detail Penjualan Lengkap + Pagination + Edit & VOID
 // =======================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 
 import {
   listenPenjualan,
@@ -12,6 +12,7 @@ import {
   getUserRole,
   addTransaksi,
   generateIdPelanggan,
+  tambahStokSetelahRefund,
 } from "../../services/FirebaseService";
 import { ref, get, update, remove, push } from "firebase/database";
 import { db } from "../../services/FirebaseInit";
@@ -56,6 +57,7 @@ export default function TablePenjualan({ data = [] }) {
   const [dateTo, setDateTo] = useState("");
   const [showRefund, setShowRefund] = useState(false);
   const [localHiddenRefund, setLocalHiddenRefund] = useState({});
+  const [deletedRows, setDeletedRows] = useState({});
 
   const pageSize = 10;
 
@@ -124,6 +126,8 @@ export default function TablePenjualan({ data = [] }) {
   useEffect(() => {
     setPage(1);
   }, [keyword, dateFrom, dateTo]);
+
+  const refundLock = useRef({});
 
   /* ================= FLATTEN DATA ================= */
   const tableRows = useMemo(() => {
@@ -250,6 +254,12 @@ export default function TablePenjualan({ data = [] }) {
         .toUpperCase();
 
       // 🔥 HILANGKAN LANGSUNG SAAT KLIK REFUND
+      // 🔥 HIDE INSTANT
+      if (deletedRows[r.invoice]) {
+        return false;
+      }
+
+      // 🔥 fallback lama
       if (localHiddenRefund[r.id]) {
         return false;
       }
@@ -339,7 +349,9 @@ export default function TablePenjualan({ data = [] }) {
       return alert("Barang ini sudah Pernah Di Refund");
     }
 
-    const trx = rows.find((x) => x.id === row.id);
+    const trx = rows.find(
+      (x) => String(x.invoice || "").trim() === String(row.invoice || "").trim()
+    );
     if (!trx) return alert("Data transaksi tidak ditemukan");
 
     setPrintData(trx);
@@ -418,95 +430,88 @@ export default function TablePenjualan({ data = [] }) {
   };
 
   const handleRefund = async (row) => {
-    // 🔥 PREVENT DOUBLE CLICK
-    if (localHiddenRefund[row.id]) return;
-
-    if (!isSuperAdmin) {
-      alert("Refund hanya bisa dilakukan oleh Superadmin");
-      return;
-    }
-
-    if (refundLoading === row.id) return;
-
-    const statusNow = String(row.status || "")
-      .toUpperCase()
-      .trim();
-
-    if (statusNow === "REFUND") {
-      return alert("Barang ini sudah pernah di Refund");
-    }
-
-    if (!window.confirm("Yakin ingin RETUR / REFUND barang ini?")) return;
-
-    setRefundLoading(row.id);
-
+    // ===============================
+    // 🔥 1. HARD LOCK (SYNC - TANPA DELAY)
+    // ===============================
+    if (refundLock.current[row.id]) return;
+    refundLock.current[row.id] = true;
+  
     try {
       // ===============================
-      // 1️⃣ UPDATE STATUS PENJUALAN
+      // 🔥 2. VALIDASI CEPAT
       // ===============================
-      await updateTransaksiPenjualan(
-        row.trxKey,
-        { statusPembayaran: "REFUND" },
-        userLogin
-      );
-
-      // ===============================
-      // 2️⃣ UNLOCK IMEI
-      // ===============================
-      if (row.imei) {
-        try {
-          await remove(ref(db, `imeiLock/${row.imei}`));
-        } catch {}
+      if (!isSuperAdmin) {
+        alert("❌ Refund hanya untuk Superadmin");
+        return;
       }
+  
+      const trx = rows.find(
+        (x) =>
+          String(x.invoice || "").trim() ===
+          String(row.invoice || "").trim()
+      );
+  
+      if (trx?.refundProcessed) {
+        alert("❌ Sudah pernah di refund");
+        return;
+      }
+  
       // ===============================
-      // HANYA UPDATE STATUS
+      // 🔥 3. LANGSUNG LOCK UI (TANPA NUNGGU)
+      // ===============================
+      setRefundLoading(row.id);
+  
+      // ===============================
+      // 🔥 4. CONFIRM (SETELAH LOCK)
+      // ===============================
+      const ok = window.confirm("Yakin ingin REFUND?");
+      if (!ok) return;
+  
+      // ===============================
+      // 🔥 5. PROSES
       // ===============================
       await updateTransaksiPenjualan(
         row.trxKey,
-        { statusPembayaran: "REFUND" },
+        {
+          statusPembayaran: "REFUND",
+          refundProcessed: true,
+        },
         userLogin
       );
-
+  
+      // 🔥 CATAT TRANSAKSI (SUMBER STOK)
+      await addTransaksi(row.tokoId, {
+        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+        NO_INVOICE: `REF-${Date.now()}`,
+        NAMA_TOKO: row.toko,
+        NAMA_BARANG: row.namaBarang,
+        IMEI: row.imei,
+        QTY: 1,
+        PAYMENT_METODE: "REFUND",
+        STATUS: "Approved",
+        CREATED_AT: Date.now(),
+      });
+  
       // ===============================
-      // 3️⃣ BUAT TRANSAKSI REFUND STOCK
+      // 🔥 6. HIDE UI (OPSIONAL)
       // ===============================
-      // await addTransaksi(row.tokoId, {
-      //   TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
-      //   NO_INVOICE: `REF-${Date.now()}`,
-
-      //   NAMA_TOKO: row.toko,
-      //   NAMA_BRAND: row.namaBrand,
-      //   NAMA_BARANG: row.namaBarang,
-
-      //   IMEI: row.imei,
-      //   NOMOR_UNIK: row.imei,
-
-      //   // 🔥 FIX PENTING
-      //   QTY: row.imei ? 1 : Number(row.qty || 0),
-
-      //   PAYMENT_METODE: "REFUND",
-      //   STATUS: "Approved",
-
-      //   KETERANGAN: "REFUND PENJUALAN",
-      //   CREATED_AT: Date.now(),
-      //   REFUND_FROM: row.trxKey,
-      //   USER_REFUND: userLogin?.name || "SYSTEM",
-      // });
-
-      alert("✅ Refund berhasil");
-      // 🔥 LANGSUNG HILANGKAN DARI TABLE
-      setLocalHiddenRefund((prev) => ({
+      setDeletedRows((prev) => ({
         ...prev,
-        [row.id]: true,
+        [row.invoice]: true,
       }));
+  
+      alert("✅ Refund berhasil (1 klik)");
     } catch (e) {
       console.error(e);
       alert("❌ Refund gagal: " + e.message);
     } finally {
+      // ===============================
+      // 🔥 7. UNLOCK (WAJIB)
+      // ===============================
       setRefundLoading(null);
+      delete refundLock.current[row.id];
     }
   };
-
   /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {
     const data = tableRows.map((r, i) => ({
@@ -825,23 +830,17 @@ export default function TablePenjualan({ data = [] }) {
                     {/* REFUND */}
 
                     {isSuperAdmin && (
-                      <button
-                        onClick={() => handleRefund(row)}
-                        disabled={
-                          refundLoading === row.id || localHiddenRefund[row.id]
-                        }
-                        className={`px-2 py-1 rounded text-white ${
-                          localHiddenRefund[row.id]
-                            ? "bg-gray-400 cursor-not-allowed"
-                            : "bg-orange-500 hover:bg-orange-600"
-                        }`}
-                      >
-                        {refundLoading === row.id
-                          ? "Processing..."
-                          : localHiddenRefund[row.id]
-                          ? "Refunded"
-                          : "Refund"}
-                      </button>
+                    <button
+                    onClick={() => handleRefund(row)}
+                    disabled={refundLoading === row.id}
+                    className={`px-2 py-1 rounded text-xs text-white ${
+                      refundLoading === row.id
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-orange-500 hover:bg-orange-600"
+                    }`}
+                  >
+                    {refundLoading === row.id ? "Processing..." : "Refund"}
+                  </button>
                     )}
                     {/* {isSuperAdmin && row.status !== "REFUND" && (
                       <button

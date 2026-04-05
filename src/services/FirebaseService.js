@@ -49,6 +49,39 @@ import {
 /* ============================================================
    HELPERS
 ============================================================ */
+// =====================================================
+// 🔥 TAMBAH STOK SETELAH REFUND
+// =====================================================
+export const tambahStokSetelahRefund = async ({ toko, items }) => {
+  try {
+    for (const item of items) {
+      // 🔥 IMEI
+      if (item.imeiList && item.imeiList.length) {
+        for (const imei of item.imeiList) {
+          await set(ref(db, `detail_stock/${imei}`), {
+            imei,
+            toko,
+            status: "READY",
+            updatedAt: Date.now(),
+          });
+        }
+      } else {
+        // 🔥 NON IMEI (qty)
+        const key = `${item.namaBrand}|${item.namaBarang}`;
+
+        const r = ref(db, `stock/${toko}/${key}`);
+        const snap = await get(r);
+
+        const current = Number(snap.val() || 0);
+
+        await set(r, current + Number(item.qty || 0));
+      }
+    }
+  } catch (e) {
+    console.error("❌ Gagal restore stok:", e);
+    throw e;
+  }
+};
 
 export const listenTransferBarangMasuk = (namaToko, callback) => {
   if (!namaToko) return () => {};

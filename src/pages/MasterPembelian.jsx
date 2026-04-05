@@ -305,13 +305,12 @@ export default function MasterPembelian() {
     ) {
       return masterBarang
         .filter(
-          (b) =>
-            String(b.kategoriBarang || "").toUpperCase() === "ACCESSORIES"
+          (b) => String(b.kategoriBarang || "").toUpperCase() === "ACCESSORIES"
         )
         .map((b) => b.namaBarang)
         .filter(Boolean);
     }
-  
+
     // ===============================
     // DEFAULT (LOGIC LAMA)
     // ===============================
@@ -941,6 +940,20 @@ export default function MasterPembelian() {
         IMEI: imeis[i] || "",
       });
     }
+
+    // ===============================
+// NON IMEI → UPDATE QTY LANGSUNG
+// ===============================
+if (!isKategoriImei) {
+  const r = rows[0];
+
+  await updateTransaksi(r.tokoId || 1, r.id, {
+    ...r,
+    QTY: Number(editData.totalQty),
+    TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
+    TANGGAL_TRANSAKSI: editData.tanggal,
+  });
+}
 
     await addLogPembelian({
       action: "EDIT_PEMBELIAN",
@@ -1657,11 +1670,14 @@ export default function MasterPembelian() {
                 </label>
                 <input
                   type="date"
-                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-100 cursor-not-allowed"
+                  className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
                   value={tambahForm.tanggal}
-                  min={TODAY}
-                  max={TODAY}
-                  readOnly
+                  onChange={(e) =>
+                    setTambahForm((prev) => ({
+                      ...prev,
+                      tanggal: e.target.value,
+                    }))
+                  }
                 />
               </div>
 
@@ -1757,8 +1773,7 @@ export default function MasterPembelian() {
                   value={tambahForm.brand}
                   onChange={(e) => {
                     const val = e.target.value;
-               
-                  
+
                     setTambahForm((prev) => ({
                       ...prev,
                       brand: val,
