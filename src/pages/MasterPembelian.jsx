@@ -297,6 +297,24 @@ export default function MasterPembelian() {
   }, [masterBarang, editData?.brand, editData?.kategoriBrand]);
 
   const namaBarangOptions = useMemo(() => {
+    // ===============================
+    // KHUSUS ACCESSORIES → FULL MASTER BARANG
+    // ===============================
+    if (
+      String(tambahForm.kategoriBrand || "").toUpperCase() === "ACCESSORIES"
+    ) {
+      return masterBarang
+        .filter(
+          (b) =>
+            String(b.kategoriBarang || "").toUpperCase() === "ACCESSORIES"
+        )
+        .map((b) => b.namaBarang)
+        .filter(Boolean);
+    }
+  
+    // ===============================
+    // DEFAULT (LOGIC LAMA)
+    // ===============================
     return masterBarang
       .filter(
         (b) =>
@@ -306,12 +324,6 @@ export default function MasterPembelian() {
       .map((b) => b.namaBarang)
       .filter(Boolean);
   }, [masterBarang, tambahForm.brand, tambahForm.kategoriBrand]);
-
-  const isNonImeiKategori = useMemo(() => {
-    return KATEGORI_NON_IMEI.includes(
-      String(tambahForm.kategoriBrand || "").toUpperCase()
-    );
-  }, [tambahForm.kategoriBrand]);
 
   // const namaBarangOptions = useMemo(() => {
   //   if (!tambahForm.brand) {
@@ -333,12 +345,53 @@ export default function MasterPembelian() {
     return draftItems.flatMap((d) => d.imeis || []);
   };
 
+  // ===============================
+  // VALIDASI MASTER BARANG (WAJIB ADA)
+  // ===============================
+  const isBarangExistInMaster = (brand, barang, kategori) => {
+    return masterBarang.some(
+      (b) =>
+        String(b.brand || "")
+          .toLowerCase()
+          .trim() ===
+          String(brand || "")
+            .toLowerCase()
+            .trim() &&
+        String(b.namaBarang || "")
+          .toLowerCase()
+          .trim() ===
+          String(barang || "")
+            .toLowerCase()
+            .trim() &&
+        String(b.kategoriBarang || "")
+          .toLowerCase()
+          .trim() ===
+          String(kategori || "")
+            .toLowerCase()
+            .trim()
+    );
+  };
+
   const handleAddDraftItem = () => {
     const { brand, kategoriBrand, barang, hargaSup, imeiList, qty } =
       tambahForm;
 
     if (!brand || !kategoriBrand || !barang || !hargaSup) {
       alert("Lengkapi data barang terlebih dahulu");
+      return;
+    }
+
+    // ===============================
+    // VALIDASI MASTER BARANG
+    // ===============================
+    const isValidMaster = isBarangExistInMaster(brand, barang, kategoriBrand);
+
+    if (!isValidMaster) {
+      alert(
+        `❌ Barang tidak terdaftar di MASTER BARANG!\n\n` +
+          `Brand: ${brand}\nBarang: ${barang}\nKategori: ${kategoriBrand}\n\n` +
+          `👉 Silahkan input dulu di MASTER BARANG`
+      );
       return;
     }
 
@@ -980,6 +1033,18 @@ export default function MasterPembelian() {
     if (!brand) return alert("Nama Brand wajib diisi.");
     if (!kategoriBrand) return alert("Kategori Brand wajib dipilih.");
     if (!barang) return alert("Nama Barang wajib diisi.");
+
+    // ===============================
+    // VALIDASI MASTER BARANG
+    // ===============================
+    const isValidMaster = isBarangExistInMaster(brand, barang, kategoriBrand);
+
+    if (!isValidMaster) {
+      return alert(
+        `❌ Barang tidak ditemukan di MASTER BARANG!\n\n` +
+          `Brand: ${brand}\nBarang: ${barang}\nKategori: ${kategoriBrand}`
+      );
+    }
 
     const hSup = Number(hargaSup || 0);
     if (!hSup || hSup <= 0) {
@@ -1690,15 +1755,18 @@ export default function MasterPembelian() {
                   }
                   disabled={!tambahForm.kategoriBrand}
                   value={tambahForm.brand}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const val = e.target.value;
+               
+                  
                     setTambahForm((prev) => ({
                       ...prev,
-                      brand: e.target.value,
-                      barang: "", // reset barang
+                      brand: val,
+                      barang: "",
                       imeiList: "",
                       qty: 1,
-                    }))
-                  }
+                    }));
+                  }}
                 />
 
                 <datalist id="brand-master-list">
@@ -1708,6 +1776,7 @@ export default function MasterPembelian() {
                 </datalist>
               </div>
 
+              {/* Nama Barang */}
               {/* Nama Barang */}
               <div>
                 <label className="text-xs font-semibold text-slate-600">
@@ -1719,12 +1788,20 @@ export default function MasterPembelian() {
                   placeholder="Pilih Nama Barang"
                   disabled={!tambahForm.brand}
                   value={tambahForm.barang}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const val = e.target.value;
+
+                    // ✅ VALIDASI HARUS ADA DI MASTER
+                    if (!namaBarangOptions.includes(val)) {
+                      alert("❌ Barang harus dipilih dari Master Barang");
+                      return;
+                    }
+
                     setTambahForm((prev) => ({
                       ...prev,
-                      barang: e.target.value,
-                    }))
-                  }
+                      barang: val,
+                    }));
+                  }}
                 />
 
                 <datalist id="barang-master-list">
