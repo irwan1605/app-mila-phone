@@ -466,6 +466,8 @@ export default function TableTransferBarang({ currentRole }) {
               const canApprove =
                 (isSuperAdmin || ((isSpv || isPic) && isTokoTujuan)) &&
                 r.status === "Pending";
+              const canReject =
+                (isSuperAdmin || isSpv || isPic) && r.status === "Pending";
               return (
                 <tr
                   key={r.id}
@@ -584,20 +586,23 @@ export default function TableTransferBarang({ currentRole }) {
 
                       {/* REJECT (SUPERADMIN ONLY) */}
                       <button
-                        disabled={!isSuperAdmin || r.status !== "Pending"}
+                        disabled={!canReject}
                         onClick={async () => {
-                          if (!isSuperAdmin) return;
-                      
-                          await handleRejectAndRollback(r); // 🔥 pakai ini
-                      
+                          if (!canReject) return;
+
+                          await handleRejectAndRollback(r); // 🔥 tetap pakai rollback
                         }}
                         className={`px-3 py-2 rounded-lg text-[11px] font-bold
-                  ${
-                    !isSuperAdmin || r.status !== "Pending"
-                      ? "bg-gray-300 text-gray-500"
-                      : "bg-red-500 text-white hover:bg-red-600"
-                  }
-                `}
+    ${
+      !canReject
+        ? "bg-gray-300 text-gray-500"
+        : isPic
+        ? "bg-orange-400 text-white hover:bg-orange-500"
+        : isSpv
+        ? "bg-orange-500 text-white hover:bg-orange-600"
+        : "bg-red-500 text-white hover:bg-red-600"
+    }
+  `}
                       >
                         ✖ Reject
                       </button>

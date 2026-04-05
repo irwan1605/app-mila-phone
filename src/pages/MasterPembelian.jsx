@@ -921,25 +921,69 @@ export default function MasterPembelian() {
       });
     }
 
-    // ===============================
-    // UPDATE / REPLACE TRANSAKSI
-    // ===============================
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
+  // ===============================
+// SMART EDIT IMEI (TAMBAH / HAPUS TANPA RESET)
+// ===============================
+if (isKategoriImei) {
+  const oldImeis = rows.map((r) => String(r.IMEI || "").trim());
+  const newImeis = imeis;
+
+  const toAdd = newImeis.filter((im) => !oldImeis.includes(im));
+  const toDelete = oldImeis.filter((im) => !newImeis.includes(im));
+  const toKeep = newImeis.filter((im) => oldImeis.includes(im));
+
+  // =========================
+  // DELETE IMEI YANG DIHAPUS
+  // =========================
+  for (const im of toDelete) {
+    const row = rows.find((r) => String(r.IMEI) === im);
+    if (row?.id) {
+      await deleteTransaksi(row.tokoId || 1, row.id);
+    }
+  }
+
+  // =========================
+  // TAMBAH IMEI BARU
+  // =========================
+  for (const im of toAdd) {
+    await addTransaksi(rows[0].tokoId || 1, {
+      ...rows[0],
+      IMEI: im,
+      QTY: 1,
+      CREATED_AT: Date.now(),
+    });
+  }
+
+  // =========================
+  // UPDATE DATA EXISTING
+  // =========================
+  for (const r of rows) {
+    if (toKeep.includes(String(r.IMEI))) {
       await updateTransaksi(r.tokoId || 1, r.id, {
         ...r,
         TANGGAL_TRANSAKSI: editData.tanggal,
         NO_INVOICE: editData.noDo,
         NAMA_SUPPLIER: editData.supplier,
         NAMA_TOKO: newToko,
-        NAMA_BRAND: editData.brand,
-        NAMA_BARANG: editData.barang,
-        KATEGORI_BRAND: editData.kategoriBrand,
         HARGA_SUPLAYER: Number(editData.hargaSup),
-        TOTAL: Number(editData.hargaSup),
-        IMEI: imeis[i] || "",
       });
     }
+  }
+}
+
+// ===============================
+// NON IMEI → UPDATE QTY LANGSUNG
+// ===============================
+if (!isKategoriImei) {
+  const r = rows[0];
+
+  await updateTransaksi(r.tokoId || 1, r.id, {
+    ...r,
+    QTY: Number(editData.totalQty),
+    TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
+    TANGGAL_TRANSAKSI: editData.tanggal,
+  });
+}
 
     // ===============================
 // NON IMEI → UPDATE QTY LANGSUNG
