@@ -898,42 +898,40 @@ export default function MasterPembelian() {
     const diffQty = newQty - originalQty;
 
     // ===============================
-// NON IMEI → UPDATE QTY LANGSUNG
-// ===============================
-if (!isKategoriImei) {
-  const r = rows[0];
+    // NON IMEI → UPDATE QTY LANGSUNG
+    // ===============================
+    if (!isKategoriImei) {
+      const r = rows[0];
 
-  await updateTransaksi(r.tokoId || 1, r.id, {
-    ...r,
-    QTY: Number(editData.totalQty),
-    TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
-    TANGGAL_TRANSAKSI: editData.tanggal,
-  });
+      await updateTransaksi(r.tokoId || 1, r.id, {
+        ...r,
+        QTY: Number(editData.totalQty),
+        TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
+        TANGGAL_TRANSAKSI: editData.tanggal,
+      });
 
-  const diff = Number(editData.totalQty) - Number(r.QTY || 0);
-  const sku = makeSku(editData.brand, editData.barang);
+  
+      const sku = makeSku(editData.brand, editData.barang);
 
-  if (diff > 0) {
-    await addStock(editData.namaToko, sku, {
-      namaBrand: editData.brand,
-      namaBarang: editData.barang,
-      qty: diff,
-    });
-  } else if (diff < 0) {
-    await reduceStock(editData.namaToko, sku, Math.abs(diff));
-  }
-}
+    
+    }
 
     // ==================================================
     // ⛔ PASANG KODE VALIDASI STOK DI SINI (WAJIB)
     // ==================================================
-    const currentStock = stockSnapshot?.[newToko]?.[sku]?.qty || 0;
+    // ===============================
+    // FIX: INCLUDE ORIGINAL QTY
+    // ===============================
+    const stockReal = stockSnapshot?.[newToko]?.[sku]?.qty || 0;
 
-    if (diffQty < 0 && currentStock < Math.abs(diffQty)) {
+    // 🔥 TAMBAHAN (PENTING)
+    const safeStock = stockReal + originalQty;
+
+    if (diffQty < 0 && safeStock < Math.abs(diffQty)) {
       alert(
-        `❌ Stok ${newToko} tidak mencukupi.\n\nStok tersedia: ${currentStock}\nPengurangan diminta: ${Math.abs(
-          diffQty
-        )}`
+        `❌ Stok ${newToko} tidak mencukupi.\n\n` +
+          `Stok tersedia: ${safeStock}\n` +
+          `Pengurangan diminta: ${Math.abs(diffQty)}`
       );
       return;
     }
