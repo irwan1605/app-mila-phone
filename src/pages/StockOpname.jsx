@@ -71,7 +71,6 @@ const STOCKABLE_CATEGORY = [
   "JASA",
 ];
 
-
 /* ======================================================
    COMPONENT
 ====================================================== */
@@ -91,16 +90,16 @@ export default function StockOpname() {
   const [filterImei, setFilterImei] = useState("");
 
   const [transaksi, setTransaksi] = useState([]);
+  const [exportMode, setExportMode] = useState("filter");
+  // "filter" | "semua"
 
   useEffect(() => {
     const unsub = listenAllTransaksi((rows) => {
       setTransaksi(rows || []);
     });
-  
+
     return () => unsub && unsub();
   }, []);
-  
-
 
   const [masterHargaMap, setMasterHargaMap] = useState({});
   const tableRef = useRef(null);
@@ -185,124 +184,109 @@ export default function StockOpname() {
   }, []);
 
   // =======================================
-// STOCK ENGINE V3 (EVENT BASED)
-// =======================================
-const getStockEffectV3 = (t) => {
-  const metode = String(t.PAYMENT_METODE || "")
-    .toUpperCase()
-    .trim();
+  // STOCK ENGINE V3 (EVENT BASED)
+  // =======================================
+  const getStockEffectV3 = (t) => {
+    const metode = String(t.PAYMENT_METODE || "")
+      .toUpperCase()
+      .trim();
 
-  const qty = Number(t.QTY || 0);
+    const qty = Number(t.QTY || 0);
 
-  // hanya transaksi stok
-  if (!qty) return 0;
+    // hanya transaksi stok
+    if (!qty) return 0;
 
-  switch (metode) {
-    case "PEMBELIAN":
-    case "TRANSFER_MASUK":
-    case "REFUND":
-      return Math.abs(qty);
+    switch (metode) {
+      case "PEMBELIAN":
+      case "TRANSFER_MASUK":
+      case "REFUND":
+        return Math.abs(qty);
 
-    case "PENJUALAN":
-    case "TRANSFER_KELUAR":
-      return -Math.abs(qty);
+      case "PENJUALAN":
+      case "TRANSFER_KELUAR":
+        return -Math.abs(qty);
 
-    default:
-      return 0;
-  }
-};
-
-
-
-const stockOpnameData = useMemo(() => {
-  const map = {};
-
-  transaksi.forEach((t) => {
-
-    if (!t) return;
-  
-    // ===============================
-    // 1️⃣ TRANSAKSI STOK NORMAL
-    // ===============================
-    if (t.PAYMENT_METODE && t.NAMA_BARANG) {
-  
-      if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
-  
-      const toko =
-        t.NAMA_TOKO || t.tokoPengirim || t.ke;
-  
-      if (!toko) return;
-  
-      const key = t.IMEI
-        ? `${toko}|${t.IMEI}`
-        : `${toko}|${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-  
-      const effect = getStockEffectV3(t);
-  
-      if (!map[key]) {
-        map[key] = {
-          key,
-          tanggal: t.TANGGAL_TRANSAKSI || "-",
-          toko,
-          supplier: t.NAMA_SUPPLIER || "-",
-          brand: t.NAMA_BRAND,
-          barang: t.NAMA_BARANG,
-          imei: t.IMEI || "",
-          qty: 0,
-          lastTransaksi: t.PAYMENT_METODE,
-        };
-      }
-  
-      map[key].qty += effect;
+      default:
+        return 0;
     }
-  
-    // ===============================
-    // 2️⃣ REFUND DARI TRANSAKSI PENJUALAN
-    // (ACCESSORIES / SPAREPART / JASA)
-    // ===============================
-    if (
-      t.statusPembayaran === "REFUND" &&
-      Array.isArray(t.items)
-    ) {
-  
-      const toko = t.toko || t.NAMA_TOKO;
-      if (!toko) return;
-  
-      t.items.forEach((it) => {
-  
-        // hanya non IMEI
-        if (it.imeiList?.length) return;
-  
-        const key = `${toko}|${it.namaBrand}|${it.namaBarang}`;
-  
+  };
+
+  const stockOpnameData = useMemo(() => {
+    const map = {};
+
+    transaksi.forEach((t) => {
+      if (!t) return;
+
+      // ===============================
+      // 1️⃣ TRANSAKSI STOK NORMAL
+      // ===============================
+      if (t.PAYMENT_METODE && t.NAMA_BARANG) {
+        if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
+
+        const toko = t.NAMA_TOKO || t.tokoPengirim || t.ke;
+
+        if (!toko) return;
+
+        const key = t.IMEI
+          ? `${toko}|${t.IMEI}`
+          : `${toko}|${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+        const effect = getStockEffectV3(t);
+
         if (!map[key]) {
           map[key] = {
             key,
-            tanggal: t.tanggal || "-",
+            tanggal: t.TANGGAL_TRANSAKSI || "-",
             toko,
-            supplier: "-",
-            brand: it.namaBrand,
-            barang: it.namaBarang,
-            imei: "",
+            supplier: t.NAMA_SUPPLIER || "-",
+            brand: t.NAMA_BRAND,
+            barang: t.NAMA_BARANG,
+            imei: t.IMEI || "",
             qty: 0,
-            lastTransaksi: "REFUND",
+            lastTransaksi: t.PAYMENT_METODE,
           };
         }
-  
-        // ✅ REFUND = +QTY
-        map[key].qty += Number(it.qty || 0);
-      });
-    }
-  
-  });
-  
 
-  // tampilkan hanya stok tersedia
-  return Object.values(map).filter((r) => r.qty > 0);
+        map[key].qty += effect;
+      }
 
-}, [transaksi]);
+      // ===============================
+      // 2️⃣ REFUND DARI TRANSAKSI PENJUALAN
+      // (ACCESSORIES / SPAREPART / JASA)
+      // ===============================
+      if (t.statusPembayaran === "REFUND" && Array.isArray(t.items)) {
+        const toko = t.toko || t.NAMA_TOKO;
+        if (!toko) return;
 
-  
+        t.items.forEach((it) => {
+          // hanya non IMEI
+          if (it.imeiList?.length) return;
+
+          const key = `${toko}|${it.namaBrand}|${it.namaBarang}`;
+
+          if (!map[key]) {
+            map[key] = {
+              key,
+              tanggal: t.tanggal || "-",
+              toko,
+              supplier: "-",
+              brand: it.namaBrand,
+              barang: it.namaBarang,
+              imei: "",
+              qty: 0,
+              lastTransaksi: "REFUND",
+            };
+          }
+
+          // ✅ REFUND = +QTY
+          map[key].qty += Number(it.qty || 0);
+        });
+      }
+    });
+
+    // tampilkan hanya stok tersedia
+    return Object.values(map).filter((r) => r.qty > 0);
+  }, [transaksi]);
 
   // ===============================
   // 3️⃣ STOCK MAP (AGREGAT STOK)
@@ -397,89 +381,74 @@ const stockOpnameData = useMemo(() => {
 
   const getStockEffect = (row) => {
     const tipe = String(row.TIPE || "").toUpperCase();
-  
+
     switch (tipe) {
       case "PEMBELIAN":
         return Math.abs(Number(row.qty || 0));
-  
+
       case "TRANSFER_IN":
         return Math.abs(Number(row.qty || 0));
-  
+
       case "REFUND":
         return Math.abs(Number(row.qty || 0));
-  
+
       case "PENJUALAN":
       case "SALE":
         return -Math.abs(Number(row.qty || 0));
-  
+
       case "TRANSFER_OUT":
         return -Math.abs(Number(row.qty || 0));
-  
+
       default:
         return Number(row.qty || 0);
     }
   };
-  
+
   const filteredStockData = useMemo(() => {
     return stockOpnameData.map((r) => ({
       ...r,
-      KATEGORI_FINAL: String(
-        r.KATEGORI || r.kategoriBarang || "LAINNYA"
-      )
+      KATEGORI_FINAL: String(r.KATEGORI || r.kategoriBarang || "LAINNYA")
         .toUpperCase()
         .trim(),
     }));
   }, [stockOpnameData]);
-  
-  
-  
- // ===============================
-// 5️⃣ AGGREGATED (BOLEH PAKAI detailStockLookup)
-// ===============================
-const aggregated = useMemo(() => {
 
-  let rows = filteredStockData;
+  // ===============================
+  // 5️⃣ AGGREGATED (BOLEH PAKAI detailStockLookup)
+  // ===============================
+  const aggregated = useMemo(() => {
+    let rows = filteredStockData;
 
-  if (filterToko !== "semua") {
-    rows = rows.filter((r) => r.toko === filterToko);
-  }
+    if (filterToko !== "semua") {
+      rows = rows.filter((r) => r.toko === filterToko);
+    }
 
-  return rows.map((r) => {
+    return rows.map((r) => {
+      const imeiKey = String(r.imei || "").trim();
+      const skuKey = `${r.brand}|${r.barang}`;
 
-    const imeiKey = String(r.imei || "").trim();
-    const skuKey = `${r.brand}|${r.barang}`;
+      // ✅ PRIORITAS:
+      // 1. IMEI
+      // 2. SKU (Accessories / Sparepart / Jasa)
+      const meta =
+        (imeiKey && masterPembelianLookup[imeiKey]) ||
+        (imeiKey && detailStockLookup[imeiKey]) ||
+        detailStockLookup[skuKey] ||
+        masterPembelianLookup[skuKey];
 
-    // ✅ PRIORITAS:
-    // 1. IMEI
-    // 2. SKU (Accessories / Sparepart / Jasa)
-    const meta =
-      (imeiKey && masterPembelianLookup[imeiKey]) ||
-      (imeiKey && detailStockLookup[imeiKey]) ||
-      detailStockLookup[skuKey] ||
-      masterPembelianLookup[skuKey];
+      return {
+        ...r,
+        tanggal: meta?.tanggal || r.tanggal || "-",
+        supplier: meta?.supplier || r.supplier || "-",
 
-    return {
-      ...r,
-      tanggal: meta?.tanggal || r.tanggal || "-",
-      supplier: meta?.supplier || r.supplier || "-",
+        // ✅ IMPORTANT
+        imei: imeiKey || "",
+        sku: !imeiKey ? skuKey : "",
 
-      // ✅ IMPORTANT
-      imei: imeiKey || "",
-      sku: !imeiKey ? skuKey : "",
-
-      qty: Number(r.qty || 0),
-    };
-
-  });
-
-}, [
-  filteredStockData,
-  filterToko,
-  masterPembelianLookup,
-  detailStockLookup
-]);
-
-  
+        qty: Number(r.qty || 0),
+      };
+    });
+  }, [filteredStockData, filterToko, masterPembelianLookup, detailStockLookup]);
 
   const tableData = aggregated;
 
@@ -608,7 +577,14 @@ const aggregated = useMemo(() => {
   const fmt = (v) => Number(v || 0).toLocaleString("id-ID");
 
   const exportStockOpnameExcel = () => {
-    const rows = tableData.map((r, idx) => ({
+
+    // ✅ pilih data berdasarkan mode export
+    const exportSource =
+      exportMode === "semua"
+        ? aggregated // 🔥 semua toko
+        : tableData; // 🔥 existing (ikut filter toko)
+  
+    const rows = exportSource.map((r, idx) => ({
       NO: idx + 1,
       TANGGAL: r.tanggal,
       TOKO: r.toko,
@@ -623,14 +599,14 @@ const aggregated = useMemo(() => {
           ? ""
           : Number(opnameMap[r.key]) - Number(r.qty),
     }));
-
+  
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Detail_Stock");
-
+  
     XLSX.writeFile(
       wb,
-      `Detail_Stock_${viewMode}_${filterToko}_${new Date()
+      `Detail_Stock_${exportMode}_${new Date()
         .toISOString()
         .slice(0, 10)}.xlsx`
     );
@@ -791,6 +767,18 @@ const aggregated = useMemo(() => {
             >
               <FaFileExcel /> Export Excel
             </button>
+          </div>
+
+          {/* FILTER EXPORT MODE */}
+          <div className="min-w-[180px]">
+            <select
+              value={exportMode}
+              onChange={(e) => setExportMode(e.target.value)}
+              className="p-2 border rounded w-full"
+            >
+              <option value="filter">Export Toko Terpilih</option>
+              <option value="semua">Export Semua Toko</option>
+            </select>
           </div>
         </div>
       </div>
