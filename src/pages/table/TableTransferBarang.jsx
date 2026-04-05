@@ -10,36 +10,33 @@ import { saveAs } from "file-saver";
 
 export default function TableTransferBarang({ currentRole }) {
   // ================= NORMALIZE ROLE =================
-const role = String(currentRole || "")
-.toLowerCase()
-.trim()
-.replace(/\s+/g, "_");
+  const role = String(currentRole || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_");
 
-// DEBUG
-console.log("ROLE RAW:", currentRole);
-console.log("ROLE NORMALIZED:", role);
+  // DEBUG
+  console.log("ROLE RAW:", currentRole);
+  console.log("ROLE NORMALIZED:", role);
 
-// ================= ROLE ENGINE =================
-const isSuperAdmin = role === "superadmin";
+  // ================= ROLE ENGINE =================
+  const isSuperAdmin = role === "superadmin";
 
-const isSpv =
-role === "spv" ||
-role === "spv_toko" ||
-role === "supervisor";
+  const isSpv = role === "spv" || role === "spv_toko" || role === "supervisor";
 
-// ================= ROLE PIC TOKO =================
-const isPic =
-role === "pic" ||
-role === "pic_toko" ||
-role === "kepala_toko" ||
-role.startsWith("pic_toko");
+  // ================= ROLE PIC TOKO =================
+  const isPic =
+    role === "pic" ||
+    role === "pic_toko" ||
+    role === "kepala_toko" ||
+    role.startsWith("pic_toko");
 
-// 🔥 ROLE YANG BOLEH APPROVE
-const canRoleApprove = isSuperAdmin || isSpv || isPic;
+  // 🔥 ROLE YANG BOLEH APPROVE
+  const canRoleApprove = isSuperAdmin || isSpv || isPic;
 
-console.log("IS SUPERADMIN:", isSuperAdmin);
-console.log("IS SPV:", isSpv);
-console.log("IS PIC:", isPic);
+  console.log("IS SUPERADMIN:", isSuperAdmin);
+  console.log("IS SPV:", isSpv);
+  console.log("IS PIC:", isPic);
 
   const [rows, setRows] = useState([]);
 
@@ -342,12 +339,12 @@ console.log("IS PIC:", isPic);
     const filtered = rowsByToko.filter(
       (r) => filterStatus === "ALL" || r.status === filterStatus
     );
-  
+
     // =========================
     // 🔥 DEDUPLICATE ENGINE
     // =========================
     const map = new Map();
-  
+
     filtered.forEach((r) => {
       // 🔥 KEY UNIK (AMAN)
       const key = [
@@ -358,31 +355,31 @@ console.log("IS PIC:", isPic);
         (r.imeis || []).join(","), // IMEI jadi pembeda utama
         r.qty,
       ].join("|");
-  
+
       // 🔥 ambil yang PALING BARU
       const existing = map.get(key);
-  
+
       if (!existing) {
         map.set(key, r);
       } else {
         const timeA = existing.createdAt || existing.approvedAt || 0;
         const timeB = r.createdAt || r.approvedAt || 0;
-  
+
         if (timeB > timeA) {
           map.set(key, r); // replace dengan yang terbaru
         }
       }
     });
-  
+
     const uniqueRows = Array.from(map.values());
-  
+
     // =========================
     // 🔥 SORT TERBARU DI ATAS
     // =========================
     return uniqueRows.sort((a, b) => {
       const timeA = a.createdAt || a.approvedAt || 0;
       const timeB = b.createdAt || b.approvedAt || 0;
-  
+
       return timeB - timeA;
     });
   }, [rowsByToko, filterStatus]);
@@ -522,46 +519,56 @@ console.log("IS PIC:", isPic);
                   {/* ===== AKSI ===== */}
                   <td className="border px-3 py-2">
                     <div className="flex gap-2 justify-center">
-                    <button
-  title="Approve Transfer"
-  disabled={!canApprove}
-  onClick={async () => {
-    if (!canApprove) return;
+                      <button
+                        title="Approve Transfer"
+                        disabled={!canApprove}
+                        onClick={async () => {
+                          if (!canApprove) return;
 
-    for (const imei of r.imeis || []) {
-      const found = inventory.find(
-        (i) => String(i.imei).trim() === String(imei).trim()
-      );
+                          for (const imei of r.imeis || []) {
+                            const found = inventory.find(
+                              (i) =>
+                                String(i.imei).trim() === String(imei).trim()
+                            );
 
-      if (!found) {
-        alert(`❌ IMEI ${imei} tidak ditemukan di inventory`);
-        return;
-      }
+                            if (!found) {
+                              alert(
+                                `❌ IMEI ${imei} tidak ditemukan di inventory`
+                              );
+                              return;
+                            }
 
-      if (found.status === "SOLD") {
-        alert(`❌ IMEI ${imei} sudah TERJUAL`);
-        return;
-      }
+                            if (found.status === "SOLD") {
+                              alert(`❌ IMEI ${imei} sudah TERJUAL`);
+                              return;
+                            }
 
-      // 🔒 cek owner hanya untuk user biasa
-      if (!canRoleApprove) {
-        const owner = String(found.toko || "").toUpperCase();
-        const tokoPengirim = String(r.tokoPengirim || "").toUpperCase();
+                            // 🔒 cek owner hanya untuk user biasa
+                            if (!canRoleApprove) {
+                              const owner = String(
+                                found.toko || ""
+                              ).toUpperCase();
+                              const tokoPengirim = String(
+                                r.tokoPengirim || ""
+                              ).toUpperCase();
 
-        if (owner && owner !== tokoPengirim) {
-          alert(`❌ IMEI ${imei} bukan milik toko ${r.tokoPengirim}`);
-          return;
-        }
-      }
-    }
+                              if (owner && owner !== tokoPengirim) {
+                                alert(
+                                  `❌ IMEI ${imei} bukan milik toko ${r.tokoPengirim}`
+                                );
+                                return;
+                              }
+                            }
+                          }
 
-    const sjId = await FirebaseService.approveTransferFINAL({
-      transfer: r,
-    });
+                          const sjId =
+                            await FirebaseService.approveTransferFINAL({
+                              transfer: r,
+                            });
 
-    navigate(`/surat-jalan/${sjId}`);
-  }}
-  className={`px-3 py-2 rounded-lg text-[11px] font-bold
+                          navigate(`/surat-jalan/${sjId}`);
+                        }}
+                        className={`px-3 py-2 rounded-lg text-[11px] font-bold
     ${
       !canApprove
         ? "bg-gray-300 text-gray-500 cursor-not-allowed"
@@ -571,19 +578,18 @@ console.log("IS PIC:", isPic);
         ? "bg-green-500 text-white hover:bg-green-600"
         : "bg-emerald-600 text-white hover:bg-emerald-700"
     }`}
->
-  ✔ Approve
-</button>
+                      >
+                        ✔ Approve
+                      </button>
 
                       {/* REJECT (SUPERADMIN ONLY) */}
                       <button
                         disabled={!isSuperAdmin || r.status !== "Pending"}
                         onClick={async () => {
                           if (!isSuperAdmin) return;
-                          await FirebaseService.rejectTransferFINAL({
-                            transfer: r,
-                          });
-                          alert("Transfer ditolak");
+                      
+                          await handleRejectAndRollback(r); // 🔥 pakai ini
+                      
                         }}
                         className={`px-3 py-2 rounded-lg text-[11px] font-bold
                   ${
