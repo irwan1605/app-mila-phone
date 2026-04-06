@@ -33,20 +33,6 @@ import {
 import TabelPembelianDraft from "./table/TabelPembelianDraft";
 import CetakInvoicePembelian from "./Print/CetakInvoicePembelian";
 
-// (omitting repeated comments for brevity in this preview)
-
-// const TOKO_LIST = [
-//   "CILANGKAP PUSAT",
-//   "CIBINONG",
-//   "GAS ALAM",
-//   "CITEUREUP",
-//   "CIRACAS",
-//   "METLAND 1",
-//   "METLAND 2",
-//   "PITARA",
-//   "KOTA WISATA",
-//   "SAWANGAN",
-// ];
 
 const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
 // ===============================

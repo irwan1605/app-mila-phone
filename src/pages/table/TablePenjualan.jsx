@@ -421,7 +421,7 @@ export default function TablePenjualan({ data = [] }) {
     CIBINONG: "2",
     "GAS ALAM": "3",
     CITEUREUP: "4",
-    CIRACAS: "5",
+    MARKETPLACE: "5",
     "METLAND 1": "6",
     "METLAND 2": "7",
     PITARA: "8",
