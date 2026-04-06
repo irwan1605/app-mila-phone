@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   listenAllTransaksi,
   listenMasterBarang,
+  listenTransaksiByTokoHemat,
 } from "../../services/FirebaseService";
 import * as XLSX from "xlsx";
 import { FaSearch, FaExchangeAlt } from "react-icons/fa";
@@ -32,14 +33,19 @@ export default function DetailStockAllToko() {
   /* ======================
      LISTEN REALTIME
   ====================== */
-  useEffect(() => {
-    const unsub1 = listenAllTransaksi((rows) => setTransaksi(rows || []));
-    const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
-    return () => {
-      unsub1 && unsub1();
-      unsub2 && unsub2();
-    };
-  }, []);
+  const tokoId = state?.tokoId;
+
+useEffect(() => {
+  if (!tokoId) return;
+
+  const unsub = listenTransaksiByTokoHemat(
+    tokoId,
+    { limit: 300 },
+    (rows) => setTransaksi(rows || [])
+  );
+
+  return () => unsub && unsub();
+}, [tokoId]);
 
   /* ======================
      MAP MASTER BARANG
