@@ -8,7 +8,7 @@ import {
   updateTransaksi,
 } from "../../services/FirebaseService";
 import { FaStore } from "react-icons/fa";
-import { useNavigate, useLocation  } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { hitungSemuaStok } from "../../utils/stockUtils";
 
 // =======================
@@ -75,7 +75,6 @@ export default function InventoryReport() {
 
   const [searchGlobal, setSearchGlobal] = useState("");
 
-  
   const location = useLocation();
   const state = location.state;
 
@@ -84,7 +83,6 @@ export default function InventoryReport() {
       setSearch(state.autoSearch);
     }
   }, [state]);
-  
 
   // ======================
   // LISTENER
@@ -112,8 +110,6 @@ export default function InventoryReport() {
   }, []);
 
   const searchTimeout = useRef(null);
-
-  
 
   // ===============================
   // 🔥 UNIVERSAL STOCK ENGINE
@@ -379,6 +375,49 @@ export default function InventoryReport() {
       .filter((t) => Object.keys(t.kategori).length > 0);
   }, [cardStockPerToko, searchGlobal]);
 
+  const tokoHasilPencarian = useMemo(() => {
+    if (!searchGlobal) return [];
+  
+    const keyword = searchGlobal.toLowerCase();
+  
+    const mapToko = {};
+  
+    transaksi.forEach((t) => {
+      if (t.STATUS !== "Approved") return;
+  
+      const brand = String(t.NAMA_BRAND || "").toLowerCase();
+      const barang = String(t.NAMA_BARANG || "").toLowerCase();
+      const imei = String(t.IMEI || "").toLowerCase();
+  
+      const isMatch =
+        brand.includes(keyword) ||
+        barang.includes(keyword) ||
+        imei.includes(keyword);
+  
+      if (!isMatch) return;
+  
+      // ❗ skip IMEI yang sudah terjual
+      if (t.IMEI && imeiTerjual.has(String(t.IMEI))) {
+        return;
+      }
+  
+      const toko =
+        t.NAMA_TOKO || t.ke || t.tokoPengirim || "UNKNOWN";
+  
+      const qty = t.IMEI ? 1 : Number(t.QTY || 0);
+  
+      if (!mapToko[toko]) {
+        mapToko[toko] = 0;
+      }
+  
+      mapToko[toko] += qty;
+    });
+  
+    return Object.entries(mapToko)
+    .map(([namaToko, total]) => ({ namaToko, total }))
+    .sort((a, b) => b.total - a.total);
+  }, [transaksi, searchGlobal, imeiTerjual]);
+
   // ==========================
   // TOTAL STOCK SEMUA TOKO (FIX FINAL)
   // ==========================
@@ -415,6 +454,7 @@ export default function InventoryReport() {
   
         if (!match) return false;
   
+        // ❗ skip IMEI terjual
         if (t.IMEI && imeiTerjual.has(String(t.IMEI))) {
           return false;
         }
@@ -422,21 +462,27 @@ export default function InventoryReport() {
         return true;
       });
   
-      if (found) {
-        const targetToko =
-          found.NAMA_TOKO || found.ke || found.tokoPengirim;
+      if (!found) return;
   
-        if (targetToko) {
-          navigate("/table/detail-stock-toko", {
-            state: {
-              namaToko: targetToko,
-              title: `Detail Stok Toko : ${targetToko}`,
-              autoSearch: searchGlobal,
-            },
-          });
-        }
+      // 🔥 CEK: hanya redirect kalau ini IMEI
+      if (!found.IMEI) {
+        return; // ⛔ STOP → biar tampil list toko dulu
       }
-    }, 500); // delay 0.5 detik
+  
+      // ✅ kalau IMEI → langsung redirect
+      const targetToko =
+        found.NAMA_TOKO || found.ke || found.tokoPengirim;
+  
+      if (targetToko) {
+        navigate("/table/detail-stock-toko", {
+          state: {
+            namaToko: targetToko,
+            title: `Detail Stok Toko : ${targetToko}`,
+            autoSearch: searchGlobal,
+          },
+        });
+      }
+    }, 500);
   }, [searchGlobal, transaksi, imeiTerjual, navigate]);
 
   useEffect(() => {
@@ -464,6 +510,33 @@ export default function InventoryReport() {
         {searchGlobal && (
           <div className="mb-4 text-sm text-yellow-300">
             🔎 Menampilkan hasil pencarian: "{searchGlobal}"
+          </div>
+        )}
+
+        {searchGlobal && tokoHasilPencarian.length > 0 && (
+          <div className="mb-6 bg-white/10 p-4 rounded-xl">
+            <div className="font-bold mb-2 text-green-300">
+              📍 Tersedia di toko:
+            </div>
+
+            {tokoHasilPencarian.map((t, i) => (
+              <div
+                key={i}
+                onClick={() =>
+                  navigate("/table/detail-stock-toko", {
+                    state: {
+                      namaToko: t.namaToko,
+                      title: `Detail Stok Toko : ${t.namaToko}`,
+                      autoSearch: searchGlobal,
+                    },
+                  })
+                }
+                className="flex justify-between p-2 rounded-lg hover:bg-white/20 cursor-pointer"
+              >
+                <span>{t.namaToko}</span>
+                <span className="font-bold">{t.total}</span>
+              </div>
+            ))}
           </div>
         )}
 
