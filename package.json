@@ -11,6 +11,8 @@
     "autoprefixer": "^10.4.20",
     "axios": "^1.12.2",
     "body-parser": "^2.2.0",
+    "browserslist": "^4.28.2",
+    "caniuse-lite": "^1.0.30001786",
     "chart.js": "^4.4.5",
     "docx": "^9.5.1",
     "express": "^5.1.0",
@@ -47,17 +49,18 @@
     "eject": "react-scripts eject",
     "build:stock": "node scripts/build-stock.js ./StockBarang.xlsx"
   },
-"eslintConfig": {
-  "extends": ["react-app", "react-app/jest"],
-  "rules": {
-    "no-unused-vars": "off",
-    "react-hooks/exhaustive-deps": "off",
-    "import/no-anonymous-default-export": "off",
-    "default-case": "off"
-  }
-}
-
-,
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ],
+    "rules": {
+      "no-unused-vars": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "import/no-anonymous-default-export": "off",
+      "default-case": "off"
+    }
+  },
   "browserslist": {
     "production": [
       ">0.2%",

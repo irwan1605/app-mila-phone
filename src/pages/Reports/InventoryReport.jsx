@@ -1,14 +1,14 @@
 // ======================================================================
 // INVENTORY REPORT — PRO MAX FINAL (FIX 100%)
 // ======================================================================
-import React, { useEffect, useMemo, useRef, useState, state } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   listenAllTransaksi,
   listenMasterBarang,
   updateTransaksi,
 } from "../../services/FirebaseService";
 import { FaStore } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation  } from "react-router-dom";
 import { hitungSemuaStok } from "../../utils/stockUtils";
 
 // =======================
@@ -74,6 +74,17 @@ export default function InventoryReport() {
   const pageSize = 25;
 
   const [searchGlobal, setSearchGlobal] = useState("");
+
+  
+  const location = useLocation();
+  const state = location.state;
+
+  useEffect(() => {
+    if (state?.autoSearch) {
+      setSearch(state.autoSearch);
+    }
+  }, [state]);
+  
 
   // ======================
   // LISTENER
