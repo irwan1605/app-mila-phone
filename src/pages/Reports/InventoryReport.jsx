@@ -1,7 +1,7 @@
 // ======================================================================
 // INVENTORY REPORT — PRO MAX FINAL (FIX 100%)
 // ======================================================================
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, state } from "react";
 import {
   listenAllTransaksi,
   listenMasterBarang,
@@ -73,6 +73,8 @@ export default function InventoryReport() {
   const [page, setPage] = useState(1);
   const pageSize = 25;
 
+  const [searchGlobal, setSearchGlobal] = useState("");
+
   // ======================
   // LISTENER
   // ======================
@@ -97,6 +99,10 @@ export default function InventoryReport() {
       unsubBarang && unsubBarang();
     };
   }, []);
+
+  const searchTimeout = useRef(null);
+
+  
 
   // ===============================
   // 🔥 UNIVERSAL STOCK ENGINE
@@ -341,6 +347,27 @@ export default function InventoryReport() {
     });
   }, [transaksi]);
 
+  const filteredStockPerToko = useMemo(() => {
+    if (!searchGlobal) return cardStockPerToko;
+
+    const keyword = searchGlobal.toLowerCase();
+
+    return cardStockPerToko
+      .map((toko) => {
+        const filteredKategori = Object.fromEntries(
+          Object.entries(toko.kategori || {}).filter(([kategori]) =>
+            kategori.toLowerCase().includes(keyword)
+          )
+        );
+
+        return {
+          ...toko,
+          kategori: filteredKategori,
+        };
+      })
+      .filter((t) => Object.keys(t.kategori).length > 0);
+  }, [cardStockPerToko, searchGlobal]);
+
   // ==========================
   // TOTAL STOCK SEMUA TOKO (FIX FINAL)
   // ==========================
@@ -355,12 +382,79 @@ export default function InventoryReport() {
     }, 0);
   }, [cardStockPerToko]);
 
+  useEffect(() => {
+    if (!searchGlobal) return;
+  
+    clearTimeout(searchTimeout.current);
+  
+    searchTimeout.current = setTimeout(() => {
+      const keyword = searchGlobal.toLowerCase();
+  
+      const found = transaksi.find((t) => {
+        if (t.STATUS !== "Approved") return false;
+  
+        const brand = String(t.NAMA_BRAND || "").toLowerCase();
+        const barang = String(t.NAMA_BARANG || "").toLowerCase();
+        const imei = String(t.IMEI || "").toLowerCase();
+  
+        const match =
+          brand.includes(keyword) ||
+          barang.includes(keyword) ||
+          imei.includes(keyword);
+  
+        if (!match) return false;
+  
+        if (t.IMEI && imeiTerjual.has(String(t.IMEI))) {
+          return false;
+        }
+  
+        return true;
+      });
+  
+      if (found) {
+        const targetToko =
+          found.NAMA_TOKO || found.ke || found.tokoPengirim;
+  
+        if (targetToko) {
+          navigate("/table/detail-stock-toko", {
+            state: {
+              namaToko: targetToko,
+              title: `Detail Stok Toko : ${targetToko}`,
+              autoSearch: searchGlobal,
+            },
+          });
+        }
+      }
+    }, 500); // delay 0.5 detik
+  }, [searchGlobal, transaksi, imeiTerjual, navigate]);
+
+  useEffect(() => {
+    if (state?.autoSearch) {
+      setSearch(state.autoSearch);
+    }
+  }, [state]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">
           INVENTORY REPORT — MILA PHONE
         </h1>
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder="🔍 Cari stok seluruh toko (Brand / Kategori / Barang / IMEI)"
+            value={searchGlobal}
+            onChange={(e) => setSearchGlobal(e.target.value)}
+            className="w-full p-3 rounded-xl bg-white/10 border border-white/20 outline-none"
+          />
+        </div>
+
+        {searchGlobal && (
+          <div className="mb-4 text-sm text-yellow-300">
+            🔎 Menampilkan hasil pencarian: "{searchGlobal}"
+          </div>
+        )}
 
         {/* ================================================================== */}
         {/* CARD BESAR CILANGKAP PUSAT */}
@@ -396,7 +490,7 @@ export default function InventoryReport() {
         {/* ================================================================== */}
         {/* CARD KECIL */}
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-          {cardStockPerToko
+          {filteredStockPerToko
             .filter((t) => {
               if (isSuperAdmin) return true;
 
@@ -407,8 +501,12 @@ export default function InventoryReport() {
               <div
                 key={t.toko}
                 onClick={() => {
-                  if (!isSuperAdmin && normalize(t.toko) !== normalize(tokoUser)) return;
-                
+                  if (
+                    !isSuperAdmin &&
+                    normalize(t.toko) !== normalize(tokoUser)
+                  )
+                    return;
+
                   navigate("/table/detail-stock-toko", {
                     state: {
                       namaToko: t.toko,
