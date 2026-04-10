@@ -6,7 +6,7 @@ const TOKO_LABELS = {
   2: "CIBINONG",
   3: "GAS ALAM",
   4: "CITEUREUP",
-  5: "CIRACAS",
+  5: "MARKETPALCE",
   6: "METLAND 1",
   7: "METLAND 2",
   8: "PITARA",
