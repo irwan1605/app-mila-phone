@@ -494,12 +494,17 @@ export default function TableTransferBarang({ currentRole }) {
               const isTokoTujuan =
                 String(r.ke || "").toUpperCase() === TOKO_LOGIN.toUpperCase();
 
-              // 🔥 RULE APPROVE FINAL
               const canApprove =
                 (isSuperAdmin || ((isSpv || isPic) && isTokoTujuan)) &&
                 r.status === "Pending";
+
               const canReject =
                 (isSuperAdmin || isSpv || isPic) && r.status === "Pending";
+
+              // ✅ TAMBAHAN BARU
+              const canPrint =
+                (isSuperAdmin || isSpv || isPic) &&
+                (r.status === "Pending" || r.status === "Approved");
               return (
                 <tr
                   key={r.id}
@@ -641,13 +646,55 @@ export default function TableTransferBarang({ currentRole }) {
 
                       {/* PRINT */}
                       <button
-                        disabled={!isSuperAdmin}
-                        onClick={() => {
-                          if (!isSuperAdmin) return;
-                          const sjId = r.suratJalanId || r.id;
-                          navigate(`/surat-jalan/${sjId}`);
+                        disabled={!canPrint}
+                        onClick={async () => {
+                          if (!canPrint) return;
+                        
+                          try {
+                            let sjId = r.suratJalanId;
+                        
+                            // 🔥 JIKA BELUM ADA → BUAT DULU
+                            if (!sjId) {
+                              const newRef = push(ref(db, "surat_jalan"));
+                        
+                              const dataSuratJalan = {
+                                transferId: r.id,
+                                noSuratJalan: r.noSuratJalan || `SJ-${Date.now()}`,
+                                tanggal: r.tanggal || new Date().toISOString().slice(0, 10),
+                                pengirim: r.pengirim,
+                                tokoPengirim: r.tokoPengirim,
+                                tokoTujuan: r.ke,
+                                brand: r.brand,
+                                barang: r.barang,
+                                imeis: r.imeis || [],
+                                qty: r.qty || 0,
+                                status: "DRAFT", // 🔥 penting
+                                createdAt: Date.now(),
+                              };
+                        
+                              await update(newRef, dataSuratJalan);
+                        
+                              sjId = newRef.key;
+                        
+                              // 🔥 SIMPAN BALIK KE TRANSFER
+                              await update(ref(db, `transfer_barang/${r.id}`), {
+                                suratJalanId: sjId,
+                              });
+                            }
+                        
+                            // 🚀 LANGSUNG KE HALAMAN PRINT
+                            navigate(`/surat-jalan/${sjId}`);
+                          } catch (err) {
+                            console.error(err);
+                            alert("❌ Gagal generate Surat Jalan");
+                          }
                         }}
-                        className="px-3 py-2 rounded-lg text-[11px] font-bold bg-indigo-500 text-white hover:bg-indigo-600"
+                        className={`px-3 py-2 rounded-lg text-[11px] font-bold
+    ${
+      !canPrint
+        ? "bg-gray-300 text-gray-500"
+        : "bg-indigo-500 text-white hover:bg-indigo-600"
+    }`}
                       >
                         <FaPrint /> Print Surat Jalan
                       </button>
