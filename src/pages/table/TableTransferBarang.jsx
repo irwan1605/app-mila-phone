@@ -649,40 +649,102 @@ export default function TableTransferBarang({ currentRole }) {
                         disabled={!canPrint}
                         onClick={async () => {
                           if (!canPrint) return;
-                        
+
                           try {
                             let sjId = r.suratJalanId;
-                        
-                            // 🔥 JIKA BELUM ADA → BUAT DULU
-                            if (!sjId) {
+
+                            // 🔥 AMBIL SEMUA TRANSFER DENGAN NO DO YANG SAMA
+                            const sameDoRows = rows.filter(
+                              (x) =>
+                                String(x.noDo || "").trim() ===
+                                String(r.noDo || "").trim()
+                            );
+
+                            // 🔥 GABUNGKAN SEMUA ITEM
+                            const allItems = [];
+
+                            sameDoRows.forEach((item) => {
+                              const imeis = Array.isArray(item.imeis) ? item.imeis : [];
+                            
+                              allItems.push({
+                                brand: item.brand,
+                                barang: item.barang,
+                                imeis,
+                                qty: imeis.length || item.qty || 0,
+                              });
+                            });
+                            
+                            // 🔥 FILTER ITEM VALID
+                            const filteredItems = allItems.filter(
+                              (item) => item.barang && (item.qty > 0 || item.imeis?.length > 0)
+                            );
+                            
+                            // 🔥 HITUNG TOTAL FINAL (HANYA SEKALI DI SINI)
+                            const totalQty = filteredItems.reduce(
+                              (sum, item) => sum + (item.qty || 0),
+                              0
+                            );
+
+                            // 🔥 JIKA BELUM ADA SURAT JALAN → BUAT
+                            // 🔥 AMBIL NO SURAT JALAN YANG FIX
+                            const noSuratJalanFix =
+                              r.noSuratJalan &&
+                              String(r.noSuratJalan).trim() !== ""
+                                ? r.noSuratJalan
+                                : `SJ-${Date.now()}`;
+
+                            // 🔥 CEK: apakah surat jalan dengan nomor ini SUDAH ADA
+                            const existing = rows.find(
+                              (x) =>
+                                String(x.noSuratJalan || "").trim() ===
+                                  String(noSuratJalanFix).trim() &&
+                                x.suratJalanId
+                            );
+
+                            if (existing) {
+                              sjId = existing.suratJalanId;
+                            }
+
+                            // 🔥 JIKA BELUM ADA → BUAT BARU
+                            // 🔥 SELALU UPDATE / SYNC DATA SURAT JALAN
+                            if (sjId) {
+                              await update(ref(db, `surat_jalan/${sjId}`), {
+                                items: filteredItems,
+                                totalQty,
+                                updatedAt: Date.now(),
+                              });
+                            } else {
                               const newRef = push(ref(db, "surat_jalan"));
-                        
+
                               const dataSuratJalan = {
-                                transferId: r.id,
-                                noSuratJalan: r.noSuratJalan || `SJ-${Date.now()}`,
-                                tanggal: r.tanggal || new Date().toISOString().slice(0, 10),
+                                noDo: r.noDo,
+                                noSuratJalan: noSuratJalanFix,
+                                tanggal: r.tanggal,
                                 pengirim: r.pengirim,
                                 tokoPengirim: r.tokoPengirim,
                                 tokoTujuan: r.ke,
-                                brand: r.brand,
-                                barang: r.barang,
-                                imeis: r.imeis || [],
-                                qty: r.qty || 0,
-                                status: "DRAFT", // 🔥 penting
+                                items: allItems,
+                                totalQty,
+                                status:
+                                  r.status === "Approved" ? "FINAL" : "DRAFT",
                                 createdAt: Date.now(),
                               };
-                        
+
                               await update(newRef, dataSuratJalan);
-                        
+
                               sjId = newRef.key;
-                        
-                              // 🔥 SIMPAN BALIK KE TRANSFER
-                              await update(ref(db, `transfer_barang/${r.id}`), {
-                                suratJalanId: sjId,
-                              });
+
+                              for (const item of sameDoRows) {
+                                await update(
+                                  ref(db, `transfer_barang/${item.id}`),
+                                  {
+                                    suratJalanId: sjId,
+                                    noSuratJalan: noSuratJalanFix,
+                                  }
+                                );
+                              }
                             }
-                        
-                            // 🚀 LANGSUNG KE HALAMAN PRINT
+
                             navigate(`/surat-jalan/${sjId}`);
                           } catch (err) {
                             console.error(err);

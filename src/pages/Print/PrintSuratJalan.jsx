@@ -1,42 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { ref, get, onValue } from "firebase/database";
 import { db } from "../../firebase/FirebaseInit";
 
 export default function PrintSuratJalan() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [itemsGabungan, setItemsGabungan] = useState([]);
   const [brandMap, setBrandMap] = useState({});
-
-  const query = new URLSearchParams(location.search);
-  const mode = query.get("mode"); // preview / final
-
-  useEffect(() => {
-    if (mode === "preview") {
-      // 🔥 ambil dari transfer_barang
-      onValue(ref(db, `transfer_barang/${id}`), (snap) => {
-        if (snap.exists()) {
-          setData(snap.val());
-        } else {
-          alert("❌ Data transfer tidak ditemukan");
-        }
-      });
-    } else {
-      // 🔥 ambil dari surat_jalan
-      onValue(ref(db, `surat_jalan/${id}`), (snap) => {
-        if (snap.exists()) {
-          setData(snap.val());
-        } else {
-          alert("❌ Surat Jalan tidak ditemukan");
-        }
-      });
-    }
-  }, [id, mode]);
 
   useEffect(() => {
     if (!data?.noSuratJalan) return;
@@ -49,7 +23,8 @@ export default function PrintSuratJalan() {
         if (!v) return;
 
         if (
-          String(v.noSuratJalan).trim() === String(data.noSuratJalan).trim()
+          String(v.noSuratJalan).trim() ===
+          String(data.noSuratJalan).trim()
         ) {
           arr.push({
             barang: v.barang,
@@ -130,6 +105,9 @@ export default function PrintSuratJalan() {
     window.location.reload();
   };
 
+  const finalItems =
+  itemsGabungan.length > 0 ? itemsGabungan : data.items || [];
+
   return (
     <div className="bg-gray-100 min-h-screen py-6">
       {/* BUTTON */}
@@ -169,16 +147,10 @@ export default function PrintSuratJalan() {
 
         {/* INFO */}
         <div className="text-[9px] mb-2 space-y-1">
-          <p>
-            <b> Nama Pengirim:</b> {data.pengirim || "-"}
-          </p>
-          <p>
-            <b>Toko Pengirim:</b> {data.tokoPengirim}
-          </p>
-
-          <p>
-            <b>Toko Tujuan:</b> {data.tokoTujuan}
-          </p>
+        <p><b> Nama Pengirim:</b> {data.pengirim || "-"}</p>
+          <p><b>Toko Pengirim:</b> {data.tokoPengirim}</p>
+         
+          <p><b>Toko Tujuan:</b> {data.tokoTujuan}</p>
         </div>
 
         {/* TABLE */}
@@ -194,23 +166,25 @@ export default function PrintSuratJalan() {
           </thead>
 
           <tbody>
-            {(itemsGabungan.length ? itemsGabungan : data.items || []).map(
-              (item, i) => (
-                <tr key={i}>
-                  <td className="border px-1 py-1 text-center">{i + 1}</td>
-                  <td className="border px-1 py-1">{item.brand}</td>
-                  <td className="border px-1 py-1">{item.barang}</td>
-                  <td className="border px-1 py-1">
-                    {item.imeis?.length ? item.imeis.join(", ") : "-"}
-                  </td>
-                  <td className="border px-1 py-1 text-center">
-                    {item.qty || 0}
-                  </td>
-                </tr>
-              )
-            )}
+          {finalItems.map((item, i) => (
+              <tr key={i}>
+                <td className="border px-1 py-1 text-center">{i + 1}</td>
+                <td className="border px-1 py-1">{item.brand}</td>
+                <td className="border px-1 py-1">{item.barang}</td>
+                <td className="border px-1 py-1">
+                  {item.imeis?.length ? item.imeis.join(", ") : "-"}
+                </td>
+                <td className="border px-1 py-1 text-center">
+                  {item.qty || 0}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
+
+        <div className="text-[9px] font-bold text-right mt-2">
+  Total Qty: {data.totalQty || 0}
+</div>
 
         <p className="text-[8px] mt-2">
           Barang di atas telah diserahkan dalam kondisi baik dan sesuai.
@@ -225,7 +199,9 @@ export default function PrintSuratJalan() {
 
           <div>
             <p className="mb-10">Pengirim</p>
-            <div className="border-t">( {data.pengirim || "........"} )</div>
+            <div className="border-t">
+              ( {data.pengirim || "........"} )
+            </div>
           </div>
 
           <div>
