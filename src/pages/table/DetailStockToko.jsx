@@ -5,6 +5,8 @@ import {
   listenMasterBarang,
   deleteTransaksi,
 } from "../../services/FirebaseService";
+import { ref, remove } from "firebase/database";
+import { db } from "../../firebase";
 import * as XLSX from "xlsx";
 import { FaSearch, FaExchangeAlt } from "react-icons/fa";
 
@@ -220,55 +222,51 @@ export default function DetailStockToko() {
     return map;
   }, [transaksi]);
 
+  
   const handleDelete = async (row) => {
     try {
-      if (!window.confirm(`Hapus data ${row.barang}?`)) return;
-
+      if (!window.confirm(`Hapus TOTAL data ${row.barang}?`)) return;
+  
       const normalize = (v) =>
-        String(v || "")
-          .trim()
-          .toLowerCase();
-
-      // 🔥 cari semua transaksi terkait
+        String(v || "").trim().toLowerCase();
+  
       const related = transaksi.filter((t) => {
-        if (t.STATUS !== "Approved") return false;
-
-        const sameToko = normalize(t.NAMA_TOKO) === normalize(namaToko);
-
-        const sameBarang = normalize(t.NAMA_BARANG) === normalize(row.barang);
-
-        const sameBrand = normalize(t.NAMA_BRAND) === normalize(row.brand);
-
-        // IMEI lebih spesifik (PRIORITAS)
+        if (!t) return false;
+  
         if (row.imei) {
-          return sameToko && normalize(t.IMEI) === normalize(row.imei);
+          return normalize(t.IMEI) === normalize(row.imei);
         }
-
-        return sameToko && sameBarang && sameBrand;
+  
+        return (
+          normalize(t.NAMA_BARANG) === normalize(row.barang) &&
+          normalize(t.NAMA_BRAND) === normalize(row.brand)
+        );
       });
-
-      if (related.length === 0) {
-        alert("❌ Data transaksi tidak ditemukan");
-        return;
-      }
-
-      // 🔥 proteksi (biar gak salah hapus massal)
-      if (related.length > 5) {
-        if (!window.confirm("Data banyak! yakin mau hapus semua?")) return;
-      }
-
-      // 🔥 delete semua transaksi
+  
+      // 🔥 HAPUS UI
+      setTransaksi((prev) =>
+        prev.filter((t) => !related.some((r) => r.id === t.id))
+      );
+  
+      // 🔥 DELETE TRANSAKSI
       for (const trx of related) {
-        await deleteTransaksi(trx.tokoId || 1, trx.id);
+        await remove(ref(db, `transaksi/${trx.tokoId}/${trx.id}`));
       }
-
-      alert("✅ Data berhasil dihapus permanen");
+  
+      // 🔥 DELETE STOCK (WAJIB 🔥)
+      const sku = `${row.brand}_${row.barang}`.replace(/\s+/g, "_");
+      const toko = namaToko || "CILANGKAP PUSAT";
+  
+      await remove(ref(db, `stock/${toko}/${sku}`));
+  
+      console.log("FULL DELETE SUCCESS");
+  
+      alert("✅ DATA HILANG TOTAL (TRANSAKSI + STOCK)");
     } catch (err) {
       console.error(err);
-      alert("Gagal hapus data ❌");
+      alert("❌ Gagal delete");
     }
   };
-
   /* ======================
    BUILD ROWS (FIX FINAL)
 ====================== */
@@ -574,13 +572,13 @@ export default function DetailStockToko() {
                     <td className="px-3 py-2 text-center">
                       <div className="flex gap-2 justify-center">
                         {/* ✅ DELETE */}
-                        {/* <button
+                        <button
                           onClick={() => handleDelete(r)}
                           title="Hapus Permanen"
                           className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
                         >
                           🗑️
-                        </button> */}
+                        </button>
 
                         {/* ✅ TRANSFER */}
                         <button
