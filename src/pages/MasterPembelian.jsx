@@ -799,21 +799,33 @@ export default function MasterPembelian() {
   };
 
   const openEdit = (item) => {
-    const hasPenjualan = (allTransaksi || []).some(
-      (t) =>
-        (t.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN" &&
-        t.NAMA_BRAND === item.brand &&
-        t.NAMA_BARANG === item.barang &&
-        t.NAMA_TOKO === item.namaToko
+    const imeis = item.imeis || [];
+  
+    // ===============================
+    // 🔥 CEK PER IMEI (NEW LOGIC)
+    // ===============================
+    const imeiTerjual = imeis.filter((imei) =>
+      (allTransaksi || []).some(
+        (t) =>
+          (t.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN" &&
+          String(t.IMEI || "").trim() === String(imei).trim()
+      )
     );
-
-    if (hasPenjualan) {
+  
+    // ===============================
+    // ❌ JIKA ADA YANG TERJUAL
+    // ===============================
+    if (imeiTerjual.length > 0) {
       alert(
-        "❌ Pembelian tidak bisa diedit karena sebagian barang sudah terjual.\n\nGunakan fitur RETUR atau PENYESUAIAN STOK."
+        `❌ Tidak bisa edit karena ada IMEI yang sudah terjual:\n\n` +
+          imeiTerjual.join("\n")
       );
       return;
     }
-
+  
+    // ===============================
+    // ✅ AMAN → BOLEH EDIT FULL
+    // ===============================
     setEditData({
       ...item,
       imeiList: (item.imeis || []).join("\n"),
@@ -821,6 +833,7 @@ export default function MasterPembelian() {
       originalKey: `${item.tanggal}|${item.noDo}|${item.supplier}|${item.brand}|${item.barang}`,
       hargaSup: item.hargaSup || 0,
     });
+  
     setShowEdit(true);
   };
 
