@@ -865,8 +865,10 @@ export const deleteTransaksi = (tokoId, id) => {
  * Listen ALL transaksi across semua toko, return merged array normalized.
  * Sorting uses TANGGAL_TRANSAKSI (newer first).
  */
+// 🔥 LISTEN SEMUA TRANSAKSI (FLAT + AMAN)
 export const listenAllTransaksi = (callback) => {
   const r = ref(db, "toko");
+
   const unsub = onValue(
     r,
     (snap) => {
@@ -875,18 +877,23 @@ export const listenAllTransaksi = (callback) => {
 
       Object.entries(raw).forEach(([tokoId, tokoData]) => {
         const tokoName =
-          (tokoData && tokoData.info && tokoData.info.name) ||
+          tokoData?.info?.name ||
           tokoData?.name ||
           `TOKO ${tokoId}`;
 
-        if (tokoData?.transaksi) {
-          Object.entries(tokoData.transaksi).forEach(([id, row]) => {
-            merged.push(normalizeTransaksi(id, row, tokoId, tokoName));
+        const transaksi = tokoData?.transaksi || {};
+
+        Object.entries(transaksi).forEach(([id, row]) => {
+          merged.push({
+            id,
+            tokoId, // 🔥 WAJIB
+            NAMA_TOKO: tokoName, // 🔥 WAJIB
+            ...row,
           });
-        }
+        });
       });
 
-      // sort by TANGGAL_TRANSAKSI (newest first), fallback to createdAt or id
+      // 🔥 SORT TERBARU
       merged.sort((a, b) => {
         const ta =
           new Date(a.TANGGAL_TRANSAKSI || a.createdAt || 0).getTime() || 0;
@@ -894,6 +901,8 @@ export const listenAllTransaksi = (callback) => {
           new Date(b.TANGGAL_TRANSAKSI || b.createdAt || 0).getTime() || 0;
         return tb - ta;
       });
+
+      console.log("🔥 TOTAL TRANSAKSI:", merged.length);
 
       callback(merged);
     },

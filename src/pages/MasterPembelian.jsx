@@ -748,43 +748,53 @@ export default function MasterPembelian() {
   const deletePembelian = async (item) => {
     if (
       !window.confirm(
-        `Hapus semua transaksi pembelian untuk:\n${item.tanggal} - DO: ${item.noDo}\nSupplier: ${item.supplier}\n${item.brand} - ${item.barang}\n(Qty: ${item.totalQty}) ?`
+        `Hapus semua transaksi pembelian untuk:\n${item.tanggal} - DO: ${item.noDo}`
       )
-    ) {
-      return;
-    }
-
-    const keyGroup = `${item.tanggal || ""}|${item.noDo || ""}|${
-      item.supplier || ""
-    }|${item.brand || ""}|${item.barang || ""}`;
-
+    ) return;
+  
+    const keyGroup = `${item.tanggal}|${item.noDo}|${item.supplier}|${item.brand}|${item.barang}`;
+  
     const rows = (allTransaksi || []).filter((t) => {
       if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return false;
-      const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
-        t.NAMA_SUPPLIER || ""
-      }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+  
+      const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${t.NAMA_SUPPLIER || ""}|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+  
       return k === keyGroup;
     });
-
+  
     try {
+      // 🔥 DELETE KE FIREBASE
       for (const r of rows) {
         const tokoId = r.tokoId || 1;
         if (r.id) {
           await deleteTransaksi(tokoId, r.id);
         }
       }
-
+  
+      // =========================
+      // 🔥 TAMBAHAN WAJIB (REALTIME UI)
+      // =========================
+      setAllTransaksi((prev) =>
+        prev.filter((t) => {
+          const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${t.NAMA_SUPPLIER || ""}|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+          return k !== keyGroup;
+        })
+      );
+  
+      // =========================
+      // UPDATE STOCK
+      // =========================
       const sku = makeSku(item.brand, item.barang);
       try {
         await reduceStock("CILANGKAP PUSAT", sku, item.totalQty);
       } catch (e) {
         console.warn("reduceStock gagal:", e);
       }
-
-      alert("✅ Data pembelian & stok berhasil dihapus.");
+  
+      alert("✅ Data langsung hilang (Realtime UI aktif)");
     } catch (err) {
-      console.error("deletePembelian error:", err);
-      alert("❌ Gagal menghapus data.");
+      console.error(err);
+      alert("❌ Gagal hapus data");
     }
   };
 

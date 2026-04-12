@@ -348,6 +348,12 @@ export default function FormItemSection({
       return;
     }
 
+    // 🔥 BLOKIR IMEI TERJUAL
+    if (last.isImei && stockRealtime?.soldImei?.[last.imei]) {
+      alert("❌ IMEI sudah terjual, tidak bisa diproses");
+      return;
+    }
+
     if (!last.isImei && (!last.qty || last.qty < 1)) {
       alert("⚠ Qty tidak valid");
       return;
@@ -684,31 +690,29 @@ export default function FormItemSection({
 
   const findBarangUniversal = (imei) => {
     const imeiFix = String(imei || "").trim();
-  
+
     // 1. CEK PEMBELIAN TOKO (EXISTING)
     let trx = allTransaksi.find(
       (t) =>
         String(t.IMEI || "").trim() === imeiFix &&
         String(t.STATUS || "").toUpperCase() === "APPROVED"
     );
-  
+
     // 2. CEK GLOBAL STOCK (🔥 TAMBAHAN)
     if (!trx && globalStockMap[imeiFix]) {
-      trx = allTransaksi.find(
-        (t) => String(t.IMEI || "").trim() === imeiFix
-      );
+      trx = allTransaksi.find((t) => String(t.IMEI || "").trim() === imeiFix);
     }
-  
+
     if (!trx) return null;
-  
+
     const barang = masterBarang.find(
       (b) =>
         String(b.namaBarang || "").toUpperCase() ===
         String(trx.NAMA_BARANG || "").toUpperCase()
     );
-  
+
     if (!barang) return null;
-  
+
     return {
       kategoriBarang: barang.kategoriBarang,
       namaBrand: barang.namaBrand || barang.brand,
@@ -776,9 +780,18 @@ export default function FormItemSection({
           item.qty > 0 &&
           item.hargaAktif > 0;
 
-        const isItemComplete = isImeiComplete || isNonImeiComplete;
+        // 🔥 CEK IMEI SUDAH TERJUAL
+        const isImeiSold =
+          item.isImei && item.imei && stockRealtime?.soldImei?.[item.imei];
 
-        const hargaAktif = isItemComplete ? Number(item.hargaAktif || 0) : 0;
+        const isItemComplete =
+          (isImeiComplete || isNonImeiComplete) && !isImeiSold;
+
+        const hargaAktif = isImeiSold
+          ? 0 // 🔥 KUNCI HARGA
+          : isItemComplete
+          ? Number(item.hargaAktif || 0)
+          : 0;
 
         const totalItem = isItemComplete
           ? Number(item.qty || 0) * hargaAktif
@@ -1163,7 +1176,7 @@ export default function FormItemSection({
                     if (!autoBarang) {
                       autoBarang = findBarangByTransfer(imei);
                     }
-                    
+
                     // 🔥 SUPER FIX
                     if (!autoBarang) {
                       autoBarang = findBarangUniversal(imei);
@@ -1200,6 +1213,12 @@ export default function FormItemSection({
                         ? "READY"
                         : "TIDAK TERSEDIA"}
                     </div>
+
+                    {isImeiSold && (
+                      <div className="text-red-600 font-bold">
+                        ❌ IMEI SUDAH TERJUAL
+                      </div>
+                    )}
 
                     {globalStockMap[item.imei] && (
                       <div className="text-gray-500">

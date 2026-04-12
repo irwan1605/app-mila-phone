@@ -5,7 +5,7 @@ import {
   listenMasterBarang,
   deleteTransaksi,
 } from "../../services/FirebaseService";
-import { ref, remove } from "firebase/database";
+import { ref, remove, get } from "firebase/database";
 import { db } from "../../firebase";
 import * as XLSX from "xlsx";
 import { FaSearch, FaExchangeAlt } from "react-icons/fa";
@@ -34,21 +34,43 @@ export default function DetailStockToko() {
   const [masterBarang, setMasterBarang] = useState([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [deletedIds, setDeletedIds] = useState(new Set());
 
   const pageSize = 25;
 
   /* ======================
      REALTIME LISTENER
   ====================== */
-  useEffect(() => {
-    const unsub1 = listenAllTransaksi((rows) => setTransaksi(rows || []));
-    const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
+  // useEffect(() => {
+  //   const unsub1 = listenAllTransaksi((rows) => {
+  //     const filtered = (rows || []).filter(
+  //       (r) => !deletedIds.has(r.id)
+  //     );
+  //     setTransaksi(filtered);
+  //   });
+  //   const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
 
+  //   return () => {
+  //     unsub1 && unsub1();
+  //     unsub2 && unsub2();
+  //   };
+  // }, []);
+
+  useEffect(() => {
+    const unsub1 = listenAllTransaksi((rows) => {
+      const filtered = (rows || []).filter(
+        (r) => !deletedIds.has(r.id)
+      );
+      setTransaksi(filtered);
+    });
+  
+    const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
+  
     return () => {
       unsub1 && unsub1();
       unsub2 && unsub2();
     };
-  }, []);
+  }, [deletedIds]); // 🔥 WAJIB
 
   // ===============================
   // 🔥 STOCK ENGINE UNIVERSAL
@@ -222,46 +244,51 @@ export default function DetailStockToko() {
     return map;
   }, [transaksi]);
 
-  
   const handleDelete = async (row) => {
     try {
       if (!window.confirm(`Hapus TOTAL data ${row.barang}?`)) return;
   
-      const normalize = (v) =>
-        String(v || "").trim().toLowerCase();
+      const snap = await get(ref(db, "toko"));
+      const data = snap.val() || {};
   
-      const related = transaksi.filter((t) => {
-        if (!t) return false;
+      let totalDelete = 0;
   
-        if (row.imei) {
-          return normalize(t.IMEI) === normalize(row.imei);
+      for (const tokoId in data) {
+        const transaksi = data[tokoId]?.transaksi || {};
+  
+        for (const id in transaksi) {
+          const t = transaksi[id];
+  
+          if (
+            String(t.NAMA_BARANG || "").toLowerCase().trim() ===
+              String(row.barang).toLowerCase().trim() &&
+            String(t.NAMA_BRAND || "").toLowerCase().trim() ===
+              String(row.brand).toLowerCase().trim()
+          ) {
+            const path = `toko/${tokoId}/transaksi/${id}`;
+            console.log("🔥 FORCE DELETE:", path);
+  
+            await remove(ref(db, path));
+            totalDelete++;
+          }
         }
-  
-        return (
-          normalize(t.NAMA_BARANG) === normalize(row.barang) &&
-          normalize(t.NAMA_BRAND) === normalize(row.brand)
-        );
-      });
-  
-      // 🔥 HAPUS UI
-      setTransaksi((prev) =>
-        prev.filter((t) => !related.some((r) => r.id === t.id))
-      );
-  
-      // 🔥 DELETE TRANSAKSI
-      for (const trx of related) {
-        await remove(ref(db, `transaksi/${trx.tokoId}/${trx.id}`));
       }
   
-      // 🔥 DELETE STOCK (WAJIB 🔥)
-      const sku = `${row.brand}_${row.barang}`.replace(/\s+/g, "_");
-      const toko = namaToko || "CILANGKAP PUSAT";
+      // 🔥 DELETE STOCK
+      const cleanBarang = String(row.barang)
+        .replace(new RegExp(`^${row.brand}\\s*`, "i"), "")
+        .trim();
   
-      await remove(ref(db, `stock/${toko}/${sku}`));
+      const sku = `${row.brand}_${cleanBarang}`
+        .toUpperCase()
+        .replace(/\s+/g, "_");
   
-      console.log("FULL DELETE SUCCESS");
+      const stockPath = `stock/${namaToko}/${sku}`;
+      console.log("🔥 DELETE STOCK:", stockPath);
   
-      alert("✅ DATA HILANG TOTAL (TRANSAKSI + STOCK)");
+      await remove(ref(db, stockPath));
+  
+      alert(`✅ ${totalDelete} DATA TERHAPUS TOTAL (FORCE MODE)`);
     } catch (err) {
       console.error(err);
       alert("❌ Gagal delete");
@@ -278,7 +305,9 @@ export default function DetailStockToko() {
     // ===============================
     // 🔥 STEP 1 — CLONE TRANSAKSI + TAMBAH REFUND PENJUALAN SEBAGAI EVENT STOK
     // ===============================
-    const allEvents = [...transaksi];
+    const allEvents = transaksi.filter(
+      (t) => !deletedIds.has(t.id)
+    );
 
     transaksi.forEach((t) => {
       if (
@@ -383,7 +412,25 @@ export default function DetailStockToko() {
       map[skuKey].qty += effect;
     });
 
-    return Object.values(map).filter((r) => r.qty > 0);
+    return Object.values(map)
+    .filter((r) => r.qty > 0)
+    .filter((r) => {
+      // 🔥 BLOCK DATA YANG SUDAH DI DELETE
+      if (r.imei) {
+        return !transaksi.some(
+          (t) =>
+            deletedIds.has(t.id) &&
+            String(t.IMEI) === String(r.imei)
+        );
+      }
+  
+      return !transaksi.some(
+        (t) =>
+          deletedIds.has(t.id) &&
+          t.NAMA_BARANG === r.barang &&
+          t.NAMA_BRAND === r.brand
+      );
+    });
   }, [transaksi, masterMap, namaToko, supplierLookup]);
 
   /* ======================
