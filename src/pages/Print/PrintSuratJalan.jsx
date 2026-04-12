@@ -13,33 +13,17 @@ export default function PrintSuratJalan() {
   const [brandMap, setBrandMap] = useState({});
 
   useEffect(() => {
-    if (!data?.noSuratJalan) return;
-
-    const unsub = onValue(ref(db, "surat_jalan"), (snap) => {
-      const arr = [];
-
-      snap.forEach((c) => {
-        const v = c.val();
-        if (!v) return;
-
-        if (
-          String(v.noSuratJalan).trim() ===
-          String(data.noSuratJalan).trim()
-        ) {
-          arr.push({
-            barang: v.barang,
-            brand: v.brand || brandMap[v.barang] || "-",
-            qty: v.qty,
-            imeis: v.imeis || [],
-          });
-        }
-      });
-
-      setItemsGabungan(arr);
-    });
-
-    return () => unsub();
-  }, [data?.noSuratJalan]);
+    if (!data?.items) return;
+  
+    const mapped = data.items.map((item) => ({
+      barang: item.barang,
+      brand: item.brand || brandMap[item.barang] || "-",
+      qty: item.qty || 0,
+      imeis: Array.isArray(item.imeis) ? item.imeis : [],
+    }));
+  
+    setItemsGabungan(mapped);
+  }, [data, brandMap]);
 
   useEffect(() => {
     return onValue(ref(db, "toko"), (snap) => {

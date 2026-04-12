@@ -1,6 +1,6 @@
 // src/pages/table/TableTransferBarang.jsx
 import React, { useEffect, useState, useMemo } from "react";
-import { ref, onValue, update, push } from "firebase/database";
+import { ref, onValue, update, push, get } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase/FirebaseInit";
 import FirebaseService from "../../services/FirebaseService";
@@ -410,6 +410,27 @@ export default function TableTransferBarang({ currentRole }) {
 
   const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
 
+  // ================= GET ALL DO ITEMS (RAW FIREBASE) =================
+const getAllDoItems = async (noDo) => {
+  const snap = await get(ref(db, "transfer_barang"));
+  const result = [];
+
+  snap.forEach((c) => {
+    const val = c.val();
+    if (!val) return;
+
+    if (String(val.noDo || "").trim() === String(noDo).trim()) {
+      result.push({
+        id: c.key,
+        ...val,
+        imeis: Array.isArray(val.imeis) ? val.imeis : [],
+      });
+    }
+  });
+
+  return result;
+};
+
   return (
     <div
       id="table-transfer-barang"
@@ -649,73 +670,73 @@ export default function TableTransferBarang({ currentRole }) {
                         disabled={!canPrint}
                         onClick={async () => {
                           if (!canPrint) return;
-
+                        
                           try {
                             let sjId = r.suratJalanId;
-
-                            // 🔥 AMBIL SEMUA TRANSFER DENGAN NO DO YANG SAMA
-                            const sameDoRows = rows.filter(
-                              (x) =>
-                                String(x.noDo || "").trim() ===
-                                String(r.noDo || "").trim()
-                            );
-
-                            // 🔥 GABUNGKAN SEMUA ITEM
+                        
+                            // 🔥 AMBIL SEMUA DATA DO LANGSUNG DARI FIREBASE (BUKAN DARI rows)
+                            const snap = await get(ref(db, "transfer_barang"));
+                            const sameDoRows = [];
+                        
+                            snap.forEach((c) => {
+                              const val = c.val();
+                              if (!val) return;
+                        
+                              if (String(val.noDo || "").trim() === String(r.noDo || "").trim()) {
+                                sameDoRows.push({
+                                  id: c.key,
+                                  ...val,
+                                  imeis: Array.isArray(val.imeis) ? val.imeis : [],
+                                });
+                              }
+                            });
+                        
+                            console.log("🔥 TOTAL DO ITEMS:", sameDoRows.length);
+                        
+                            // 🔥 GABUNGKAN SEMUA ITEM (TANPA FILTER)
                             const allItems = [];
-
+                        
                             sameDoRows.forEach((item) => {
                               const imeis = Array.isArray(item.imeis) ? item.imeis : [];
-                            
+                        
                               allItems.push({
-                                brand: item.brand,
-                                barang: item.barang,
+                                brand: item.brand || "-",
+                                barang: item.barang || "-",
                                 imeis,
-                                qty: imeis.length || item.qty || 0,
+                                qty:
+                                  imeis.length > 0
+                                    ? imeis.length
+                                    : Number(item.qty) > 0
+                                    ? Number(item.qty)
+                                    : 1, // 🔥 WAJIB ADA (BIAR TIDAK HILANG)
                               });
                             });
-                            
-                            // 🔥 FILTER ITEM VALID
-                            const filteredItems = allItems.filter(
-                              (item) => item.barang && (item.qty > 0 || item.imeis?.length > 0)
-                            );
-                            
-                            // 🔥 HITUNG TOTAL FINAL (HANYA SEKALI DI SINI)
-                            const totalQty = filteredItems.reduce(
-                              (sum, item) => sum + (item.qty || 0),
-                              0
-                            );
-
-                            // 🔥 JIKA BELUM ADA SURAT JALAN → BUAT
-                            // 🔥 AMBIL NO SURAT JALAN YANG FIX
+                        
+                            // 🔥 OPTIONAL: SORT BIAR RAPI
+                            allItems.sort((a, b) => a.barang.localeCompare(b.barang));
+                        
+                            // 🔥 TOTAL FINAL
+                            const totalQty = allItems.reduce((sum, item) => sum + item.qty, 0);
+                        
+                            console.log("🔥 FINAL ITEMS:", allItems);
+                        
+                            // 🔥 CEK / BUAT NO SURAT JALAN
                             const noSuratJalanFix =
-                              r.noSuratJalan &&
-                              String(r.noSuratJalan).trim() !== ""
+                              r.noSuratJalan && String(r.noSuratJalan).trim() !== ""
                                 ? r.noSuratJalan
                                 : `SJ-${Date.now()}`;
-
-                            // 🔥 CEK: apakah surat jalan dengan nomor ini SUDAH ADA
-                            const existing = rows.find(
-                              (x) =>
-                                String(x.noSuratJalan || "").trim() ===
-                                  String(noSuratJalanFix).trim() &&
-                                x.suratJalanId
-                            );
-
-                            if (existing) {
-                              sjId = existing.suratJalanId;
-                            }
-
-                            // 🔥 JIKA BELUM ADA → BUAT BARU
-                            // 🔥 SELALU UPDATE / SYNC DATA SURAT JALAN
+                        
+                            // 🔥 JIKA SUDAH ADA → UPDATE (BIAR SELALU SYNC)
                             if (sjId) {
                               await update(ref(db, `surat_jalan/${sjId}`), {
-                                items: filteredItems,
+                                items: allItems,
                                 totalQty,
                                 updatedAt: Date.now(),
                               });
                             } else {
+                              // 🔥 BUAT BARU
                               const newRef = push(ref(db, "surat_jalan"));
-
+                        
                               const dataSuratJalan = {
                                 noDo: r.noDo,
                                 noSuratJalan: noSuratJalanFix,
@@ -723,28 +744,28 @@ export default function TableTransferBarang({ currentRole }) {
                                 pengirim: r.pengirim,
                                 tokoPengirim: r.tokoPengirim,
                                 tokoTujuan: r.ke,
+                        
                                 items: allItems,
                                 totalQty,
-                                status:
-                                  r.status === "Approved" ? "FINAL" : "DRAFT",
+                        
+                                status: r.status === "Approved" ? "FINAL" : "DRAFT",
                                 createdAt: Date.now(),
                               };
-
+                        
                               await update(newRef, dataSuratJalan);
-
+                        
                               sjId = newRef.key;
-
+                        
+                              // 🔥 SIMPAN KE SEMUA ROW DO
                               for (const item of sameDoRows) {
-                                await update(
-                                  ref(db, `transfer_barang/${item.id}`),
-                                  {
-                                    suratJalanId: sjId,
-                                    noSuratJalan: noSuratJalanFix,
-                                  }
-                                );
+                                await update(ref(db, `transfer_barang/${item.id}`), {
+                                  suratJalanId: sjId,
+                                  noSuratJalan: noSuratJalanFix,
+                                });
                               }
                             }
-
+                        
+                            // 🔥 NAVIGATE KE PRINT
                             navigate(`/surat-jalan/${sjId}`);
                           } catch (err) {
                             console.error(err);
