@@ -43,6 +43,7 @@ export default function TableTransferBarang({ currentRole }) {
   const [inventory, setInventory] = useState([]);
   const navigate = useNavigate();
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterToko, setFilterToko] = useState("");
   const [preview, setPreview] = useState(null);
 
   const [soldImeis, setSoldImeis] = useState([]);
@@ -117,6 +118,17 @@ export default function TableTransferBarang({ currentRole }) {
       setInventory(Object.values(map));
     });
   }, []);
+
+  const tokoList = useMemo(() => {
+    const set = new Set();
+
+    rows.forEach((r) => {
+      if (r.tokoPengirim) set.add(r.tokoPengirim);
+      if (r.ke) set.add(r.ke);
+    });
+
+    return Array.from(set).sort();
+  }, [rows]);
 
   // ================= FILTER TRANSFER: TOLAK IMEI TERJUAL =================
   const safeRows = useMemo(() => {
@@ -336,27 +348,36 @@ export default function TableTransferBarang({ currentRole }) {
   // DATA FINAL SETELAH FILTER
   // ===============================
   const filteredRows = useMemo(() => {
-    const filtered = rowsByToko.filter(
-      (r) => filterStatus === "ALL" || r.status === filterStatus
-    );
+    const filtered = rowsByToko.filter((r) => {
+      // =========================
+      // FILTER STATUS (EXISTING)
+      // =========================
+      const matchStatus = filterStatus === "ALL" || r.status === filterStatus;
+
+      // =========================
+      // 🔥 FILTER TOKO (NEW)
+      // =========================
+      const matchToko =
+        !filterToko || r.tokoPengirim === filterToko || r.ke === filterToko;
+
+      return matchStatus && matchToko;
+    });
 
     // =========================
-    // 🔥 DEDUPLICATE ENGINE
+    // 🔥 DEDUPLICATE (TETAP)
     // =========================
     const map = new Map();
 
     filtered.forEach((r) => {
-      // 🔥 KEY UNIK (AMAN)
       const key = [
         r.tokoPengirim,
         r.ke,
         r.brand,
         r.barang,
-        (r.imeis || []).join(","), // IMEI jadi pembeda utama
+        (r.imeis || []).join(","),
         r.qty,
       ].join("|");
 
-      // 🔥 ambil yang PALING BARU
       const existing = map.get(key);
 
       if (!existing) {
@@ -366,23 +387,18 @@ export default function TableTransferBarang({ currentRole }) {
         const timeB = r.createdAt || r.approvedAt || 0;
 
         if (timeB > timeA) {
-          map.set(key, r); // replace dengan yang terbaru
+          map.set(key, r);
         }
       }
     });
 
-    const uniqueRows = Array.from(map.values());
-
-    // =========================
-    // 🔥 SORT TERBARU DI ATAS
-    // =========================
-    return uniqueRows.sort((a, b) => {
+    return Array.from(map.values()).sort((a, b) => {
       const timeA = a.createdAt || a.approvedAt || 0;
       const timeB = b.createdAt || b.approvedAt || 0;
 
       return timeB - timeA;
     });
-  }, [rowsByToko, filterStatus]);
+  }, [rowsByToko, filterStatus, filterToko]);
 
   // ===============================
   // HITUNG DATA PAGINATION
@@ -403,7 +419,7 @@ export default function TableTransferBarang({ currentRole }) {
         📦 TABEL TRANSFER BARANG
       </h3>
 
-      <div className="hover:bg-indigo-50 transition-colors p-2 flex gap-3">
+      <div className="hover:bg-indigo-50 transition-colors p-2 flex gap-3 flex-wrap">
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
@@ -414,6 +430,22 @@ export default function TableTransferBarang({ currentRole }) {
           <option value="Approved">Approved</option>
           <option value="Rejected">Rejected</option>
           <option value="Voided">Voided</option>
+        </select>
+
+        <select
+          value={filterToko}
+          onChange={(e) => {
+            setFilterToko(e.target.value);
+            setCurrentPage(1);
+          }}
+          className="input max-w-xs"
+        >
+          <option value="">SEMUA TOKO</option>
+          {tokoList.map((t, i) => (
+            <option key={i} value={t}>
+              {t}
+            </option>
+          ))}
         </select>
 
         <button
