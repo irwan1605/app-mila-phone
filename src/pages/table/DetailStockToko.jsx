@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   listenAllTransaksi,
   listenMasterBarang,
+  deleteTransaksi,
 } from "../../services/FirebaseService";
 import * as XLSX from "xlsx";
 import { FaSearch, FaExchangeAlt } from "react-icons/fa";
@@ -184,173 +185,208 @@ export default function DetailStockToko() {
     return set;
   }, [transaksi]);
 
+  // ===============================
+  // 🔥 SUPPLIER LOOKUP FROM PEMBELIAN
+  // ===============================
+  // ===============================
+  // 🔥 SUPPLIER LOOKUP UNIVERSAL
+  // ===============================
+  const supplierLookup = useMemo(() => {
+    const map = {};
 
-// ===============================
-// 🔥 SUPPLIER LOOKUP FROM PEMBELIAN
-// ===============================
-// ===============================
-// 🔥 SUPPLIER LOOKUP UNIVERSAL
-// ===============================
-const supplierLookup = useMemo(() => {
-  const map = {};
+    transaksi.forEach((t) => {
+      if (t.STATUS !== "Approved") return;
+      if (!t.NAMA_BARANG || !t.NAMA_BRAND) return;
 
-  transaksi.forEach((t) => {
-    if (t.STATUS !== "Approved") return;
-    if (!t.NAMA_BARANG || !t.NAMA_BRAND) return;
+      // IMEI
+      if (t.IMEI) {
+        const imeiKey = String(t.IMEI).trim();
 
-    // IMEI
-    if (t.IMEI) {
-      const imeiKey = String(t.IMEI).trim();
-
-      if (t.PAYMENT_METODE === "PEMBELIAN") {
-        map[imeiKey] = t.NAMA_SUPPLIER || "-";
+        if (t.PAYMENT_METODE === "PEMBELIAN") {
+          map[imeiKey] = t.NAMA_SUPPLIER || "-";
+        }
       }
-    }
 
-    // NON IMEI (SKU)
-    if (!t.IMEI) {
-      const skuKey = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+      // NON IMEI (SKU)
+      if (!t.IMEI) {
+        const skuKey = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
 
-      if (t.PAYMENT_METODE === "PEMBELIAN") {
-        map[skuKey] = t.NAMA_SUPPLIER || "-";
+        if (t.PAYMENT_METODE === "PEMBELIAN") {
+          map[skuKey] = t.NAMA_SUPPLIER || "-";
+        }
       }
+    });
+
+    return map;
+  }, [transaksi]);
+
+  const handleDelete = async (row) => {
+    try {
+      if (!window.confirm(`Hapus data ${row.barang}?`)) return;
+
+      const normalize = (v) =>
+        String(v || "")
+          .trim()
+          .toLowerCase();
+
+      // 🔥 cari semua transaksi terkait
+      const related = transaksi.filter((t) => {
+        if (t.STATUS !== "Approved") return false;
+
+        const sameToko = normalize(t.NAMA_TOKO) === normalize(namaToko);
+
+        const sameBarang = normalize(t.NAMA_BARANG) === normalize(row.barang);
+
+        const sameBrand = normalize(t.NAMA_BRAND) === normalize(row.brand);
+
+        // IMEI lebih spesifik (PRIORITAS)
+        if (row.imei) {
+          return sameToko && normalize(t.IMEI) === normalize(row.imei);
+        }
+
+        return sameToko && sameBarang && sameBrand;
+      });
+
+      if (related.length === 0) {
+        alert("❌ Data transaksi tidak ditemukan");
+        return;
+      }
+
+      // 🔥 proteksi (biar gak salah hapus massal)
+      if (related.length > 5) {
+        if (!window.confirm("Data banyak! yakin mau hapus semua?")) return;
+      }
+
+      // 🔥 delete semua transaksi
+      for (const trx of related) {
+        await deleteTransaksi(trx.tokoId || 1, trx.id);
+      }
+
+      alert("✅ Data berhasil dihapus permanen");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal hapus data ❌");
     }
-  });
-
-  return map;
-}, [transaksi]);
-
-
+  };
 
   /* ======================
    BUILD ROWS (FIX FINAL)
 ====================== */
-const rows = useMemo(() => {
-  if (!namaToko) return [];
+  const rows = useMemo(() => {
+    if (!namaToko) return [];
 
-  const map = {};
+    const map = {};
 
-  // ===============================
-  // 🔥 STEP 1 — CLONE TRANSAKSI + TAMBAH REFUND PENJUALAN SEBAGAI EVENT STOK
-  // ===============================
-  const allEvents = [...transaksi];
+    // ===============================
+    // 🔥 STEP 1 — CLONE TRANSAKSI + TAMBAH REFUND PENJUALAN SEBAGAI EVENT STOK
+    // ===============================
+    const allEvents = [...transaksi];
 
-  transaksi.forEach((t) => {
-    if (
-      t.statusPembayaran === "REFUND" &&
-      Array.isArray(t.items) &&
-      normalize(t.toko) === normalize(namaToko)
-    ) {
-      t.items.forEach((it) => {
-        // ❌ skip IMEI karena sudah ada transaksi REFUND stock engine
-        if (it.imeiList?.length) return;
+    transaksi.forEach((t) => {
+      if (
+        t.statusPembayaran === "REFUND" &&
+        Array.isArray(t.items) &&
+        normalize(t.toko) === normalize(namaToko)
+      ) {
+        t.items.forEach((it) => {
+          // ❌ skip IMEI karena sudah ada transaksi REFUND stock engine
+          if (it.imeiList?.length) return;
 
-        allEvents.push({
-          STATUS: "Approved",
-          PAYMENT_METODE: "REFUND",
-          NAMA_TOKO: t.toko,
-          NAMA_BRAND: it.namaBrand,
-          NAMA_BARANG: it.namaBarang,
-          QTY: it.qty,
-          IMEI: "",
-          NO_INVOICE: t.invoice,
-          TANGGAL_TRANSAKSI: t.tanggal,
-          NAMA_SUPPLIER: supplierLookup?.[
-            `${it.namaBrand}|${it.namaBarang}`
-          ] || "-",
+          allEvents.push({
+            STATUS: "Approved",
+            PAYMENT_METODE: "REFUND",
+            NAMA_TOKO: t.toko,
+            NAMA_BRAND: it.namaBrand,
+            NAMA_BARANG: it.namaBarang,
+            QTY: it.qty,
+            IMEI: "",
+            NO_INVOICE: t.invoice,
+            TANGGAL_TRANSAKSI: t.tanggal,
+            NAMA_SUPPLIER:
+              supplierLookup?.[`${it.namaBrand}|${it.namaBarang}`] || "-",
+          });
         });
-      });
-    }
-  });
+      }
+    });
 
-  // ===============================
-  // 🔥 STEP 2 — HITUNG SEMUA EVENT
-  // ===============================
-  allEvents.forEach((t) => {
-    if (t.STATUS !== "Approved") return;
-    if (normalize(t.NAMA_TOKO) !== normalize(namaToko)) return;
+    // ===============================
+    // 🔥 STEP 2 — HITUNG SEMUA EVENT
+    // ===============================
+    allEvents.forEach((t) => {
+      if (t.STATUS !== "Approved") return;
+      if (normalize(t.NAMA_TOKO) !== normalize(namaToko)) return;
 
-    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-    const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+      const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
 
-    let effect = 0;
+      let effect = 0;
 
-    if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
-      effect = qtyBase;
-    }
+      if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+        effect = qtyBase;
+      }
 
-    if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
-      effect = -qtyBase;
-    }
+      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+        effect = -qtyBase;
+      }
 
-    // ======================
-    // IMEI
-    // ======================
-    if (t.IMEI) {
-      const key = String(t.IMEI).trim();
+      // ======================
+      // IMEI
+      // ======================
+      if (t.IMEI) {
+        const key = String(t.IMEI).trim();
 
-      if (!map[key]) {
-        map[key] = {
+        if (!map[key]) {
+          map[key] = {
+            tanggal: t.TANGGAL_TRANSAKSI || "-",
+            noDo: t.NO_INVOICE || "-",
+            supplier: supplierLookup?.[key] || t.NAMA_SUPPLIER || "-",
+            namaToko: t.NAMA_TOKO || "-",
+            brand: t.NAMA_BRAND || "-",
+            barang: t.NAMA_BARANG || "-",
+            imei: key,
+            qty: 0,
+            hargaSRP:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
+            hargaGrosir:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
+            hargaReseller:
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller ||
+              0,
+            statusBarang: "TERSEDIA",
+          };
+        }
+
+        map[key].qty += effect;
+        return;
+      }
+
+      // ======================
+      // NON IMEI
+      // ======================
+      const skuKey = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+      if (!map[skuKey]) {
+        map[skuKey] = {
           tanggal: t.TANGGAL_TRANSAKSI || "-",
           noDo: t.NO_INVOICE || "-",
-          supplier:
-            supplierLookup?.[key] ||
-            t.NAMA_SUPPLIER ||
-            "-",
+          supplier: supplierLookup?.[skuKey] || t.NAMA_SUPPLIER || "-",
           namaToko: t.NAMA_TOKO || "-",
           brand: t.NAMA_BRAND || "-",
           barang: t.NAMA_BARANG || "-",
-          imei: key,
+          imei: "",
           qty: 0,
-          hargaSRP:
-            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
-          hargaGrosir:
-            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
-          hargaReseller:
-            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+          hargaSRP: masterMap?.[skuKey]?.hargaSRP || 0,
+          hargaGrosir: masterMap?.[skuKey]?.hargaGrosir || 0,
+          hargaReseller: masterMap?.[skuKey]?.hargaReseller || 0,
           statusBarang: "TERSEDIA",
         };
       }
 
-      map[key].qty += effect;
-      return;
-    }
+      map[skuKey].qty += effect;
+    });
 
-    // ======================
-    // NON IMEI
-    // ======================
-    const skuKey = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-
-    if (!map[skuKey]) {
-      map[skuKey] = {
-        tanggal: t.TANGGAL_TRANSAKSI || "-",
-        noDo: t.NO_INVOICE || "-",
-        supplier:
-          supplierLookup?.[skuKey] ||
-          t.NAMA_SUPPLIER ||
-          "-",
-        namaToko: t.NAMA_TOKO || "-",
-        brand: t.NAMA_BRAND || "-",
-        barang: t.NAMA_BARANG || "-",
-        imei: "",
-        qty: 0,
-        hargaSRP:
-          masterMap?.[skuKey]?.hargaSRP || 0,
-        hargaGrosir:
-          masterMap?.[skuKey]?.hargaGrosir || 0,
-        hargaReseller:
-          masterMap?.[skuKey]?.hargaReseller || 0,
-        statusBarang: "TERSEDIA",
-      };
-    }
-
-    map[skuKey].qty += effect;
-  });
-
-  return Object.values(map).filter((r) => r.qty > 0);
-
-}, [transaksi, masterMap, namaToko, supplierLookup]);
-
+    return Object.values(map).filter((r) => r.qty > 0);
+  }, [transaksi, masterMap, namaToko, supplierLookup]);
 
   /* ======================
      SEARCH FILTER
@@ -535,30 +571,38 @@ const rows = useMemo(() => {
                     <td className="px-3 py-2 text-right font-mono text-xs text-gray-600">
                       {r.keterangan || "-"}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono">
-                      <button
-                        onClick={() =>
-                          navigate("/transfer-barang", {
-                            state: {
-                              tokoPengirim: namaToko, // ⬅️ INI PENTING
-                            },
-                          })
-                        }
-                        title="Transfer Barang"
-                        className="
-    group flex items-center gap-2
-    px-3 py-1.5 rounded-lg
-    bg-gradient-to-r from-yellow-400 to-orange-500
-    hover:from-orange-500 hover:to-yellow-500
-    shadow-md hover:shadow-yellow-400/50
-    text-white text-xs font-semibold
-    transition-all duration-200
-    mx-auto
-  "
-                      >
-                        <FaExchangeAlt className="text-sm group-hover:rotate-180 transition-transform duration-300" />
-                        <span className="hidden md:inline">Transfer</span>
-                      </button>
+                    <td className="px-3 py-2 text-center">
+                      <div className="flex gap-2 justify-center">
+                        {/* ✅ DELETE */}
+                        {/* <button
+                          onClick={() => handleDelete(r)}
+                          title="Hapus Permanen"
+                          className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
+                        >
+                          🗑️
+                        </button> */}
+
+                        {/* ✅ TRANSFER */}
+                        <button
+                          onClick={() =>
+                            navigate("/transfer-barang", {
+                              state: {
+                                tokoPengirim: namaToko,
+                              },
+                            })
+                          }
+                          title="Transfer Barang"
+                          className="
+        flex items-center gap-1
+        px-2 py-1 rounded
+        bg-yellow-500 hover:bg-yellow-600
+        text-white text-xs
+      "
+                        >
+                          <FaExchangeAlt />
+                          Transfer
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
