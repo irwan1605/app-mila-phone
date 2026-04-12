@@ -33,7 +33,6 @@ import {
 import TabelPembelianDraft from "./table/TabelPembelianDraft";
 import CetakInvoicePembelian from "./Print/CetakInvoicePembelian";
 
-
 const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
 // ===============================
 // KATEGORI TANPA IMEI
@@ -1279,9 +1278,20 @@ export default function MasterPembelian() {
 
   const groupedPurchases = groupedPembelian;
 
-  // ------------------------
-  // exportExcel (FINAL FIX)
-  // ------------------------
+  const getVisiblePages = () => {
+    const delta = 2; // jumlah kiri kanan
+    const pages = [];
+  
+    for (
+      let i = Math.max(1, currentPage - delta);
+      i <= Math.min(totalPages, currentPage + delta);
+      i++
+    ) {
+      pages.push(i);
+    }
+  
+    return pages;
+  };
   // ------------------------
   // exportExcel (FINAL FIX - per-IMEI rows, Qty/Harga/Total konsisten)
   // ------------------------
@@ -1608,46 +1618,69 @@ export default function MasterPembelian() {
             </table>
           </div>
 
-          {/* PAGINATION */}
-          <div className="flex justify-between items-center mt-3 text-xs md:text-sm text-slate-600">
+          <div className="flex justify-between items-center mt-3 text-xs md:text-sm text-slate-600 flex-wrap gap-2">
             <div>
               Halaman {currentPage} dari {totalPages}
             </div>
-            <div className="flex gap-1">
+
+            <div className="flex items-center gap-1 overflow-x-auto max-w-full">
+              {/* PREV */}
               <button
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className={`px-3 py-1 rounded-full border text-xs ${
-                  currentPage === 1
-                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                    : "bg-white hover:bg-slate-50"
-                }`}
+                className="px-3 py-1 rounded-full border text-xs bg-white hover:bg-slate-50 disabled:bg-slate-200 disabled:text-slate-400"
               >
                 Prev
               </button>
-              {Array.from({ length: totalPages }, (_, i) => (
+
+              {/* FIRST */}
+              {currentPage > 3 && (
+                <>
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    className="px-3 py-1 rounded-full border text-xs bg-white"
+                  >
+                    1
+                  </button>
+                  <span className="px-1">...</span>
+                </>
+              )}
+
+              {/* MIDDLE */}
+              {getVisiblePages().map((i) => (
                 <button
                   key={i}
-                  onClick={() => setCurrentPage(i + 1)}
+                  onClick={() => setCurrentPage(i)}
                   className={`px-3 py-1 rounded-full border text-xs ${
-                    currentPage === i + 1
+                    currentPage === i
                       ? "bg-indigo-600 text-white border-indigo-600"
                       : "bg-white hover:bg-slate-50"
                   }`}
                 >
-                  {i + 1}
+                  {i}
                 </button>
               ))}
+
+              {/* LAST */}
+              {currentPage < totalPages - 2 && (
+                <>
+                  <span className="px-1">...</span>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    className="px-3 py-1 rounded-full border text-xs bg-white"
+                  >
+                    {totalPages}
+                  </button>
+                </>
+              )}
+
+              {/* NEXT */}
               <button
                 disabled={currentPage === totalPages}
                 onClick={() =>
                   setCurrentPage((p) => Math.min(totalPages, p + 1))
                 }
-                className={`px-3 py-1 rounded-full border text-xs ${
-                  currentPage === totalPages
-                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                    : "bg-white hover:bg-slate-50"
-                }`}
+                className="px-3 py-1 rounded-full border text-xs bg-white hover:bg-slate-50 disabled:bg-slate-200 disabled:text-slate-400"
               >
                 Next
               </button>
