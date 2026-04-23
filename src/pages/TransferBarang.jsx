@@ -2078,7 +2078,7 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
 
           if (invalidImeis.length > 0) {
             alert(
-              "❌ IMEI tidak valid / sudah keluar:\n" + invalidImeis.join(", ")
+              "❌ IMEI tidak valid / sudah keluar / Periksa Stok Barang Anda:\n" + invalidImeis.join(", ")
             );
             return;
           }

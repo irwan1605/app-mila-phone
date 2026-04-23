@@ -434,6 +434,7 @@ export default function FinanceReport() {
     return () => unsub && unsub();
   }, []);
 
+
   /* ================= FORMAT TELP ================= */
 
   const formatPhone = (val) => {
@@ -481,6 +482,51 @@ export default function FinanceReport() {
         String(k.toko).toUpperCase() === String(form.NAMA_TOKO).toUpperCase()
     );
   }, [masterKaryawan, form.NAMA_TOKO]);
+
+  useEffect(() => {
+    if (!form.STORE_HEAD) return;
+
+    const sh = masterKaryawan.find((k) => k.nama === form.STORE_HEAD);
+
+    if (sh) {
+      setForm((prev) => ({
+        ...prev,
+        STORE_HEAD: sh.nama,
+      }));
+    }
+  }, [form.STORE_HEAD, masterKaryawan]);
+
+  useEffect(() => {
+    const total = Number(form.QTY || 0) * Number(form.HARGA || 0);
+
+    setForm((prev) => ({
+      ...prev,
+      GRAND_TOTAL_BARANG: total,
+      JUMLAH_SETORAN: total,
+    }));
+  }, [form.QTY, form.HARGA]);
+
+  const masterBarangMap = useMemo(() => {
+    const map = {};
+  
+    masterBarang.forEach((b) => {
+      const key = `${b.brand}|${b.nama}`;
+      map[key] = { kategori: b.kategori };
+    });
+  
+    return map;
+  }, [masterBarang]);
+  
+  useEffect(() => {
+    const key = `${form.NAMA_BRAND}|${form.NAMA_BARANG}`;
+  
+    if (masterBarangMap[key]) {
+      setForm((prev) => ({
+        ...prev,
+        KATEGORI_BARANG: masterBarangMap[key].kategori,
+      }));
+    }
+  }, [form.NAMA_BRAND, form.NAMA_BARANG, masterBarangMap]);
 
   const salesList = useMemo(() => {
     return masterKaryawan.filter(
@@ -533,6 +579,49 @@ export default function FinanceReport() {
       return true;
     });
   }, [setoran, filter, isPicToko, tokoLogin]);
+
+  const penjualanMap = useMemo(() => {
+    const map = {};
+
+    allData.forEach((t) => {
+      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PENJUALAN") return;
+
+      const key = `${t.NO_INVOICE}|${t.NAMA_BARANG}|${t.IMEI}`;
+
+      if (!map[key]) {
+        map[key] = {
+          tanggal: t.TANGGAL_TRANSAKSI,
+          toko: t.NAMA_TOKO,
+          brand: t.NAMA_BRAND,
+          barang: t.NAMA_BARANG,
+          imei: t.IMEI,
+          harga: Number(t.HARGA_UNIT || 0),
+        };
+      }
+    });
+
+    return map;
+  }, [allData]);
+
+  const autoFillFromPenjualan = (imei) => {
+    const found = Object.values(penjualanMap).find(
+      (p) => String(p.imei).trim() === String(imei).trim()
+    );
+
+    if (!found) return;
+
+    setForm((prev) => ({
+      ...prev,
+      TANGGAL_TRANSAKSI: found.tanggal,
+      NAMA_TOKO: found.toko,
+      NAMA_BRAND: found.brand,
+      NAMA_BARANG: found.barang,
+      HARGA: found.harga,
+      QTY: 1,
+    }));
+  };
+
+
 
   const filteredPengeluaran = useMemo(() => {
     return pengeluaran.filter((s) => {
@@ -600,6 +689,34 @@ export default function FinanceReport() {
       total,
     }));
   }, [setoran]);
+
+  const tableSetoranExcel = useMemo(() => {
+    return filteredSetoran.map((r, i) => {
+      const total = Number(r.QTY || 0) * Number(r.HARGA || 0);
+
+      return {
+        no: i + 1,
+        noPreOrder: r.NO_PRE_ORDER,
+        tanggal: r.TANGGAL_TRANSAKSI,
+        toko: r.NAMA_TOKO,
+        pelanggan: r.NAMA_PELANGGAN,
+        id: r.ID_PELANGGAN,
+        tlp: r.NO_TLP,
+        storeHead: r.STORE_HEAD,
+        sales: r.NAMA_SALES,
+        salesHandle: r.SALES_HANDLE,
+        kategori: r.KATEGORI_BARANG,
+        brand: r.NAMA_BRAND,
+        barang: r.NAMA_BARANG,
+        qty: r.QTY,
+        harga: r.HARGA,
+        kategoriPayment: r.KATEGORI_PEMBAYARAN,
+        dp: r.DP_PAYMENT,
+        total,
+        status: r.STATUS,
+      };
+    });
+  }, [filteredSetoran]);
 
   // ===============================
   // Pagination
@@ -894,6 +1011,30 @@ export default function FinanceReport() {
   // =====================================================
   //                      JSX UI
   // =====================================================
+
+  const headerTableExcel = [
+    "No",
+    "No Pre Order",
+    "Tanggal",
+    "Toko",
+    "Nama Pelanggan",
+    "ID Pelanggan",
+    "No TLP",
+    "Store Head",
+    "Sales",
+    "Sales Handle",
+    "Kategori",
+    "Brand",
+    "Barang",
+    "QTY",
+    "Harga",
+    "Kategori Payment",
+    "DP Payment",
+    "Total",
+    "Keterangan",
+    "Status",
+    "Aksi",
+  ];
   return (
     <div className="p-4 space-y-6">
       <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-lg shadow mb-4">
@@ -1329,8 +1470,8 @@ export default function FinanceReport() {
               />
             </div>
 
-               {/* KETERANGAN */}
-               <div>
+            {/* KETERANGAN */}
+            <div>
               <label className="text-xs font-semibold">KETERANGAN</label>
               <input
                 list="sales-list"
@@ -1398,34 +1539,18 @@ export default function FinanceReport() {
           <table className="min-w-[1400px] w-full text-sm">
             <thead className="bg-slate-100 text-slate-700">
               <tr>
-                <th className="px-3 py-2 text-center">No</th>
-                <th className="px-3 py-2 text-left">No Pre Order</th>
-                <th className="px-3 py-2 text-left">Tanggal</th>
-                <th className="px-3 py-2 text-left">Toko</th>
-                <th className="px-3 py-2 text-left">Nama Pelanggan</th>
-                <th className="px-3 py-2 text-left">ID Pelanggan</th>
-                <th className="px-3 py-2 text-left">No TLP</th>
-                <th className="px-3 py-2 text-left">Store Head</th>
-                <th className="px-3 py-2 text-left">Sales</th>
-                <th className="px-3 py-2 text-left">Sales Handle</th>
-                <th className="px-3 py-2 text-left">Kategori</th>
-                <th className="px-3 py-2 text-left">Brand</th>
-                <th className="px-3 py-2 text-left">Barang</th>
-                <th className="px-3 py-2 text-center">QTY</th>
-                <th className="px-3 py-2 text-right">Harga</th>
-                <th className="px-3 py-2 text-right">Kategori Payment</th>
-                <th className="px-3 py-2 text-right">DP Payment</th>
-                <th className="px-3 py-2 text-right">Total</th>
-                <th className="px-3 py-2 text-left">Keterangan</th>
-                <th className="px-3 py-2 text-left">Status</th>
-                <th className="px-3 py-2 text-left">Aksi</th>
+                {headerTableExcel.map((h, i) => (
+                  <th key={i} className="px-3 py-2 text-xs text-left">
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
 
             <tbody>
               {paginatedSetoran.length === 0 ? (
                 <tr>
-                  <td colSpan={18} className="py-6 text-center text-slate-500">
+                 <td colSpan={21} className="py-6 text-center text-slate-500">
                     Tidak ada data
                   </td>
                 </tr>
@@ -1472,9 +1597,7 @@ export default function FinanceReport() {
                         {formatCurrency(r.HARGA)}
                       </td>
 
-                      <td className="px-3 py-2 text-right">
-                        {r.KATEGORI_PEMBAYARAN}
-                      </td>
+                      <td className="px-3 py-2">{r.KATEGORI_PEMBAYARAN}</td>
 
                       <td className="px-3 py-2 text-right">
                         {formatCurrency(r.DP_PAYMENT)}

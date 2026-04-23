@@ -386,6 +386,17 @@ export default function CardPenjualanToko() {
 
     try {
       setSubmitting(true);
+      for (const item of items) {
+        if (item.isImei) {
+          const imei = item.imeiList?.[0];
+      
+          const masihAda = detailStockLookup?.[imei];
+      
+          if (!masihAda) {
+            throw new Error(`IMEI ${imei} tidak ditemukan di stok`);
+          }
+        }
+      }
 
       /* =================================================
          1️⃣ VALIDASI & LOCK IMEI

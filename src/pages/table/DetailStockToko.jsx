@@ -58,14 +58,12 @@ export default function DetailStockToko() {
 
   useEffect(() => {
     const unsub1 = listenAllTransaksi((rows) => {
-      const filtered = (rows || []).filter(
-        (r) => !deletedIds.has(r.id)
-      );
+      const filtered = (rows || []).filter((r) => !deletedIds.has(r.id));
       setTransaksi(filtered);
     });
-  
+
     const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
-  
+
     return () => {
       unsub1 && unsub1();
       unsub2 && unsub2();
@@ -179,6 +177,16 @@ export default function DetailStockToko() {
       const imei = String(t.IMEI);
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
+      const sold = new Set();
+
+      transaksi.forEach((t) => {
+        if (t.STATUS !== "Approved" || !t.IMEI) return;
+
+        if (String(t.PAYMENT_METODE).toUpperCase() === "PENJUALAN") {
+          sold.add(String(t.IMEI));
+        }
+      });
+
       // PENJUALAN → tandai terjual
       if (metode === "PENJUALAN") {
         sold.add(imei);
@@ -247,47 +255,49 @@ export default function DetailStockToko() {
   const handleDelete = async (row) => {
     try {
       if (!window.confirm(`Hapus TOTAL data ${row.barang}?`)) return;
-  
+
       const snap = await get(ref(db, "toko"));
       const data = snap.val() || {};
-  
+
       let totalDelete = 0;
-  
+
       for (const tokoId in data) {
         const transaksi = data[tokoId]?.transaksi || {};
-  
+
         for (const id in transaksi) {
           const t = transaksi[id];
-  
+
           if (
-            String(t.NAMA_BARANG || "").toLowerCase().trim() ===
-              String(row.barang).toLowerCase().trim() &&
-            String(t.NAMA_BRAND || "").toLowerCase().trim() ===
-              String(row.brand).toLowerCase().trim()
+            String(t.NAMA_BARANG || "")
+              .toLowerCase()
+              .trim() === String(row.barang).toLowerCase().trim() &&
+            String(t.NAMA_BRAND || "")
+              .toLowerCase()
+              .trim() === String(row.brand).toLowerCase().trim()
           ) {
             const path = `toko/${tokoId}/transaksi/${id}`;
             console.log("🔥 FORCE DELETE:", path);
-  
+
             await remove(ref(db, path));
             totalDelete++;
           }
         }
       }
-  
+
       // 🔥 DELETE STOCK
       const cleanBarang = String(row.barang)
         .replace(new RegExp(`^${row.brand}\\s*`, "i"), "")
         .trim();
-  
+
       const sku = `${row.brand}_${cleanBarang}`
         .toUpperCase()
         .replace(/\s+/g, "_");
-  
+
       const stockPath = `stock/${namaToko}/${sku}`;
       console.log("🔥 DELETE STOCK:", stockPath);
-  
+
       await remove(ref(db, stockPath));
-  
+
       alert(`✅ ${totalDelete} DATA TERHAPUS TOTAL (FORCE MODE)`);
     } catch (err) {
       console.error(err);
@@ -305,9 +315,7 @@ export default function DetailStockToko() {
     // ===============================
     // 🔥 STEP 1 — CLONE TRANSAKSI + TAMBAH REFUND PENJUALAN SEBAGAI EVENT STOK
     // ===============================
-    const allEvents = transaksi.filter(
-      (t) => !deletedIds.has(t.id)
-    );
+    const allEvents = transaksi.filter((t) => !deletedIds.has(t.id));
 
     transaksi.forEach((t) => {
       if (
@@ -413,24 +421,32 @@ export default function DetailStockToko() {
     });
 
     return Object.values(map)
-    .filter((r) => r.qty > 0)
-    .filter((r) => {
-      // 🔥 BLOCK DATA YANG SUDAH DI DELETE
-      if (r.imei) {
+      .filter((r) => r.qty > 0)
+      .filter((r) => {
+        if (r.imei) {
+          return r.qty > 0; // 🔥 IMEI harus masih ada
+        }
+
+        if (r.imei && imeiTerjual.has(r.imei)) {
+          return false; // 🔥 paksa hilang
+        }
+        // 🔥 BLOCK DATA YANG SUDAH DI DELETE
+        if (r.imei) {
+          return !transaksi.some(
+            (t) => deletedIds.has(t.id) && String(t.IMEI) === String(r.imei)
+          );
+        }
+
+        
+
         return !transaksi.some(
           (t) =>
             deletedIds.has(t.id) &&
-            String(t.IMEI) === String(r.imei)
+            t.NAMA_BARANG === r.barang &&
+            t.NAMA_BRAND === r.brand
         );
-      }
-  
-      return !transaksi.some(
-        (t) =>
-          deletedIds.has(t.id) &&
-          t.NAMA_BARANG === r.barang &&
-          t.NAMA_BRAND === r.brand
-      );
-    });
+        
+      });
   }, [transaksi, masterMap, namaToko, supplierLookup]);
 
   /* ======================

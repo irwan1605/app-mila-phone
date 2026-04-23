@@ -212,9 +212,13 @@ const rows = useMemo(() => {
       if (imeiKey) {
         return stockData?.available === true;
       }
-
+      
+      if (r.imei) {
+        return r.qty > 0; // 🔥 IMEI harus masih ada
+      }
+      return r.qty > 0;
       // NON IMEI → hanya tampil kalau qty > 0
-      return stockData?.qty > 0;
+     
     });
 
 }, [transaksi, masterMap, stockTracker]);

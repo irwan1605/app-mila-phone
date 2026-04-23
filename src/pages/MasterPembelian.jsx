@@ -246,6 +246,30 @@ export default function MasterPembelian() {
     return masterSupplier.map((s) => s.namaSupplier).filter(Boolean);
   }, [masterSupplier]);
 
+  const groupedByDO = useMemo(() => {
+    const map = {};
+
+    (allTransaksi || []).forEach((t) => {
+      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return;
+
+      const key = `${t.TANGGAL_TRANSAKSI}|${t.NO_INVOICE}`;
+
+      if (!map[key]) {
+        map[key] = {
+          tanggal: t.TANGGAL_TRANSAKSI,
+          noDo: t.NO_INVOICE,
+          supplier: t.NAMA_SUPPLIER,
+          namaToko: t.NAMA_TOKO,
+          items: [],
+        };
+      }
+
+      map[key].items.push(t);
+    });
+
+    return Object.values(map);
+  }, [allTransaksi]);
+
   // ===============================
   // BRAND LIST DARI MASTER BARANG (REALTIME)
   // ===============================
@@ -750,18 +774,21 @@ export default function MasterPembelian() {
       !window.confirm(
         `Hapus semua transaksi pembelian untuk:\n${item.tanggal} - DO: ${item.noDo}`
       )
-    ) return;
-  
+    )
+      return;
+
     const keyGroup = `${item.tanggal}|${item.noDo}|${item.supplier}|${item.brand}|${item.barang}`;
-  
+
     const rows = (allTransaksi || []).filter((t) => {
       if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return false;
-  
-      const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${t.NAMA_SUPPLIER || ""}|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
-  
+
+      const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
+        t.NAMA_SUPPLIER || ""
+      }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+
       return k === keyGroup;
     });
-  
+
     try {
       // 🔥 DELETE KE FIREBASE
       for (const r of rows) {
@@ -770,17 +797,19 @@ export default function MasterPembelian() {
           await deleteTransaksi(tokoId, r.id);
         }
       }
-  
+
       // =========================
       // 🔥 TAMBAHAN WAJIB (REALTIME UI)
       // =========================
       setAllTransaksi((prev) =>
         prev.filter((t) => {
-          const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${t.NAMA_SUPPLIER || ""}|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+          const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
+            t.NAMA_SUPPLIER || ""
+          }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
           return k !== keyGroup;
         })
       );
-  
+
       // =========================
       // UPDATE STOCK
       // =========================
@@ -790,7 +819,7 @@ export default function MasterPembelian() {
       } catch (e) {
         console.warn("reduceStock gagal:", e);
       }
-  
+
       alert("✅ Data langsung hilang (Realtime UI aktif)");
     } catch (err) {
       console.error(err);
@@ -800,7 +829,7 @@ export default function MasterPembelian() {
 
   const openEdit = (item) => {
     const imeis = item.imeis || [];
-  
+
     // ===============================
     // 🔥 CEK PER IMEI (NEW LOGIC)
     // ===============================
@@ -811,18 +840,34 @@ export default function MasterPembelian() {
           String(t.IMEI || "").trim() === String(imei).trim()
       )
     );
-  
+
     // ===============================
     // ❌ JIKA ADA YANG TERJUAL
     // ===============================
+    // pisahkan IMEI
+    const imeiTerjualSet = new Set(imeiTerjual);
+    const imeiAman = imeis.filter((im) => !imeiTerjualSet.has(im));
+
+    // tetap boleh edit
+    setEditData({
+      ...item,
+      imeiList: imeiAman.join("\n"), // hanya IMEI yang bisa diedit
+      imeiLocked: imeiTerjual, // simpan IMEI terkunci
+      originalToko: item.namaToko,
+      originalKey: `${item.tanggal}|${item.noDo}|${item.supplier}|${item.brand}|${item.barang}`,
+      hargaSup: item.hargaSup || 0,
+    });
+
+    setShowEdit(true);
+
+    // kasih warning aja
     if (imeiTerjual.length > 0) {
       alert(
-        `❌ Tidak bisa edit karena ada IMEI yang sudah terjual:\n\n` +
+        `⚠️ Beberapa IMEI sudah terjual dan tidak bisa diedit:\n\n` +
           imeiTerjual.join("\n")
       );
-      return;
     }
-  
+
     // ===============================
     // ✅ AMAN → BOLEH EDIT FULL
     // ===============================
@@ -833,7 +878,7 @@ export default function MasterPembelian() {
       originalKey: `${item.tanggal}|${item.noDo}|${item.supplier}|${item.brand}|${item.barang}`,
       hargaSup: item.hargaSup || 0,
     });
-  
+
     setShowEdit(true);
   };
 
@@ -871,6 +916,11 @@ export default function MasterPembelian() {
     let imeis = [];
     let newQty = originalQty;
 
+  // ===============================
+    // UPDATE QTY (DELTA)
+    // ===============================
+    const diffQty = newQty - originalQty;
+
     if (isKategoriImei) {
       imeis = String(editData.imeiList || "")
         .split("\n")
@@ -895,16 +945,13 @@ export default function MasterPembelian() {
     if (oldToko !== newToko) {
       await reduceStock(oldToko, sku, originalQty);
       await addStock(newToko, sku, {
-        namaBrand: editData.brand,
-        namaBarang: editData.barang,
-        qty: originalQty,
+        brand: editData.brand,
+        barang: editData.barang,
+        qty: diffQty,
       });
     }
 
-    // ===============================
-    // UPDATE QTY (DELTA)
-    // ===============================
-    const diffQty = newQty - originalQty;
+  
 
     // ===============================
     // NON IMEI → UPDATE QTY LANGSUNG
@@ -1304,7 +1351,7 @@ export default function MasterPembelian() {
   const getVisiblePages = () => {
     const delta = 2; // jumlah kiri kanan
     const pages = [];
-  
+
     for (
       let i = Math.max(1, currentPage - delta);
       i <= Math.min(totalPages, currentPage + delta);
@@ -1312,7 +1359,7 @@ export default function MasterPembelian() {
     ) {
       pages.push(i);
     }
-  
+
     return pages;
   };
   // ------------------------
@@ -2145,23 +2192,8 @@ export default function MasterPembelian() {
                   Nama Toko
                 </label>
                 <select
-                  value={editData.nama}
-                  onChange={(e) =>
-                    setEditData((prev) => ({
-                      ...prev,
-                      nama: e.target.value,
-                    }))
-                  }
-                >
-                  {masterToko.map((t) => (
-                    <option key={t.id} value={t.nama}>
-                      {t.namaToko}
-                    </option>
-                  ))}
-                </select>
-                <select
                   className="input"
-                  value={editData.nama}
+                  value={editData.namaToko}
                   onChange={(e) =>
                     setEditData((prev) => ({
                       ...prev,
@@ -2261,6 +2293,7 @@ export default function MasterPembelian() {
                   min={1}
                   className="w-full border rounded-lg px-2 py-2 text-sm bg-slate-50"
                   value={editData.totalQty}
+                  disabled={editData.kategoriBrand !== "ACCESORIES"}
                   onChange={(e) => {
                     const val = Number(e.target.value || 0);
 
@@ -2301,6 +2334,14 @@ export default function MasterPembelian() {
                     }));
                   }}
                 />
+                {editData.imeiLocked?.length > 0 && (
+                  <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-600">
+                    <b>IMEI terkunci (sudah terjual):</b>
+                    <pre className="whitespace-pre-wrap">
+                      {editData.imeiLocked.join("\n")}
+                    </pre>
+                  </div>
+                )}
                 <p className="text-[10px] text-gray-500 mt-1">
                   • Jumlah baris IMEI sebaiknya sama dengan total Qty.
                 </p>
