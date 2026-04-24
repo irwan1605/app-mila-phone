@@ -26,7 +26,9 @@ import {
   deleteTransaksi,
   listenPaymentJenis,
   listenMasterPaymentMetode,
+  listenTransaksi ,
 } from "../../services/FirebaseService";
+import TableLaporanPenjualan from "../table/TableLaporanPenjualan";
 
 // ===== Konfigurasi Toko =====
 const fallbackTokoNames = [
@@ -95,11 +97,12 @@ function normalizeRecord(r) {
   return {
     id: r.id || r._id || r.key || r.ID || String(Date.now()) + Math.random(),
 
+    TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || todayStr(),
+
     NO_PRE_ORDER: r.NO_PRE_ORDER || "",
 
     TIPE: String(r.TIPE || "").toUpperCase(),
 
-    TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || todayStr(),
     NAMA_TOKO: r.NAMA_TOKO || "",
 
     NAMA_PELANGGAN: r.NAMA_PELANGGAN || "",
@@ -147,6 +150,7 @@ export default function FinanceReport() {
   const tokoIdFromState = location.state?.tokoId || null;
   const tokoNameFromState = location.state?.tokoName || null;
   const [uploading, setUploading] = useState(false);
+  const [dataPenjualan, setDataPenjualan] = useState([]);
 
   const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
   const role = String(loggedUser?.role || "").toLowerCase();
@@ -174,6 +178,15 @@ export default function FinanceReport() {
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
   const [masterKategori, setMasterKategori] = useState([]);
+
+  useEffect(() => {
+    const unsub = listenTransaksi((rows) => {
+      console.log("🔥 DATA MASUK KE TABLE:", rows);
+      setDataPenjualan(rows);
+    });
+  
+    return () => unsub && unsub();
+  }, []);
 
   useEffect(() => {
     if (isPicToko && tokoLogin) {
@@ -434,7 +447,6 @@ export default function FinanceReport() {
     return () => unsub && unsub();
   }, []);
 
-
   /* ================= FORMAT TELP ================= */
 
   const formatPhone = (val) => {
@@ -508,18 +520,18 @@ export default function FinanceReport() {
 
   const masterBarangMap = useMemo(() => {
     const map = {};
-  
+
     masterBarang.forEach((b) => {
       const key = `${b.brand}|${b.nama}`;
       map[key] = { kategori: b.kategori };
     });
-  
+
     return map;
   }, [masterBarang]);
-  
+
   useEffect(() => {
     const key = `${form.NAMA_BRAND}|${form.NAMA_BARANG}`;
-  
+
     if (masterBarangMap[key]) {
       setForm((prev) => ({
         ...prev,
@@ -603,6 +615,43 @@ export default function FinanceReport() {
     return map;
   }, [allData]);
 
+  const penjualanDetailMap = useMemo(() => {
+    const map = {};
+
+    allData.forEach((t) => {
+      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PENJUALAN") return;
+
+      const key = String(t.IMEI || "").trim();
+
+      if (!key) return;
+
+      map[key] = {
+        NO_RESI: t.NO_INVOICE || "-",
+        NAMA: t.NAMA_PELANGGAN || "-",
+        NIK: t.ID_PELANGGAN || "-",
+        NO_HP: t.NO_TLP || "-",
+        SALES: t.NAMA_SALES || "-",
+        SALES_HANDLE: t.SALES_HANDLE || "-",
+        LEADER: t.STORE_HEAD || "-",
+        TOKO: t.NAMA_TOKO || "-",
+
+        BRAND: t.NAMA_BRAND || "-",
+        TYPE: t.NAMA_BARANG || "-",
+        IMEI: t.IMEI || "-",
+
+        HARGA: Number(t.HARGA_UNIT || 0),
+        PAYMENT: t.PAYMENT_METODE || "-",
+
+        TENOR: t.TENOR || "-",
+        DP_USER: Number(t.DP_USER || 0),
+
+        STATUS: t.STATUS || "-",
+      };
+    });
+
+    return map;
+  }, [allData]);
+
   const autoFillFromPenjualan = (imei) => {
     const found = Object.values(penjualanMap).find(
       (p) => String(p.imei).trim() === String(imei).trim()
@@ -621,7 +670,72 @@ export default function FinanceReport() {
     }));
   };
 
+  const tableSetoranPreOrder = useMemo(() => {
+    return filteredSetoran.map((s, i) => {
+      const imei = String(s.REF_SETORAN || "").trim();
 
+      const jual = penjualanDetailMap[imei] || {};
+
+      return {
+        NO: i + 1,
+        TANGGAL: s.TANGGAL_TRANSAKSI,
+        NO_RESI: jual.NO_RESI || "-",
+        MASA_KERJA: "-",
+        NIK: jual.NIK || "-",
+        NAMA_SALES: jual.SALES || "-",
+        REFERENSI: s.REF_SETORAN || "-",
+        TOKO: s.NAMA_TOKO || "-",
+        LEADER: jual.LEADER || "-",
+
+        KOMODITI: s.KATEGORI_BARANG || "-",
+        BRAND: s.NAMA_BRAND || "-",
+        TYPE: s.NAMA_BARANG || "-",
+        IMEI: imei,
+
+        HARGA_UNIT: jual.HARGA || s.HARGA || 0,
+        KATEGORI_HARGA: "-",
+        MARKET_PRICE: "-",
+
+        AKSESORIS: "-",
+        ONGKIR: "-",
+        HARGA_AKSESORIS: "-",
+
+        MP_PROTECK: "-",
+
+        PAYMENT_METODE: jual.PAYMENT || s.KATEGORI_PEMBAYARAN,
+
+        SYSTEM_PAYMENT: s.KATEGORI_PEMBAYARAN,
+
+        TOTAL_PAYMENT_USER: s.JUMLAH_SETORAN || 0,
+        MDR: 0,
+        POTONGAN_MDR: 0,
+
+        TOTAL: s.JUMLAH_SETORAN || 0,
+
+        SISA_LIMIT: "-",
+
+        NO_KONTRAK: "-",
+        NAMA_AKUN: s.NAMA_PELANGGAN || "-",
+        NO_HP: s.NO_TLP || "-",
+
+        TENOR: jual.TENOR || "-",
+        DP_USER_MERCHANT: jual.DP_USER || 0,
+        DP_USER_TOKO: 0,
+        REQUEST_DP: 0,
+
+        SALDO_TOKO: 0,
+        SALDO_FL: 0,
+        SISA: 0,
+
+        NAMA_FL: "-",
+        NAMA_TEKNISI: "-",
+        SALES_HANDLE: jual.SALES_HANDLE || "-",
+
+        STATUS_PICKUP: jual.STATUS || "-",
+        KETERANGAN: s.KETERANGAN || "-",
+      };
+    });
+  }, [filteredSetoran, penjualanDetailMap]);
 
   const filteredPengeluaran = useMemo(() => {
     return pengeluaran.filter((s) => {
@@ -696,8 +810,9 @@ export default function FinanceReport() {
 
       return {
         no: i + 1,
-        noPreOrder: r.NO_PRE_ORDER,
         tanggal: r.TANGGAL_TRANSAKSI,
+        noPreOrder: r.NO_PRE_ORDER,
+
         toko: r.NAMA_TOKO,
         pelanggan: r.NAMA_PELANGGAN,
         id: r.ID_PELANGGAN,
@@ -756,8 +871,9 @@ export default function FinanceReport() {
 
     const payload = {
       TIPE: "SETORAN",
-      NO_PRE_ORDER: form.NO_PRE_ORDER,
       TANGGAL_TRANSAKSI: form.TANGGAL_TRANSAKSI,
+      NO_PRE_ORDER: form.NO_PRE_ORDER,
+
       NAMA_TOKO: isPicToko ? tokoLogin : form.NAMA_TOKO,
 
       // ===== TAHAP 1 =====
@@ -923,8 +1039,9 @@ export default function FinanceReport() {
 
       return {
         No: i + 1,
-        "No Pre Order": r.NO_PRE_ORDER || "-",
         Tanggal: r.TANGGAL_TRANSAKSI || "-",
+        "No Pre Order": r.NO_PRE_ORDER || "-",
+
         Toko: r.NAMA_TOKO || "-",
         "Nama Pelanggan": r.NAMA_PELANGGAN || "-",
         "ID Pelanggan": r.ID_PELANGGAN || "-",
@@ -1014,8 +1131,9 @@ export default function FinanceReport() {
 
   const headerTableExcel = [
     "No",
+    "TANGGAL",
     "No Pre Order",
-    "Tanggal",
+    "No Invoice Penjualan",
     "Toko",
     "Nama Pelanggan",
     "ID Pelanggan",
@@ -1155,18 +1273,6 @@ export default function FinanceReport() {
               {editId ? "Edit Setoran" : "Tambah SETORAN Pre ORDER PENJUALAN"}
             </h3>
 
-            {/* NO PRE ORDER */}
-            <div>
-              <label className="text-xs">No Pre Order</label>
-              <input
-                value={form.NO_PRE_ORDER || ""}
-                onChange={(e) =>
-                  setForm({ ...form, NO_PRE_ORDER: e.target.value })
-                }
-                className="w-full border rounded p-1"
-              />
-            </div>
-
             {/* TANGGAL */}
             <div>
               <label className="text-xs">Tanggal</label>
@@ -1179,6 +1285,21 @@ export default function FinanceReport() {
                 className="w-full border rounded p-1"
               />
             </div>
+
+            {/* NO PRE ORDER */}
+            <div>
+              <label className="text-xs">No Pre Order</label>
+              <input
+                value={form.NO_PRE_ORDER || ""}
+                onChange={(e) =>
+                  setForm({ ...form, NO_PRE_ORDER: e.target.value })
+                }
+                className="w-full border rounded p-1"
+              />
+            </div>
+
+            
+
             {/* TOKO */}
             <div>
               <label className="text-xs">Nama Toko</label>
@@ -1525,6 +1646,7 @@ export default function FinanceReport() {
         </div>
       </div>
       {/* TABEL */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <div className="border rounded-xl p-4 bg-white shadow">
         <h3 className="font-semibold mb-2">
           Daftar SETORAN Pre ORDER PENJUALAN
@@ -1550,7 +1672,7 @@ export default function FinanceReport() {
             <tbody>
               {paginatedSetoran.length === 0 ? (
                 <tr>
-                 <td colSpan={21} className="py-6 text-center text-slate-500">
+                  <td colSpan={21} className="py-6 text-center text-slate-500">
                     Tidak ada data
                   </td>
                 </tr>
@@ -1565,11 +1687,10 @@ export default function FinanceReport() {
                       <td className="px-3 py-2 text-center font-semibold">
                         {nomor}
                       </td>
+                      <td className="px-3 py-2">{r.TANGGAL_TRANSAKSI}</td>
                       <td className="px-3 py-2 font-semibold">
                         {r.NO_PRE_ORDER}
                       </td>
-
-                      <td className="px-3 py-2">{r.TANGGAL_TRANSAKSI}</td>
 
                       <td className="px-3 py-2">{r.NAMA_TOKO}</td>
 
@@ -1702,6 +1823,8 @@ export default function FinanceReport() {
           </div>
         </div>
       </div>
+      <TableLaporanPenjualan data={dataPenjualan} />
+      </div>
 
       <div className="flex items-center gap-2">
         <button
@@ -1716,6 +1839,8 @@ export default function FinanceReport() {
         >
           Export PDF
         </button>
+
+      
       </div>
 
       {/* Filters + Form */}

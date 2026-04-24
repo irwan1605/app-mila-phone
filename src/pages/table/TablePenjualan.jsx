@@ -435,7 +435,7 @@ export default function TablePenjualan({ data = [] }) {
     // ===============================
     if (refundLock.current[row.id]) return;
     refundLock.current[row.id] = true;
-  
+
     try {
       // ===============================
       // 🔥 2. VALIDASI CEPAT
@@ -444,29 +444,28 @@ export default function TablePenjualan({ data = [] }) {
         alert("❌ Refund hanya untuk Superadmin");
         return;
       }
-  
+
       const trx = rows.find(
         (x) =>
-          String(x.invoice || "").trim() ===
-          String(row.invoice || "").trim()
+          String(x.invoice || "").trim() === String(row.invoice || "").trim()
       );
-  
+
       if (trx?.refundProcessed) {
         alert("❌ Sudah pernah di refund");
         return;
       }
-  
+
       // ===============================
       // 🔥 3. LANGSUNG LOCK UI (TANPA NUNGGU)
       // ===============================
       setRefundLoading(row.id);
-  
+
       // ===============================
       // 🔥 4. CONFIRM (SETELAH LOCK)
       // ===============================
       const ok = window.confirm("Yakin ingin REFUND?");
       if (!ok) return;
-  
+
       // ===============================
       // 🔥 5. PROSES
       // ===============================
@@ -478,7 +477,7 @@ export default function TablePenjualan({ data = [] }) {
         },
         userLogin
       );
-  
+
       // 🔥 CATAT TRANSAKSI (SUMBER STOK)
       await addTransaksi(row.tokoId, {
         TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
@@ -491,7 +490,7 @@ export default function TablePenjualan({ data = [] }) {
         STATUS: "Approved",
         CREATED_AT: Date.now(),
       });
-  
+
       // ===============================
       // 🔥 6. HIDE UI (OPSIONAL)
       // ===============================
@@ -499,7 +498,7 @@ export default function TablePenjualan({ data = [] }) {
         ...prev,
         [row.invoice]: true,
       }));
-  
+
       alert("✅ Refund berhasil (1 klik)");
     } catch (e) {
       console.error(e);
@@ -830,17 +829,17 @@ export default function TablePenjualan({ data = [] }) {
                     {/* REFUND */}
 
                     {isSuperAdmin && (
-                    <button
-                    onClick={() => handleRefund(row)}
-                    disabled={refundLoading === row.id}
-                    className={`px-2 py-1 rounded text-xs text-white ${
-                      refundLoading === row.id
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-orange-500 hover:bg-orange-600"
-                    }`}
-                  >
-                    {refundLoading === row.id ? "Processing..." : "Refund"}
-                  </button>
+                      <button
+                        onClick={() => handleRefund(row)}
+                        disabled={refundLoading === row.id}
+                        className={`px-2 py-1 rounded text-xs text-white ${
+                          refundLoading === row.id
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-orange-500 hover:bg-orange-600"
+                        }`}
+                      >
+                        {refundLoading === row.id ? "Processing..." : "Refund"}
+                      </button>
                     )}
                     {/* {isSuperAdmin && row.status !== "REFUND" && (
                       <button

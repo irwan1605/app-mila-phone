@@ -44,11 +44,36 @@ import {
   endAt,
   child,
   off ,
+  
 } from "firebase/database";
 
-/* ============================================================
-   HELPERS
-============================================================ */
+
+
+export const listenTransaksi = (callback) => {
+  const dbRef = ref(db, "transaksi");
+
+  onValue(dbRef, (snapshot) => {
+    const val = snapshot.val();
+
+    console.log("🔥 RAW FIREBASE:", val);
+
+    if (!val) {
+      callback([]);
+      return;
+    }
+
+    // ✅ FIX: langsung map (bukan nested)
+    const rows = Object.keys(val).map((id) => ({
+      id,
+      ...val[id],
+    }));
+
+    console.log("🔥 HASIL FINAL:", rows);
+
+    callback(rows);
+  });
+};
+
 // =====================================================
 // 🔥 TAMBAH STOK SETELAH REFUND
 // =====================================================
