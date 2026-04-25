@@ -50,6 +50,11 @@ const genInvoice = () =>
       String(v || "")
         .trim()
         .toUpperCase();
+
+        const normalizeImei = (v) =>
+          String(v || "")
+            .trim()
+            .toUpperCase();
     
 
 // ================= COMPONENT =================
@@ -390,10 +395,14 @@ export default function CardPenjualanToko() {
         if (item.isImei) {
           const imei = item.imeiList?.[0];
       
-          const masihAda = detailStockLookup?.[imei];
+          const imeiFix = normalizeImei(imei);
+
+          const masihAda = Object.entries(detailStockLookup || {}).find(
+            ([key]) => normalizeImei(key) === imeiFix
+          )?.[1];
       
-          if (!masihAda) {
-            throw new Error(`IMEI ${imei} tidak ditemukan di stok`);
+          if (!detailStockLookup || Object.keys(detailStockLookup).length === 0) {
+            throw new Error("Data stok belum siap, coba ulang");
           }
         }
       }
