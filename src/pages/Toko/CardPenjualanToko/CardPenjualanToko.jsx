@@ -100,11 +100,16 @@ export default function CardPenjualanToko() {
   const location = useLocation();
   const [listBarang, setListBarang] = useState([]);
   const [detailStockLookup, setDetailStockLookup] = useState({});
+  const [isStockReady, setIsStockReady] = useState(false);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "detail_stock"), (snap) => {
       const data = snap.val() || {};
       setDetailStockLookup(data);
+    
+      if (data && Object.keys(data).length > 0) {
+        setIsStockReady(true); // ✅ tandai siap
+      }
     });
   
     return () => unsub();
@@ -376,52 +381,69 @@ export default function CardPenjualanToko() {
       alert("❌ Pembayaran belum lengkap");
       return;
     }
-
-  console.log("PAYMENT:", payment);
-
+  
+    console.log("PAYMENT:", payment);
+  
     const tokoIdFix = normalizeTokoId(tokoAktifId);
-
+  
     if (!tokoIdFix || tokoIdFix === "[object Object]") {
       alert("❌ ID TOKO INVALID\nSilahkan logout & login ulang");
       return;
     }
-
+  
+    // ✅ cek apakah data stok sudah siap
+    const stockReady =
+      detailStockLookup && Object.keys(detailStockLookup).length > 0;
+  
     const imeiLocked = [];
     const stokRollback = [];
-
+  
     try {
       setSubmitting(true);
+  
+      /* =================================================
+         0️⃣ VALIDASI IMEI TERHADAP STOK (NON BLOCKING)
+      ================================================= */
       for (const item of items) {
         if (item.isImei) {
           const imei = item.imeiList?.[0];
-      
+          if (!imei) throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
+  
           const imeiFix = normalizeImei(imei);
-
-          const masihAda = Object.entries(detailStockLookup || {}).find(
-            ([key]) => normalizeImei(key) === imeiFix
-          )?.[1];
-      
-          if (!detailStockLookup || Object.keys(detailStockLookup).length === 0) {
-            throw new Error("Data stok belum siap, coba ulang");
+  
+          let masihAda = null;
+  
+          // 🔥 hanya cek kalau data sudah ready
+          if (stockReady) {
+            for (const [key, val] of Object.entries(detailStockLookup || {})) {
+              if (normalizeImei(key) === imeiFix) {
+                masihAda = val;
+                break;
+              }
+            }
+  
+            if (!masihAda) {
+              throw new Error(`IMEI ${imei} tidak ditemukan di stok`);
+            }
+          } else {
+            console.warn("⚠️ Skip validasi stok (belum ready)");
           }
         }
       }
-
+  
       /* =================================================
          1️⃣ VALIDASI & LOCK IMEI
       ================================================= */
       for (const item of items) {
         const qty = Number(item.qty || 0);
         const imei = item.isImei ? item.imeiList?.[0] : null;
-
+  
         if (item.isImei) {
           if (!imei) throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
-
-          // 🔥 CEK DARI FIREBASE (SERVICE)
+  
           const sold = await cekImeiSudahTerjual(imei);
           if (sold) throw new Error(`IMEI ${imei} sudah pernah terjual`);
-
-          // 🔥 CEK DARI DATA TABLE YANG SUDAH ADA (DOUBLE SAFETY)
+  
           const sudahAdaDiTable = penjualanList.some(
             (trx) =>
               Array.isArray(trx.items) &&
@@ -433,143 +455,93 @@ export default function CardPenjualanToko() {
                   )
               )
           );
-
+  
           if (sudahAdaDiTable) {
             throw new Error(`IMEI ${imei} sudah pernah terjual`);
           }
-
+  
           await lockImeiRealtime(
             imei,
             formUser.namaToko,
             userLogin?.email || "unknown"
           );
-
+  
           imeiLocked.push(imei);
         } else {
-          // 🔥 NON IMEI (ACCESSORIES, BATERAI, DLL)
-          if (qty <= 0) throw new Error(`QTY tidak valid (${item.namaBarang})`);
-          // ❌ JANGAN CEK SKU LAGI
+          if (qty <= 0)
+            throw new Error(`QTY tidak valid (${item.namaBarang})`);
         }
       }
-
+  
       /* =================================================
          2️⃣ BENTUK TRANSAKSI
       ================================================= */
       const transaksi = {
-        id: Date.now(), // 🔥 ID LOCAL UNTUK TABLE
+        id: Date.now(),
         invoice: formUser.noFaktur,
         tanggal: formUser.tanggal,
         toko: formUser.namaToko,
         tokoId: tokoIdFix,
-
+  
         user: {
           namaPelanggan: formUser.namaPelanggan,
-          idPelanggan : formUser.idPelanggan ,
+          idPelanggan: formUser.idPelanggan,
           noTlpPelanggan: formUser.noTlpPelanggan,
-          storeHead: formUser.storeHead,
           namaSales: formUser.namaSales,
-          salesHandle: formUser.salesHandle,
         },
-
+  
         payment: { ...payment },
         statusPembayaran: "OK",
         createdAt: Date.now(),
-
-        items: items.map((item) => {
-          const masterBarang = barangList.find(
-            (b) =>
-              String(b.namaBarang || "").trim() ===
-              String(item.namaBarang || "").trim()
-          );
-
-          return {
-            kategoriBarang: item.kategoriBarang,
-            namaBrand: item.namaBrand,
-            namaBarang: item.namaBarang,
-
-            qty: Number(item.qty || 0),
-            imeiList: item.isImei ? item.imeiList : [],
-
-            skemaHarga: item.skemaHarga,
-            hargaAktif: Number(item.hargaAktif || 0),
-          };
-        }),
+  
+        items: items.map((item) => ({
+          kategoriBarang: item.kategoriBarang,
+          namaBrand: item.namaBrand,
+          namaBarang: item.namaBarang,
+          qty: Number(item.qty || 0),
+          imeiList: item.isImei ? item.imeiList : [],
+          skemaHarga: item.skemaHarga,
+          hargaAktif: Number(item.hargaAktif || 0),
+        })),
       };
-
-      const errorOwnership = validateStockOwnership(
-        items,
-        formUser.namaToko
-      );
-      
-      
-      if (errorOwnership) {
-        alert("❌ " + errorOwnership);
-        return;
-      }
-      
+  
       /* =================================================
-         3️⃣ SIMPAN TRANSAKSI KE FIREBASE
+         3️⃣ SIMPAN TRANSAKSI
       ================================================= */
       const key = await addPenjualan(tokoIdFix, transaksi);
       if (!key) throw new Error("Gagal menyimpan transaksi");
-
+  
       await saveTransaksiPenjualan(transaksi);
-
+  
       /* =================================================
-   🔥 3C — CATAT TRANSAKSI STOK (PENJUALAN)
-================================================= */
+         4️⃣ CATAT KE TRANSAKSI STOK
+      ================================================= */
       for (const item of items) {
         const payload = {
           TANGGAL_TRANSAKSI: formUser.tanggal,
           NO_INVOICE: formUser.noFaktur,
           NAMA_TOKO: formUser.namaToko,
-          NAMA_SUPPLIER: "-", // penjualan
           NAMA_BRAND: item.namaBrand,
           NAMA_BARANG: item.namaBarang,
           QTY: item.isImei ? 1 : Number(item.qty),
           IMEI: item.isImei ? item.imeiList?.[0] : "",
-          NOMOR_UNIK: item.isImei
-            ? item.imeiList?.[0]
-            : `${item.namaBrand}|${item.namaBarang}`,
-
           PAYMENT_METODE: "PENJUALAN",
           STATUS: "Approved",
-          KETERANGAN: "AUTO FROM PENJUALAN",
         };
-
+  
         await addTransaksi(tokoIdFix, payload);
       }
-
+  
       /* =================================================
-         🔥 3B — LANGSUNG MASUK KE TABLE (REALTIME)
-      ================================================= */
-      // setPenjualanList((prev) => [
-      //   {
-      //     ...transaksi,
-      //     id: key,
-      //   },
-      //   ...prev,
-      // ]);
-
-      /* =================================================
-         4️⃣ POTONG STOK
+         5️⃣ POTONG STOK
       ================================================= */
       await kurangiStokSetelahPenjualan({
         toko: formUser.namaToko,
         items,
       });
-
-      items.forEach((item) => {
-        if (!item.isImei) {
-          stokRollback.push({
-            sku: item.sku,
-            qty: Number(item.qty),
-          });
-        }
-      });
-
+  
       /* =================================================
-         5️⃣ AUDIT IMEI
+         6️⃣ AUDIT IMEI
       ================================================= */
       for (const imei of imeiLocked) {
         try {
@@ -583,11 +555,11 @@ export default function CardPenjualanToko() {
           });
         } catch {}
       }
-
-      alert("✅ PENJUALAN BERHASIL & MASUK TABEL");
-
+  
+      alert("✅ PENJUALAN BERHASIL");
+  
       /* =================================================
-         6️⃣ RESET
+         7️⃣ RESET
       ================================================= */
       setItems([]);
       setPayment({});
@@ -600,26 +572,13 @@ export default function CardPenjualanToko() {
       }));
     } catch (e) {
       console.error(e);
-
-      /* =================================================
-         ROLLBACK
-      ================================================= */
+  
       for (const imei of imeiLocked) {
         try {
-          await unlockImeiRealtime(imei, userLogin?.email || "unknown");
+          await unlockImeiRealtime(imei);
         } catch {}
       }
-
-      for (const s of stokRollback) {
-        try {
-          await kurangiStokToko({
-            tokoId: tokoIdFix,
-            sku: s.sku,
-            qty: -Math.abs(s.qty),
-          });
-        } catch {}
-      }
-
+  
       alert("❌ Penjualan gagal: " + e.message);
     } finally {
       setSubmitting(false);

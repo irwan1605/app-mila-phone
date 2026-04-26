@@ -21,6 +21,9 @@ const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
 const isImeiKategori = (kat) =>
   KATEGORI_IMEI.includes((kat || "").toUpperCase());
 
+const normalizeImei = (v) =>
+  String(v || "").trim().toUpperCase();
+
 export default function FormItemSection({
   value = [],
   onChange,
@@ -45,10 +48,12 @@ export default function FormItemSection({
 
   /* ================= HELPER CEK TOKO DARI TRANSFER ================= */
   const findTokoByTransfer = (imei) => {
+    const imeiFix = normalizeImei(imei);
+  
     const tf = stokToko.find(
-      (s) => String(s.imei).trim() === String(imei).trim()
+      (s) => normalizeImei(s.imei) === imeiFix
     );
-
+  
     return tf?.toko || null;
   };
 
@@ -593,62 +598,67 @@ export default function FormItemSection({
    🔥 GLOBAL STOCK MAP (100% STOCK OPNAME SYNC)
    IMEI + NON IMEI
 ===================================================== */
-  const globalStockMap = useMemo(() => {
-    if (!tokoLogin) return {};
+const normalizeImei = (v) =>
+  String(v || "").trim().toUpperCase();
 
-    const map = {};
+const globalStockMap = useMemo(() => {
+  if (!tokoLogin) return {};
 
-    allTransaksi.forEach((t) => {
-      if (!t) return;
-      if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
-      if (
-        String(t.NAMA_TOKO || "").toUpperCase() !==
-        String(tokoLogin || "").toUpperCase()
-      )
-        return;
+  const map = {};
 
-      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-      const isImei = !!t.IMEI;
+  allTransaksi.forEach((t) => {
+    if (!t) return;
 
-      // ================= IMEI =================
-      if (isImei) {
-        const imei = String(t.IMEI).trim();
+    if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
 
-        if (!map[imei]) {
-          map[imei] = { type: "IMEI", available: false };
-        }
+    if (
+      String(t.NAMA_TOKO || "").toUpperCase() !==
+      String(tokoLogin || "").toUpperCase()
+    )
+      return;
 
-        if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
-          map[imei].available = true;
-        }
+    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+    const isImei = !!t.IMEI;
 
-        if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
-          map[imei].available = false;
-        }
+    // ================= IMEI =================
+    if (isImei) {
+      const imei = normalizeImei(t.IMEI); // 🔥 FIX DI SINI
+
+      if (!map[imei]) {
+        map[imei] = { type: "IMEI", available: false };
       }
 
-      // ================= NON IMEI =================
-      if (!isImei) {
-        const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-
-        if (!map[key]) {
-          map[key] = { type: "NON_IMEI", qty: 0 };
-        }
-
-        const qty = Number(t.QTY || 0);
-
-        if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
-          map[key].qty += qty;
-        }
-
-        if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
-          map[key].qty -= qty;
-        }
+      if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+        map[imei].available = true;
       }
-    });
 
-    return map;
-  }, [allTransaksi, tokoLogin]);
+      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+        map[imei].available = false;
+      }
+    }
+
+    // ================= NON IMEI =================
+    if (!isImei) {
+      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+      if (!map[key]) {
+        map[key] = { type: "NON_IMEI", qty: 0 };
+      }
+
+      const qty = Number(t.QTY || 0);
+
+      if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+        map[key].qty += qty;
+      }
+
+      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+        map[key].qty -= qty;
+      }
+    }
+  });
+
+  return map;
+}, [allTransaksi, tokoLogin]);
 
   // ===============================
   // HELPER: Cari toko asal IMEI
@@ -1083,10 +1093,13 @@ export default function FormItemSection({
                     }
 
                     // 🔥 VALIDASI FINAL STOCK SOURCE
-                    if (
-                      !globalStockMap[imei] ||
-                      !globalStockMap[imei].available
-                    ) {
+                    const imeiFix = normalizeImei(imei);
+
+                    const stockEntry = Object.entries(globalStockMap || {}).find(
+                      ([key]) => normalizeImei(key) === imeiFix
+                    )?.[1];
+                    
+                    if (!stockEntry || !stockEntry.available) {
                       alert("❌ IMEI tidak tersedia di toko ini");
                       updateItem(idx, {
                         imei: "",
@@ -1101,18 +1114,23 @@ export default function FormItemSection({
                        (TAMBAHAN - TIDAK MERUBAH LOGIC LAMA)
                     =============================== */
                     const imeiFromTransfer = stokToko.some(
-                      (s) => String(s.imei).trim() === imei
+                      (s) => normalizeImei(s.imei) === normalizeImei(imei)
                     );
 
                     /* ===============================
                        3. VALIDASI AVAILABLE
                        (LOGIC LAMA + TRANSFER)
                     =============================== */
-                    if (
-                      (!imeiAvailableList.includes(imei) &&
-                        !imeiFromTransfer) ||
-                      stockRealtime?.soldImei?.[imei]
-                    ) {
+
+                    const isAvailable = imeiAvailableList.some(
+                      (im) => normalizeImei(im) === imeiFix
+                    );
+                    
+                    const isSold = Object.keys(stockRealtime?.soldImei || {}).some(
+                      (im) => normalizeImei(im) === imeiFix
+                    );
+                    
+                    if ((!isAvailable && !imeiFromTransfer) || isSold) {
                       alert("❌ IMEI sudah terjual / tidak tersedia");
                       updateItem(idx, {
                         imei: "",
@@ -1209,7 +1227,7 @@ export default function FormItemSection({
                   <div className="text-xs mt-1 space-y-1">
                     <div className="text-blue-600">
                       🔍 Status IMEI:{" "}
-                      {globalStockMap[item.imei]?.available
+                      {globalStockMap[normalizeImei(item.imei)]?.available
                         ? "READY"
                         : "TIDAK TERSEDIA"}
                     </div>
