@@ -28,7 +28,7 @@ import {
   listenMasterPaymentMetode,
   listenTransaksi ,
 } from "../../services/FirebaseService";
-import TableLaporanPenjualan from "../table/TableLaporanPenjualan";
+// import TableLaporanPenjualan from "../table/TableLaporanPenjualan";
 
 // ===== Konfigurasi Toko =====
 const fallbackTokoNames = [
@@ -1646,7 +1646,7 @@ export default function FinanceReport() {
         </div>
       </div>
       {/* TABEL */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      {/* <div className="grid grid-cols-1 xl:grid-cols-2 gap-4"> */}
       <div className="border rounded-xl p-4 bg-white shadow">
         <h3 className="font-semibold mb-2">
           Daftar SETORAN Pre ORDER PENJUALAN
@@ -1822,8 +1822,8 @@ export default function FinanceReport() {
             </button>
           </div>
         </div>
-      </div>
-      <TableLaporanPenjualan data={dataPenjualan} />
+      {/* </div> */}
+      {/* <TableLaporanPenjualan data={dataPenjualan} /> */}
       </div>
 
       <div className="flex items-center gap-2">
