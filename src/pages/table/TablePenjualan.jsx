@@ -217,8 +217,14 @@ export default function TablePenjualan({ data = [] }) {
           paymentKredit: trx.payment?.status === "PIUTANG" ? "KREDIT" : "LUNAS",
 
           /* 🔥 AGREGASI */
-          kategoriBarang: "MULTI ITEM",
-          namaBrand: "-",
+          kategoriBarang:
+            trx.items?.length === 1
+              ? trx.items[0]?.kategoriBarang || "-"
+              : trx.items?.map((i) => i.kategoriBarang).join(", "),
+          namaBrand:
+            trx.items?.length === 1
+              ? trx.items[0]?.namaBrand || "-"
+              : [...new Set(trx.items.map((i) => i.namaBrand))].join(", "),
           namaBarang: allBarang,
           imei: allIMEI,
           qty: totalQty,
@@ -229,6 +235,18 @@ export default function TablePenjualan({ data = [] }) {
 
           statusBayar: trx.payment?.status || "-",
           nominalMdr: trx.payment?.nominalMdr || 0,
+          dashboardKredit: Number(trx.payment?.dashboardPayment || 0),
+
+          paymentKreditNominal:
+            trx.payment?.paymentMethod === "KREDIT"
+              ? Number(trx.payment?.dashboardPayment || 0) -
+                Number(trx.payment?.nominalMdr || 0) -
+                Number(trx.payment?.dpTalangan || 0)
+              : 0,
+
+          paymentMetodeUser: Array.isArray(trx.payment?.splitPayment)
+            ? trx.payment.splitPayment.map((p) => p.metode).join(" + ")
+            : trx.payment?.paymentMethod || trx.payment?.metode || "-",
           tenor: trx.payment?.tenor || "-",
           cicilan: trx.payment?.cicilan || 0,
 
@@ -489,9 +507,9 @@ export default function TablePenjualan({ data = [] }) {
         PAYMENT_METODE: "REFUND",
         STATUS: "Approved",
         CREATED_AT: Date.now(),
-      
+
         // 🔥 WAJIB (ANTI DOUBLE)
-        SOURCE: "REFUND_BUTTON"
+        SOURCE: "REFUND_BUTTON",
       });
 
       // ===============================
@@ -516,51 +534,76 @@ export default function TablePenjualan({ data = [] }) {
   };
   /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {
-    const data = tableRows.map((r, i) => ({
-      No: i + 1,
-      Tanggal: r.tanggal
-        ? new Date(r.tanggal).toLocaleDateString("id-ID")
-        : "-",
-      Invoice: r.invoice,
-      Toko: r.toko,
-      Pelanggan: r.pelanggan,
-      idPelanggan: r.idPelanggan,
-      Telp: r.telp,
-      StoreHead: r.storeHead,
-      Sales: r.sales,
-      SalesHandle: r.salesHandle,
+    const data = [];
 
-      Kategori: r.kategoriBarang,
-      Brand: r.namaBrand,
-      Barang: r.namaBarang,
-      IMEI: r.imei,
-      QTY: r.qty,
-
-      HargaSRP: r.hargaSRP || 0,
-      HargaGrosir: r.hargaGrosir || 0,
-      HargaReseller: r.hargaReseller || 0,
-
-      StatusBayar: r.statusBayar,
-
-      // 🔥 PAYMENT
-      PaymentMetode: r.paymentMetode || "-",
-      NamaBank: r.namaBank || "-",
-      NominalPayment: r.nominalPaymentMetode || 0,
-
-      // 🔥 MDR & DP
-      NamaMDR: r.namaMdr || "-",
-      NominalMDR: r.nominalMdr || 0,
-      DPTalangan: r.dpTalangan || 0,
-
-      PaymentKredit: r.paymentKredit || "-",
-      Tenor: r.tenor || "-",
-
-      Keterangan: r.keterangan || "-",
-      GrandTotal: r.grandTotal || 0,
-      Status: r.status,
-    }));
+    tableRows.forEach((r, i) => {
+      data.push({
+        No: i + 1,
+    
+        // ===== INVOICE =====
+        Tanggal: r.tanggal
+          ? new Date(r.tanggal).toLocaleDateString("id-ID")
+          : "-",
+        Invoice: r.invoice,
+        Toko: r.toko,
+    
+        // ===== USER =====
+        Pelanggan: r.pelanggan,
+        IDPelanggan: r.idPelanggan,
+        Telp: r.telp,
+        StoreHead: r.storeHead,
+    
+        // ===== SALES =====
+        Sales: r.sales,
+        SalesHandle: r.salesHandle,
+    
+        // ===== BARANG (TAHAP 2) =====
+        Kategori: r.kategoriBarang,
+        Brand: r.namaBrand,
+        NamaBarang: r.namaBarang,
+        IMEI: r.imei,
+        QTY: r.qty,
+    
+        // ===== HARGA =====
+        HargaSRP: r.hargaSRP || 0,
+        HargaGrosir: r.hargaGrosir || 0,
+        HargaReseller: r.hargaReseller || 0,
+    
+        // ===== PAYMENT (TAHAP 3) =====
+        StatusBayar: r.statusBayar,
+    
+        PaymentMetode: r.paymentMetodeUser || r.paymentMetode,
+        NamaBank: r.namaBank,
+    
+        DashboardKredit: r.dashboardKredit || 0,
+        PaymentKredit: r.paymentKreditNominal || 0,
+    
+        NominalPayment: r.nominalPaymentMetode || 0,
+    
+        // ===== MDR =====
+        NamaMDR: r.namaMdr,
+        NominalMDR: r.nominalMdr,
+        DPTalangan: r.dpTalangan,
+    
+        // ===== KREDIT =====
+        Tenor: r.tenor,
+        Cicilan: r.cicilan || 0,
+    
+        // ===== SELISIH =====
+        KurangBayar: r.KURANG_BAYAR || 0,
+        SisaKembalian: r.SISA_KEMBALIAN || 0,
+    
+        // ===== TOTAL =====
+        GrandTotal: r.grandTotal,
+    
+        Status: r.status,
+      });
+    });
 
     const ws = XLSX.utils.json_to_sheet(data);
+
+    // auto width kolom
+    ws["!cols"] = Object.keys(data[0]).map(() => ({ wch: 18 }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Penjualan");
 
@@ -666,6 +709,9 @@ export default function TablePenjualan({ data = [] }) {
               <th className="px-3 py-2 border border-gray-400">
                 Payment Kredit
               </th>
+              <th className="px-3 py-2 border border-gray-400">
+                Dashboard Kredit
+              </th>
               <th className="px-3 py-2 border border-gray-400">Tenor</th>
               <th className="px-3 py-2 border border-gray-400">Nama Bank</th>
               <th className="px-3 py-2 border border-gray-400">Nama MDR</th>
@@ -750,10 +796,16 @@ export default function TablePenjualan({ data = [] }) {
                   {row.statusBayar}
                 </td>
                 <td className="px-3 py-2 border border-gray-300">
-                  {row.paymentMetode}
+                  {row.paymentMetodeUser}
                 </td>
                 <td className="px-3 py-2 border border-gray-300">
-                  {row.paymentKredit}
+                  Rp{" "}
+                  {Number(row.paymentKreditNominal || 0).toLocaleString(
+                    "id-ID"
+                  )}
+                </td>
+                <td className="px-3 py-2 border border-gray-300">
+                  Rp {Number(row.dashboardKredit || 0).toLocaleString("id-ID")}
                 </td>
                 <td className="px-3 py-2 border border-gray-300">
                   {row.tenor}
