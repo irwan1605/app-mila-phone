@@ -489,6 +489,9 @@ export default function TablePenjualan({ data = [] }) {
         PAYMENT_METODE: "REFUND",
         STATUS: "Approved",
         CREATED_AT: Date.now(),
+      
+        // 🔥 WAJIB (ANTI DOUBLE)
+        SOURCE: "REFUND_BUTTON"
       });
 
       // ===============================

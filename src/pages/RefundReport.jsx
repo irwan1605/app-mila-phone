@@ -63,7 +63,8 @@ export default function RefundReport() {
         // =========================
         if (
           t.PAYMENT_METODE === "REFUND" &&
-          String(t.STATUS).toUpperCase() === "APPROVED"
+          String(t.STATUS).toUpperCase() === "APPROVED" &&
+          t.SOURCE === "REFUND_BUTTON"
         ) {
           refundRowsRaw.push({
             id: t.id,
