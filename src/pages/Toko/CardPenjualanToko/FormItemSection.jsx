@@ -22,7 +22,9 @@ const isImeiKategori = (kat) =>
   KATEGORI_IMEI.includes((kat || "").toUpperCase());
 
 const normalizeImei = (v) =>
-  String(v || "").trim().toUpperCase();
+  String(v || "")
+    .trim()
+    .toUpperCase();
 
 export default function FormItemSection({
   value = [],
@@ -38,6 +40,9 @@ export default function FormItemSection({
     [onChange]
   );
 
+  const normalize = (v) =>
+    String(v || "").trim().toUpperCase();
+
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterKategori, setMasterKategori] = useState([]);
   const [allTransaksi, setAllTransaksi] = useState([]);
@@ -49,11 +54,9 @@ export default function FormItemSection({
   /* ================= HELPER CEK TOKO DARI TRANSFER ================= */
   const findTokoByTransfer = (imei) => {
     const imeiFix = normalizeImei(imei);
-  
-    const tf = stokToko.find(
-      (s) => normalizeImei(s.imei) === imeiFix
-    );
-  
+
+    const tf = stokToko.find((s) => normalizeImei(s.imei) === imeiFix);
+
     return tf?.toko || null;
   };
 
@@ -401,6 +404,62 @@ export default function FormItemSection({
     }
   };
 
+  /* ==============================
+   🔥 STOK NON IMEI MILIK TOKO
+============================== */
+  const stokNonImeiToko = useMemo(() => {
+    if (!tokoLogin) return {};
+
+    const map = {};
+
+    Object.entries(stockRealtime?.barang || {}).forEach(([namaBarang, qty]) => {
+      if (!qty || qty <= 0) return;
+
+      // cari di master barang
+      const barang = masterBarang.find(
+        (b) =>
+          String(b.namaBarang || "").toUpperCase() ===
+          String(namaBarang || "").toUpperCase()
+      );
+
+      if (!barang) return;
+
+      map[namaBarang] = qty;
+    });
+
+    return map;
+  }, [stockRealtime, tokoLogin, masterBarang]);
+
+  /* ===============================
+   🔥 GET STOK PER BARANG TOKO
+================================= */
+const getStokBarang = (brand, barang) => {
+  if (!brand || !barang) return 0;
+
+  const key = `${brand}|${barang}`;
+
+  // NON IMEI
+  if (stokNonImeiToko[barang]) {
+    return stokNonImeiToko[barang];
+  }
+
+  // IMEI → hitung dari globalStockMap
+  return Object.entries(globalStockMap).filter(([imei, val]) => {
+    if (val.type !== "IMEI") return false;
+    if (!val.available) return false;
+
+    const trx = allTransaksi.find(
+      (t) => normalize(t.IMEI) === normalize(imei)
+    );
+
+    return (
+      trx &&
+      normalize(trx.NAMA_BARANG) === normalize(barang) &&
+      normalize(trx.NAMA_BRAND) === normalize(brand)
+    );
+  }).length;
+};
+
   const kategoriList = useMemo(
     () => masterKategori.map((k) => k.namaKategori),
     [masterKategori]
@@ -414,6 +473,30 @@ export default function FormItemSection({
           .map((b) => b.namaBrand || b.brand)
       ),
     ].filter(Boolean);
+
+  /* ===============================
+   🔥 BARANG BY BRAND + STOK TOKO
+================================= */
+const barangByBrand = useMemo(() => {
+  return (kategori, brand) => {
+    if (!kategori || !brand) return [];
+
+    return masterBarang.filter((b) => {
+      const cocok =
+        normalize(b.kategoriBarang) === normalize(kategori) &&
+        normalize(b.namaBrand || b.brand) === normalize(brand);
+
+      if (!cocok) return false;
+
+      // 🔥 NON IMEI harus ada stok
+      if (!isImeiKategori(kategori)) {
+        return stokNonImeiToko[b.namaBarang] > 0;
+      }
+
+      return true;
+    });
+  };
+}, [masterBarang, stokNonImeiToko]);
 
   const barangList = (kategori, brand) =>
     masterBarang.filter((b) => {
@@ -568,97 +651,73 @@ export default function FormItemSection({
     };
   };
 
-  /* ==============================
-   🔥 STOK NON IMEI MILIK TOKO
-============================== */
-  const stokNonImeiToko = useMemo(() => {
-    if (!tokoLogin) return {};
-
-    const map = {};
-
-    Object.entries(stockRealtime?.barang || {}).forEach(([namaBarang, qty]) => {
-      if (!qty || qty <= 0) return;
-
-      // cari di master barang
-      const barang = masterBarang.find(
-        (b) =>
-          String(b.namaBarang || "").toUpperCase() ===
-          String(namaBarang || "").toUpperCase()
-      );
-
-      if (!barang) return;
-
-      map[namaBarang] = qty;
-    });
-
-    return map;
-  }, [stockRealtime, tokoLogin, masterBarang]);
-
   /* =====================================================
    🔥 GLOBAL STOCK MAP (100% STOCK OPNAME SYNC)
    IMEI + NON IMEI
 ===================================================== */
-const normalizeImei = (v) =>
-  String(v || "").trim().toUpperCase();
+  const normalizeImei = (v) =>
+    String(v || "")
+      .trim()
+      .toUpperCase();
 
-const globalStockMap = useMemo(() => {
-  if (!tokoLogin) return {};
+  const globalStockMap = useMemo(() => {
+    if (!tokoLogin) return {};
 
-  const map = {};
+    const map = {};
 
-  allTransaksi.forEach((t) => {
-    if (!t) return;
+    allTransaksi.forEach((t) => {
+      if (!t) return;
 
-    if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
+      if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
 
-    if (
-      String(t.NAMA_TOKO || "").toUpperCase() !==
-      String(tokoLogin || "").toUpperCase()
-    )
-      return;
+      if (
+        String(t.NAMA_TOKO || "").toUpperCase() !==
+        String(tokoLogin || "").toUpperCase()
+      )
+        return;
 
-    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-    const isImei = !!t.IMEI;
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+      const isImei = !!t.IMEI;
 
-    // ================= IMEI =================
-    if (isImei) {
-      const imei = normalizeImei(t.IMEI); // 🔥 FIX DI SINI
+      // ================= IMEI =================
+      if (isImei) {
+        const imei = normalizeImei(t.IMEI); // 🔥 FIX DI SINI
 
-      if (!map[imei]) {
-        map[imei] = { type: "IMEI", available: false };
+        if (!map[imei]) {
+          map[imei] = { type: "IMEI", available: false };
+        }
+
+        if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+          map[imei].available = true;
+        }
+
+        if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+          map[imei].available = false;
+        }
       }
 
-      if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
-        map[imei].available = true;
+      // ================= NON IMEI =================
+      if (!isImei) {
+        const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+        if (!map[key]) {
+          map[key] = { type: "NON_IMEI", qty: 0 };
+        }
+
+        const qty = Number(t.QTY || 0);
+
+        if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+          map[key].qty += qty;
+        }
+
+        if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+          map[key].qty -= qty;
+        }
       }
+    });
 
-      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
-        map[imei].available = false;
-      }
-    }
-
-    // ================= NON IMEI =================
-    if (!isImei) {
-      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-
-      if (!map[key]) {
-        map[key] = { type: "NON_IMEI", qty: 0 };
-      }
-
-      const qty = Number(t.QTY || 0);
-
-      if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
-        map[key].qty += qty;
-      }
-
-      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
-        map[key].qty -= qty;
-      }
-    }
-  });
-
-  return map;
-}, [allTransaksi, tokoLogin]);
+    return map;
+  }, [allTransaksi, tokoLogin]);
 
   // ===============================
   // HELPER: Cari toko asal IMEI
@@ -672,6 +731,64 @@ const globalStockMap = useMemo(() => {
       .map(([key]) => key)
       .filter((imei) => !stockRealtime?.soldImei?.[imei]);
   }, [globalStockMap, stockRealtime]);
+
+  /* ===============================
+   🔥 IMEI KHUSUS TOKO (FINAL FIX)
+================================= */
+  const imeiTokoOnlyList = useMemo(() => {
+    if (!tokoLogin) return [];
+
+    return Object.entries(globalStockMap)
+      .filter(([imei, val]) => {
+        if (val.type !== "IMEI") return false;
+        if (!val.available) return false;
+
+        // 🔥 pastikan milik toko ini
+        const tokoTransfer = findTokoByTransfer(imei);
+        if (tokoTransfer) {
+          return (
+            String(tokoTransfer).toUpperCase() ===
+            String(tokoLogin).toUpperCase()
+          );
+        }
+
+        const tokoBeli = findTokoByImei(imei, allTransaksi);
+
+        return (
+          String(tokoBeli || "").toUpperCase() ===
+          String(tokoLogin).toUpperCase()
+        );
+      })
+      .map(([imei]) => imei)
+      .filter((imei) => !stockRealtime?.soldImei?.[imei]);
+  }, [globalStockMap, tokoLogin, allTransaksi, stokToko, stockRealtime]);
+
+  /* ===============================
+   🔥 IMEI SESUAI NAMA BARANG
+================================= */
+const imeiBySelectedBarang = useMemo(() => {
+  if (!tokoLogin) return [];
+
+  return imeiTokoOnlyList.filter((imei) => {
+    const trx = allTransaksi.find(
+      (t) => normalize(t.IMEI) === normalize(imei)
+    );
+
+    if (trx) {
+      return normalize(trx.NAMA_BARANG) === normalize(items[0]?.namaBarang);
+    }
+
+    const stok = stokToko.find(
+      (s) => normalize(s.imei) === normalize(imei)
+    );
+
+    if (stok) {
+      return normalize(stok.namaBarang) === normalize(items[0]?.namaBarang);
+    }
+
+    return false;
+  });
+}, [imeiTokoOnlyList, allTransaksi, stokToko, items]);
 
   const nonImeiStockMap = useMemo(() => {
     const map = {};
@@ -825,6 +942,7 @@ const globalStockMap = useMemo(() => {
             key={item.id}
             className="border rounded-xl p-4 mb-4 bg-white space-y-3"
           >
+            <label className="text-xs font-semibold">Kategori Barang</label>
             {/* KATEGORI */}
             <select
               className="w-full border rounded-lg p-2"
@@ -847,102 +965,89 @@ const globalStockMap = useMemo(() => {
             </select>
 
             {/* BRAND */}
-            <select
-              className="w-full border rounded-lg p-2"
-              disabled={!item.kategoriBarang}
-              value={item.namaBrand || ""}
-              onChange={(e) =>
-                updateItem(idx, {
-                  namaBrand: e.target.value,
-                  namaBarang: "",
-                  imeiList: [],
-                  qty: 0,
-                })
-              }
-            >
-              <option value="">-- Pilih Brand --</option>
-              {brandList(item.kategoriBarang).map((b) => (
-                <option key={b}>{b}</option>
-              ))}
-            </select>
+            <label className="text-xs font-semibold">Nama Brand</label>
+
+<select
+  className="w-full border rounded-lg p-2"
+  disabled={!item.kategoriBarang}
+  value={item.namaBrand || ""}
+  onChange={(e) =>
+    updateItem(idx, {
+      namaBrand: e.target.value,
+      namaBarang: "",
+      imei: "",
+      imeiList: [],
+      qty: 0,
+    })
+  }
+>
+  <option value="">-- Pilih Brand --</option>
+  {brandList(item.kategoriBarang).map((b) => (
+    <option key={b} value={b}>
+      {b}
+    </option>
+  ))}
+</select>
 
             {/* BARANG */}
             <div className="space-y-1">
-              <input
-                list={`barang-${idx}`}
-                className="w-full border rounded-lg p-2"
-                disabled={!item.namaBrand}
-                placeholder="Pilih / ketik nama barang"
-                value={item.namaBarang || ""}
-                onChange={(e) => {
-                  const val = e.target.value;
+            <div className="space-y-1">
+  <label className="text-xs font-semibold">Nama Barang</label>
 
-                  // 🔥 Cari di master sesuai kategori + brand
-                  const barangValid = barangByKategori.find(
-                    (b) =>
-                      String(b.namaBarang).toUpperCase() ===
-                      String(val).toUpperCase()
-                  );
+  <input
+    list={`barang-${idx}`}
+    className="w-full border rounded-lg p-2"
+    disabled={!item.namaBrand}
+    value={item.namaBarang || ""}
+    placeholder="Pilih barang"
+    onChange={(e) => {
+      const val = e.target.value;
 
-                  if (!barangValid) {
-                    updateItem(idx, {
-                      namaBarang: val,
-                    });
-                    return;
-                  }
+      const barangValid = barangByBrand(
+        item.kategoriBarang,
+        item.namaBrand
+      ).find(
+        (b) => normalize(b.namaBarang) === normalize(val)
+      );
 
-                  const key = `${barangValid.namaBrand || barangValid.brand}|${
-                    barangValid.namaBarang
-                  }`;
-                  const stokTersedia = nonImeiStockMap[key] || 0;
+      if (!barangValid) {
+        updateItem(idx, { namaBarang: val });
+        return;
+      }
 
-                  updateItem(idx, {
-                    namaBarang: barangValid.namaBarang,
-                    kategoriBarang: barangValid.kategoriBarang,
-                    isImei: isImeiKategori(barangValid.kategoriBarang),
-                    hargaMap: barangValid.harga || {},
-                    skemaHarga: "srp",
-                    hargaAktif: Number(barangValid.harga?.srp || 0),
-                    qty: isImeiKategori(barangValid.kategoriBarang)
-                      ? 0
-                      : stokTersedia > 0
-                      ? 1
-                      : 0,
-                  });
-                }}
-                onBlur={() => {
-                  const barangValid = barangByKategori.find(
-                    (b) =>
-                      String(b.namaBarang).toUpperCase() ===
-                      String(item.namaBarang).toUpperCase()
-                  );
+      const stok = getStokBarang(
+        barangValid.namaBrand || barangValid.brand,
+        barangValid.namaBarang
+      );
 
-                  if (!barangValid) {
-                    alert("❌ Barang tidak ditemukan di stok toko ini");
-                    updateItem(idx, {
-                      namaBarang: "",
-                      qty: 0,
-                    });
-                    return;
-                  }
+      updateItem(idx, {
+        namaBarang: barangValid.namaBarang,
+        kategoriBarang: barangValid.kategoriBarang,
+        isImei: isImeiKategori(barangValid.kategoriBarang),
+        hargaMap: barangValid.harga || {},
+        skemaHarga: "srp",
+        hargaAktif: Number(barangValid.harga?.srp || 0),
+        qty: isImeiKategori(barangValid.kategoriBarang)
+          ? 0
+          : stok > 0
+          ? 1
+          : 0,
+      });
+    }}
+  />
 
-                  const key = `${barangValid.namaBrand || barangValid.brand}|${
-                    barangValid.namaBarang
-                  }`;
-                  const stok = nonImeiStockMap[key] || 0;
+  <datalist id={`barang-${idx}`}>
+    {barangByBrand(item.kategoriBarang, item.namaBrand).map((b) => (
+      <option key={b.namaBarang} value={b.namaBarang} />
+    ))}
+  </datalist>
 
-                  if (
-                    !isImeiKategori(barangValid.kategoriBarang) &&
-                    stok <= 0
-                  ) {
-                    alert("❌ Stok barang kosong");
-                    updateItem(idx, {
-                      namaBarang: "",
-                      qty: 0,
-                    });
-                  }
-                }}
-              />
+  {/* 🔥 STOK */}
+  <div className="text-xs text-green-600 font-semibold">
+    📦 Stok tersedia:{" "}
+    {getStokBarang(item.namaBrand, item.namaBarang)}
+  </div>
+</div>
 
               {/* 🔥 TAMPILKAN INFO STOK REALTIME */}
               {!item.isImei && item.namaBarang && (
@@ -977,6 +1082,7 @@ const globalStockMap = useMemo(() => {
             </datalist>
 
             {/* SKEMA */}
+            <label className="text-xs font-semibold">Kategori Harga</label>
             <select
               className="w-full border rounded p-2"
               value={item.skemaHarga}
@@ -1029,7 +1135,10 @@ const globalStockMap = useMemo(() => {
                       return;
                     }
 
-                    updateItem(idx, { qty: qtyInput });
+                    // ✅ HANYA UPDATE QTY
+                    updateItem(idx, {
+                      qty: qtyInput,
+                    });
                   }}
                 />
 
@@ -1046,6 +1155,7 @@ const globalStockMap = useMemo(() => {
             {/* IMEI — HANYA MUNCUL JIKA BARANG IMEI */}
             {item.isImei && (
               <>
+                <label className="text-xs font-semibold">No IMEI</label>
                 <input
                   list={`imei-${idx}`}
                   className="border rounded px-2 py-1 w-full"
@@ -1065,9 +1175,9 @@ const globalStockMap = useMemo(() => {
 
                     setImeiKeyword(val);
                     updateItem(idx, {
-                      imei: val,
-                      imeiList: [],
-                      qty: 0,
+                      imei: e.target.value,
+                      imeiList: [e.target.value],
+                      qty: 1,
                     });
                   }}
                   onBlur={async () => {
@@ -1095,10 +1205,10 @@ const globalStockMap = useMemo(() => {
                     // 🔥 VALIDASI FINAL STOCK SOURCE
                     const imeiFix = normalizeImei(imei);
 
-                    const stockEntry = Object.entries(globalStockMap || {}).find(
-                      ([key]) => normalizeImei(key) === imeiFix
-                    )?.[1];
-                    
+                    const stockEntry = Object.entries(
+                      globalStockMap || {}
+                    ).find(([key]) => normalizeImei(key) === imeiFix)?.[1];
+
                     if (!stockEntry || !stockEntry.available) {
                       alert("❌ IMEI tidak tersedia di toko ini");
                       updateItem(idx, {
@@ -1125,11 +1235,11 @@ const globalStockMap = useMemo(() => {
                     const isAvailable = imeiAvailableList.some(
                       (im) => normalizeImei(im) === imeiFix
                     );
-                    
-                    const isSold = Object.keys(stockRealtime?.soldImei || {}).some(
-                      (im) => normalizeImei(im) === imeiFix
-                    );
-                    
+
+                    const isSold = Object.keys(
+                      stockRealtime?.soldImei || {}
+                    ).some((im) => normalizeImei(im) === imeiFix);
+
                     if ((!isAvailable && !imeiFromTransfer) || isSold) {
                       alert("❌ IMEI sudah terjual / tidak tersedia");
                       updateItem(idx, {
@@ -1250,16 +1360,15 @@ const globalStockMap = useMemo(() => {
                 )}
 
                 <datalist id={`imei-${idx}`}>
-                  {imeiByBarang
-                    .filter((im) =>
-                      im.toLowerCase().includes(imeiKeyword.toLowerCase())
-                    )
-                    .map((im) => (
-                      <option key={im} value={im} />
-                    ))}
+                {imeiBySelectedBarang.map((im) => (
+        <option key={im} value={im} />
+      ))}
                 </datalist>
               </>
             )}
+            <div className="text-xs text-green-600 font-semibold">
+              📦 Stok IMEI untuk barang ini: {imeiBySelectedBarang.length}
+            </div>
 
             {!item.isImei && (
               <div className="text-xs text-gray-500">

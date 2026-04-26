@@ -26,7 +26,10 @@ import {
   deleteTransaksi,
   listenPaymentJenis,
   listenMasterPaymentMetode,
-  listenTransaksi ,
+  listenTransaksi,
+  listenMasterSales,
+  listenKaryawan,
+  listenMasterStoreHead,
 } from "../../services/FirebaseService";
 // import TableLaporanPenjualan from "../table/TableLaporanPenjualan";
 
@@ -177,14 +180,33 @@ export default function FinanceReport() {
 
   const [masterBarang, setMasterBarang] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
+  const [masterSales, setMasterSales] = useState([]);
   const [masterKategori, setMasterKategori] = useState([]);
+  const [salesList, setSalesList] = useState([]);
+  const [karyawanList, setKaryawanList] = useState([]);
+  const [storeHeadList, setStoreHeadList] = useState([]);
+
+  useEffect(() => {
+    const unsubSales = listenMasterSales((data) => {
+      setSalesList(Array.isArray(data) ? data : []);
+    });
+
+    const unsubKaryawan = listenKaryawan((data) => {
+      setKaryawanList(Array.isArray(data) ? data : []);
+    });
+
+    return () => {
+      unsubSales && unsubSales();
+      unsubKaryawan && unsubKaryawan();
+    };
+  }, []);
 
   useEffect(() => {
     const unsub = listenTransaksi((rows) => {
       console.log("🔥 DATA MASUK KE TABLE:", rows);
       setDataPenjualan(rows);
     });
-  
+
     return () => unsub && unsub();
   }, []);
 
@@ -447,6 +469,16 @@ export default function FinanceReport() {
     return () => unsub && unsub();
   }, []);
 
+  useEffect(() => {
+    const unsubSH = listenMasterStoreHead((data) => {
+      setStoreHeadList(Array.isArray(data) ? data : []);
+    });
+
+    return () => {
+      unsubSH && unsubSH();
+    };
+  }, []);
+
   /* ================= FORMAT TELP ================= */
 
   const formatPhone = (val) => {
@@ -486,14 +518,6 @@ export default function FinanceReport() {
   }, [form.NAMA_SALES, masterKaryawan]);
 
   const tokoNameToId = (name) => ALL_TOKO.findIndex((t) => t === name) + 1 || 1;
-
-  const storeHeadList = useMemo(() => {
-    return masterKaryawan.filter(
-      (k) =>
-        String(k.jabatan).toLowerCase().includes("store head") &&
-        String(k.toko).toUpperCase() === String(form.NAMA_TOKO).toUpperCase()
-    );
-  }, [masterKaryawan, form.NAMA_TOKO]);
 
   useEffect(() => {
     if (!form.STORE_HEAD) return;
@@ -540,17 +564,32 @@ export default function FinanceReport() {
     }
   }, [form.NAMA_BRAND, form.NAMA_BARANG, masterBarangMap]);
 
-  const salesList = useMemo(() => {
-    return masterKaryawan.filter(
-      (k) =>
-        String(k.jabatan).toLowerCase().includes("sales") &&
-        String(k.toko).toUpperCase() === String(form.NAMA_TOKO).toUpperCase()
-    );
-  }, [masterKaryawan, form.NAMA_TOKO]);
-
   const salesHandleList = useMemo(() => {
     return masterKaryawan;
   }, [masterKaryawan]);
+
+  const fields = [
+    {
+      name: "namaSales",
+      label: "Nama Sales",
+      type: "select",
+      options: masterSales.map((s) => ({
+        value: s.namaSales,
+        label: s.namaSales,
+      })),
+      required: true,
+    },
+    {
+      name: "salesHandle",
+      label: "Sales Handle",
+      type: "select",
+      options: masterKaryawan.map((k) => ({
+        value: k.NAMA,
+        label: k.NAMA,
+      })),
+      required: true,
+    },
+  ];
 
   // ===============================
   // Filtering
@@ -1298,8 +1337,6 @@ export default function FinanceReport() {
               />
             </div>
 
-            
-
             {/* TOKO */}
             <div>
               <label className="text-xs">Nama Toko</label>
@@ -1374,22 +1411,22 @@ export default function FinanceReport() {
 
             {/* STORE HEAD */}
             <div>
-              <label className="text-xs font-semibold">Store Head</label>
+              <label className="text-xs font-semibold">Nama Store Head</label>
               <input
-                list="store-head-list"
-                value={form.STORE_HEAD || ""}
+                list="storehead-list"
+                value={form.NAMA_STORE_HEAD || ""}
                 onChange={(e) =>
                   setForm((prev) => ({
                     ...prev,
-                    STORE_HEAD: e.target.value,
+                    NAMA_STORE_HEAD: e.target.value,
                   }))
                 }
                 className="w-full border rounded p-1"
               />
 
-              <datalist id="store-head-list">
-                {storeHeadList.map((k, i) => (
-                  <option key={i} value={k.nama} />
+              <datalist id="storehead-list">
+                {storeHeadList.map((sh, i) => (
+                  <option key={i} value={sh.namaSH} />
                 ))}
               </datalist>
             </div>
@@ -1411,7 +1448,7 @@ export default function FinanceReport() {
 
               <datalist id="sales-list">
                 {salesList.map((k, i) => (
-                  <option key={i} value={k.nama} />
+                  <option key={i} value={k.namaSales} />
                 ))}
               </datalist>
             </div>
@@ -1432,9 +1469,13 @@ export default function FinanceReport() {
               />
 
               <datalist id="handle-list">
-                {salesHandleList.map((k, i) => (
-                  <option key={i} value={k.nama} />
-                ))}
+                {karyawanList
+                  .filter((k) =>
+                    ["SL (SALES)", "SH (SALES HEAD)"].includes(k.JABATAN)
+                  )
+                  .map((k, i) => (
+                    <option key={i} value={k.NAMA} />
+                  ))}
               </datalist>
             </div>
 
@@ -1822,8 +1863,8 @@ export default function FinanceReport() {
             </button>
           </div>
         </div>
-      {/* </div> */}
-      {/* <TableLaporanPenjualan data={dataPenjualan} /> */}
+        {/* </div> */}
+        {/* <TableLaporanPenjualan data={dataPenjualan} /> */}
       </div>
 
       <div className="flex items-center gap-2">
@@ -1839,8 +1880,6 @@ export default function FinanceReport() {
         >
           Export PDF
         </button>
-
-      
       </div>
 
       {/* Filters + Form */}
