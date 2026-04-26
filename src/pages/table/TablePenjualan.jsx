@@ -564,38 +564,38 @@ export default function TablePenjualan({ data = [] }) {
   /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {
     const data = [];
-
+  
     tableRows.forEach((r) => {
       if (r.DETAIL_ITEMS?.length) {
-        r.DETAIL_ITEMS.forEach((item) => {
+        r.DETAIL_ITEMS.forEach((item, idx) => {
           data.push({
             No: data.length + 1,
-    
+  
             // ===== INVOICE =====
             Tanggal: r.tanggal
               ? new Date(r.tanggal).toLocaleDateString("id-ID")
               : "-",
             Invoice: r.invoice,
             Toko: r.toko,
-    
+  
             // ===== USER =====
             Pelanggan: r.pelanggan,
             IDPelanggan: r.idPelanggan,
             Telp: r.telp,
             StoreHead: r.storeHead,
-    
+  
             // ===== SALES =====
             Sales: r.sales,
             SalesHandle: r.salesHandle,
-    
-            // ===== BARANG (PER ITEM 🔥) =====
+  
+            // ===== BARANG =====
             Kategori: item.kategoriBarang || r.kategoriBarang,
             Brand: item.namaBrand || r.namaBrand,
             NamaBarang: item.namaBarang,
             Qty: item.qty,
             IMEI: item.imeiList?.join(", ") || "-",
-    
-            // ===== HARGA PER ITEM 🔥 =====
+  
+            // ===== HARGA =====
             HargaSRP:
               item.skemaHarga === "srp" ? Number(item.hargaAktif || 0) : 0,
             HargaGrosir:
@@ -604,37 +604,36 @@ export default function TablePenjualan({ data = [] }) {
               item.skemaHarga === "reseller"
                 ? Number(item.hargaAktif || 0)
                 : 0,
-    
-            // ===== PAYMENT =====
-            StatusBayar: r.statusBayar,
-            PaymentMetode: r.paymentMetodeUser,
-            NamaBank: r.namaBank,
-    
-            DashboardKredit: r.dashboardKredit || 0,
-            PaymentKredit: r.paymentKreditNominal || 0,
-            NominalPayment: r.nominalPaymentMetode || 0,
-    
+  
+            // ===== PAYMENT (🔥 HANYA BARIS PERTAMA) =====
+            StatusBayar: idx === 0 ? r.statusBayar : "",
+            PaymentMetode: idx === 0 ? r.paymentMetodeUser : "",
+            NamaBank: idx === 0 ? r.namaBank : "",
+  
+            DashboardKredit: idx === 0 ? r.dashboardKredit || 0 : "",
+            PaymentKredit: idx === 0 ? r.paymentKreditNominal || 0 : "",
+            NominalPayment: idx === 0 ? r.nominalPaymentMetode || 0 : "",
+  
             // ===== MDR =====
-            NamaMDR: r.namaMdr,
-            NominalMDR: r.nominalMdr,
-            DPTalangan: r.dpTalangan,
-    
+            NamaMDR: idx === 0 ? r.namaMdr : "",
+            NominalMDR: idx === 0 ? r.nominalMdr : "",
+            DPTalangan: idx === 0 ? r.dpTalangan : "",
+  
             // ===== KREDIT =====
-            Tenor: r.tenor,
-            Cicilan: r.cicilan || 0,
-    
+            Tenor: idx === 0 ? r.tenor : "",
+            Cicilan: idx === 0 ? r.cicilan || 0 : "",
+  
             // ===== SELISIH =====
-            KurangBayar: r.KURANG_BAYAR || 0,
-            SisaKembalian: r.SISA_KEMBALIAN || 0,
-    
+            KurangBayar: idx === 0 ? r.KURANG_BAYAR || 0 : "",
+            SisaKembalian: idx === 0 ? r.SISA_KEMBALIAN || 0 : "",
+  
             // ===== TOTAL =====
-            GrandTotal: r.grandTotal,
-    
-            Status: r.status,
+            GrandTotal: idx === 0 ? r.grandTotal : "",
+  
+            Status: idx === 0 ? r.status : "",
           });
         });
       } else {
-        // fallback lama (kalau tidak ada item)
         data.push({
           No: data.length + 1,
           NamaBarang: r.namaBarang,
@@ -642,19 +641,19 @@ export default function TablePenjualan({ data = [] }) {
         });
       }
     });
-
+  
     const ws = XLSX.utils.json_to_sheet(data);
-
-    // auto width kolom
+  
     ws["!cols"] = Object.keys(data[0]).map(() => ({ wch: 20 }));
+  
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Penjualan");
-
+  
     const excelBuffer = XLSX.write(wb, {
       bookType: "xlsx",
       type: "array",
     });
-
+  
     saveAs(new Blob([excelBuffer]), `Laporan_Penjualan_${Date.now()}.xlsx`);
   };
 

@@ -416,11 +416,11 @@ export default function SalesReport() {
   
       filteredData.forEach((r) => {
         if (r.DETAIL_ITEMS?.length) {
-          r.DETAIL_ITEMS.forEach((item) => {
+          r.DETAIL_ITEMS.forEach((item, idx) => {
             exportData.push({
               No: exportData.length + 1,
   
-              // ===== HEADER SESUAI TABLE =====
+              // ===== HEADER =====
               Tanggal: r.TANGGAL_TRANSAKSI
                 ? new Date(r.TANGGAL_TRANSAKSI).toLocaleDateString("id-ID")
                 : "-",
@@ -439,12 +439,12 @@ export default function SalesReport() {
               Kategori: item.kategoriBarang || r.KATEGORI,
               Brand: item.namaBrand || r.NAMA_BRAND,
   
-              // 🔥 PER ITEM
+              // ===== ITEM =====
               NamaBarang: item.namaBarang,
               IMEI: item.imeiList?.join(", ") || "NON-IMEI",
               Qty: item.qty,
   
-              // 🔥 HARGA PER ITEM
+              // ===== HARGA =====
               HargaSRP:
                 item.skemaHarga === "srp"
                   ? Number(item.hargaAktif || 0)
@@ -460,33 +460,30 @@ export default function SalesReport() {
                   ? Number(item.hargaAktif || 0)
                   : 0,
   
-              // ===== PAYMENT =====
-              StatusBayar: r.STATUS_BAYAR,
-              PaymentMetode: r.PAYMENT_METODE,
+              // ===== PAYMENT (🔥 ONLY FIRST ROW) =====
+              StatusBayar: idx === 0 ? r.STATUS_BAYAR : "",
+              PaymentMetode: idx === 0 ? r.PAYMENT_METODE : "",
   
-              PaymentKredit: r.PAYMENT_KREDIT,
-              DashboardKredit: Number(r.dashboardKredit || 0),
+              PaymentKredit: idx === 0 ? r.PAYMENT_KREDIT : "",
+              DashboardKredit: idx === 0 ? Number(r.dashboardKredit || 0) : "",
   
-              Bank: r.NAMA_BANK,
-              NominalPayment: Number(r.NOMINAL_PAYMENT || 0),
+              Bank: idx === 0 ? r.NAMA_BANK : "",
+              NominalPayment: idx === 0 ? Number(r.NOMINAL_PAYMENT || 0) : "",
   
-              DPTalangan: Number(r.DP_TALANGAN || 0),
+              DPTalangan: idx === 0 ? Number(r.DP_TALANGAN || 0) : "",
   
-              NamaMDR: r.NAMA_MDR,
-              NominalMDR: Number(r.NOMINAL_MDR || 0),
+              NamaMDR: idx === 0 ? r.NAMA_MDR : "",
+              NominalMDR: idx === 0 ? Number(r.NOMINAL_MDR || 0) : "",
   
-              PaymentKreditStatus: r.PAYMENT_KREDIT,
+              Tenor: idx === 0 ? r.TENOR : "",
+              Keterangan: idx === 0 ? r.KETERANGAN : "",
   
-              Tenor: r.TENOR,
-              Keterangan: r.KETERANGAN,
+              Status: idx === 0 ? r.STATUS : "",
   
-              Status: r.STATUS,
-  
-              GrandTotal: Number(r.GRAND_TOTAL || 0),
+              GrandTotal: idx === 0 ? Number(r.GRAND_TOTAL || 0) : "",
             });
           });
         } else {
-          // fallback
           exportData.push({
             No: exportData.length + 1,
             NamaBarang: r.NAMA_BARANG,
@@ -497,7 +494,6 @@ export default function SalesReport() {
   
       const ws = XLSX.utils.json_to_sheet(exportData);
   
-      // 🔥 AUTO WIDTH BIAR RAPI
       ws["!cols"] = Object.keys(exportData[0]).map(() => ({ wch: 20 }));
   
       const wb = XLSX.utils.book_new();
