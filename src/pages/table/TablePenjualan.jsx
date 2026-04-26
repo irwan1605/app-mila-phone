@@ -192,6 +192,7 @@ export default function TablePenjualan({ data = [] }) {
       /* ================= PUSH HANYA 1X PER INVOICE ================= */
       if (!map[trx.invoice]) {
         map[trx.invoice] = {
+          DETAIL_ITEMS: trx.items || [],
           id: trx.id,
           trxKey: trx.trxKey,
           tokoId: trx.tokoId,
@@ -229,9 +230,23 @@ export default function TablePenjualan({ data = [] }) {
           imei: allIMEI,
           qty: totalQty,
 
-          hargaSRP: 0,
-          hargaGrosir: 0,
-          hargaReseller: 0,
+          hargaSRP: trx.items.reduce(
+            (s, i) =>
+              i.skemaHarga === "srp" ? s + Number(i.hargaAktif || 0) : s,
+            0
+          ),
+
+          hargaGrosir: trx.items.reduce(
+            (s, i) =>
+              i.skemaHarga === "grosir" ? s + Number(i.hargaAktif || 0) : s,
+            0
+          ),
+
+          hargaReseller: trx.items.reduce(
+            (s, i) =>
+              i.skemaHarga === "reseller" ? s + Number(i.hargaAktif || 0) : s,
+            0
+          ),
 
           statusBayar: trx.payment?.status || "-",
           nominalMdr: trx.payment?.nominalMdr || 0,
@@ -244,9 +259,23 @@ export default function TablePenjualan({ data = [] }) {
                 Number(trx.payment?.dpTalangan || 0)
               : 0,
 
-          paymentMetodeUser: Array.isArray(trx.payment?.splitPayment)
-            ? trx.payment.splitPayment.map((p) => p.metode).join(" + ")
-            : trx.payment?.paymentMethod || trx.payment?.metode || "-",
+              paymentMetodeUser: (() => {
+                if (
+                  Array.isArray(trx.payment?.splitPayment) &&
+                  trx.payment.splitPayment.length
+                ) {
+                  return trx.payment.splitPayment
+                    .map((p) => (p.metode || "").toUpperCase())
+                    .filter(Boolean)
+                    .join(" + ");
+                }
+              
+                if (trx.payment?.metode) {
+                  return String(trx.payment.metode).toUpperCase();
+                }
+              
+                return String(trx.payment?.paymentMethod || "-").toUpperCase();
+              })(),
           tenor: trx.payment?.tenor || "-",
           cicilan: trx.payment?.cicilan || 0,
 
@@ -536,74 +565,88 @@ export default function TablePenjualan({ data = [] }) {
   const exportExcel = () => {
     const data = [];
 
-    tableRows.forEach((r, i) => {
-      data.push({
-        No: i + 1,
+    tableRows.forEach((r) => {
+      if (r.DETAIL_ITEMS?.length) {
+        r.DETAIL_ITEMS.forEach((item) => {
+          data.push({
+            No: data.length + 1,
     
-        // ===== INVOICE =====
-        Tanggal: r.tanggal
-          ? new Date(r.tanggal).toLocaleDateString("id-ID")
-          : "-",
-        Invoice: r.invoice,
-        Toko: r.toko,
+            // ===== INVOICE =====
+            Tanggal: r.tanggal
+              ? new Date(r.tanggal).toLocaleDateString("id-ID")
+              : "-",
+            Invoice: r.invoice,
+            Toko: r.toko,
     
-        // ===== USER =====
-        Pelanggan: r.pelanggan,
-        IDPelanggan: r.idPelanggan,
-        Telp: r.telp,
-        StoreHead: r.storeHead,
+            // ===== USER =====
+            Pelanggan: r.pelanggan,
+            IDPelanggan: r.idPelanggan,
+            Telp: r.telp,
+            StoreHead: r.storeHead,
     
-        // ===== SALES =====
-        Sales: r.sales,
-        SalesHandle: r.salesHandle,
+            // ===== SALES =====
+            Sales: r.sales,
+            SalesHandle: r.salesHandle,
     
-        // ===== BARANG (TAHAP 2) =====
-        Kategori: r.kategoriBarang,
-        Brand: r.namaBrand,
-        NamaBarang: r.namaBarang,
-        IMEI: r.imei,
-        QTY: r.qty,
+            // ===== BARANG (PER ITEM 🔥) =====
+            Kategori: item.kategoriBarang || r.kategoriBarang,
+            Brand: item.namaBrand || r.namaBrand,
+            NamaBarang: item.namaBarang,
+            Qty: item.qty,
+            IMEI: item.imeiList?.join(", ") || "-",
     
-        // ===== HARGA =====
-        HargaSRP: r.hargaSRP || 0,
-        HargaGrosir: r.hargaGrosir || 0,
-        HargaReseller: r.hargaReseller || 0,
+            // ===== HARGA PER ITEM 🔥 =====
+            HargaSRP:
+              item.skemaHarga === "srp" ? Number(item.hargaAktif || 0) : 0,
+            HargaGrosir:
+              item.skemaHarga === "grosir" ? Number(item.hargaAktif || 0) : 0,
+            HargaReseller:
+              item.skemaHarga === "reseller"
+                ? Number(item.hargaAktif || 0)
+                : 0,
     
-        // ===== PAYMENT (TAHAP 3) =====
-        StatusBayar: r.statusBayar,
+            // ===== PAYMENT =====
+            StatusBayar: r.statusBayar,
+            PaymentMetode: r.paymentMetodeUser,
+            NamaBank: r.namaBank,
     
-        PaymentMetode: r.paymentMetodeUser || r.paymentMetode,
-        NamaBank: r.namaBank,
+            DashboardKredit: r.dashboardKredit || 0,
+            PaymentKredit: r.paymentKreditNominal || 0,
+            NominalPayment: r.nominalPaymentMetode || 0,
     
-        DashboardKredit: r.dashboardKredit || 0,
-        PaymentKredit: r.paymentKreditNominal || 0,
+            // ===== MDR =====
+            NamaMDR: r.namaMdr,
+            NominalMDR: r.nominalMdr,
+            DPTalangan: r.dpTalangan,
     
-        NominalPayment: r.nominalPaymentMetode || 0,
+            // ===== KREDIT =====
+            Tenor: r.tenor,
+            Cicilan: r.cicilan || 0,
     
-        // ===== MDR =====
-        NamaMDR: r.namaMdr,
-        NominalMDR: r.nominalMdr,
-        DPTalangan: r.dpTalangan,
+            // ===== SELISIH =====
+            KurangBayar: r.KURANG_BAYAR || 0,
+            SisaKembalian: r.SISA_KEMBALIAN || 0,
     
-        // ===== KREDIT =====
-        Tenor: r.tenor,
-        Cicilan: r.cicilan || 0,
+            // ===== TOTAL =====
+            GrandTotal: r.grandTotal,
     
-        // ===== SELISIH =====
-        KurangBayar: r.KURANG_BAYAR || 0,
-        SisaKembalian: r.SISA_KEMBALIAN || 0,
-    
-        // ===== TOTAL =====
-        GrandTotal: r.grandTotal,
-    
-        Status: r.status,
-      });
+            Status: r.status,
+          });
+        });
+      } else {
+        // fallback lama (kalau tidak ada item)
+        data.push({
+          No: data.length + 1,
+          NamaBarang: r.namaBarang,
+          Qty: r.qty,
+        });
+      }
     });
 
     const ws = XLSX.utils.json_to_sheet(data);
 
     // auto width kolom
-    ws["!cols"] = Object.keys(data[0]).map(() => ({ wch: 18 }));
+    ws["!cols"] = Object.keys(data[0]).map(() => ({ wch: 20 }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Penjualan");
 
@@ -704,7 +747,7 @@ export default function TablePenjualan({ data = [] }) {
               </th>
               <th className="px-3 py-2 border border-gray-400">Status Bayar</th>
               <th className="px-3 py-2 border border-gray-400">
-                Payment Metode
+                Payment Metode User
               </th>
               <th className="px-3 py-2 border border-gray-400">
                 Payment Kredit
@@ -779,18 +822,48 @@ export default function TablePenjualan({ data = [] }) {
                   {row.namaBrand}
                 </td>
                 <td className="px-3 py-2 border border-gray-300">
-                  {row.namaBarang}
+                  {row.DETAIL_ITEMS?.length
+                    ? row.DETAIL_ITEMS.map((item, i) => (
+                        <div key={i}>
+                          • {item.namaBarang} ({item.qty})
+                        </div>
+                      ))
+                    : row.namaBarang}
                 </td>
                 <td className="px-3 py-2 border border-gray-300">{row.imei}</td>
                 <td className="px-3 py-2 border border-gray-300">{row.qty}</td>
                 <td className="px-3 py-2 border border-gray-300">
-                  {rupiah(row.hargaSRP)}
+                  {row.DETAIL_ITEMS?.length
+                    ? row.DETAIL_ITEMS.map((item, i) => (
+                        <div key={i}>
+                          {item.skemaHarga === "srp"
+                            ? rupiah(item.hargaAktif)
+                            : "-"}
+                        </div>
+                      ))
+                    : rupiah(row.hargaSRP)}
                 </td>
                 <td className="px-3 py-2 border border-gray-300">
-                  {rupiah(row.hargaGrosir)}
+                  {row.DETAIL_ITEMS?.length
+                    ? row.DETAIL_ITEMS.map((item, i) => (
+                        <div key={i}>
+                          {item.skemaHarga === "grosir"
+                            ? rupiah(item.hargaAktif)
+                            : "-"}
+                        </div>
+                      ))
+                    : rupiah(row.hargaGrosir)}
                 </td>
                 <td className="px-3 py-2 border border-gray-300">
-                  {rupiah(row.hargaReseller)}
+                  {row.DETAIL_ITEMS?.length
+                    ? row.DETAIL_ITEMS.map((item, i) => (
+                        <div key={i}>
+                          {item.skemaHarga === "reseller"
+                            ? rupiah(item.hargaAktif)
+                            : "-"}
+                        </div>
+                      ))
+                    : rupiah(row.hargaReseller)}
                 </td>
                 <td className="px-3 py-2 border border-gray-300">
                   {row.statusBayar}
