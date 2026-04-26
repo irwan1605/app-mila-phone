@@ -180,7 +180,7 @@ export default function DetailStockToko() {
       const sold = new Set();
 
       transaksi.forEach((t) => {
-        if (t.STATUS !== "APPROVED" || !t.IMEI) return;
+        if (t.STATUS !== "Approved" || !t.IMEI) return;
 
         if (String(t.PAYMENT_METODE).toUpperCase() === "PENJUALAN") {
           sold.add(String(t.IMEI));
@@ -206,7 +206,7 @@ export default function DetailStockToko() {
 
     transaksi.forEach((t) => {
       if (
-        t.STATUS === "APPROVED" &&
+        t.STATUS === "Approved" &&
         String(t.PAYMENT_METODE).toUpperCase() === "TRANSFER_KELUAR" &&
         t.IMEI
       ) {
@@ -227,7 +227,7 @@ export default function DetailStockToko() {
     const map = {};
 
     transaksi.forEach((t) => {
-      if (t.STATUS !== "APPROVED") return;
+      if (t.STATUS !== "Approved") return;
       if (!t.NAMA_BARANG || !t.NAMA_BRAND) return;
 
       // IMEI
@@ -328,7 +328,7 @@ export default function DetailStockToko() {
           if (it.imeiList?.length) return;
 
           allEvents.push({
-            STATUS: "APPROVED",
+            STATUS: "Approved",
             PAYMENT_METODE: "REFUND",
             NAMA_TOKO: t.toko,
             NAMA_BRAND: it.namaBrand,
@@ -348,7 +348,7 @@ export default function DetailStockToko() {
     // 🔥 STEP 2 — HITUNG SEMUA EVENT
     // ===============================
     allEvents.forEach((t) => {
-      if (t.STATUS !== "APPROVED") return;
+      if (t.STATUS !== "Approved") return;
       if (normalize(t.NAMA_TOKO) !== normalize(namaToko)) return;
 
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
