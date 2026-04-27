@@ -259,23 +259,23 @@ export default function TablePenjualan({ data = [] }) {
                 Number(trx.payment?.dpTalangan || 0)
               : 0,
 
-              paymentMetodeUser: (() => {
-                if (
-                  Array.isArray(trx.payment?.splitPayment) &&
-                  trx.payment.splitPayment.length
-                ) {
-                  return trx.payment.splitPayment
-                    .map((p) => (p.metode || "").toUpperCase())
-                    .filter(Boolean)
-                    .join(" + ");
-                }
-              
-                if (trx.payment?.metode) {
-                  return String(trx.payment.metode).toUpperCase();
-                }
-              
-                return String(trx.payment?.paymentMethod || "-").toUpperCase();
-              })(),
+          paymentMetodeUser: (() => {
+            if (
+              Array.isArray(trx.payment?.splitPayment) &&
+              trx.payment.splitPayment.length
+            ) {
+              return trx.payment.splitPayment
+                .map((p) => (p.metode || "").toUpperCase())
+                .filter(Boolean)
+                .join(" + ");
+            }
+
+            if (trx.payment?.metode) {
+              return String(trx.payment.metode).toUpperCase();
+            }
+
+            return String(trx.payment?.paymentMethod || "-").toUpperCase();
+          })(),
           tenor: trx.payment?.tenor || "-",
           cicilan: trx.payment?.cicilan || 0,
 
@@ -478,7 +478,15 @@ export default function TablePenjualan({ data = [] }) {
 
   const handleRefund = async (row) => {
     // ===============================
-    // 🔥 1. HARD LOCK (SYNC - TANPA DELAY)
+    // 🔥 ANTI DOUBLE REFUND (WAJIB)
+    // ===============================
+    if (row.status === "REFUND") {
+      alert("❌ Transaksi ini sudah di-refund");
+      return;
+    }
+  
+    // ===============================
+    // 🔥 1. HARD LOCK (SYNC)
     // ===============================
     if (refundLock.current[row.id]) return;
     refundLock.current[row.id] = true;
@@ -525,21 +533,38 @@ export default function TablePenjualan({ data = [] }) {
         userLogin
       );
 
-      // 🔥 CATAT TRANSAKSI (SUMBER STOK)
-      await addTransaksi(row.tokoId, {
-        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
-        NO_INVOICE: `REF-${Date.now()}`,
-        NAMA_TOKO: row.toko,
-        NAMA_BARANG: row.namaBarang,
-        IMEI: row.imei,
-        QTY: 1,
-        PAYMENT_METODE: "REFUND",
-        STATUS: "Approved",
-        CREATED_AT: Date.now(),
+      // ===============================
+      // 🔥 KEMBALIKAN STOK (FIX)
+      // ===============================
+      if (trx?.items?.length) {
+        for (const item of trx.items) {
+          await tambahStokSetelahRefund({
+            tokoId: trx.tokoId,
+            namaBarang: item.namaBarang,
+            imeiList: item.imeiList || [],
+            qty: Number(item.qty || 0),
+          });
+        }
+      }
 
-        // 🔥 WAJIB (ANTI DOUBLE)
-        SOURCE: "REFUND_BUTTON",
-      });
+      // 🔥 CATAT TRANSAKSI (SUMBER STOK)
+      for (const item of trx.items) {
+        await addTransaksi(row.tokoId, {
+          TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+          NO_INVOICE: `REF-${Date.now()}`,
+          NAMA_TOKO: row.toko,
+      
+          NAMA_BARANG: item.namaBarang,
+          IMEI: (item.imeiList || []).join(","),
+          QTY: Number(item.qty || 0),
+      
+          PAYMENT_METODE: "REFUND",
+          STATUS: "Approved",
+          CREATED_AT: Date.now(),
+      
+          SOURCE: "REFUND_BUTTON",
+        });
+      }
 
       // ===============================
       // 🔥 6. HIDE UI (OPSIONAL)
@@ -564,72 +589,70 @@ export default function TablePenjualan({ data = [] }) {
   /* ================= EXPORT EXCEL ================= */
   const exportExcel = () => {
     const data = [];
-  
+
     tableRows.forEach((r) => {
       if (r.DETAIL_ITEMS?.length) {
         r.DETAIL_ITEMS.forEach((item, idx) => {
           data.push({
             No: data.length + 1,
-  
+
             // ===== INVOICE =====
             Tanggal: r.tanggal
               ? new Date(r.tanggal).toLocaleDateString("id-ID")
               : "-",
             Invoice: r.invoice,
             Toko: r.toko,
-  
+
             // ===== USER =====
             Pelanggan: r.pelanggan,
             IDPelanggan: r.idPelanggan,
             Telp: r.telp,
             StoreHead: r.storeHead,
-  
+
             // ===== SALES =====
             Sales: r.sales,
             SalesHandle: r.salesHandle,
-  
+
             // ===== BARANG =====
             Kategori: item.kategoriBarang || r.kategoriBarang,
             Brand: item.namaBrand || r.namaBrand,
             NamaBarang: item.namaBarang,
             Qty: item.qty,
             IMEI: item.imeiList?.join(", ") || "-",
-  
+
             // ===== HARGA =====
             HargaSRP:
               item.skemaHarga === "srp" ? Number(item.hargaAktif || 0) : 0,
             HargaGrosir:
               item.skemaHarga === "grosir" ? Number(item.hargaAktif || 0) : 0,
             HargaReseller:
-              item.skemaHarga === "reseller"
-                ? Number(item.hargaAktif || 0)
-                : 0,
-  
+              item.skemaHarga === "reseller" ? Number(item.hargaAktif || 0) : 0,
+
             // ===== PAYMENT (🔥 HANYA BARIS PERTAMA) =====
             StatusBayar: idx === 0 ? r.statusBayar : "",
             PaymentMetode: idx === 0 ? r.paymentMetodeUser : "",
             NamaBank: idx === 0 ? r.namaBank : "",
-  
+
             DashboardKredit: idx === 0 ? r.dashboardKredit || 0 : "",
             PaymentKredit: idx === 0 ? r.paymentKreditNominal || 0 : "",
             NominalPayment: idx === 0 ? r.nominalPaymentMetode || 0 : "",
-  
+
             // ===== MDR =====
             NamaMDR: idx === 0 ? r.namaMdr : "",
             NominalMDR: idx === 0 ? r.nominalMdr : "",
             DPTalangan: idx === 0 ? r.dpTalangan : "",
-  
+
             // ===== KREDIT =====
             Tenor: idx === 0 ? r.tenor : "",
             Cicilan: idx === 0 ? r.cicilan || 0 : "",
-  
+
             // ===== SELISIH =====
             KurangBayar: idx === 0 ? r.KURANG_BAYAR || 0 : "",
             SisaKembalian: idx === 0 ? r.SISA_KEMBALIAN || 0 : "",
-  
+
             // ===== TOTAL =====
             GrandTotal: idx === 0 ? r.grandTotal : "",
-  
+
             Status: idx === 0 ? r.status : "",
           });
         });
@@ -641,19 +664,19 @@ export default function TablePenjualan({ data = [] }) {
         });
       }
     });
-  
+
     const ws = XLSX.utils.json_to_sheet(data);
-  
+
     ws["!cols"] = Object.keys(data[0]).map(() => ({ wch: 20 }));
-  
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Penjualan");
-  
+
     const excelBuffer = XLSX.write(wb, {
       bookType: "xlsx",
       type: "array",
     });
-  
+
     saveAs(new Blob([excelBuffer]), `Laporan_Penjualan_${Date.now()}.xlsx`);
   };
 
