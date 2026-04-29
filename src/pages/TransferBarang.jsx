@@ -110,6 +110,23 @@ export default function TransferBarang() {
     );
   }, [form.kategori]);
 
+  // 🔥 AMBIL DATA INVENTORY TERAKHIR (FIX STOK NYATA)
+const getLatestInventoryItem = (imei) => {
+  const clean = normalizeImei(imei);
+
+  const items = inventory
+    .filter((i) => normalizeImei(i.imei) === clean)
+    .sort((a, b) => {
+      const ta = a.updatedAt || a.CREATED_AT || 0;
+      const tb = b.updatedAt || b.CREATED_AT || 0;
+      return ta - tb;
+    });
+
+  if (items.length === 0) return null;
+
+  return items[items.length - 1]; // 🔥 ambil paling akhir
+};
+
   // ✅ OVERRIDE AMAN TANPA MERUSAK LOGIC LAMA
   const isKategoriImeiFinal = isKategoriImei && !isNonImeiKategori;
 
@@ -713,7 +730,7 @@ export default function TransferBarang() {
   const isImeiFromThisStore = (imei) => {
     const clean = normalizeImei(imei);
 
-    const found = inventory.find((i) => normalizeImei(i.imei) === clean);
+    const found = getLatestInventoryItem(clean);
 
     if (!found) return false;
 
@@ -733,7 +750,7 @@ export default function TransferBarang() {
   const getLastOwnerToko = (imei) => {
     const clean = normalizeImei(imei);
 
-    const found = inventory.find((i) => normalizeImei(i.imei) === clean);
+    const found = getLatestInventoryItem(clean);
 
     if (!found) return null;
 
@@ -1410,7 +1427,7 @@ export default function TransferBarang() {
       return;
     }
 
-    const found = inventory.find((i) => normalizeImei(i.imei) === im);
+    const found = getLatestInventoryItem(im);
 
     // ❌ CEK TOKO PEMILIK
     if (
@@ -1669,7 +1686,7 @@ export default function TransferBarang() {
       }
 
       // ❌ CEK OWNER TOKO
-      const found = inventory.find((i) => normalizeImei(i.imei) === clean);
+      const found = getLatestInventoryItem(clean);
 
       if (!found) {
         alert(`❌ IMEI ${clean} tidak ditemukan di stok`);
