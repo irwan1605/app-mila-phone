@@ -639,6 +639,88 @@ export default function FormItemSection({
     return map;
   }, [allTransaksi, tokoLogin]);
 
+  /* ===============================
+🔥 STOK FINAL (SAMA DENGAN LAPORAN)
+================================= */
+  const stokDisplayMap = useMemo(() => {
+    if (!tokoLogin) return {};
+
+    const map = {};
+
+    allTransaksi.forEach((t) => {
+      if (!t) return;
+      if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
+
+      // 🔥 hanya toko ini
+      if (
+        String(t.NAMA_TOKO || "").toUpperCase() !==
+        String(tokoLogin || "").toUpperCase()
+      )
+        return;
+
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+      const isImei = !!t.IMEI;
+
+      // ================= NON IMEI =================
+      if (!isImei) {
+        const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+        const qty = Number(t.QTY || 0);
+
+        if (!map[key]) map[key] = 0;
+
+        if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+          map[key] += qty;
+        }
+
+        if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+          map[key] -= qty;
+        }
+      }
+    });
+
+    return map;
+  }, [allTransaksi, tokoLogin]);
+
+  /* ===============================
+🔥 STOK IMEI (SAMA DENGAN LAPORAN)
+================================= */
+  const imeiStockDisplayMap = useMemo(() => {
+    if (!tokoLogin) return {};
+
+    const map = {};
+
+    Object.entries(globalStockMap).forEach(([key, val]) => {
+      if (val.type !== "IMEI") return;
+      if (!val.available) return;
+
+      const imei = key;
+
+      // 🔥 cari transaksi untuk mapping barang
+      const trx = allTransaksi.find(
+        (t) =>
+          String(t.IMEI || "").trim() === imei &&
+          String(t.STATUS).toUpperCase() === "APPROVED"
+      );
+
+      if (!trx) return;
+
+      // 🔥 pastikan milik toko ini
+      if (
+        String(trx.NAMA_TOKO || "").toUpperCase() !==
+        String(tokoLogin || "").toUpperCase()
+      )
+        return;
+
+      const keyBarang = `${trx.NAMA_BRAND}|${trx.NAMA_BARANG}`;
+
+      if (!map[keyBarang]) map[keyBarang] = 0;
+
+      map[keyBarang] += 1;
+    });
+
+    return map;
+  }, [globalStockMap, allTransaksi, tokoLogin]);
+
   // ===============================
   // HELPER: Cari toko asal IMEI
   // ===============================
@@ -679,31 +761,29 @@ export default function FormItemSection({
 
   const findBarangUniversal = (imei) => {
     const imeiFix = String(imei || "").trim();
-  
+
     // 1. CEK PEMBELIAN TOKO (EXISTING)
     let trx = allTransaksi.find(
       (t) =>
         String(t.IMEI || "").trim() === imeiFix &&
         String(t.STATUS || "").toUpperCase() === "APPROVED"
     );
-  
+
     // 2. CEK GLOBAL STOCK (🔥 TAMBAHAN)
     if (!trx && globalStockMap[imeiFix]) {
-      trx = allTransaksi.find(
-        (t) => String(t.IMEI || "").trim() === imeiFix
-      );
+      trx = allTransaksi.find((t) => String(t.IMEI || "").trim() === imeiFix);
     }
-  
+
     if (!trx) return null;
-  
+
     const barang = masterBarang.find(
       (b) =>
         String(b.namaBarang || "").toUpperCase() ===
         String(trx.NAMA_BARANG || "").toUpperCase()
     );
-  
+
     if (!barang) return null;
-  
+
     return {
       kategoriBarang: barang.kategoriBarang,
       namaBrand: barang.namaBrand || barang.brand,
@@ -893,7 +973,7 @@ export default function FormItemSection({
                   );
 
                   if (!barangValid) {
-                    alert("❌ Barang tidak ditemukan di stok toko ini");
+                    alert("❌ Lengkapi Dulu Isi Form TAHAP 2 - INPUT BARANG");
                     updateItem(idx, {
                       namaBarang: "",
                       qty: 0,
@@ -904,7 +984,7 @@ export default function FormItemSection({
                   const key = `${barangValid.namaBrand || barangValid.brand}|${
                     barangValid.namaBarang
                   }`;
-                  const stok = nonImeiStockMap[key] || 0;
+                  const stok = stokDisplayMap[key] || 0;
 
                   if (
                     !isImeiKategori(barangValid.kategoriBarang) &&
@@ -920,10 +1000,22 @@ export default function FormItemSection({
               />
 
               {/* 🔥 TAMPILKAN INFO STOK REALTIME */}
-              {!item.isImei && item.namaBarang && (
-                <div className="text-xs text-blue-600 font-semibold">
-                  Stok tersedia:{" "}
-                  {nonImeiStockMap[`${item.namaBrand}|${item.namaBarang}`] || 0}
+              {item.namaBarang && (
+                <div className="text-xs font-semibold">
+                  {item.isImei ? (
+                    <span className="text-blue-600">
+                      📱 Stok IMEI (Laporan):{" "}
+                      {imeiStockDisplayMap[
+                        `${item.namaBrand}|${item.namaBarang}`
+                      ] || 0}
+                    </span>
+                  ) : (
+                    <span className="text-green-600">
+                      📦 Stok (Laporan):{" "}
+                      {stokDisplayMap[`${item.namaBrand}|${item.namaBarang}`] ||
+                        0}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -939,7 +1031,9 @@ export default function FormItemSection({
                 })
                 .map((b) => {
                   const key = `${b.namaBrand || b.brand}|${b.namaBarang}`;
-                  const stok = nonImeiStockMap[key] || 0;
+                  const stok = isImeiKategori(b.kategoriBarang)
+                    ? imeiStockDisplayMap[key] || 0
+                    : stokDisplayMap[key] || 0;
 
                   return (
                     <option
@@ -952,7 +1046,9 @@ export default function FormItemSection({
             </datalist>
 
             {/* SKEMA */}
-            <label className="text-xs font-semibold">PILIH KATEGORI HARGA</label> 
+            <label className="text-xs font-semibold">
+              PILIH KATEGORI HARGA
+            </label>
             <select
               className="w-full border rounded p-2"
               value={item.skemaHarga}
@@ -1162,7 +1258,7 @@ export default function FormItemSection({
                     if (!autoBarang) {
                       autoBarang = findBarangByTransfer(imei);
                     }
-                    
+
                     // 🔥 SUPER FIX
                     if (!autoBarang) {
                       autoBarang = findBarangUniversal(imei);
@@ -1377,4 +1473,3 @@ export default function FormItemSection({
     </div>
   );
 }
-
