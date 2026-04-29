@@ -58,6 +58,7 @@ export default function TablePenjualan({ data = [] }) {
   const [showRefund, setShowRefund] = useState(false);
   const [localHiddenRefund, setLocalHiddenRefund] = useState({});
   const [deletedRows, setDeletedRows] = useState({});
+  const [instantRefund, setInstantRefund] = useState({});
 
   const pageSize = 10;
 
@@ -300,6 +301,11 @@ export default function TablePenjualan({ data = [] }) {
         .trim()
         .toUpperCase();
 
+      // 🔥 INSTANT HIDE SAAT CLICK REFUND
+      if (instantRefund[r.invoice]) {
+        return false;
+      }
+
       // 🔥 HILANGKAN LANGSUNG SAAT KLIK REFUND
       // 🔥 HIDE INSTANT
       if (deletedRows[r.invoice]) {
@@ -490,7 +496,7 @@ export default function TablePenjualan({ data = [] }) {
     // ===============================
     if (refundLock.current[row.id]) return;
     refundLock.current[row.id] = true;
-
+  
     try {
       // ===============================
       // 🔥 2. VALIDASI CEPAT
@@ -499,30 +505,60 @@ export default function TablePenjualan({ data = [] }) {
         alert("❌ Refund hanya untuk Superadmin");
         return;
       }
-
+  
       const trx = rows.find(
         (x) =>
           String(x.invoice || "").trim() === String(row.invoice || "").trim()
       );
-
+  
       if (trx?.refundProcessed) {
         alert("❌ Sudah pernah di refund");
         return;
       }
-
+  
       // ===============================
-      // 🔥 3. LANGSUNG LOCK UI (TANPA NUNGGU)
+      // 🔥 3. INSTANT UI UPDATE (NEW)
+      // ===============================
+      // 🔥 langsung hilang dari table TANPA nunggu backend
+      setInstantRefund((prev) => ({
+        ...prev,
+        [row.invoice]: true,
+      }));
+  
+      // ===============================
+      // 🔥 4. LOCK UI
       // ===============================
       setRefundLoading(row.id);
-
+  
       // ===============================
-      // 🔥 4. CONFIRM (SETELAH LOCK)
+      // 🔥 5. CONFIRM
       // ===============================
       const ok = window.confirm("Yakin ingin REFUND?");
-      if (!ok) return;
-
+      if (!ok) {
+        // rollback kalau cancel
+        setInstantRefund((prev) => {
+          const copy = { ...prev };
+          delete copy[row.invoice];
+          return copy;
+        });
+        return;
+      }
+  
       // ===============================
-      // 🔥 5. PROSES
+      // 🔥 6. FAST STOCK SIMULATION (NEW)
+      // ===============================
+      if (trx?.items?.length) {
+        trx.items.forEach((item) => {
+          console.log("⚡ STOCK BALIK CEPAT:", {
+            barang: item.namaBarang,
+            qty: item.qty,
+            imei: item.imeiList,
+          });
+        });
+      }
+  
+      // ===============================
+      // 🔥 7. PROSES BACKEND (ASLI)
       // ===============================
       await updateTransaksiPenjualan(
         row.trxKey,
@@ -532,9 +568,9 @@ export default function TablePenjualan({ data = [] }) {
         },
         userLogin
       );
-
+  
       // ===============================
-      // 🔥 KEMBALIKAN STOK (FIX)
+      // 🔥 KEMBALIKAN STOK (REAL)
       // ===============================
       if (trx?.items?.length) {
         for (const item of trx.items) {
@@ -546,41 +582,53 @@ export default function TablePenjualan({ data = [] }) {
           });
         }
       }
-
-      // 🔥 CATAT TRANSAKSI (SUMBER STOK)
+  
+      // ===============================
+      // 🔥 CATAT TRANSAKSI
+      // ===============================
       for (const item of trx.items) {
-        await addTransaksi(row.tokoId, {
+        await addTransaksi(trx.tokoId,{
           TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
           NO_INVOICE: `REF-${Date.now()}`,
-          NAMA_TOKO: row.toko,
-      
+          NAMA_TOKO: trx.toko, // bukan row.toko
+  
           NAMA_BARANG: item.namaBarang,
           IMEI: (item.imeiList || []).join(","),
           QTY: Number(item.qty || 0),
-      
+  
           PAYMENT_METODE: "REFUND",
           STATUS: "Approved",
           CREATED_AT: Date.now(),
-      
+  
           SOURCE: "REFUND_BUTTON",
+          IS_REFUND: true, // 🔥 NEW (biar inventory gampang detect)
+          
         });
       }
-
+  
       // ===============================
-      // 🔥 6. HIDE UI (OPSIONAL)
+      // 🔥 8. HIDE FINAL (BACKUP)
       // ===============================
       setDeletedRows((prev) => ({
         ...prev,
         [row.invoice]: true,
       }));
-
-      alert("✅ Refund berhasil (1 klik)");
+  
+      alert("✅ Refund berhasil (Instant + Backend)");
     } catch (e) {
       console.error(e);
+  
+      // rollback UI kalau gagal
+      setInstantRefund((prev) => {
+        const copy = { ...prev };
+        delete copy[row.invoice];
+        return copy;
+      });
+  
       alert("❌ Refund gagal: " + e.message);
     } finally {
       // ===============================
-      // 🔥 7. UNLOCK (WAJIB)
+      // 🔥 9. UNLOCK
       // ===============================
       setRefundLoading(null);
       delete refundLock.current[row.id];
