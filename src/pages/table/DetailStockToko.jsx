@@ -5,7 +5,7 @@ import {
   listenMasterBarang,
   deleteTransaksi,
 } from "../../services/FirebaseService";
-import { ref, remove, get } from "firebase/database";
+import { ref, remove, get, onValue } from "firebase/database";
 import { db } from "../../firebase";
 import * as XLSX from "xlsx";
 import { FaSearch, FaExchangeAlt } from "react-icons/fa";
@@ -19,6 +19,8 @@ const rupiah = (n) =>
     currency: "IDR",
     minimumFractionDigits: 0,
   });
+
+const isApproved = (t) => String(t.STATUS || "").toUpperCase() === "APPROVED";
 
 export default function DetailStockToko() {
   const { state } = useLocation();
@@ -35,6 +37,7 @@ export default function DetailStockToko() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [deletedIds, setDeletedIds] = useState(new Set());
+  const [detailStock, setDetailStock] = useState({});
 
   const pageSize = 25;
 
@@ -55,6 +58,16 @@ export default function DetailStockToko() {
   //     unsub2 && unsub2();
   //   };
   // }, []);
+
+  useEffect(() => {
+    const refStock = ref(db, "detail_stock");
+
+    const unsub = onValue(refStock, (snap) => {
+      setDetailStock(snap.val() || {});
+    });
+
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const unsub1 = listenAllTransaksi((rows) => {
@@ -132,7 +145,7 @@ export default function DetailStockToko() {
     const map = {};
 
     transaksi.forEach((t) => {
-      if (!t || t.STATUS !== "APPROVED" || !t.IMEI) return;
+      if (!isApproved(t) || !t.IMEI) return;
 
       const imei = String(t.IMEI).trim();
       const toko = String(t.NAMA_TOKO || "").trim();
@@ -172,7 +185,7 @@ export default function DetailStockToko() {
     const sold = new Set();
 
     transaksi.forEach((t) => {
-      if (t.STATUS !== "APPROVED" || !t.IMEI) return;
+      if (!isApproved(t) || !t.IMEI) return;
 
       const imei = String(t.IMEI);
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
@@ -227,7 +240,7 @@ export default function DetailStockToko() {
     const map = {};
 
     transaksi.forEach((t) => {
-      if (t.STATUS !== "Approved") return;
+      if (!isApproved(t)) return;
       if (!t.NAMA_BARANG || !t.NAMA_BRAND) return;
 
       // IMEI
@@ -345,10 +358,41 @@ export default function DetailStockToko() {
     });
 
     // ===============================
+    // 🔥 FALLBACK DARI detail_stock
+    // ===============================
+    Object.values(detailStock).forEach((s) => {
+      if (!s?.imei) return;
+      if (normalize(s.toko) !== normalize(namaToko)) return;
+
+      // 🔥 hanya tampil kalau AVAILABLE / REFUND
+      const status = String(s.STATUS || s.status || "").toUpperCase();
+
+      if (!["AVAILABLE", "REFUND"].includes(status)) return;
+
+      if (!map[s.imei]) {
+        map[s.imei] = {
+          tanggal: "-",
+          noDo: "-",
+          supplier: "-",
+          namaToko: s.toko,
+          brand: "-",
+          barang: "-",
+          imei: s.imei,
+          qty: 1,
+          hargaSRP: 0,
+          hargaGrosir: 0,
+          hargaReseller: 0,
+          statusBarang: "TERSEDIA",
+          keterangan: "DARI DETAIL STOCK",
+        };
+      }
+    });
+
+    // ===============================
     // 🔥 STEP 2 — HITUNG SEMUA EVENT
     // ===============================
     allEvents.forEach((t) => {
-      if (t.STATUS !== "Approved") return;
+      if (!isApproved(t)) return;
       if (normalize(t.NAMA_TOKO) !== normalize(namaToko)) return;
 
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
@@ -365,10 +409,12 @@ export default function DetailStockToko() {
       }
 
       // ======================
-      // IMEI
+      // IMEI (FINAL FIX)
       // ======================
       if (t.IMEI) {
         const key = String(t.IMEI).trim();
+
+        const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
         if (!map[key]) {
           map[key] = {
@@ -391,7 +437,37 @@ export default function DetailStockToko() {
           };
         }
 
-        map[key].qty += effect;
+        // ============================================
+        // 🔥 RULE FINAL IMEI (SUPPORT REFUND FULL)
+        // ============================================
+
+        // 🔥 REFUND → selalu balikin stok (override semua)
+        if (metode === "REFUND") {
+          map[key].qty = 1;
+          return;
+        }
+
+        // 🔥 PENJUALAN → habisin stok
+        if (metode === "PENJUALAN") {
+          map[key].qty = 0;
+          return;
+        }
+
+        // 🔥 TRANSFER KELUAR → kurangi (tapi jangan negatif)
+        if (metode === "TRANSFER_KELUAR") {
+          map[key].qty = Math.max(0, map[key].qty - 1);
+          return;
+        }
+
+        // 🔥 TRANSFER MASUK / PEMBELIAN → tambah
+        if (["PEMBELIAN", "TRANSFER_MASUK"].includes(metode)) {
+          map[key].qty += 1;
+          return;
+        }
+
+        // 🔥 fallback (biar aman kalau ada metode lain)
+        map[key].qty += 0;
+
         return;
       }
 
@@ -437,15 +513,12 @@ export default function DetailStockToko() {
           );
         }
 
-        
-
         return !transaksi.some(
           (t) =>
             deletedIds.has(t.id) &&
             t.NAMA_BARANG === r.barang &&
             t.NAMA_BRAND === r.brand
         );
-        
       });
   }, [transaksi, masterMap, namaToko, supplierLookup]);
 

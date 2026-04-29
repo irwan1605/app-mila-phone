@@ -1,3 +1,8 @@
+// ===================================================
+// FormItemSection.jsx — FINAL FIX 100% (STABIL)
+// Tahap 2 | INPUT BARANG | IMEI + NON IMEI + BUNDLING
+// ===================================================
+
 import React, { useEffect, useMemo, useState } from "react";
 import {
   listenMasterBarang,
@@ -639,48 +644,6 @@ export default function FormItemSection({
     return map;
   }, [allTransaksi, tokoLogin]);
 
-  /* ===============================
-🔥 STOK FINAL (SAMA DENGAN LAPORAN)
-================================= */
-const stokDisplayMap = useMemo(() => {
-  if (!tokoLogin) return {};
-
-  const map = {};
-
-  allTransaksi.forEach((t) => {
-    if (!t) return;
-    if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
-
-    // 🔥 hanya toko ini
-    if (
-      String(t.NAMA_TOKO || "").toUpperCase() !==
-      String(tokoLogin || "").toUpperCase()
-    )
-      return;
-
-    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-    const isImei = !!t.IMEI;
-
-    // ================= NON IMEI =================
-    if (!isImei) {
-      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-      const qty = Number(t.QTY || 0);
-
-      if (!map[key]) map[key] = 0;
-
-      if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
-        map[key] += qty;
-      }
-
-      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
-        map[key] -= qty;
-      }
-    }
-  });
-
-  return map;
-}, [allTransaksi, tokoLogin]);
-
   // ===============================
   // HELPER: Cari toko asal IMEI
   // ===============================
@@ -883,8 +846,8 @@ const stokDisplayMap = useMemo(() => {
             </select>
 
             {/* BARANG */}
-            <label className="text-xs font-semibold">NAMA BARANG</label>
             <div className="space-y-1">
+            <label className="text-xs font-semibold">NAMA BARANG</label>
               <input
                 list={`barang-${idx}`}
                 className="w-full border rounded-lg p-2"
@@ -994,7 +957,7 @@ const stokDisplayMap = useMemo(() => {
             </datalist>
 
             {/* SKEMA */}
-            <label className="text-xs font-semibold">PILIH KATEGORI HARGA</label> 
+            <label className="text-xs font-semibold">KATEGORI HARGA</label>
             <select
               className="w-full border rounded p-2"
               value={item.skemaHarga}
@@ -1029,6 +992,7 @@ const stokDisplayMap = useMemo(() => {
             )}
 
             {/* QTY — KHUSUS NON IMEI */}
+            
             {!item.isImei && (
               <div>
                 <label className="text-xs font-semibold">QTY</label>
@@ -1064,6 +1028,7 @@ const stokDisplayMap = useMemo(() => {
             {/* IMEI — HANYA MUNCUL JIKA BARANG IMEI */}
             {item.isImei && (
               <>
+               <label className="text-xs font-semibold">NO IMEI</label>
                 <input
                   list={`imei-${idx}`}
                   className="border rounded px-2 py-1 w-full"
@@ -1419,4 +1384,3 @@ const stokDisplayMap = useMemo(() => {
     </div>
   );
 }
-

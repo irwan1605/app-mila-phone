@@ -80,42 +80,24 @@ export const listenTransaksi = (callback) => {
 export const tambahStokSetelahRefund = async ({ toko, items }) => {
   try {
     for (const item of items) {
-      // ===============================
-      // 🔥 IMEI
-      // ===============================
       if (item.imeiList && item.imeiList.length) {
-        for (const imei of item.imeiList) {
+        for (const raw of item.imeiList) {
+          const imei = String(raw || "").trim();
           if (!imei) continue;
-          const stockRef = ref(db, `detail_stock/${imei}`);
 
-          await update(stockRef, {
+          await update(ref(db, `detail_stock/${imei}`), {
             imei,
-            toko,
-
-            // 🔥 WAJIB: supaya kebaca di semua halaman
-            status: "AVAILABLE",
-
-            // 🔥 biar bisa di transfer lagi
+            toko: toko, // 🔥 WAJIB BENAR
+            status: "AVAILABLE", // 🔥 WAJIB
             LOCK_TRANSFER: false,
-
-            // 🔥 tracking (optional tapi bagus)
             LAST_ACTION: "REFUND",
-            FROM_REFUND: true,
-
             updatedAt: Date.now(),
           });
         }
-      }
-
-      // ===============================
-      // 🔥 NON IMEI (qty)
-      // ===============================
-      else {
+      } else {
         const key = `${item.namaBrand}|${item.namaBarang}`;
-
         const r = ref(db, `stock/${toko}/${key}`);
         const snap = await get(r);
-
         const current = Number(snap.val() || 0);
 
         await set(r, current + Number(item.qty || 0));
