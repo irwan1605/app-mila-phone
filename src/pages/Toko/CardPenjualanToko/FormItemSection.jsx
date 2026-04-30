@@ -985,26 +985,36 @@ export default function FormItemSection({
 
             {/* 🔥 DATA LIST SESUAI KATEGORI (ACCESSORIES) */}
             <datalist id={`barang-${idx}`}>
-              {barangByKategori
-                .filter((b) => {
-                  if (isImeiKategori(b.kategoriBarang)) return true;
+  {barangByKategori
+    .filter((b) => {
+      const key = `${b.namaBrand || b.brand}|${b.namaBarang}`;
 
-                  const key = `${b.namaBrand || b.brand}|${b.namaBarang}`;
-                  return nonImeiStockMap[key] > 0;
-                })
-                .map((b) => {
-                  const key = `${b.namaBrand || b.brand}|${b.namaBarang}`;
-                  const stok = nonImeiStockMap[key] || 0;
+      // 🔥 IMEI → SAMAKAN DENGAN NON IMEI
+      if (isImeiKategori(b.kategoriBarang)) {
+        const stokImei = imeiStockByBarangToko[key] || 0;
+        return stokImei > 0; // ❗ hanya tampil jika ada stok
+      }
 
-                  return (
-                    <option
-                      key={b.id}
-                      value={b.namaBarang}
-                      label={`${b.namaBarang} (Stok: ${stok})`}
-                    />
-                  );
-                })}
-            </datalist>
+      // 🔥 NON IMEI (TIDAK DIUBAH)
+      return nonImeiStockMap[key] > 0;
+    })
+    .map((b) => {
+      const key = `${b.namaBrand || b.brand}|${b.namaBarang}`;
+
+      // 🔥 SAMAKAN SOURCE STOK
+      const stok = isImeiKategori(b.kategoriBarang)
+        ? imeiStockByBarangToko[key] || 0
+        : nonImeiStockMap[key] || 0;
+
+      return (
+        <option
+          key={b.id}
+          value={b.namaBarang}
+          label={`${b.namaBarang} (Stok: ${stok})`}
+        />
+      );
+    })}
+</datalist>
 
             {/* SKEMA */}
             <label className="text-xs font-semibold">KATEGORI HARGA</label>
