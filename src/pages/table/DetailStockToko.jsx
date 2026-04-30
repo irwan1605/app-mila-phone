@@ -537,29 +537,49 @@ const supplierFix =
     });
 
     return Object.values(map)
-      .filter((r) => r.qty > 0)
-      .filter((r) => {
-        if (r.imei) {
-          return r.qty > 0; // 🔥 IMEI harus masih ada
+    .map((r) => {
+      // 🔥 HARD CLEAN: kalau qty <= 0 langsung buang
+      if (!r || Number(r.qty || 0) <= 0) return null;
+      return r;
+    })
+    .filter(Boolean)
+    .filter((r) => {
+      // =========================
+      // 🔥 IMEI RULES (KERAS)
+      // =========================
+      if (r.imei) {
+        const imei = String(r.imei).trim();
+  
+        // ❌ sudah terjual → hilang
+        if (imeiTerjual.has(imei)) return false;
+  
+        // ❌ sudah transfer keluar → hilang
+        if (imeiTransferKeluar.has(imei)) return false;
+  
+        // ❌ sudah dihapus manual → hilang
+        if (
+          transaksi.some(
+            (t) =>
+              deletedIds.has(t.id) &&
+              String(t.IMEI).trim() === imei
+          )
+        ) {
+          return false;
         }
-
-        if (r.imei && imeiTerjual.has(r.imei)) {
-          return false; // 🔥 paksa hilang
-        }
-        // 🔥 BLOCK DATA YANG SUDAH DI DELETE
-        if (r.imei) {
-          return !transaksi.some(
-            (t) => deletedIds.has(t.id) && String(t.IMEI) === String(r.imei)
-          );
-        }
-
-        return !transaksi.some(
-          (t) =>
-            deletedIds.has(t.id) &&
-            t.NAMA_BARANG === r.barang &&
-            t.NAMA_BRAND === r.brand
-        );
-      });
+  
+        return true;
+      }
+  
+      // =========================
+      // 🔥 NON IMEI
+      // =========================
+      return !transaksi.some(
+        (t) =>
+          deletedIds.has(t.id) &&
+          t.NAMA_BARANG === r.barang &&
+          t.NAMA_BRAND === r.brand
+      );
+    });
   }, [transaksi, masterMap, namaToko, supplierLookup]);
 
   /* ======================
