@@ -43,11 +43,8 @@ import {
   startAt,
   endAt,
   child,
-  off ,
-  
+  off,
 } from "firebase/database";
-
-
 
 export const listenTransaksi = (callback) => {
   const dbRef = ref(db, "transaksi");
@@ -903,9 +900,7 @@ export const listenAllTransaksi = (callback) => {
 
       Object.entries(raw).forEach(([tokoId, tokoData]) => {
         const tokoName =
-          tokoData?.info?.name ||
-          tokoData?.name ||
-          `TOKO ${tokoId}`;
+          tokoData?.info?.name || tokoData?.name || `TOKO ${tokoId}`;
 
         const transaksi = tokoData?.transaksi || {};
 
@@ -2160,7 +2155,6 @@ export const approveTransferAndMoveStock = async ({
 // ================= APPROVE + SURAT JALAN =================
 // ================= APPROVE + SURAT JALAN (FINAL FIX 100%) =================
 export const approveTransferFINAL = async ({ transfer }) => {
-
   // =====================================================
   // 🔐 USER APPROVAL INFO
   // =====================================================
@@ -2170,8 +2164,17 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
   const sjRef = push(ref(db, "surat_jalan"));
 
+  // ===============================
+  // 🔥 NORMALIZE + ANTI LOSS (WAJIB)
+  // ===============================
   const safeImeis = Array.isArray(transfer.imeis)
-    ? transfer.imeis.map((i) => String(i).trim())
+    ? [
+        ...new Set(
+          transfer.imeis
+            .map((i) => String(i || "").trim())
+            .filter((i) => i !== "")
+        ),
+      ]
     : [];
 
   const {
@@ -2211,18 +2214,15 @@ export const approveTransferFINAL = async ({ transfer }) => {
     const allTokoData = allTokoSnap.val() || {};
 
     for (const imei of safeImeis) {
-
       let saldo = 0;
       let lokasiTerakhir = null;
       let waktuTerakhir = 0;
       let sudahTerjual = false;
 
       Object.values(allTokoData).forEach((toko) => {
-
         const transaksi = toko.transaksi || {};
 
         Object.values(transaksi).forEach((trx) => {
-
           if (String(trx.IMEI).trim() !== imei) return;
           if (trx.STATUS !== "Approved") return;
 
@@ -2245,10 +2245,18 @@ export const approveTransferFINAL = async ({ transfer }) => {
             saldo -= 1;
             sudahTerjual = true;
           }
-
         });
-
       });
+
+      // ===============================
+      // 🔥 VALIDASI TOTAL (WAJIB)
+      // ===============================
+      if (safeImeis.length > 0 && safeImeis.length !== transfer.imeis.length) {
+        console.warn("⚠️ Ada IMEI invalid / duplicate dibersihkan", {
+          before: transfer.imeis.length,
+          after: safeImeis.length,
+        });
+      }
 
       // ❌ BLOK JIKA SUDAH TERJUAL
       if (sudahTerjual) {
@@ -2259,7 +2267,6 @@ export const approveTransferFINAL = async ({ transfer }) => {
       if (saldo <= 0) {
         throw new Error(`IMEI ${imei} tidak tersedia`);
       }
-
     }
   }
 
@@ -2288,8 +2295,14 @@ export const approveTransferFINAL = async ({ transfer }) => {
   // =====================================================
   if (safeImeis.length > 0) {
 
-    for (const imei of safeImeis) {
-
+    for (let i = 0; i < safeImeis.length; i++) {
+      const imei = safeImeis[i];
+  
+      if (!imei) {
+        throw new Error(`❌ IMEI kosong di index ${i}`);
+      }
+  
+      console.log("🚀 PROSES IMEI:", imei);
       // 🔻 TRANSFER KELUAR
       await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
@@ -2338,12 +2351,15 @@ export const approveTransferFINAL = async ({ transfer }) => {
         approvedToko,
         createdAt: approvedAt,
       });
-
     }
-
   } else {
-
-    const safeQty = Number(qty || 1);
+  // ===============================
+// 🔥 FIX QTY NON IMEI
+// ===============================
+const safeQty =
+safeImeis.length > 0
+  ? safeImeis.length // kalau ada IMEI → pakai ini
+  : Number(qty || 1);
 
     await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
       TANGGAL_TRANSAKSI: tanggal,
@@ -2376,7 +2392,6 @@ export const approveTransferFINAL = async ({ transfer }) => {
       STATUS: "Approved",
       CREATED_AT: approvedAt,
     });
-
   }
 
   // =====================================================
@@ -2393,7 +2408,6 @@ export const approveTransferFINAL = async ({ transfer }) => {
   });
 
   return noSuratJalan;
-
 };
 
 export const editTransferFINAL = async (id, data) => {
