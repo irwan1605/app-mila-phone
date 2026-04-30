@@ -319,6 +319,9 @@ export default function StockOpname() {
     return `${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`.trim();
   };
 
+  const normalizeImei = (v) =>
+    String(v || "").toLowerCase().replace(/[^0-9]/g, "");
+
   // ===============================
   // 4️⃣ DETAIL LOOKUP (WAJIB DI SINI)
   // ===============================
@@ -367,10 +370,20 @@ export default function StockOpname() {
       ) {
         const key = String(t.IMEI).trim();
 
+        // 🔥 KEY ASLI
         map[key] = {
           tanggal: t.TANGGAL_TRANSAKSI || "-",
           supplier: t.NAMA_SUPPLIER || "-",
           imei: key,
+        };
+        
+        // 🔥 KEY NORMALIZE (ANTI BUG REFUND)
+        const cleanKey = normalizeImei(t.IMEI);
+        
+        map[cleanKey] = {
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
+          supplier: t.NAMA_SUPPLIER || "-",
+          imei: key, // 🔥 tetap simpan versi asli
         };
       }
     });
@@ -413,6 +426,8 @@ export default function StockOpname() {
     }));
   }, [stockOpnameData]);
 
+
+
   // ===============================
   // 5️⃣ AGGREGATED (BOLEH PAKAI detailStockLookup)
   // ===============================
@@ -424,25 +439,30 @@ export default function StockOpname() {
     }
 
     return rows.map((r) => {
-      const imeiKey = String(r.imei || "").trim();
+      const imeiRaw = String(r.imei || "").trim();
+      const imeiKey = imeiRaw;
+      
+      // 🔥 NORMALIZE UNTUK MATCH
+      const imeiClean = normalizeImei(imeiRaw);
       const skuKey = `${r.brand}|${r.barang}`;
 
       // ✅ PRIORITAS:
       // 1. IMEI
       // 2. SKU (Accessories / Sparepart / Jasa)
       const meta =
-        (imeiKey && masterPembelianLookup[imeiKey]) ||
-        (imeiKey && detailStockLookup[imeiKey]) ||
-        detailStockLookup[skuKey] ||
-        masterPembelianLookup[skuKey];
-
+      (imeiKey && masterPembelianLookup[imeiKey]) ||
+      (imeiClean && masterPembelianLookup[imeiClean]) ||
+      (imeiKey && detailStockLookup[imeiKey]) ||
+      (imeiClean && detailStockLookup[imeiClean]) ||
+      detailStockLookup[skuKey] ||
+      masterPembelianLookup[skuKey];
       return {
         ...r,
         tanggal: meta?.tanggal || r.tanggal || "-",
         supplier: meta?.supplier || r.supplier || "-",
 
         // ✅ IMPORTANT
-        imei: imeiKey || "",
+        imei: meta?.imei || imeiKey || "",
         sku: !imeiKey ? skuKey : "",
 
         qty: Number(r.qty || 0),
