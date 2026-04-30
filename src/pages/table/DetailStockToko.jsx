@@ -20,6 +20,9 @@ const rupiah = (n) =>
     minimumFractionDigits: 0,
   });
 
+  const normalizeImei = (v) =>
+    String(v || "").toLowerCase().replace(/[^0-9]/g, "");
+
 const isApproved = (t) => String(t.STATUS || "").toUpperCase() === "APPROVED";
 
 export default function DetailStockToko() {
@@ -238,30 +241,39 @@ export default function DetailStockToko() {
   // ===============================
   const supplierLookup = useMemo(() => {
     const map = {};
-
+  
     transaksi.forEach((t) => {
       if (!isApproved(t)) return;
       if (!t.NAMA_BARANG || !t.NAMA_BRAND) return;
-
+  
+      // ======================
       // IMEI
+      // ======================
       if (t.IMEI) {
         const imeiKey = String(t.IMEI).trim();
-
+        const cleanKey = normalizeImei(t.IMEI);
+  
         if (t.PAYMENT_METODE === "PEMBELIAN") {
+          // 🔥 KEY ASLI
           map[imeiKey] = t.NAMA_SUPPLIER || "-";
+  
+          // 🔥 KEY NORMALIZE (ANTI ERROR)
+          map[cleanKey] = t.NAMA_SUPPLIER || "-";
         }
       }
-
+  
+      // ======================
       // NON IMEI (SKU)
+      // ======================
       if (!t.IMEI) {
         const skuKey = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-
+  
         if (t.PAYMENT_METODE === "PEMBELIAN") {
           map[skuKey] = t.NAMA_SUPPLIER || "-";
         }
       }
     });
-
+  
     return map;
   }, [transaksi]);
 
@@ -317,6 +329,23 @@ export default function DetailStockToko() {
       alert("❌ Gagal delete");
     }
   };
+
+  const imeiMasterLookup = useMemo(() => {
+    const map = {};
+  
+    transaksi.forEach((t) => {
+      if (!isApproved(t)) return;
+      if (t.PAYMENT_METODE !== "PEMBELIAN") return;
+      if (!t.IMEI) return;
+  
+      const raw = String(t.IMEI).trim();
+      const clean = normalizeImei(raw);
+  
+      map[clean] = raw; // simpan IMEI asli
+    });
+  
+    return map;
+  }, [transaksi]);
   /* ======================
    BUILD ROWS (FIX FINAL)
 ====================== */
@@ -413,26 +442,37 @@ export default function DetailStockToko() {
       // ======================
       if (t.IMEI) {
         const key = String(t.IMEI).trim();
-
+        const clean = normalizeImei(key);
+        // 🔥 IMEI ASLI DARI MASTER
+const displayImei = imeiMasterLookup[clean] || key;
+// 🔥 SUPPLIER FIX (ANTI HILANG)
+const supplierFix =
+  supplierLookup?.[key] ||
+  supplierLookup?.[clean] ||
+  t.NAMA_SUPPLIER ||
+  "-";
         const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
         if (!map[key]) {
           map[key] = {
             tanggal: t.TANGGAL_TRANSAKSI || "-",
             noDo: t.NO_INVOICE || "-",
-            supplier: supplierLookup?.[key] || t.NAMA_SUPPLIER || "-",
+        
+            supplier: supplierFix, // 🔥 FIX
             namaToko: t.NAMA_TOKO || "-",
             brand: t.NAMA_BRAND || "-",
             barang: t.NAMA_BARANG || "-",
-            imei: key,
+        
+            imei: displayImei, // 🔥 FIX UTAMA
+        
             qty: 0,
             hargaSRP:
               masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
             hargaGrosir:
               masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
             hargaReseller:
-              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller ||
-              0,
+              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+        
             statusBarang: "TERSEDIA",
           };
         }

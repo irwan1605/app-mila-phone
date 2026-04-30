@@ -313,14 +313,16 @@ export default function StockOpname() {
     );
   }, [allTransaksi]);
 
+  const normalizeImei = (v) =>
+    String(v || "").toLowerCase().replace(/[^0-9]/g, "");
+
   const normalizeKey = (t = {}) => {
     if (t.IMEI) return String(t.IMEI).trim();
     if (t.NOMOR_UNIK) return String(t.NOMOR_UNIK).trim();
     return `${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`.trim();
   };
 
-  const normalizeImei = (v) =>
-    String(v || "").toLowerCase().replace(/[^0-9]/g, "");
+
 
   // ===============================
   // 4️⃣ DETAIL LOOKUP (WAJIB DI SINI)

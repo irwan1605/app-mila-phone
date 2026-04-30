@@ -644,6 +644,45 @@ export default function FormItemSection({
     return map;
   }, [allTransaksi, tokoLogin]);
 
+  /* ===============================
+🔥 STOK IMEI PER BARANG (TOKO SAJA)
+================================= */
+  const imeiStockByBarangToko = useMemo(() => {
+    if (!tokoLogin) return {};
+
+    const map = {};
+
+    Object.entries(globalStockMap).forEach(([imei, val]) => {
+      if (val.type !== "IMEI") return;
+      if (!val.available) return;
+
+      // 🔥 cari transaksi untuk mapping barang
+      const trx = allTransaksi.find(
+        (t) =>
+          String(t.IMEI || "").trim() === imei &&
+          String(t.STATUS).toUpperCase() === "APPROVED" &&
+          String(t.NAMA_TOKO || "").toUpperCase() ===
+            String(tokoLogin || "").toUpperCase()
+      );
+
+      if (!trx) return;
+
+      const key = `${trx.NAMA_BRAND}|${trx.NAMA_BARANG}`;
+
+      if (!map[key]) map[key] = 0;
+      map[key] += 1;
+    });
+
+    // 🔥 TAMBAHAN: IMEI DARI TRANSFER
+    stokToko.forEach((s) => {
+      const key = `${s.namaBrand}|${s.namaBarang}`;
+      if (!map[key]) map[key] = 0;
+      map[key] += 1;
+    });
+
+    return map;
+  }, [globalStockMap, allTransaksi, tokoLogin, stokToko]);
+
   // ===============================
   // HELPER: Cari toko asal IMEI
   // ===============================
@@ -684,31 +723,29 @@ export default function FormItemSection({
 
   const findBarangUniversal = (imei) => {
     const imeiFix = String(imei || "").trim();
-  
+
     // 1. CEK PEMBELIAN TOKO (EXISTING)
     let trx = allTransaksi.find(
       (t) =>
         String(t.IMEI || "").trim() === imeiFix &&
         String(t.STATUS || "").toUpperCase() === "APPROVED"
     );
-  
+
     // 2. CEK GLOBAL STOCK (🔥 TAMBAHAN)
     if (!trx && globalStockMap[imeiFix]) {
-      trx = allTransaksi.find(
-        (t) => String(t.IMEI || "").trim() === imeiFix
-      );
+      trx = allTransaksi.find((t) => String(t.IMEI || "").trim() === imeiFix);
     }
-  
+
     if (!trx) return null;
-  
+
     const barang = masterBarang.find(
       (b) =>
         String(b.namaBarang || "").toUpperCase() ===
         String(trx.NAMA_BARANG || "").toUpperCase()
     );
-  
+
     if (!barang) return null;
-  
+
     return {
       kategoriBarang: barang.kategoriBarang,
       namaBrand: barang.namaBrand || barang.brand,
@@ -847,7 +884,7 @@ export default function FormItemSection({
 
             {/* BARANG */}
             <div className="space-y-1">
-            <label className="text-xs font-semibold">NAMA BARANG</label>
+              <label className="text-xs font-semibold">NAMA BARANG</label>
               <input
                 list={`barang-${idx}`}
                 className="w-full border rounded-lg p-2"
@@ -925,10 +962,23 @@ export default function FormItemSection({
               />
 
               {/* 🔥 TAMPILKAN INFO STOK REALTIME */}
-              {!item.isImei && item.namaBarang && (
-                <div className="text-xs text-blue-600 font-semibold">
-                  Stok tersedia:{" "}
-                  {nonImeiStockMap[`${item.namaBrand}|${item.namaBarang}`] || 0}
+              {item.namaBarang && (
+                <div className="text-xs font-semibold">
+                  {item.isImei ? (
+                    <span className="text-blue-600">
+                      📱 Stok IMEI Toko:{" "}
+                      {imeiStockByBarangToko[
+                        `${item.namaBrand}|${item.namaBarang}`
+                      ] || 0}
+                    </span>
+                  ) : (
+                    <span className="text-green-600">
+                      📦 Stok Barang Toko:{" "}
+                      {nonImeiStockMap[
+                        `${item.namaBrand}|${item.namaBarang}`
+                      ] || 0}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -992,7 +1042,7 @@ export default function FormItemSection({
             )}
 
             {/* QTY — KHUSUS NON IMEI */}
-            
+
             {!item.isImei && (
               <div>
                 <label className="text-xs font-semibold">QTY</label>
@@ -1028,7 +1078,7 @@ export default function FormItemSection({
             {/* IMEI — HANYA MUNCUL JIKA BARANG IMEI */}
             {item.isImei && (
               <>
-               <label className="text-xs font-semibold">NO IMEI</label>
+                <label className="text-xs font-semibold">NO IMEI</label>
                 <input
                   list={`imei-${idx}`}
                   className="border rounded px-2 py-1 w-full"
@@ -1169,7 +1219,7 @@ export default function FormItemSection({
                     if (!autoBarang) {
                       autoBarang = findBarangByTransfer(imei);
                     }
-                    
+
                     // 🔥 SUPER FIX
                     if (!autoBarang) {
                       autoBarang = findBarangUniversal(imei);
