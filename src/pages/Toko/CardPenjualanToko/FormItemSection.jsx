@@ -22,7 +22,9 @@ const isImeiKategori = (kat) =>
   KATEGORI_IMEI.includes((kat || "").toUpperCase());
 
 const normalize = (v) =>
-  String(v || "").toUpperCase().trim();
+  String(v || "")
+    .toUpperCase()
+    .trim();
 
 export default function FormItemSection({
   value = [],
@@ -405,14 +407,11 @@ export default function FormItemSection({
           .filter(
             (b) =>
               String(b.kategoriBarang).toUpperCase() ===
-                String(kategori).toUpperCase() &&
-              b.stok > 0
+                String(kategori).toUpperCase() && b.stok > 0
           )
           .map((b) => b.namaBrand)
       ),
     ].filter(Boolean);
-
-    
 
   const barangList = (kategori, brand) =>
     masterBarang.filter((b) => {
@@ -744,12 +743,13 @@ export default function FormItemSection({
     const map = {};
     const imeiTracker = new Set();
   
+    // =========================
+    // 🔥 1. DATA DARI TRANSAKSI
+    // =========================
     allTransaksi.forEach((t) => {
       if (!t) return;
   
       const status = String(t.STATUS || "").toUpperCase();
-  
-      // ✅ FIX: include REFUND
       if (!["APPROVED", "REFUND"].includes(status)) return;
   
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
@@ -763,7 +763,7 @@ export default function FormItemSection({
         return;
       }
   
-      const key = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+      const key = `${normalize(t.NAMA_BRAND)}|${normalize(t.NAMA_BARANG)}`;
   
       // ================= IMEI =================
       if (t.IMEI) {
@@ -799,12 +799,12 @@ export default function FormItemSection({
         map[key] -= qty;
       }
   
-      // 🔥🔥🔥 SUPER FIX (INI YANG BIKIN DATA LO NGACO)
+      // REFUND DETAIL
       if (t.statusPembayaran === "REFUND" && Array.isArray(t.items)) {
         t.items.forEach((it) => {
-          if (it.imeiList?.length) return; // skip IMEI
+          if (it.imeiList?.length) return;
   
-          const k = `${it.namaBrand}|${it.namaBarang}`;
+          const k = `${normalize(it.namaBrand)}|${normalize(it.namaBarang)}`;
   
           if (!map[k]) map[k] = 0;
   
@@ -813,70 +813,89 @@ export default function FormItemSection({
       }
     });
   
-    return map;
-  }, [allTransaksi, tokoLogin]);
+    // =========================
+    // 🔥 2. DATA DARI TRANSFER (FIX DI SINI)
+    // =========================
+    stokToko.forEach((tf) => {
+      if (!tf) return;
+  
+      if (
+        String(tf.ke || "").toUpperCase().trim() !==
+        String(tokoLogin || "").toUpperCase().trim()
+      ) {
+        return;
+      }
+  
+      const key = `${normalize(tf.brand)}|${normalize(tf.barang)}`;
+  
+      if (!map[key]) map[key] = 0;
+  
+      map[key] += Number(tf.qty || 0);
+    });
 
+    
+  
+    return map;
+  }, [allTransaksi, tokoLogin, stokToko]);
   // 🔥 taruh DI SINI (di dalam component, sebelum return)
 
-const barangByKategoriMap = useMemo(() => {
-  const map = {};
+  useEffect(() => {
+    console.log("🔥 FINAL STOCK:", stockGabunganToko);
+  }, [stockGabunganToko]);
 
-  items.forEach((item) => {
-    const list = [];
-
-    Object.entries(stockGabunganToko).forEach(([key, qty]) => {
-      if (!qty || qty <= 0) return;
-
-      const [brand, namaBarang] = key.split("|");
-
-      const barangMaster = masterBarang.find(
-        (b) =>
-          String(b.namaBarang).toUpperCase() ===
-          String(namaBarang).toUpperCase()
-      );
-
-      list.push({
-        kategoriBarang:
-          barangMaster?.kategoriBarang || item.kategoriBarang,
-        namaBrand: brand,
-        namaBarang,
-        harga: barangMaster?.harga || {},
-        stok: qty,
+  const barangByKategoriMap = useMemo(() => {
+    const map = {};
+  
+    items.forEach((item) => {
+      const list = [];
+  
+      Object.entries(stockGabunganToko).forEach(([key, qty]) => {
+        if (!qty || qty <= 0) return;
+  
+        const [brand, namaBarang] = key.split("|");
+  
+        const barangMaster = masterBarang.find(
+          (b) =>
+            normalize(b.namaBarang) === normalize(namaBarang)
+        );
+  
+        list.push({
+          kategoriBarang: item.kategoriBarang, // 🔥 FIX DI SINI
+          namaBrand: brand,
+          namaBarang,
+          harga: barangMaster?.harga || {},
+          stok: qty,
+        });
+      });
+  
+      map[item.id] = list.filter((b) => {
+        if (normalize(b.kategoriBarang) !== normalize(item.kategoriBarang))
+          return false;
+  
+        if (
+          item.namaBrand &&
+          normalize(b.namaBrand) !== normalize(item.namaBrand)
+        )
+          return false;
+  
+        return true;
       });
     });
-
-    map[item.id] = list.filter((b) => {
-      if (
-        String(b.kategoriBarang).toUpperCase() !==
-        String(item.kategoriBarang).toUpperCase()
-      )
-        return false;
-
-      if (
-        item.namaBrand &&
-        String(b.namaBrand).toUpperCase() !==
-          String(item.namaBrand).toUpperCase()
-      )
-        return false;
-
-      return true;
-    });
-  });
-
-  return map;
-}, [stockGabunganToko, masterBarang, items]);
-
+  
+    return map;
+  }, [stockGabunganToko, masterBarang, items]);
+  
   // 🔥 DEBUG DI SINI
-useEffect(() => {
-  console.log("🔥 MASTER:", masterBarang);
-  console.log("🔥 STOCK:", stockGabunganToko);
+  useEffect(() => {
+    console.log("🔥 MASTER:", masterBarang);
+    console.log("🔥 STOCK:", stockGabunganToko);
 
-  const found = Object.keys(stockGabunganToko).find((k) =>
-    k.includes("BATERAI SLA 12A")
-  );
+    const found = Object.keys(stockGabunganToko).find((k) =>
+      k.includes("BATERAI SLA 12A")
+    );
 
-  console.log("🔥 CEK SLA 12A:", found);
-}, [stockGabunganToko, masterBarang])
+    console.log("🔥 CEK SLA 12A:", found);
+  }, [stockGabunganToko, masterBarang]);
 
   /* =========================================
 🔥 MASTER BARANG DARI STOCK FINAL
@@ -992,7 +1011,7 @@ useEffect(() => {
       )}
 
       {items.map((item, idx) => {
-          const barangByKategori = barangByKategoriMap[item.id] || [];
+        const barangByKategori = barangByKategoriMap[item.id] || [];
         // 🔥 jika sedang edit → tampilkan item yang diedit
         if (editIndex !== null) {
           if (editIndex !== idx) return null;
@@ -1021,8 +1040,6 @@ useEffect(() => {
         const totalItem = isItemComplete
           ? Number(item.qty || 0) * hargaAktif
           : 0;
-
-       
 
         return (
           <div
@@ -1083,25 +1100,26 @@ useEffect(() => {
                 value={item.namaBarang || ""}
                 onChange={(e) => {
                   const val = e.target.value;
-                
+
                   const barangValid = barangByKategori.find(
                     (b) =>
                       String(b.namaBarang).toUpperCase() ===
                       String(val).toUpperCase()
                   );
-                
+
                   if (!barangValid) {
                     updateItem(idx, {
                       namaBarang: val,
                     });
                     return;
                   }
-                
-                  const key = `${normalize(barangValid.namaBrand || barangValid.brand)}|${normalize(barangValid.namaBarang)}`;
-                
-                  const stokTersedia =
-                    stockGabunganToko[key] || 0;
-                
+
+                  const key = `${normalize(
+                    barangValid.namaBrand || barangValid.brand
+                  )}|${normalize(barangValid.namaBarang)}`;
+
+                  const stokTersedia = stockGabunganToko[key] || 0;
+
                   updateItem(idx, {
                     namaBarang: barangValid.namaBarang,
                     kategoriBarang: barangValid.kategoriBarang,
@@ -1122,22 +1140,19 @@ useEffect(() => {
                       String(b.namaBarang).toUpperCase() ===
                       String(item.namaBarang).toUpperCase()
                   );
-                
+
                   if (!barangValid) {
-                    alert("❌ Barang tidak ditemukan di stok toko ini");
-                    updateItem(idx, {
-                      namaBarang: "",
-                      qty: 0,
-                    });
+                    // ❗ jangan langsung error
                     return;
                   }
-                
-                  const key = `${normalize(barangValid.namaBrand)}|${normalize(barangValid.namaBarang)}`;
-                
-                  const stokTersedia =
-                    stockGabunganToko[key] || 0;
-                    console.log("🔥 FINAL STOCK:", stockGabunganToko);
-                
+
+                  const key = `${normalize(barangValid.namaBrand)}|${normalize(
+                    barangValid.namaBarang
+                  )}`;
+
+                  const stokTersedia = stockGabunganToko[key] || 0;
+                  console.log("🔥 FINAL STOCK:", stockGabunganToko);
+
                   if (
                     !isImeiKategori(barangValid.kategoriBarang) &&
                     stokTersedia <= 0
@@ -1156,15 +1171,20 @@ useEffect(() => {
                 <div className="text-xs font-semibold">
                   {item.isImei ? (
                     <span className="text-blue-600">
-                      📱 Stok IMEI Toko:{" "}
-                      Stok tersedia:{" "}
-                      {stockGabunganToko[`${normalize(item.namaBrand)}|${normalize(item.namaBarang)}`] || 0}
+                      📱 Stok IMEI Toko: Stok tersedia:{" "}
+                      {stockGabunganToko[
+                        `${normalize(item.namaBrand)}|${normalize(
+                          item.namaBarang
+                        )}`
+                      ] || 0}
                     </span>
                   ) : (
                     <span className="text-green-600">
                       📦 Stok Barang Toko:{" "}
                       {stockGabunganToko[
-                        `${normalize(item.namaBrand)}|${normalize(item.namaBarang)}`
+                        `${normalize(item.namaBrand)}|${normalize(
+                          item.namaBarang
+                        )}`
                       ] || 0}
                     </span>
                   )}
@@ -1176,11 +1196,15 @@ useEffect(() => {
             <datalist id={`barang-${idx}`}>
               {barangByKategori
                 .filter((b) => {
-                  const key = `${normalize(b.namaBrand || b.brand)}|${normalize(b.namaBarang)}`;
+                  const key = `${normalize(b.namaBrand || b.brand)}|${normalize(
+                    b.namaBarang
+                  )}`;
                   return (stockGabunganToko[key] || 0) > 0;
                 })
                 .map((b) => {
-                  const key = `${normalize(b.namaBrand || b.brand)}|${normalize(b.namaBarang)}`;
+                  const key = `${normalize(b.namaBrand || b.brand)}|${normalize(
+                    b.namaBarang
+                  )}`;
                   const stok = stockGabunganToko[key] || 0;
 
                   return (
@@ -1240,8 +1264,10 @@ useEffect(() => {
                   value={item.qty || 1}
                   onChange={(e) => {
                     const qtyInput = Number(e.target.value || 1);
-                  const key = `${normalize(item.namaBrand)}|${normalize(item.namaBarang)}`;
-const stok = stockGabunganToko[key] || 0;
+                    const key = `${normalize(item.namaBrand)}|${normalize(
+                      item.namaBarang
+                    )}`;
+                    const stok = stockGabunganToko[key] || 0;
                     if (qtyInput > stok) {
                       alert("❌ Qty melebihi stok tersedia");
                       return;
