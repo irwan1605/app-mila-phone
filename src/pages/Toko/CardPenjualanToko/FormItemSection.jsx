@@ -846,7 +846,7 @@ export default function FormItemSection({
   const barangByKategoriMap = useMemo(() => {
     const map = {};
   
-    items.forEach((item) => {
+    items.forEach((item, idx) => {
       const list = [];
   
       Object.entries(stockGabunganToko).forEach(([key, qty]) => {
@@ -860,7 +860,8 @@ export default function FormItemSection({
         );
   
         list.push({
-          kategoriBarang: item.kategoriBarang, // 🔥 FIX DI SINI
+        kategoriBarang:
+  barangMaster?.kategoriBarang || "UNKNOWN",
           namaBrand: brand,
           namaBarang,
           harga: barangMaster?.harga || {},
@@ -868,8 +869,11 @@ export default function FormItemSection({
         });
       });
   
-      map[item.id] = list.filter((b) => {
-        if (normalize(b.kategoriBarang) !== normalize(item.kategoriBarang))
+      map[idx] = list.filter((b) => {
+        if (
+          item.kategoriBarang &&
+          normalize(b.kategoriBarang) !== normalize(item.kategoriBarang)
+        )
           return false;
   
         if (
@@ -884,7 +888,7 @@ export default function FormItemSection({
   
     return map;
   }, [stockGabunganToko, masterBarang, items]);
-  
+
   // 🔥 DEBUG DI SINI
   useEffect(() => {
     console.log("🔥 MASTER:", masterBarang);
@@ -1011,7 +1015,7 @@ export default function FormItemSection({
       )}
 
       {items.map((item, idx) => {
-        const barangByKategori = barangByKategoriMap[item.id] || [];
+        const barangByKategori = barangByKategoriMap[idx] || [];
         // 🔥 jika sedang edit → tampilkan item yang diedit
         if (editIndex !== null) {
           if (editIndex !== idx) return null;
