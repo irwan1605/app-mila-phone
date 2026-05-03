@@ -326,26 +326,26 @@ export default function TransferBarang() {
   // ================= INVENTORY NORMALIZATION (FINAL) =================
   useEffect(() => {
     const tokoRef = ref(db, "toko");
-  
+
     const unsubscribe = onValue(tokoRef, (snap) => {
       const map = {}; // key = imei
-  
+
       snap.forEach((tokoSnap) => {
         const transaksiSnap = tokoSnap.child("transaksi");
         if (!transaksiSnap.exists()) return;
-  
+
         const trxList = [];
-  
+
         // ===============================
         // 🔥 AMBIL SEMUA TRANSAKSI DULU
         // ===============================
         transaksiSnap.forEach((trx) => {
           const v = trx.val();
           if (!v || !v.IMEI) return;
-  
+
           trxList.push(v);
         });
-  
+
         // ===============================
         // 🔥 SORT BERDASARKAN WAKTU (WAJIB)
         // ===============================
@@ -354,14 +354,14 @@ export default function TransferBarang() {
           const tb = b.CREATED_AT || b.createdAt || 0;
           return ta - tb;
         });
-  
+
         // ===============================
         // 🔥 PROSES SATU PERSATU
         // ===============================
         trxList.forEach((v) => {
           const imei = String(v.IMEI).trim();
           const metode = String(v.PAYMENT_METODE || "").toUpperCase();
-  
+
           if (!map[imei]) {
             map[imei] = {
               imei,
@@ -372,32 +372,28 @@ export default function TransferBarang() {
               kategori: String(v.KATEGORI_BRAND || "").trim(),
             };
           }
-  
+
           // ============================================
           // 🔥 RULE STATUS IMEI (FINAL - SUPPORT CHAIN)
           // ============================================
-  
+
           if (metode === "PEMBELIAN") {
             map[imei].status = "AVAILABLE";
             map[imei].toko = String(v.NAMA_TOKO || "").trim();
-          }
-  
-          else if (metode === "REFUND") {
+          } else if (metode === "REFUND") {
             map[imei].status = "AVAILABLE";
             map[imei].toko = String(v.NAMA_TOKO || "").trim();
-          }
-  
-          else if (metode === "PENJUALAN") {
+          } else if (metode === "PENJUALAN") {
             map[imei].status = "SOLD";
           }
-  
+
           // 🔥 FIX UTAMA: JANGAN MATIKAN IMEI
           else if (metode === "TRANSFER_KELUAR") {
             if (map[imei].status !== "SOLD") {
               map[imei].status = "AVAILABLE"; // 🔥 tetap bisa dipakai lagi
             }
           }
-  
+
           // 🔥 PINDAH OWNER TERAKHIR
           else if (metode === "TRANSFER_MASUK") {
             if (map[imei].status !== "SOLD") {
@@ -407,13 +403,13 @@ export default function TransferBarang() {
           }
         });
       });
-  
+
       // ===============================
       // 🔥 FINAL SET INVENTORY
       // ===============================
       setInventory(Object.values(map));
     });
-  
+
     return () => unsubscribe();
   }, []);
 
@@ -2336,18 +2332,19 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
           {/* TOKO TUJUAN */}
           <div>
             <label className="text-xs font-semibold">Toko Tujuan</label>
-            <input
-              list="toko-tujuan-list"
+            <select
               className="input"
               value={form.ke}
               onChange={(e) => setForm((f) => ({ ...f, ke: e.target.value }))}
-              placeholder="Ketik / pilih toko tujuan"
-            />
-            <datalist id="toko-tujuan-list">
+            >
+              <option value="">-- Pilih Toko Tujuan --</option>
+
               {TOKO_OPTIONS.filter((t) => t !== form.tokoPengirim).map((t) => (
-                <option key={t} value={t} />
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
 
           {/* KATEGORI BARANG */}
