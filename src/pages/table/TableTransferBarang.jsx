@@ -447,7 +447,7 @@ const getAllDoItems = async (noDo) => {
           className="input max-w-xs"
         >
           <option value="ALL">SEMUA</option>
-          <option value="Pending">Pending</option>
+          <option value="Pending">Pendding</option>
           <option value="Approved">Approved</option>
           <option value="Rejected">Rejected</option>
           <option value="Voided">Voided</option>
