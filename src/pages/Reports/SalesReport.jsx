@@ -462,7 +462,7 @@ export default function SalesReport() {
   
               // ===== PAYMENT (🔥 ONLY FIRST ROW) =====
               StatusBayar: idx === 0 ? r.STATUS_BAYAR : "",
-              PaymentMetode: idx === 0 ? r.PAYMENT_METODE : "",
+              PaymentMetodeUser: idx === 0 ? r.PAYMENT_METODE : "",
   
               PaymentKredit: idx === 0 ? r.PAYMENT_KREDIT : "",
               DashboardKredit: idx === 0 ? Number(r.dashboardKredit || 0) : "",

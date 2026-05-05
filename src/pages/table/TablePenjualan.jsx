@@ -753,7 +753,7 @@ export default function TablePenjualan({ data = [] }) {
 
             // ===== PAYMENT (🔥 HANYA BARIS PERTAMA) =====
             StatusBayar: idx === 0 ? r.statusBayar : "",
-            PaymentMetode: idx === 0 ? r.paymentMetodeUser : "",
+            paymentMetodeUser: idx === 0 ? r.paymentMetodeUser : "",
             NamaBank: idx === 0 ? r.namaBank : "",
 
             DashboardKredit: idx === 0 ? r.dashboardKredit || 0 : "",
