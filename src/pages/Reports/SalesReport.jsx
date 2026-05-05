@@ -22,6 +22,7 @@ import {
   deleteTransaksi,
   listenMasterStoreHead,
   listenKaryawan,
+  listenMasterPaymentMetode ,
 } from "../../services/FirebaseService";
 import { useLocation } from "react-router-dom";
 
@@ -43,6 +44,12 @@ const safe = (v) => Number(v || 0);
 
 const rupiah = (v) => `Rp ${safe(v).toLocaleString("id-ID")}`;
 
+const normalizePayment = (val = "") => {
+  return String(val)
+    .toUpperCase()
+    .replace(/\s+/g, "");
+};
+
 export default function SalesReport() {
   const [allData, setAllData] = useState([]);
   const [filterToko, setFilterToko] = useState("semua");
@@ -55,6 +62,7 @@ export default function SalesReport() {
   const [rows, setRows] = useState([]);
   const [masterSH, setMasterSH] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
+  const [masterPayment, setMasterPayment] = useState([]);
 
   useEffect(() => {
     const unsubSH = listenMasterStoreHead((data) => {
@@ -69,6 +77,14 @@ export default function SalesReport() {
       unsubSH && unsubSH();
       unsubKar && unsubKar();
     };
+  }, []);
+
+  useEffect(() => {
+    const unsub = listenMasterPaymentMetode((data) => {
+      setMasterPayment(data || []);
+    });
+  
+    return () => unsub && unsub();
   }, []);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -131,10 +147,28 @@ export default function SalesReport() {
   const safe = (v) => Number(v || 0);
   const rupiah = (v) => `Rp ${safe(v).toLocaleString("id-ID")}`;
 
+  const resolvePaymentMetode = (val = "") => {
+    if (!val || val === "-") return "-";
+  
+    const parts = String(val).split("+");
+  
+    const result = parts.map((p) => {
+      const key = normalizePayment(p);
+  
+      return (
+        paymentMetodeMap[key] ||
+        String(p || "").toUpperCase().trim() ||
+        "-"
+      );
+    });
+  
+    return result.join(" + ");
+  };
+
   // ================= REALTIME =================
   useEffect(() => {
-    if (!masterSH.length || !masterKaryawan.length) return;
-  
+    if (!masterSH.length || !masterKaryawan.length || !masterPayment.length) return;
+
     const unsub = listenPenjualan((data = []) => {
       const mapInvoice = {};
 
@@ -145,6 +179,27 @@ export default function SalesReport() {
 
         // ================= PAYMENT =================
         let paymentMetode = "-";
+
+        if (
+          Array.isArray(payment.splitPayment) &&
+          payment.splitPayment.length
+        ) {
+          paymentMetode = payment.splitPayment
+            .map((p) =>
+              String(p.metode || "")
+                .toUpperCase()
+                .trim()
+            )
+            .filter(Boolean)
+            .join(" + ");
+        } else {
+          paymentMetode = String(
+            payment.metode ||
+            payment.paymentMethod ||
+            payment.jenisPembayaran ||
+            "-"
+          ).toUpperCase().trim();
+        }
         let namaBank = "-";
         let nominalPayment = 0;
 
@@ -165,7 +220,7 @@ export default function SalesReport() {
             0
           );
         } else {
-          paymentMetode = String(payment.metode || "-").toUpperCase();
+        
           namaBank = payment.bankNama || "-";
           nominalPayment =
             Number(payment.nominalPayment || 0) || Number(payment.nominal || 0);
@@ -203,8 +258,12 @@ export default function SalesReport() {
         const sisaKembalian =
           nominalPayment > grandTotalFix ? nominalPayment - grandTotalFix : 0;
 
-          const tokoKey = String(trx.toko || "").toUpperCase().trim();
-          const salesKey = String(trx.user?.namaSales || "").toUpperCase().trim();
+        const tokoKey = String(trx.toko || "")
+          .toUpperCase()
+          .trim();
+        const salesKey = String(trx.user?.namaSales || "")
+          .toUpperCase()
+          .trim();
 
         // ================= PUSH =================
         if (!mapInvoice[trx.invoice]) {
@@ -279,30 +338,38 @@ export default function SalesReport() {
     });
 
     return () => unsub && unsub();
-  }, [masterSH, masterKaryawan]);
+  }, [masterSH, masterKaryawan, masterPayment]);
 
   const storeHeadMap = useMemo(() => {
     const map = {};
-  
+
     masterSH.forEach((sh) => {
-      const toko = String(sh.namaToko || "").toUpperCase().trim();
+      const toko = String(sh.namaToko || "")
+        .toUpperCase()
+        .trim();
       map[toko] = sh.namaSH;
     });
-  
+
     return map;
   }, [masterSH]);
-  
+
   const salesHandleMap = useMemo(() => {
     const map = {};
-  
+
     masterKaryawan.forEach((k) => {
-      const nama = String(k.NAMA || "").toUpperCase().trim();
-  
-      if (String(k.JABATAN || "").toUpperCase().includes("SL")) {
+      const nama = String(k.NAMA || "")
+        .toUpperCase()
+        .trim();
+
+      if (
+        String(k.JABATAN || "")
+          .toUpperCase()
+          .includes("SL")
+      ) {
         map[nama] = k.NAMA;
       }
     });
-  
+
     return map;
   }, [masterKaryawan]);
 
@@ -378,6 +445,22 @@ export default function SalesReport() {
     () => [...new Set(allData.map((r) => r.NAMA_BRAND).filter(Boolean))],
     [allData]
   );
+
+  const paymentMetodeMap = useMemo(() => {
+    const map = {};
+  
+    masterPayment.forEach((p) => {
+      (p.paymentMetode || []).forEach((m) => {
+        const key = String(m || "")
+          .toUpperCase()
+          .replace(/\s+/g, "");
+  
+        map[key] = m;
+      });
+    });
+  
+    return map;
+  }, [masterPayment]);
 
   /* ===================== FILTER LOCK PIC TOKO ===================== */
   const filteredData = useMemo(() => {
@@ -462,8 +545,6 @@ export default function SalesReport() {
     return filteredData.slice(start, start + rowsPerPage);
   }, [filteredData, currentPage]);
 
-
-
   const handleExportExcel = () => {
     try {
       const exportData = [];
@@ -512,7 +593,10 @@ export default function SalesReport() {
 
               // ===== PAYMENT (🔥 ONLY FIRST ROW) =====
               StatusBayar: idx === 0 ? r.STATUS_BAYAR : "",
-              PaymentMetodeUser: idx === 0 ? r.PAYMENT_METODE : "",
+              PaymentMetodeUser:
+              idx === 0
+                ? resolvePaymentMetode(r.PAYMENT_METODE)
+                : "",
 
               PaymentKredit: idx === 0 ? r.PAYMENT_KREDIT : "",
               DashboardKredit: idx === 0 ? Number(r.dashboardKredit || 0) : "",
@@ -844,7 +928,7 @@ export default function SalesReport() {
 
                 {/* PAYMENT */}
                 <td className="p-2 border">{row.STATUS_BAYAR}</td>
-                <td className="p-2 border">{row.PAYMENT_METODE}</td>
+                <td className="p-2 border">{resolvePaymentMetode(row.PAYMENT_METODE)}</td>
 
                 {/* 🔥 KREDIT */}
                 <td className="p-2 border">{row.PAYMENT_KREDIT}</td>
