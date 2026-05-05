@@ -13,6 +13,8 @@ import {
   addTransaksi,
   generateIdPelanggan,
   tambahStokSetelahRefund,
+  listenMasterStoreHead,
+  listenKaryawan,
 } from "../../services/FirebaseService";
 import { ref, get, update, remove, push } from "firebase/database";
 import { db } from "../../services/FirebaseInit";
@@ -64,6 +66,18 @@ export default function TablePenjualan({ data = [] }) {
   const [localHiddenRefund, setLocalHiddenRefund] = useState({});
   const [deletedRows, setDeletedRows] = useState({});
   const [instantRefund, setInstantRefund] = useState({});
+  const [masterSH, setMasterSH] = useState([]);
+const [masterKaryawan, setMasterKaryawan] = useState([]);
+
+useEffect(() => {
+  const unsubSH = listenMasterStoreHead(setMasterSH);
+  const unsubKar = listenKaryawan(setMasterKaryawan);
+
+  return () => {
+    unsubSH && unsubSH();
+    unsubKar && unsubKar();
+  };
+}, []);
 
   const pageSize = 10;
 
@@ -135,6 +149,25 @@ export default function TablePenjualan({ data = [] }) {
 
   const refundLock = useRef({});
 
+  const storeHeadMap = useMemo(() => {
+    const map = {};
+    masterSH.forEach((sh) => {
+      map[String(sh.namaToko || "").toUpperCase()] = sh.namaSH;
+    });
+    return map;
+  }, [masterSH]);
+  
+  const salesHandleMap = useMemo(() => {
+    const map = {};
+    masterKaryawan.forEach((k) => {
+      if (String(k.JABATAN || "").includes("SL")) {
+        map[String(k.NAMA || "").toUpperCase()] = k.NAMA;
+      }
+    });
+    return map;
+  }, [masterKaryawan]);
+  
+
   /* ================= FLATTEN DATA ================= */
   const tableRows = useMemo(() => {
     const map = {};
@@ -195,6 +228,10 @@ export default function TablePenjualan({ data = [] }) {
       const sisaKembalian =
         totalBayarFix > grandTotalFix ? totalBayarFix - grandTotalFix : 0;
 
+        
+        const tokoKey = String(trx.toko || "").toUpperCase();
+        const salesKey = String(trx.user?.namaSales || "").toUpperCase();
+
       /* ================= PUSH HANYA 1X PER INVOICE ================= */
       if (!map[trx.invoice]) {
         map[trx.invoice] = {
@@ -211,9 +248,18 @@ export default function TablePenjualan({ data = [] }) {
           idPelanggan: trx.user?.idPelanggan || "-",
           telp: trx.user?.noTlpPelanggan || "-",
 
-          storeHead: trx.user?.storeHead || "-",
+          
+          storeHead:
+            storeHeadMap[tokoKey] ||
+            trx.user?.storeHead ||
+            "-",
+          
           sales: trx.user?.namaSales || "-",
-          salesHandle: trx.user?.salesHandle || "-",
+          
+          salesHandle:
+            salesHandleMap[salesKey] ||
+            trx.user?.salesHandle ||
+            "-",
 
           paymentMetode,
           namaBank,

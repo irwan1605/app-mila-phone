@@ -20,6 +20,8 @@ import {
   listenPenjualan,
   updateTransaksi,
   deleteTransaksi,
+  listenMasterStoreHead,
+  listenKaryawan,
 } from "../../services/FirebaseService";
 import { useLocation } from "react-router-dom";
 
@@ -51,6 +53,23 @@ export default function SalesReport() {
   const [filterEnd, setFilterEnd] = useState("");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState([]);
+  const [masterSH, setMasterSH] = useState([]);
+  const [masterKaryawan, setMasterKaryawan] = useState([]);
+
+  useEffect(() => {
+    const unsubSH = listenMasterStoreHead((data) => {
+      setMasterSH(data || []);
+    });
+
+    const unsubKar = listenKaryawan((data) => {
+      setMasterKaryawan(data || []);
+    });
+
+    return () => {
+      unsubSH && unsubSH();
+      unsubKar && unsubKar();
+    };
+  }, []);
 
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 12;
@@ -114,6 +133,8 @@ export default function SalesReport() {
 
   // ================= REALTIME =================
   useEffect(() => {
+    if (!masterSH.length || !masterKaryawan.length) return;
+  
     const unsub = listenPenjualan((data = []) => {
       const mapInvoice = {};
 
@@ -182,6 +203,9 @@ export default function SalesReport() {
         const sisaKembalian =
           nominalPayment > grandTotalFix ? nominalPayment - grandTotalFix : 0;
 
+          const tokoKey = String(trx.toko || "").toUpperCase().trim();
+          const salesKey = String(trx.user?.namaSales || "").toUpperCase().trim();
+
         // ================= PUSH =================
         if (!mapInvoice[trx.invoice]) {
           mapInvoice[trx.invoice] = {
@@ -195,9 +219,12 @@ export default function SalesReport() {
             ID_USER: trx.user?.idPelanggan || "-",
             NO_TLP: trx.user?.noTlpPelanggan || "-",
 
-            STORE_HEAD: trx.user?.storeHead || "-",
+            STORE_HEAD: storeHeadMap[tokoKey] || trx.user?.storeHead || "-",
+
             NAMA_SALES: trx.user?.namaSales || "-",
-            SALES_HANDLE: trx.user?.salesHandle || "-",
+
+            SALES_HANDLE:
+              salesHandleMap[salesKey] || trx.user?.salesHandle || "-",
 
             // 🔥 BARANG
             KATEGORI:
@@ -252,7 +279,32 @@ export default function SalesReport() {
     });
 
     return () => unsub && unsub();
-  }, []);
+  }, [masterSH, masterKaryawan]);
+
+  const storeHeadMap = useMemo(() => {
+    const map = {};
+  
+    masterSH.forEach((sh) => {
+      const toko = String(sh.namaToko || "").toUpperCase().trim();
+      map[toko] = sh.namaSH;
+    });
+  
+    return map;
+  }, [masterSH]);
+  
+  const salesHandleMap = useMemo(() => {
+    const map = {};
+  
+    masterKaryawan.forEach((k) => {
+      const nama = String(k.NAMA || "").toUpperCase().trim();
+  
+      if (String(k.JABATAN || "").toUpperCase().includes("SL")) {
+        map[nama] = k.NAMA;
+      }
+    });
+  
+    return map;
+  }, [masterKaryawan]);
 
   const normalizeRow = (r) => {
     const item = r.items?.[0] || {};
@@ -410,76 +462,74 @@ export default function SalesReport() {
     return filteredData.slice(start, start + rowsPerPage);
   }, [filteredData, currentPage]);
 
+
+
   const handleExportExcel = () => {
     try {
       const exportData = [];
-  
+
       filteredData.forEach((r) => {
         if (r.DETAIL_ITEMS?.length) {
           r.DETAIL_ITEMS.forEach((item, idx) => {
             exportData.push({
               No: exportData.length + 1,
-  
+
               // ===== HEADER =====
               Tanggal: r.TANGGAL_TRANSAKSI
                 ? new Date(r.TANGGAL_TRANSAKSI).toLocaleDateString("id-ID")
                 : "-",
-  
+
               NoInvoice: r.NO_INVOICE,
               NamaToko: r.NAMA_TOKO,
-  
+
               NamaPelanggan: r.NAMA_USER,
               IDPelanggan: r.ID_USER,
               NoTlp: r.NO_TLP,
-  
+
               StoreHead: r.STORE_HEAD,
               Sales: r.NAMA_SALES,
               SalesHandle: r.SALES_HANDLE,
-  
+
               Kategori: item.kategoriBarang || r.KATEGORI,
               Brand: item.namaBrand || r.NAMA_BRAND,
-  
+
               // ===== ITEM =====
               NamaBarang: item.namaBarang,
               IMEI: item.imeiList?.join(", ") || "NON-IMEI",
               Qty: item.qty,
-  
+
               // ===== HARGA =====
               HargaSRP:
-                item.skemaHarga === "srp"
-                  ? Number(item.hargaAktif || 0)
-                  : 0,
-  
+                item.skemaHarga === "srp" ? Number(item.hargaAktif || 0) : 0,
+
               HargaGrosir:
-                item.skemaHarga === "grosir"
-                  ? Number(item.hargaAktif || 0)
-                  : 0,
-  
+                item.skemaHarga === "grosir" ? Number(item.hargaAktif || 0) : 0,
+
               HargaReseller:
                 item.skemaHarga === "reseller"
                   ? Number(item.hargaAktif || 0)
                   : 0,
-  
+
               // ===== PAYMENT (🔥 ONLY FIRST ROW) =====
               StatusBayar: idx === 0 ? r.STATUS_BAYAR : "",
               PaymentMetodeUser: idx === 0 ? r.PAYMENT_METODE : "",
-  
+
               PaymentKredit: idx === 0 ? r.PAYMENT_KREDIT : "",
               DashboardKredit: idx === 0 ? Number(r.dashboardKredit || 0) : "",
-  
+
               Bank: idx === 0 ? r.NAMA_BANK : "",
               NominalPayment: idx === 0 ? Number(r.NOMINAL_PAYMENT || 0) : "",
-  
+
               DPTalangan: idx === 0 ? Number(r.DP_TALANGAN || 0) : "",
-  
+
               NamaMDR: idx === 0 ? r.NAMA_MDR : "",
               NominalMDR: idx === 0 ? Number(r.NOMINAL_MDR || 0) : "",
-  
+
               Tenor: idx === 0 ? r.TENOR : "",
               Keterangan: idx === 0 ? r.KETERANGAN : "",
-  
+
               Status: idx === 0 ? r.STATUS : "",
-  
+
               GrandTotal: idx === 0 ? Number(r.GRAND_TOTAL || 0) : "",
             });
           });
@@ -491,14 +541,14 @@ export default function SalesReport() {
           });
         }
       });
-  
+
       const ws = XLSX.utils.json_to_sheet(exportData);
-  
+
       ws["!cols"] = Object.keys(exportData[0]).map(() => ({ wch: 20 }));
-  
+
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "SalesReport");
-  
+
       XLSX.writeFile(
         wb,
         `SalesReport_${myTokoName || "ALL"}_${Date.now()}.xlsx`
