@@ -11,7 +11,7 @@ import {
   FaSearch,
 } from "react-icons/fa";
 
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, get  } from "firebase/database";
 import { db } from "../firebase";
 
 import {
@@ -107,6 +107,7 @@ export default function DashboardToko(props) {
   // ✅ LIST KHUSUS TOKO INI (HEMAT) UNTUK IMEI, VOID, RETURN
   const [transaksiToko, setTransaksiToko] = useState([]);
   const [stockToko, setStockToko] = useState([]);
+  const [detailStock, setDetailStock] = useState({});
   const [loadingStock, setLoadingStock] = useState(true);
   const [searchStock, setSearchStock] = useState("");
   const { state } = useLocation();
@@ -134,6 +135,19 @@ export default function DashboardToko(props) {
       unsub2 && unsub2();
     };
   }, []);
+
+  // ===============================
+// 🔥 DETAIL STOCK REALTIME
+// ===============================
+useEffect(() => {
+  const refStock = ref(db, "detail_stock");
+
+  const unsub = onValue(refStock, (snap) => {
+    setDetailStock(snap.val() || {});
+  });
+
+  return () => unsub();
+}, []);
 
   useEffect(() => {
     if (!firebaseTokoId) return;
@@ -259,6 +273,20 @@ export default function DashboardToko(props) {
     String(v || "")
       .trim()
       .toUpperCase();
+
+      const normalizeText = (v) =>
+        String(v || "")
+          .trim()
+          .toUpperCase()
+          .replace(/\s+/g, " ");
+      
+      const normalizeImei = (v) =>
+        String(v || "")
+          .toLowerCase()
+          .replace(/[^0-9]/g, "");
+      
+      const isApproved = (t) =>
+        String(t.STATUS || "").toUpperCase() === "APPROVED";
 
       // ===============================
 // 🔥 SUPPLIER LOOKUP UNIVERSAL
@@ -422,9 +450,19 @@ const rows = useMemo(() => {
 
   const map = {};
 
-  // 🔥 CLONE TRANSAKSI + HANDLE REFUND ITEM
-  const allEvents = [...transaksi];
+  // ===============================
+  // 🔥 STEP 1 — CLONE TRANSAKSI
+  // ===============================
+  const allEvents = transaksi.filter(
+    (t) =>
+      ["APPROVED", "REFUND"].includes(
+        String(t.STATUS || "").toUpperCase()
+      )
+  );
 
+  // ===============================
+  // 🔥 REFUND DARI PENJUALAN
+  // ===============================
   transaksi.forEach((t) => {
     if (
       t.statusPembayaran === "REFUND" &&
@@ -453,27 +491,102 @@ const rows = useMemo(() => {
     }
   });
 
-  // 🔥 HITUNG SEMUA EVENT
-  allEvents.forEach((t) => {
-    if (t.STATUS !== "Approved") return;
-    if (normalize(t.NAMA_TOKO) !== normalize(namaToko)) return;
+  // ===============================
+  // 🔥 FALLBACK detail_stock
+  // ===============================
+  Object.values(detailStock || {}).forEach((s) => {
+    if (!s?.imei) return;
 
-    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-    const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
+    if (normalize(s.toko) !== normalize(namaToko)) return;
+
+    const status = String(
+      s.STATUS || s.status || ""
+    ).toUpperCase();
+
+    if (!["AVAILABLE", "REFUND"].includes(status)) return;
+
+    if (!map[s.imei]) {
+      map[s.imei] = {
+        tanggal: "-",
+        noDo: "-",
+        supplier:
+          supplierLookup?.[s.imei] ||
+          supplierLookup?.[normalizeImei(s.imei)] ||
+          "-",
+
+        namaToko: s.toko,
+        brand: s.brand || "-",
+        barang: s.namaBarang || "-",
+        imei: s.imei,
+        qty: 1,
+
+        hargaSRP: 0,
+        hargaGrosir: 0,
+        hargaReseller: 0,
+
+        statusBarang: "TERSEDIA",
+        keterangan: "DARI DETAIL STOCK",
+      };
+    }
+  });
+
+  // ===============================
+  // 🔥 PROCESS ALL EVENTS
+  // ===============================
+  allEvents.forEach((t) => {
+    if (
+      !["APPROVED", "REFUND"].includes(
+        String(t.STATUS || "").toUpperCase()
+      )
+    ) {
+      return;
+    }
+
+    if (
+      normalize(t.NAMA_TOKO) !==
+      normalize(namaToko)
+    ) {
+      return;
+    }
+
+    const metode = String(
+      t.PAYMENT_METODE || ""
+    ).toUpperCase();
+
+    const qtyBase = t.IMEI
+      ? 1
+      : Number(t.QTY || 0);
 
     let effect = 0;
 
-    if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
-      effect = qtyBase;
+    // 🔥 STOCK MASUK
+    if (
+      [
+        "PEMBELIAN",
+        "TRANSFER_MASUK",
+        "REFUND",
+        "RETUR",
+        "VOID OPNAME",
+      ].includes(metode)
+    ) {
+      effect = Math.abs(qtyBase);
     }
 
-    if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
-      effect = -qtyBase;
+    // 🔥 STOCK KELUAR
+    if (
+      [
+        "PENJUALAN",
+        "TRANSFER_KELUAR",
+        "REJECT",
+        "STOK OPNAME",
+      ].includes(metode)
+    ) {
+      effect = -Math.abs(qtyBase);
     }
 
-    // ======================
-    // IMEI
-    // ======================
+    // ==================================
+    // 🔥 IMEI
+    // ==================================
     if (t.IMEI) {
       const key = String(t.IMEI).trim();
 
@@ -481,62 +594,125 @@ const rows = useMemo(() => {
         map[key] = {
           tanggal: t.TANGGAL_TRANSAKSI || "-",
           noDo: t.NO_INVOICE || "-",
+
           supplier:
             supplierLookup?.[key] ||
             t.NAMA_SUPPLIER ||
             "-",
+
           namaToko: t.NAMA_TOKO || "-",
           brand: t.NAMA_BRAND || "-",
           barang: t.NAMA_BARANG || "-",
+
           imei: key,
           qty: 0,
+
           hargaSRP:
-            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
+            masterMap?.[
+              `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
+            ]?.hargaSRP || 0,
+
           hargaGrosir:
-            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
+            masterMap?.[
+              `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
+            ]?.hargaGrosir || 0,
+
           hargaReseller:
-            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+            masterMap?.[
+              `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
+            ]?.hargaReseller || 0,
+
           statusBarang: "TERSEDIA",
-          keterangan: "",
+          keterangan: "-",
         };
       }
 
-      map[key].qty += effect;
+      // MASUK
+      if (
+        [
+          "PEMBELIAN",
+          "TRANSFER_MASUK",
+          "REFUND",
+          "RETUR",
+          "VOID OPNAME",
+        ].includes(metode)
+      ) {
+        map[key].qty = 1;
+      }
+
+      // KELUAR
+      if (
+        [
+          "PENJUALAN",
+          "TRANSFER_KELUAR",
+          "REJECT",
+          "STOK OPNAME",
+        ].includes(metode)
+      ) {
+        map[key].qty = 0;
+      }
+
       return;
     }
 
-    // ======================
-    // NON IMEI
-    // ======================
-    const skuKey = `${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+    // ==================================
+    // 🔥 NON IMEI
+    // ==================================
+    const skuKey = `${normalizeText(
+      t.NAMA_BRAND
+    )}|${normalizeText(t.NAMA_BARANG)}`;
 
     if (!map[skuKey]) {
       map[skuKey] = {
         tanggal: t.TANGGAL_TRANSAKSI || "-",
         noDo: t.NO_INVOICE || "-",
+
         supplier:
           supplierLookup?.[skuKey] ||
           t.NAMA_SUPPLIER ||
           "-",
+
         namaToko: t.NAMA_TOKO || "-",
         brand: t.NAMA_BRAND || "-",
         barang: t.NAMA_BARANG || "-",
+
         imei: "",
         qty: 0,
-        hargaSRP: masterMap?.[skuKey]?.hargaSRP || 0,
-        hargaGrosir: masterMap?.[skuKey]?.hargaGrosir || 0,
-        hargaReseller: masterMap?.[skuKey]?.hargaReseller || 0,
+
+        hargaSRP:
+          masterMap?.[skuKey]?.hargaSRP || 0,
+
+        hargaGrosir:
+          masterMap?.[skuKey]?.hargaGrosir || 0,
+
+        hargaReseller:
+          masterMap?.[skuKey]?.hargaReseller || 0,
+
         statusBarang: "TERSEDIA",
-        keterangan: "",
+        keterangan: "-",
       };
     }
 
     map[skuKey].qty += effect;
   });
 
-  return Object.values(map).filter((r) => r.qty > 0);
+  // ===============================
+  // 🔥 FINAL CLEAN
+  // ===============================
+  return Object.values(map)
+    .filter((r) => Number(r.qty || 0) > 0)
+    .map((r) => ({
+      ...r,
+      statusBarang: "TERSEDIA",
+    }));
 
-}, [transaksi, masterMap, namaToko, supplierLookup]);
+}, [
+  transaksi,
+  masterMap,
+  namaToko,
+  supplierLookup,
+  detailStock,
+]);
 
   /* ======================
    SEARCH FILTER
