@@ -362,6 +362,26 @@ export default function DetailStockToko() {
 
     return map;
   }, [transaksi]);
+
+  // ======================================
+  // 🔥 IMEI AKTIF FINAL
+  // ======================================
+  const activeImeiSet = useMemo(() => {
+    const set = new Set();
+
+    transaksi.forEach((t) => {
+      if (!isApproved(t) || !t.IMEI) {
+        return;
+      }
+
+      // ✅ HANYA PEMBELIAN TERBARU
+      if (String(t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN") {
+        set.add(normalizeImei(t.IMEI));
+      }
+    });
+
+    return set;
+  }, [transaksi]);
   /* ======================
    BUILD ROWS (FIX FINAL)
 ====================== */
@@ -673,54 +693,104 @@ export default function DetailStockToko() {
     // ==================================================
 
     // =======================================
-    // 🔥 PRIORITAS REFUND TERBARU
+    // 🔥 PRIORITAS DATA TERBARU
     // =======================================
     const finalMap = {};
 
     Object.values(map).forEach((r) => {
       if (!r) return;
 
-      const key = r.imei
-        ? `IMEI_${String(r.imei).trim()}`
-        : `SKU_${r.brand}|${r.barang}`;
+      // =========================================
+      // 🔥 NORMALIZE IMEI
+      // =========================================
+      const cleanImei = normalizeImei(r.imei);
 
-      // =======================================
+      // =========================================
+      // 🔥 KEY FINAL
+      // =========================================
+      const key = cleanImei
+        ? `IMEI_${cleanImei}`
+        : `SKU_${normalizeText(r.brand)}|${normalizeText(r.barang)}`;
+
+      // =========================================
       // 🔥 BELUM ADA
-      // =======================================
+      // =========================================
       if (!finalMap[key]) {
-        finalMap[key] = r;
+        finalMap[key] = {
+          ...r,
+          _timestamp: new Date(r.tanggal || 0).getTime(),
+        };
+
         return;
       }
 
-      // =======================================
-      // 🔥 REFUND LEBIH PRIORITAS
-      // =======================================
-      const oldRefund = String(finalMap[key]?.keterangan || "")
+      // =========================================
+      // 🔥 DATA LAMA
+      // =========================================
+      const oldData = finalMap[key];
+
+      const oldDate = Number(oldData._timestamp || 0);
+
+      const newDate = new Date(r.tanggal || 0).getTime();
+
+      // =========================================
+      // 🔥 REFUND PRIORITAS TERTINGGI
+      // =========================================
+      const oldRefund = String(oldData.keterangan || "")
         .toUpperCase()
         .includes("REFUND");
 
-      const newRefund = String(r?.keterangan || "")
+      const newRefund = String(r.keterangan || "")
         .toUpperCase()
         .includes("REFUND");
 
-      // ✅ kalau data baru REFUND → replace
+      // =========================================
+      // ✅ REFUND MENANG
+      // =========================================
       if (!oldRefund && newRefund) {
-        finalMap[key] = r;
+        finalMap[key] = {
+          ...r,
+          _timestamp: newDate,
+        };
+
         return;
       }
 
-      // =======================================
-      // 🔥 TANGGAL TERBARU MENANG
-      // =======================================
-      const oldDate = new Date(finalMap[key]?.tanggal || 0).getTime();
-
-      const newDate = new Date(r?.tanggal || 0).getTime();
-
+      // =========================================
+      // ✅ DATA TERBARU MENANG
+      // =========================================
       if (newDate >= oldDate) {
-        finalMap[key] = r;
+        finalMap[key] = {
+          ...r,
+          _timestamp: newDate,
+        };
       }
     });
 
+    // ======================================
+    // 🔥 HAPUS DATA LIAR IMEI LAMA
+    // ======================================
+    Object.keys(finalMap).forEach((k) => {
+      const row = finalMap[k];
+
+      if (!row?.imei) return;
+
+      const cleanImei = normalizeImei(row.imei);
+
+      // ===================================
+      // ❌ IMEI SUDAH TIDAK ADA
+      // ===================================
+      if (
+        !activeImeiSet.has(cleanImei) &&
+        String(row.keterangan || "").toUpperCase() === "REFUND"
+      ) {
+        delete finalMap[k];
+      }
+    });
+
+    // =========================================
+    // 🔥 CLEAN RESULT
+    // =========================================
     return Object.values(finalMap)
       .map((r) => {
         if (!r || Number(r.qty || 0) <= 0) {
@@ -745,30 +815,27 @@ export default function DetailStockToko() {
       })
       .filter(Boolean)
       .filter((r) => {
-        // =========================
-        // 🔥 IMEI RULES
-        // =========================
+        // =====================================
+        // 🔥 FILTER IMEI TERJUAL
+        // =====================================
         if (r.imei) {
-          const imei = String(r.imei).trim();
+          const imei = normalizeImei(r.imei);
 
           const hasRefund = transaksi.some(
             (t) =>
-              String(t.IMEI || "").trim() === imei &&
+              normalizeImei(t.IMEI) === imei &&
               String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" &&
               String(t.STATUS || "").toUpperCase() === "APPROVED"
           );
 
-          // ❌ terjual tapi belum refund
-          if (imeiTerjual.has(imei) && !hasRefund) {
+          // ❌ TERJUAL BELUM REFUND
+          if (imeiTerjual.has(r.imei) && !hasRefund) {
             return false;
           }
 
           return true;
         }
 
-        // =========================
-        // 🔥 NON IMEI
-        // =========================
         return !transaksi.some(
           (t) =>
             deletedIds.has(t.id) &&
