@@ -827,48 +827,103 @@ if (imeiTerjual.has(soldImei)) {
       })
       .filter(Boolean)
       .filter((r) => {
+
         // =====================================
         // 🔥 FILTER IMEI TERJUAL
         // =====================================
         if (r.imei) {
-          const cleanImei = normalizeImei(r.imei);
-        
+      
+          const cleanImei =
+            normalizeImei(r.imei);
+      
           // =====================================
           // 🔥 HARD REMOVE BARANG TERJUAL
           // =====================================
           if (imeiTerjual.has(cleanImei)) {
-        
+      
             // cek apakah sudah refund
             const hasRefund = transaksi.some(
               (t) =>
                 normalizeImei(t.IMEI) === cleanImei &&
-                String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" &&
-                String(t.STATUS || "").toUpperCase() === "APPROVED"
+                String(
+                  t.PAYMENT_METODE || ""
+                ).toUpperCase() === "REFUND" &&
+                String(t.STATUS || "")
+                  .toUpperCase() === "APPROVED"
             );
-        
+      
             // belum refund = hilangkan
             if (!hasRefund) {
               return false;
             }
           }
-        
+      
+          // =====================================
+          // 🔥 HANYA TAMPIL TOKO TRANSFER TERAKHIR
+          // =====================================
+          const latestTransfer = transaksi
+            .filter((t) => {
+      
+              return (
+                normalizeImei(t.IMEI) === cleanImei &&
+                String(
+                  t.PAYMENT_METODE || ""
+                ).toUpperCase() ===
+                  "TRANSFER_MASUK" &&
+                String(t.STATUS || "")
+                  .toUpperCase() === "APPROVED"
+              );
+            })
+      
+            // =====================================
+            // 🔥 SORT TRANSFER TERBARU
+            // =====================================
+            .sort(
+              (a, b) =>
+                new Date(
+                  b.TANGGAL_TRANSAKSI || 0
+                ).getTime() -
+                new Date(
+                  a.TANGGAL_TRANSAKSI || 0
+                ).getTime()
+            )[0];
+      
+          // =====================================
+          // 🔥 ADA TRANSFER TERBARU
+          // =====================================
+          if (latestTransfer) {
+      
+            // ❌ TOKO LAMA HILANG
+            if (
+              normalize(r.namaToko) !==
+              normalize(
+                latestTransfer.NAMA_TOKO
+              )
+            ) {
+              return false;
+            }
+          }
+      
           // =====================================
           // 🔥 QTY HARUS ADA
           // =====================================
           if (Number(r.qty || 0) <= 0) {
             return false;
           }
-        
+      
           return true;
         }
-
+      
+        // =====================================
+        // 🔥 NON IMEI
+        // =====================================
         return !transaksi.some(
           (t) =>
             deletedIds.has(t.id) &&
             t.NAMA_BARANG === r.barang &&
             t.NAMA_BRAND === r.brand
         );
-      });
+      })
   }, [
     transaksi,
     masterMap,
