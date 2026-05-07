@@ -186,6 +186,31 @@ export default function MasterPembelian() {
   }, [tambahForm.brand]);
 
   const [editData, setEditData] = useState(null);
+  const [editAutoSaving, setEditAutoSaving] = useState(false);
+const editAutoSaveRef = useRef(null);
+
+// ======================================
+// AUTO SAVE EDIT PEMBELIAN REALTIME
+// ======================================
+useEffect(() => {
+  if (!showEdit) return;
+  if (!editData?.originalKey) return;
+
+}, [
+  editData?.tanggal,
+  editData?.noDo,
+  editData?.supplier,
+  editData?.namaToko,
+  editData?.brand,
+  editData?.kategoriBrand,
+  editData?.barang,
+  editData?.hargaSup,
+  editData?.hargaSRP,
+  editData?.hargaGrosir,
+  editData?.hargaReseller,
+  editData?.totalQty,
+  editData?.imeiList,
+]);
 
   useEffect(() => {
     const unsub = listenMasterSupplier((rows) => {
@@ -1275,25 +1300,6 @@ export default function MasterPembelian() {
     }
 
     // ===============================
-    // NON IMEI → UPDATE QTY LANGSUNG
-    // ===============================
-    // if (!isKategoriImei) {
-    //   const r = rows[0];
-
-    //   await updateTransaksi(r.tokoId || 1, r.id, {
-    //     ...r,
-    //     QTY: Number(editData.totalQty),
-    //     TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
-    //     TANGGAL_TRANSAKSI: editData.tanggal,
-    //   });
-
-    //   const sku = makeSku(editData.brand, editData.barang);
-    // }
-
-    // ==================================================
-    // ⛔ PASANG KODE VALIDASI STOK DI SINI (WAJIB)
-    // ==================================================
-    // ===============================
     // FIX: INCLUDE ORIGINAL QTY
     // ===============================
     const stockReal = stockSnapshot?.[newToko]?.[sku]?.qty || 0;
@@ -1373,14 +1379,29 @@ export default function MasterPembelian() {
       // =========================
       for (const r of rows) {
         if (toKeep.includes(String(r.IMEI))) {
-          await updateTransaksi(r.tokoId || 1, r.id, {
-            ...r,
-            TANGGAL_TRANSAKSI: editData.tanggal,
-            NO_INVOICE: editData.noDo,
-            NAMA_SUPPLIER: editData.supplier,
-            NAMA_TOKO: newToko,
-            HARGA_SUPLAYER: Number(editData.hargaSup),
-          });
+       await updateTransaksi(r.tokoId || 1, r.id, {
+  ...r,
+
+  TANGGAL_TRANSAKSI: editData.tanggal,
+  NO_INVOICE: editData.noDo,
+
+  NAMA_SUPPLIER: editData.supplier,
+  NAMA_TOKO: newToko,
+
+  NAMA_BRAND: editData.brand,
+  KATEGORI_BRAND: editData.kategoriBrand,
+  NAMA_BARANG: editData.barang,
+
+  HARGA_SUPLAYER: Number(editData.hargaSup),
+
+  QTY: Number(editData.totalQty),
+
+  TOTAL:
+    Number(editData.hargaSup || 0) *
+    Number(editData.totalQty || 0),
+
+  UPDATED_AT: Date.now(),
+});
         }
       }
     }
@@ -1425,7 +1446,9 @@ export default function MasterPembelian() {
       diffQty,
     });
 
-    alert("✅ Edit pembelian berhasil & stok sinkron realtime.");
+   
+
+// jangan auto close modal
     setShowEdit(false);
   };
 

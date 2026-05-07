@@ -196,36 +196,35 @@ export default function DetailStockToko() {
   }, [transaksi]);
 
   const imeiTerjual = useMemo(() => {
-    const sold = new Set();
-
+    const soldSet = new Set();
+  
     transaksi.forEach((t) => {
-      if (!isApproved(t) || !t.IMEI) return;
-
-      const imei = String(t.IMEI);
+      if (!t?.IMEI) return;
+  
+      const imei = normalizeImei(t.IMEI);
+  
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-
-      const sold = new Set();
-
-      transaksi.forEach((t) => {
-        if (t.STATUS !== "Approved" || !t.IMEI) return;
-
-        if (String(t.PAYMENT_METODE).toUpperCase() === "PENJUALAN") {
-          sold.add(String(t.IMEI));
-        }
-      });
-
-      // PENJUALAN → tandai terjual
+  
+      const status = String(t.STATUS || "").toUpperCase();
+  
+      if (!["APPROVED", "REFUND"].includes(status)) return;
+  
+      // =========================
+      // PENJUALAN = HILANGKAN
+      // =========================
       if (metode === "PENJUALAN") {
-        sold.add(imei);
+        soldSet.add(imei);
       }
-
-      // ✅ REFUND → keluarkan dari daftar terjual
+  
+      // =========================
+      // REFUND = KEMBALIKAN
+      // =========================
       if (metode === "REFUND") {
-        sold.delete(imei);
+        soldSet.delete(imei);
       }
     });
-
-    return sold;
+  
+    return soldSet;
   }, [transaksi]);
 
   // const imeiTransferKeluar = useMemo(() => {
@@ -455,6 +454,15 @@ export default function DetailStockToko() {
 
       if (!["AVAILABLE", "REFUND"].includes(status)) return;
 
+      // ======================================
+// 🔥 JANGAN TAMPILKAN YANG SUDAH TERJUAL
+// ======================================
+const soldImei = normalizeImei(s.imei);
+
+if (imeiTerjual.has(soldImei)) {
+  return;
+}
+
       if (!map[s.imei]) {
         map[s.imei] = {
           tanggal: "-",
@@ -608,10 +616,14 @@ export default function DetailStockToko() {
           )
         ) {
           map[key].qty = 0;
-
+        
+          map[key].statusBarang = "TERJUAL";
+        
           map[key].keterangan =
-            metode === "TRANSFER_KELUAR" ? "TRANSFER BARANG" : metode;
-
+            metode === "TRANSFER_KELUAR"
+              ? "TRANSFER BARANG"
+              : metode;
+        
           return;
         }
       }
@@ -819,20 +831,34 @@ export default function DetailStockToko() {
         // 🔥 FILTER IMEI TERJUAL
         // =====================================
         if (r.imei) {
-          const imei = normalizeImei(r.imei);
-
-          const hasRefund = transaksi.some(
-            (t) =>
-              normalizeImei(t.IMEI) === imei &&
-              String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" &&
-              String(t.STATUS || "").toUpperCase() === "APPROVED"
-          );
-
-          // ❌ TERJUAL BELUM REFUND
-          if (imeiTerjual.has(r.imei) && !hasRefund) {
+          const cleanImei = normalizeImei(r.imei);
+        
+          // =====================================
+          // 🔥 HARD REMOVE BARANG TERJUAL
+          // =====================================
+          if (imeiTerjual.has(cleanImei)) {
+        
+            // cek apakah sudah refund
+            const hasRefund = transaksi.some(
+              (t) =>
+                normalizeImei(t.IMEI) === cleanImei &&
+                String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" &&
+                String(t.STATUS || "").toUpperCase() === "APPROVED"
+            );
+        
+            // belum refund = hilangkan
+            if (!hasRefund) {
+              return false;
+            }
+          }
+        
+          // =====================================
+          // 🔥 QTY HARUS ADA
+          // =====================================
+          if (Number(r.qty || 0) <= 0) {
             return false;
           }
-
+        
           return true;
         }
 
