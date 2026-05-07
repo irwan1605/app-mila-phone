@@ -94,6 +94,7 @@ export default function MasterPembelian() {
   const [showDraftTable, setShowDraftTable] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
   const [filterToko, setFilterToko] = useState("");
+  const [deletedKeys, setDeletedKeys] = useState(new Set());
 
   const masterBarangMap = useMemo(() => {
     const map = {};
@@ -604,12 +605,43 @@ export default function MasterPembelian() {
     const map = {};
 
     (allTransaksi || []).forEach((t) => {
-      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return;
+      // ===============================
+      // FILTER DATA LIAR / INVALID
+      // ===============================
+      if (!t) return;
+
+      if (String(t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") {
+        return;
+      }
+
+      if (!t.NAMA_BARANG && !t.NAMA_BRAND) {
+        return;
+      }
+
+      if (
+        String(t.NAMA_TOKO || "")
+          .toUpperCase()
+          .includes("OHWC")
+      ) {
+        return;
+      }
+      const groupKeyRealtime = `${t.TANGGAL_TRANSAKSI}|${t.NO_INVOICE}|${t.NAMA_SUPPLIER}|${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+      // 🔥 HIDE REALTIME SETELAH DELETE
+      if (deletedKeys.has(groupKeyRealtime)) {
+        return;
+      }
 
       const brand = t.NAMA_BRAND || "";
       const barang = t.NAMA_BARANG || "";
 
-      const keyGroup = `${t.TANGGAL_TRANSAKSI}|${t.NO_INVOICE}|${brand}|${barang}`;
+      const keyGroup =
+        `${t.TANGGAL_TRANSAKSI || ""}|` +
+        `${t.NO_INVOICE || ""}|` +
+        `${t.NAMA_SUPPLIER || ""}|` +
+        `${t.NAMA_TOKO || ""}|` +
+        `${brand}|${barang}|` +
+        `${t.PAYMENT_METODE || ""}`;
 
       // 🔗 JOIN KE MASTER BARANG (REALTIME)
       const masterKey = `${brand}|${barang}`;
@@ -650,7 +682,7 @@ export default function MasterPembelian() {
     return Object.values(map).sort(
       (a, b) => new Date(b.tanggal) - new Date(a.tanggal)
     );
-  }, [allTransaksi, masterBarangMap]);
+  }, [allTransaksi, masterBarangMap, deletedKeys]);
 
   const filteredPurchases = useMemo(() => {
     const q = String(search || "").toLowerCase();
@@ -770,60 +802,138 @@ export default function MasterPembelian() {
   };
 
   const deletePembelian = async (item) => {
-    if (
-      !window.confirm(
-        `Hapus semua transaksi pembelian untuk:\n${item.tanggal} - DO: ${item.noDo}`
-      )
-    )
-      return;
+    const confirmDelete = window.confirm(
+      `Hapus semua transaksi pembelian?\n\n${item.brand} - ${item.barang}\nDO: ${item.noDo}`
+    );
 
-    const keyGroup = `${item.tanggal}|${item.noDo}|${item.supplier}|${item.brand}|${item.barang}`;
-
-    const rows = (allTransaksi || []).filter((t) => {
-      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return false;
-
-      const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
-        t.NAMA_SUPPLIER || ""
-      }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
-
-      return k === keyGroup;
-    });
+    if (!confirmDelete) return;
+    const keyGroup =
+    `${item.tanggal || ""}|` +
+    `${item.noDo || ""}|` +
+    `${item.supplier || ""}|` +
+    `${item.namaToko || ""}|` +
+    `${item.brand || ""}|` +
+    `${item.barang || ""}|PEMBELIAN`;
 
     try {
-      // 🔥 DELETE KE FIREBASE
+      // ===============================
+      // 🔥 REALTIME HIDE DULU
+      // ===============================
+      setDeletedKeys((prev) => {
+        const next = new Set(prev);
+        next.add(keyGroup);
+        return next;
+      });
+
+      // ===============================
+      // 🔥 CARI SEMUA ROW
+      // ===============================
+      const rows = (allTransaksi || []).filter((t) => {
+        if (!t) return false;
+      
+        if (
+          String(t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN"
+        ) {
+          return false;
+        }
+      
+        const k =
+          `${t.TANGGAL_TRANSAKSI || ""}|` +
+          `${t.NO_INVOICE || ""}|` +
+          `${t.NAMA_SUPPLIER || ""}|` +
+          `${t.NAMA_TOKO || ""}|` +
+          `${t.NAMA_BRAND || ""}|` +
+          `${t.NAMA_BARANG || ""}|` +
+          `${t.PAYMENT_METODE || ""}`;
+      
+        return k === keyGroup;
+      });
+
+      // ===============================
+      // ❌ DATA TIDAK ADA
+      // ===============================
+      if (!rows.length) {
+        alert("❌ Data pembelian tidak ditemukan");
+        return;
+      }
+
+      // ===============================
+      // 🔥 DELETE FIREBASE
+      // ===============================
       for (const r of rows) {
-        const tokoId = r.tokoId || 1;
-        if (r.id) {
-          await deleteTransaksi(tokoId, r.id);
+        try {
+          const tokoId = r.tokoId || r.TOKO_ID || r.idToko || 1;
+
+          if (r?.id) {
+            await deleteTransaksi(
+              r.tokoId ||
+                r.TOKO_ID ||
+                r.idToko ||
+                tokoId,
+              r.id
+            );
+          }
+        } catch (err) {
+          console.error("DELETE ROW ERROR:", err);
         }
       }
 
-      // =========================
-      // 🔥 TAMBAHAN WAJIB (REALTIME UI)
-      // =========================
+      // ===============================
+      // 🔥 REALTIME FILTER LOCAL
+      // ===============================
       setAllTransaksi((prev) =>
         prev.filter((t) => {
-          const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
-            t.NAMA_SUPPLIER || ""
-          }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+          const k =
+          `${t.TANGGAL_TRANSAKSI || ""}|` +
+          `${t.NO_INVOICE || ""}|` +
+          `${t.NAMA_SUPPLIER || ""}|` +
+          `${t.NAMA_TOKO || ""}|` +
+          `${t.NAMA_BRAND || ""}|` +
+          `${t.NAMA_BARANG || ""}|` +
+          `${t.PAYMENT_METODE || ""}`;
+
           return k !== keyGroup;
         })
       );
 
-      // =========================
-      // UPDATE STOCK
-      // =========================
-      const sku = makeSku(item.brand, item.barang);
+      // ===============================
+      // 🔥 UPDATE STOCK
+      // ===============================
       try {
-        await reduceStock("CILANGKAP PUSAT", sku, item.totalQty);
-      } catch (e) {
-        console.warn("reduceStock gagal:", e);
+        const sku = makeSku(item.brand, item.barang);
+
+        await reduceStock(
+          item.namaToko || "CILANGKAP PUSAT",
+          sku,
+          Number(item.totalQty || 0)
+        );
+      } catch (stockErr) {
+        console.warn("reduceStock gagal:", stockErr);
       }
 
-      alert("✅ Data langsung hilang (Realtime UI aktif)");
+      // ===============================
+      // 🔥 CLEAN UI CACHE
+      // ===============================
+      setTimeout(() => {
+        setDeletedKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(keyGroup);
+          return next;
+        });
+      }, 3000);
+
+      alert("✅ Data pembelian berhasil dihapus realtime");
     } catch (err) {
       console.error(err);
-      alert("❌ Gagal hapus data");
+
+      // rollback
+      setDeletedKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(keyGroup);
+        return next;
+      });
+
+      alert("❌ Gagal hapus pembelian");
     }
   };
 
@@ -916,7 +1026,7 @@ export default function MasterPembelian() {
     let imeis = [];
     let newQty = originalQty;
 
-  // ===============================
+    // ===============================
     // UPDATE QTY (DELTA)
     // ===============================
     const diffQty = newQty - originalQty;
@@ -950,8 +1060,6 @@ export default function MasterPembelian() {
         qty: diffQty,
       });
     }
-
-  
 
     // ===============================
     // NON IMEI → UPDATE QTY LANGSUNG
@@ -1619,7 +1727,10 @@ export default function MasterPembelian() {
 
                     return (
                       <tr
-                        key={item.key}
+                      key={
+                        `${item.tanggal}-${item.noDo}-${item.namaToko}-` +
+                        `${item.brand}-${item.barang}-${idx}`
+                      }
                         className="hover:bg-slate-50/80 transition"
                       >
                         <td className="border p-2 text-center">
