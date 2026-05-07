@@ -733,38 +733,92 @@ if (!activeImeiSet.has(cleanKey)) {
       }
 
       // MASUK
-      if (
-        [
-          "PEMBELIAN",
-          "TRANSFER_MASUK",
-          "REFUND",
-          "RETUR",
-          "VOID OPNAME",
-        ].includes(metode)
-      ) {
-        map[key].qty = 1;
-      }
+   // ============================================
+// 🔥 FINAL IMEI STOCK ENGINE
+// ============================================
 
-      // KELUAR
-      if (
-        [
-          "PENJUALAN",
-          "TRANSFER_KELUAR",
-          "REJECT",
-          "STOK OPNAME",
-        ].includes(metode)
-      ) {
-        map[key].qty = 0;
-      
-        map[key].statusBarang = "TERJUAL";
-      
-        map[key].keterangan =
-          metode === "TRANSFER_KELUAR"
-            ? "TRANSFER BARANG"
-            : metode;
-      
-        return;
-      }
+// ✅ STOCK MASUK
+if (
+  [
+    "PEMBELIAN",
+    "TRANSFER_MASUK",
+    "REFUND",
+    "RETUR",
+    "VOID OPNAME",
+  ].includes(metode)
+) {
+
+  // ======================================
+  // 🔥 RESET DATA TERBARU
+  // ======================================
+  map[key] = {
+    ...map[key],
+
+    tanggal: t.TANGGAL_TRANSAKSI || "-",
+
+    noDo: t.NO_INVOICE || "-",
+
+    supplier:
+      supplierLookup?.[key] ||
+      t.NAMA_SUPPLIER ||
+      "-",
+
+    namaToko: t.NAMA_TOKO || "-",
+
+    brand: t.NAMA_BRAND || "-",
+
+    barang: t.NAMA_BARANG || "-",
+
+    imei: key,
+
+    qty: 1,
+
+    statusBarang: "TERSEDIA",
+
+    hargaSRP:
+      masterMap?.[
+        `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
+      ]?.hargaSRP || 0,
+
+    hargaGrosir:
+      masterMap?.[
+        `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
+      ]?.hargaGrosir || 0,
+
+    hargaReseller:
+      masterMap?.[
+        `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
+      ]?.hargaReseller || 0,
+
+    keterangan:
+      metode === "TRANSFER_MASUK"
+        ? "TRANSFER BARANG"
+        : metode,
+  };
+
+  return;
+}
+
+   // KELUAR
+if (
+  [
+    "PENJUALAN",
+    "TRANSFER_KELUAR",
+    "REJECT",
+    "STOK OPNAME",
+  ].includes(metode)
+) {
+  map[key].qty = 0;
+
+  map[key].statusBarang = "TERJUAL";
+
+  map[key].keterangan =
+    metode === "TRANSFER_KELUAR"
+      ? "TRANSFER BARANG"
+      : metode;
+
+  return;
+}
 
       return;
     }
@@ -810,15 +864,53 @@ if (!activeImeiSet.has(cleanKey)) {
     map[skuKey].qty += effect;
   });
 
+  // ======================================
+// 🔥 TRACK TRANSFER TERAKHIR
+// ======================================
+const latestTransferMap = {};
+
+transaksi.forEach((t) => {
+  if (!t?.IMEI) return;
+
+  const metode = String(
+    t.PAYMENT_METODE || ""
+  ).toUpperCase();
+
+  // hanya transfer masuk
+  if (metode !== "TRANSFER_MASUK") {
+    return;
+  }
+
+  const imei = normalizeImei(t.IMEI);
+
+  const trxDate = new Date(
+    t.TANGGAL_TRANSAKSI || 0
+  ).getTime();
+
+  // simpan transfer terbaru
+  if (
+    !latestTransferMap[imei] ||
+    trxDate >
+      latestTransferMap[imei]._date
+  ) {
+    latestTransferMap[imei] = {
+      toko: t.NAMA_TOKO,
+      _date: trxDate,
+    };
+  }
+});
+
   // ===============================
   // 🔥 FINAL CLEAN
   // ===============================
   return Object.values(map)
   .filter((r) => {
+
     // =====================================
     // 🔥 FILTER IMEI TERJUAL
     // =====================================
     if (r.imei) {
+
       const cleanImei =
         normalizeImei(r.imei);
 
@@ -858,6 +950,50 @@ if (!activeImeiSet.has(cleanKey)) {
       ) {
         return false;
       }
+
+      // =====================================
+      // 🔥 HANYA TAMPIL TOKO TRANSFER TERAKHIR
+      // =====================================
+      const latestTransfer = transaksi
+        .filter((t) => {
+
+          return (
+            normalizeImei(t.IMEI) === cleanImei &&
+            String(
+              t.PAYMENT_METODE || ""
+            ).toUpperCase() ===
+              "TRANSFER_MASUK"
+          );
+        })
+
+        // =====================================
+        // 🔥 SORT TRANSFER TERBARU
+        // =====================================
+        .sort(
+          (a, b) =>
+            new Date(
+              b.TANGGAL_TRANSAKSI || 0
+            ).getTime() -
+            new Date(
+              a.TANGGAL_TRANSAKSI || 0
+            ).getTime()
+        )[0];
+
+      // =====================================
+      // 🔥 ADA TRANSFER TERBARU
+      // =====================================
+      if (latestTransfer) {
+
+        // ❌ TOKO LAMA HILANG
+        if (
+          normalize(r.namaToko) !==
+          normalize(
+            latestTransfer.NAMA_TOKO
+          )
+        ) {
+          return false;
+        }
+      }
     }
 
     // =====================================
@@ -865,6 +1001,7 @@ if (!activeImeiSet.has(cleanKey)) {
     // =====================================
     return Number(r.qty || 0) > 0;
   })
+
   .map((r) => ({
     ...r,
 
