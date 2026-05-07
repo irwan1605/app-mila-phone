@@ -910,7 +910,7 @@ const activeImeiSet = useMemo(() => {
       </div>
 
       <h2 className="text-xl font-bold mb-4 text-blue-700">
-        Stok Opname & Inventory Management
+        Stok Opname & Inventory Management Mila Phone
       </h2>
 
       {/* CONTROL BAR */}
