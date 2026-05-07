@@ -222,6 +222,32 @@ export default function StockOpname() {
     }
   };
 
+    // ======================================
+// 🔥 ACTIVE IMEI FINAL
+// ======================================
+const activeImeiSet = useMemo(() => {
+  const set = new Set();
+
+  allTransaksi.forEach((t) => {
+    if (!t) return;
+
+    // ✅ hanya pembelian approved
+    if (
+      String(t.PAYMENT_METODE || "")
+        .toUpperCase() === "PEMBELIAN" &&
+      String(t.STATUS || "")
+        .toUpperCase() === "APPROVED" &&
+      t.IMEI
+    ) {
+      set.add(
+        normalizeImei(t.IMEI)
+      );
+    }
+  });
+
+  return set;
+}, [allTransaksi]);
+
   // ===============================
   // 🔥 SUPPLIER LOOKUP FINAL
   // ===============================
@@ -338,7 +364,38 @@ export default function StockOpname() {
     });
 
     // tampilkan hanya stok tersedia
-    return Object.values(map).filter((r) => r.qty > 0);
+    return Object.values(map)
+    .filter((r) => r.qty > 0)
+  
+    // =====================================
+    // 🔥 HAPUS DATA LIAR IMEI LAMA
+    // =====================================
+    .filter((r) => {
+      // ✅ NON IMEI tetap tampil
+      if (!r.imei) {
+        return true;
+      }
+  
+      const cleanImei =
+        normalizeImei(r.imei);
+  
+      const isRefund =
+        String(
+          r.lastTransaksi || ""
+        ).toUpperCase() === "REFUND";
+  
+      // =====================================
+      // ❌ REFUND IMEI LAMA
+      // =====================================
+      if (
+        isRefund &&
+        !activeImeiSet.has(cleanImei)
+      ) {
+        return false;
+      }
+  
+      return true;
+    });
   }, [transaksi]);
 
   // ===============================
@@ -475,6 +532,8 @@ export default function StockOpname() {
         .trim(),
     }));
   }, [stockOpnameData]);
+
+
 
   // ===============================
   // 5️⃣ AGGREGATED (BOLEH PAKAI detailStockLookup)

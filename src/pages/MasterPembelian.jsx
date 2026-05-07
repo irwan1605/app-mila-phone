@@ -12,6 +12,7 @@ import {
   addLogPembelian,
   listenStockAll,
   listenMasterBarang,
+  updateMasterBarangHarga,
   listenMasterSupplier,
   addMasterSupplier,
 } from "../services/FirebaseService";
@@ -74,6 +75,32 @@ const generateNoDo = (allTransaksi, tanggal) => {
   return `INV-${tgl}-${next}`;
 };
 
+const makePembelianKey = (t) => {
+  return [
+    String(t?.TANGGAL_TRANSAKSI || t?.tanggal || "").trim(),
+
+    String(t?.NO_INVOICE || t?.noDo || "").trim(),
+
+    String(t?.NAMA_SUPPLIER || t?.supplier || "")
+      .trim()
+      .toUpperCase(),
+
+    String(t?.NAMA_TOKO || t?.namaToko || "")
+      .trim()
+      .toUpperCase(),
+
+    String(t?.NAMA_BRAND || t?.brand || "")
+      .trim()
+      .toUpperCase(),
+
+    String(t?.NAMA_BARANG || t?.barang || "")
+      .trim()
+      .toUpperCase(),
+
+    "PEMBELIAN",
+  ].join("|");
+};
+
 export default function MasterPembelian() {
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [search, setSearch] = useState("");
@@ -82,6 +109,18 @@ export default function MasterPembelian() {
   const tableRef = useRef(null);
   const [showTambah, setShowTambah] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [showEditHarga, setShowEditHarga] = useState(false);
+
+  const [editHargaData, setEditHargaData] = useState({
+    brand: "",
+    barang: "",
+    kategoriBrand: "",
+
+    hargaSRP: 0,
+    hargaGrosir: 0,
+    hargaReseller: 0,
+  });
+
   const TODAY = new Date().toISOString().slice(0, 10);
   const [tokoTujuan, setTokoTujuan] = useState("CILANGKAP PUSAT");
   const [masterToko, setMasterToko] = useState([]);
@@ -122,6 +161,11 @@ export default function MasterPembelian() {
     brand: "",
     kategoriBrand: "",
     barang: "",
+
+    hargaSRP: "",
+    hargaGrosir: "",
+    hargaReseller: "",
+
     hargaSup: "",
     imeiList: "",
     qty: 1,
@@ -239,6 +283,25 @@ export default function MasterPembelian() {
       hargaBandling3: Number(selectedMasterBarang.HARGA_BANDLING_3 || 0),
     }));
   }, [selectedMasterBarang]);
+
+  // ===============================
+  // AUTO FILL MASTER HARGA
+  // ===============================
+  useEffect(() => {
+    if (!tambahForm.brand || !tambahForm.barang) return;
+
+    const key = `${tambahForm.brand}|${tambahForm.barang}`;
+    const harga = masterBarangMap[key];
+
+    if (!harga) return;
+
+    setTambahForm((prev) => ({
+      ...prev,
+      hargaSRP: harga.hargaSRP || 0,
+      hargaGrosir: harga.hargaGrosir || 0,
+      hargaReseller: harga.hargaReseller || 0,
+    }));
+  }, [tambahForm.brand, tambahForm.barang, masterBarangMap]);
 
   const isBandlingItem = selectedMasterBarang?.IS_BANDLING === true;
   const tipeBandling = selectedMasterBarang?.TIPE_BANDLING || "";
@@ -473,6 +536,10 @@ export default function MasterPembelian() {
         kategoriBrand,
         barang,
 
+        hargaSRP: Number(tambahForm.hargaSRP || 0),
+        hargaGrosir: Number(tambahForm.hargaGrosir || 0),
+        hargaReseller: Number(tambahForm.hargaReseller || 0),
+
         hargaSup: Number(hargaSup),
         qty: finalQty,
         imeis,
@@ -488,6 +555,9 @@ export default function MasterPembelian() {
       kategoriBrand: "",
       barang: "",
       hargaSup: "",
+      hargaSRP: "",
+      hargaGrosir: "",
+      hargaReseller: "",
       imeiList: "",
       qty: 1,
     }));
@@ -509,6 +579,11 @@ export default function MasterPembelian() {
           brand,
           kategoriBrand,
           barang,
+
+          hargaSRP,
+          hargaGrosir,
+          hargaReseller,
+
           hargaSup,
           qty,
           imeis = [],
@@ -554,6 +629,10 @@ export default function MasterPembelian() {
               HARGA_SUPLAYER: hSup,
               HARGA_UNIT: hSup,
               TOTAL: hSup,
+
+              HARGA_SRP: Number(hargaSRP || 0),
+              HARGA_GROSIR: Number(hargaGrosir || 0),
+              HARGA_RESELLER: Number(hargaReseller || 0),
 
               PAYMENT_METODE: "PEMBELIAN",
               STATUS: "Approved",
@@ -605,16 +684,26 @@ export default function MasterPembelian() {
     const map = {};
 
     (allTransaksi || []).forEach((t) => {
+      // ======================================
+      // SKIP VOID DELETE
+      // ======================================
+      if (String(t.PAYMENT_METODE || "").toUpperCase() === "VOID DELETE") {
+        return;
+      }
+
       // ===============================
       // FILTER DATA LIAR / INVALID
       // ===============================
-      if (!t) return;
+      if (!t?.id) return;
 
       if (String(t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") {
         return;
       }
 
-      if (!t.NAMA_BARANG && !t.NAMA_BRAND) {
+      if (
+        String(t.NAMA_BARANG || "").trim() === "" ||
+        String(t.NAMA_BRAND || "").trim() === ""
+      ) {
         return;
       }
 
@@ -625,7 +714,8 @@ export default function MasterPembelian() {
       ) {
         return;
       }
-      const groupKeyRealtime = `${t.TANGGAL_TRANSAKSI}|${t.NO_INVOICE}|${t.NAMA_SUPPLIER}|${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
+
+      const groupKeyRealtime = makePembelianKey(t);
 
       // 🔥 HIDE REALTIME SETELAH DELETE
       if (deletedKeys.has(groupKeyRealtime)) {
@@ -635,17 +725,46 @@ export default function MasterPembelian() {
       const brand = t.NAMA_BRAND || "";
       const barang = t.NAMA_BARANG || "";
 
-      const keyGroup =
-        `${t.TANGGAL_TRANSAKSI || ""}|` +
-        `${t.NO_INVOICE || ""}|` +
-        `${t.NAMA_SUPPLIER || ""}|` +
-        `${t.NAMA_TOKO || ""}|` +
-        `${brand}|${barang}|` +
-        `${t.PAYMENT_METODE || ""}`;
+      const keyGroup = makePembelianKey({
+        ...t,
+        NAMA_BRAND: brand,
+        NAMA_BARANG: barang,
+      });
 
       // 🔗 JOIN KE MASTER BARANG (REALTIME)
       const masterKey = `${brand}|${barang}`;
       const masterRef = masterBarangMap[masterKey] || {};
+
+      // ======================================
+      // CEK APAKAH SUDAH DI VOID
+      // ======================================
+      const isVoided = (allTransaksi || []).some((x) => {
+        const isVoid =
+          String(x.PAYMENT_METODE || "").toUpperCase() === "VOID DELETE";
+
+        if (!isVoid) return false;
+
+        const sameKey =
+          String(x.NO_INVOICE || "") === String(t.NO_INVOICE || "") &&
+          String(x.NAMA_BARANG || "")
+            .trim()
+            .toUpperCase() ===
+            String(t.NAMA_BARANG || "")
+              .trim()
+              .toUpperCase() &&
+          String(x.NAMA_BRAND || "")
+            .trim()
+            .toUpperCase() ===
+            String(t.NAMA_BRAND || "")
+              .trim()
+              .toUpperCase();
+
+        return sameKey;
+      });
+
+      if (isVoided) {
+        return;
+      }
 
       if (!map[keyGroup]) {
         map[keyGroup] = {
@@ -675,7 +794,11 @@ export default function MasterPembelian() {
       map[keyGroup].totalHargaSup += qty * Number(t.HARGA_SUPLAYER || 0);
 
       if (t.IMEI) {
-        map[keyGroup].imeis.push(String(t.IMEI));
+        const cleanImei = String(t.IMEI).trim();
+
+        if (!map[keyGroup].imeis.includes(cleanImei)) {
+          map[keyGroup].imeis.push(cleanImei);
+        }
       }
     });
 
@@ -801,148 +924,171 @@ export default function MasterPembelian() {
     return errors;
   };
 
+  const getValidTokoId = (row) => {
+    // PRIORITAS ID LANGSUNG
+    if (row?.tokoId) return row.tokoId;
+    if (row?.TOKO_ID) return row.TOKO_ID;
+    if (row?.idToko) return row.idToko;
+
+    // CARI DARI MASTER TOKO
+    const toko = masterToko.find(
+      (x) =>
+        String(x.nama || x.namaToko || "")
+          .trim()
+          .toUpperCase() ===
+        String(row.NAMA_TOKO || "")
+          .trim()
+          .toUpperCase()
+    );
+
+    if (toko?.id) return toko.id;
+
+    return null;
+  };
+
   const deletePembelian = async (item) => {
     const confirmDelete = window.confirm(
       `Hapus semua transaksi pembelian?\n\n${item.brand} - ${item.barang}\nDO: ${item.noDo}`
     );
 
     if (!confirmDelete) return;
-    const keyGroup =
-    `${item.tanggal || ""}|` +
-    `${item.noDo || ""}|` +
-    `${item.supplier || ""}|` +
-    `${item.namaToko || ""}|` +
-    `${item.brand || ""}|` +
-    `${item.barang || ""}|PEMBELIAN`;
+
+    const keyGroup = makePembelianKey(item);
 
     try {
-      // ===============================
-      // 🔥 REALTIME HIDE DULU
-      // ===============================
+      // =====================================
+      // HIDE REALTIME UI
+      // =====================================
       setDeletedKeys((prev) => {
         const next = new Set(prev);
         next.add(keyGroup);
         return next;
       });
 
-      // ===============================
-      // 🔥 CARI SEMUA ROW
-      // ===============================
+      // =====================================
+      // AMBIL SEMUA ROW FIREBASE
+      // =====================================
       const rows = (allTransaksi || []).filter((t) => {
-        if (!t) return false;
-      
-        if (
-          String(t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN"
-        ) {
+        if (!t?.id) return false;
+
+        if (String(t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") {
           return false;
         }
-      
-        const k =
-          `${t.TANGGAL_TRANSAKSI || ""}|` +
-          `${t.NO_INVOICE || ""}|` +
-          `${t.NAMA_SUPPLIER || ""}|` +
-          `${t.NAMA_TOKO || ""}|` +
-          `${t.NAMA_BRAND || ""}|` +
-          `${t.NAMA_BARANG || ""}|` +
-          `${t.PAYMENT_METODE || ""}`;
-      
-        return k === keyGroup;
+
+        return makePembelianKey(t) === keyGroup;
       });
 
-      // ===============================
-      // ❌ DATA TIDAK ADA
-      // ===============================
       if (!rows.length) {
-        alert("❌ Data pembelian tidak ditemukan");
-        return;
+        throw new Error("Data transaksi tidak ditemukan");
       }
 
-      // ===============================
-      // 🔥 DELETE FIREBASE
-      // ===============================
+      // =====================================
+      // DELETE SATU PERSATU (WAJIB SERIAL)
+      // =====================================
       for (const r of rows) {
-        try {
-          const tokoId = r.tokoId || r.TOKO_ID || r.idToko || 1;
+        const finalTokoId = getValidTokoId(r);
 
-          if (r?.id) {
-            await deleteTransaksi(
-              r.tokoId ||
-                r.TOKO_ID ||
-                r.idToko ||
-                tokoId,
-              r.id
-            );
-          }
-        } catch (err) {
-          console.error("DELETE ROW ERROR:", err);
+        if (!finalTokoId) {
+          console.error("TOKO ID INVALID:", r);
+          continue;
+        }
+
+        if (!r.id) {
+          console.error("ID TRANSAKSI INVALID:", r);
+          continue;
+        }
+
+        console.log("🔥 DELETE:", finalTokoId, r.id, r.NAMA_BARANG);
+
+        // 🔥 WAJIB AWAIT SERIAL
+        const res = await deleteTransaksi(null, r.id);
+
+        // =====================================
+        // DATA SUDAH HILANG = ANGAP SUCCESS
+        // =====================================
+        if (!res?.success && res?.message !== "Data sudah terhapus") {
+          throw new Error(res?.message || "Delete gagal");
         }
       }
 
-      // ===============================
-      // 🔥 REALTIME FILTER LOCAL
-      // ===============================
-      setAllTransaksi((prev) =>
-        prev.filter((t) => {
-          const k =
-          `${t.TANGGAL_TRANSAKSI || ""}|` +
-          `${t.NO_INVOICE || ""}|` +
-          `${t.NAMA_SUPPLIER || ""}|` +
-          `${t.NAMA_TOKO || ""}|` +
-          `${t.NAMA_BRAND || ""}|` +
-          `${t.NAMA_BARANG || ""}|` +
-          `${t.PAYMENT_METODE || ""}`;
-
-          return k !== keyGroup;
-        })
-      );
-
-      // ===============================
-      // 🔥 UPDATE STOCK
-      // ===============================
+      // =====================================
+      // STOCK UPDATE
+      // =====================================
       try {
         const sku = makeSku(item.brand, item.barang);
 
-        await reduceStock(
-          item.namaToko || "CILANGKAP PUSAT",
-          sku,
-          Number(item.totalQty || 0)
-        );
+        const qtyDelete = rows.reduce((sum, r) => sum + Number(r.QTY || 0), 0);
+
+        await reduceStock(item.namaToko || "CILANGKAP PUSAT", sku, qtyDelete);
       } catch (stockErr) {
         console.warn("reduceStock gagal:", stockErr);
       }
 
-      // ===============================
-      // 🔥 CLEAN UI CACHE
-      // ===============================
-      setTimeout(() => {
-        setDeletedKeys((prev) => {
-          const next = new Set(prev);
-          next.delete(keyGroup);
-          return next;
-        });
-      }, 3000);
+      // =====================================
+      // CREATE VOID DELETE MARKER
+      // =====================================
+      const firstRow = rows[0];
 
-      alert("✅ Data pembelian berhasil dihapus realtime");
+      if (firstRow) {
+        const finalTokoId = getValidTokoId(firstRow);
+
+        if (finalTokoId) {
+          await addTransaksi(finalTokoId, {
+            CREATED_AT: Date.now(),
+
+            PAYMENT_METODE: "VOID DELETE",
+
+            KETERANGAN: "AUTO DELETE (FULL REVERSAL)",
+
+            STATUS: "APPROVED",
+
+            NAMA_USER: "SYSTEM",
+
+            TANGGAL_TRANSAKSI: firstRow.TANGGAL_TRANSAKSI,
+
+            NO_INVOICE: firstRow.NO_INVOICE,
+
+            NAMA_SUPPLIER: firstRow.NAMA_SUPPLIER,
+
+            NAMA_TOKO: firstRow.NAMA_TOKO,
+
+            NAMA_BRAND: firstRow.NAMA_BRAND,
+
+            NAMA_BARANG: firstRow.NAMA_BARANG,
+
+            KATEGORI_BRAND: firstRow.KATEGORI_BRAND,
+
+            QTY: -1,
+
+            TOTAL: 0,
+          });
+
+          console.log("✅ VOID DELETE CREATED:", firstRow.NO_INVOICE);
+        }
+      }
+
+      // =====================================
+      // JANGAN HAPUS deletedKeys CEPAT
+      // =====================================
+
+      alert("✅ Data berhasil dihapus permanen");
     } catch (err) {
-      console.error(err);
+      console.error("DELETE PEMBELIAN ERROR:", err);
 
-      // rollback
+      // rollback hide
       setDeletedKeys((prev) => {
         const next = new Set(prev);
         next.delete(keyGroup);
         return next;
       });
 
-      alert("❌ Gagal hapus pembelian");
+      alert(err?.message || "❌ Gagal menghapus pembelian");
     }
   };
 
   const openEdit = (item) => {
     const imeis = item.imeis || [];
 
-    // ===============================
-    // 🔥 CEK PER IMEI (NEW LOGIC)
-    // ===============================
     const imeiTerjual = imeis.filter((imei) =>
       (allTransaksi || []).some(
         (t) =>
@@ -951,26 +1097,62 @@ export default function MasterPembelian() {
       )
     );
 
-    // ===============================
-    // ❌ JIKA ADA YANG TERJUAL
-    // ===============================
-    // pisahkan IMEI
     const imeiTerjualSet = new Set(imeiTerjual);
+
     const imeiAman = imeis.filter((im) => !imeiTerjualSet.has(im));
 
-    // tetap boleh edit
-    setEditData({
-      ...item,
-      imeiList: imeiAman.join("\n"), // hanya IMEI yang bisa diedit
-      imeiLocked: imeiTerjual, // simpan IMEI terkunci
-      originalToko: item.namaToko,
-      originalKey: `${item.tanggal}|${item.noDo}|${item.supplier}|${item.brand}|${item.barang}`,
-      hargaSup: item.hargaSup || 0,
-    });
+    // ===============================
+    // AMBIL MASTER HARGA
+    // ===============================
+    const key = `${item.brand}|${item.barang}`;
 
-    setShowEdit(true);
+    const masterRef = masterBarang.find(
+      (b) => `${b.brand || b.namaBrand}|${b.namaBarang}` === key
+    );
 
-    // kasih warning aja
+    // setEditData({
+    //   ...item,
+
+    //   imeiList: imeiAman.join("\n"),
+
+    //   imeiLocked: imeiTerjual,
+
+    //   originalToko: item.namaToko,
+
+    //   originalKey:
+    //     `${item.tanggal}|${item.noDo}|${item.supplier}|${item.brand}|${item.barang}`,
+
+    //   hargaSup: Number(item.hargaSup || 0),
+
+    //   // ===============================
+    //   // FIX HARGA
+    //   // ===============================
+    //   masterHargaId: masterRef?.id || "",
+
+    //   hargaSRP: Number(
+    //     masterRef?.hargaSRP ||
+    //     masterRef?.harga?.srp ||
+    //     item.hargaSRP ||
+    //     0
+    //   ),
+
+    //   hargaGrosir: Number(
+    //     masterRef?.hargaGrosir ||
+    //     masterRef?.harga?.grosir ||
+    //     item.hargaGrosir ||
+    //     0
+    //   ),
+
+    //   hargaReseller: Number(
+    //     masterRef?.hargaReseller ||
+    //     masterRef?.harga?.reseller ||
+    //     item.hargaReseller ||
+    //     0
+    //   ),
+    // });
+
+    // setShowEdit(true);
+
     if (imeiTerjual.length > 0) {
       alert(
         `⚠️ Beberapa IMEI sudah terjual dan tidak bisa diedit:\n\n` +
@@ -1012,6 +1194,37 @@ export default function MasterPembelian() {
       }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
       return k === editData.originalKey;
     });
+
+    // ===============================
+    // UPDATE MASTER HARGA REALTIME
+    // ===============================
+    if (editData.masterHargaId) {
+      const payloadHarga = {
+        hargaSRP: Number(editData.hargaSRP || 0),
+        hargaGrosir: Number(editData.hargaGrosir || 0),
+        hargaReseller: Number(editData.hargaReseller || 0),
+
+        harga: {
+          srp: Number(editData.hargaSRP || 0),
+          grosir: Number(editData.hargaGrosir || 0),
+          reseller: Number(editData.hargaReseller || 0),
+        },
+      };
+
+      await updateMasterBarangHarga(editData.masterHargaId, payloadHarga);
+
+      // realtime local update
+      setMasterBarang((prev) =>
+        prev.map((x) =>
+          x.id === editData.masterHargaId
+            ? {
+                ...x,
+                ...payloadHarga,
+              }
+            : x
+        )
+      );
+    }
 
     if (!rows.length) {
       alert("Data pembelian tidak ditemukan.");
@@ -1064,18 +1277,18 @@ export default function MasterPembelian() {
     // ===============================
     // NON IMEI → UPDATE QTY LANGSUNG
     // ===============================
-    if (!isKategoriImei) {
-      const r = rows[0];
+    // if (!isKategoriImei) {
+    //   const r = rows[0];
 
-      await updateTransaksi(r.tokoId || 1, r.id, {
-        ...r,
-        QTY: Number(editData.totalQty),
-        TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
-        TANGGAL_TRANSAKSI: editData.tanggal,
-      });
+    //   await updateTransaksi(r.tokoId || 1, r.id, {
+    //     ...r,
+    //     QTY: Number(editData.totalQty),
+    //     TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
+    //     TANGGAL_TRANSAKSI: editData.tanggal,
+    //   });
 
-      const sku = makeSku(editData.brand, editData.barang);
-    }
+    //   const sku = makeSku(editData.brand, editData.barang);
+    // }
 
     // ==================================================
     // ⛔ PASANG KODE VALIDASI STOK DI SINI (WAJIB)
@@ -1132,10 +1345,25 @@ export default function MasterPembelian() {
       // TAMBAH IMEI BARU
       // =========================
       for (const im of toAdd) {
+        const alreadyExist = (allTransaksi || []).some(
+          (x) =>
+            String(x.IMEI || "").trim() === String(im).trim() &&
+            (x.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN"
+        );
+
+        if (alreadyExist) continue;
+
         await addTransaksi(rows[0].tokoId || 1, {
           ...rows[0],
-          IMEI: im,
+
+          IMEI: String(im).trim(),
+
           QTY: 1,
+
+          NOMOR_UNIK: `PEMBELIAN|${editData.brand}|${editData.barang}|${String(
+            im
+          ).trim()}`,
+
           CREATED_AT: Date.now(),
         });
       }
@@ -1199,6 +1427,95 @@ export default function MasterPembelian() {
 
     alert("✅ Edit pembelian berhasil & stok sinkron realtime.");
     setShowEdit(false);
+  };
+
+  // ===============================
+  // OPEN EDIT HARGA
+  // ===============================
+  const openEditHarga = (item) => {
+    const key = `${item.brand}|${item.barang}`;
+
+    const masterRef = masterBarang.find(
+      (b) => `${b.brand || b.namaBrand}|${b.namaBarang}` === key
+    );
+
+    setEditHargaData({
+      id: masterRef?.id || "",
+
+      brand: item.brand || "",
+      barang: item.barang || "",
+      kategoriBrand: item.kategoriBrand || "",
+
+      hargaSRP: Number(
+        masterRef?.hargaSRP || masterRef?.harga?.srp || item.hargaSRP || 0
+      ),
+
+      hargaGrosir: Number(
+        masterRef?.hargaGrosir ||
+          masterRef?.harga?.grosir ||
+          item.hargaGrosir ||
+          0
+      ),
+
+      hargaReseller: Number(
+        masterRef?.hargaReseller ||
+          masterRef?.harga?.reseller ||
+          item.hargaReseller ||
+          0
+      ),
+    });
+
+    setShowEditHarga(true);
+  };
+
+  // ===============================
+  // SAVE EDIT HARGA
+  // ===============================
+  const saveEditHarga = async () => {
+    try {
+      if (!editHargaData?.id) {
+        alert("❌ Data MASTER HARGA tidak ditemukan");
+        return;
+      }
+
+      const payload = {
+        hargaSRP: Number(editHargaData.hargaSRP || 0),
+        hargaGrosir: Number(editHargaData.hargaGrosir || 0),
+        hargaReseller: Number(editHargaData.hargaReseller || 0),
+
+        harga: {
+          srp: Number(editHargaData.hargaSRP || 0),
+          grosir: Number(editHargaData.hargaGrosir || 0),
+          reseller: Number(editHargaData.hargaReseller || 0),
+        },
+      };
+
+      // ===============================
+      // UPDATE FIREBASE
+      // ===============================
+      await updateMasterBarangHarga(editHargaData.id, payload);
+
+      // ===============================
+      // UPDATE LOCAL REALTIME
+      // ===============================
+      setMasterBarang((prev) =>
+        prev.map((x) =>
+          x.id === editHargaData.id
+            ? {
+                ...x,
+                ...payload,
+              }
+            : x
+        )
+      );
+
+      alert("✅ Harga berhasil diupdate realtime");
+
+      setShowEditHarga(false);
+    } catch (err) {
+      console.error(err);
+      alert("❌ Gagal update harga");
+    }
   };
 
   const handleTambahChange = (keyGroup, value) => {
@@ -1727,10 +2044,7 @@ export default function MasterPembelian() {
 
                     return (
                       <tr
-                      key={
-                        `${item.tanggal}-${item.noDo}-${item.namaToko}-` +
-                        `${item.brand}-${item.barang}-${idx}`
-                      }
+                        key={makePembelianKey(item)}
                         className="hover:bg-slate-50/80 transition"
                       >
                         <td className="border p-2 text-center">
@@ -1784,6 +2098,7 @@ export default function MasterPembelian() {
                           >
                             <FaEdit />
                           </button>
+
                           <button
                             className="inline-flex items-center justify-center p-[6px] rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
                             onClick={() => deletePembelian(item)}
@@ -1903,6 +2218,120 @@ export default function MasterPembelian() {
                 setShowInvoice(true);
               }}
             />
+
+            {/* ===================================== */}
+            {/* MODAL EDIT HARGA MASTER */}
+            {/* ===================================== */}
+            {showEditHarga && (
+              <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-[9999]">
+                <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-5">
+                  {/* HEADER */}
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-slate-800">
+                      Edit Harga Master
+                    </h3>
+
+                    <button
+                      onClick={() => setShowEditHarga(false)}
+                      className="text-slate-500 hover:text-red-500"
+                    >
+                      <FaTimes />
+                    </button>
+                  </div>
+
+                  {/* BRAND */}
+                  <div className="mb-3">
+                    <label className="text-xs font-semibold text-slate-600">
+                      Brand
+                    </label>
+
+                    <input
+                      disabled
+                      value={editHargaData.brand || ""}
+                      className="w-full border rounded-xl px-3 py-2 bg-slate-100"
+                    />
+                  </div>
+
+                  {/* BARANG */}
+                  <div className="mb-3">
+                    <label className="text-xs font-semibold text-slate-600">
+                      Nama Barang
+                    </label>
+
+                    <input
+                      disabled
+                      value={editHargaData.barang || ""}
+                      className="w-full border rounded-xl px-3 py-2 bg-slate-100"
+                    />
+                  </div>
+
+                  {/* SRP */}
+                  <div className="mb-3">
+                    <label className="text-xs font-semibold text-slate-600">
+                      Harga SRP
+                    </label>
+
+                    <input
+                      type="number"
+                      value={editHargaData.hargaSRP || 0}
+                      onChange={(e) =>
+                        setEditHargaData((p) => ({
+                          ...p,
+                          hargaSRP: e.target.value,
+                        }))
+                      }
+                      className="w-full border rounded-xl px-3 py-2"
+                    />
+                  </div>
+
+                  {/* GROSIR */}
+                  <div className="mb-3">
+                    <label className="text-xs font-semibold text-slate-600">
+                      Harga Grosir
+                    </label>
+
+                    <input
+                      type="number"
+                      value={editHargaData.hargaGrosir || 0}
+                      onChange={(e) =>
+                        setEditHargaData((p) => ({
+                          ...p,
+                          hargaGrosir: e.target.value,
+                        }))
+                      }
+                      className="w-full border rounded-xl px-3 py-2"
+                    />
+                  </div>
+
+                  {/* RESELLER */}
+                  <div className="mb-4">
+                    <label className="text-xs font-semibold text-slate-600">
+                      Harga Reseller
+                    </label>
+
+                    <input
+                      type="number"
+                      value={editHargaData.hargaReseller || 0}
+                      onChange={(e) =>
+                        setEditHargaData((p) => ({
+                          ...p,
+                          hargaReseller: e.target.value,
+                        }))
+                      }
+                      className="w-full border rounded-xl px-3 py-2"
+                    />
+                  </div>
+
+                  {/* BUTTON */}
+                  <button
+                    onClick={saveEditHarga}
+                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                  >
+                    Simpan Harga
+                  </button>
+                </div>
+              </div>
+            )}
 
             {showInvoice && (
               <div className="fixed inset-0 bg-black/40 z-50 flex justify-center items-start py-6 overflow-y-auto">
@@ -2374,6 +2803,57 @@ export default function MasterPembelian() {
                   onChange={(e) =>
                     setEditData((p) => ({ ...p, barang: e.target.value }))
                   }
+                />
+              </div>
+
+              {/* HARGA SRP */}
+              <div>
+                <label className="text-xs font-semibold">Harga SRP</label>
+
+                <input
+                  type="number"
+                  value={editData?.hargaSRP || 0}
+                  onChange={(e) =>
+                    setEditData((p) => ({
+                      ...p,
+                      hargaSRP: e.target.value,
+                    }))
+                  }
+                  className="w-full border rounded-xl px-3 py-2"
+                />
+              </div>
+
+              {/* HARGA GROSIR */}
+              <div>
+                <label className="text-xs font-semibold">Harga Grosir</label>
+
+                <input
+                  type="number"
+                  value={editData?.hargaGrosir || 0}
+                  onChange={(e) =>
+                    setEditData((p) => ({
+                      ...p,
+                      hargaGrosir: e.target.value,
+                    }))
+                  }
+                  className="w-full border rounded-xl px-3 py-2"
+                />
+              </div>
+
+              {/* HARGA RESELLER */}
+              <div>
+                <label className="text-xs font-semibold">Harga Reseller</label>
+
+                <input
+                  type="number"
+                  value={editData?.hargaReseller || 0}
+                  onChange={(e) =>
+                    setEditData((p) => ({
+                      ...p,
+                      hargaReseller: e.target.value,
+                    }))
+                  }
+                  className="w-full border rounded-xl px-3 py-2"
                 />
               </div>
 

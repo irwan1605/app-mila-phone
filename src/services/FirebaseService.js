@@ -880,8 +880,74 @@ export const listenTransaksiByTokoHemat = (tokoId, options = {}, callback) => {
 /**
  * Delete transaksi by id
  */
-export const deleteTransaksi = (tokoId, id) => {
-  return remove(ref(db, `toko/${tokoId}/transaksi/${id}`));
+/**
+ * DELETE TRANSAKSI MASTER PEMBELIAN
+ * FIX REALTIME + PERMANENT DELETE
+ */
+export const deleteTransaksi = async (tokoId, transaksiId) => {
+  try {
+    if (!transaksiId) {
+      throw new Error("transaksiId kosong");
+    }
+
+    // =========================================
+    // LANGSUNG CARI KE SEMUA TOKO
+    // ANTI SALAH PATH
+    // =========================================
+    const tokoSnap = await get(ref(db, "toko"));
+
+    if (!tokoSnap.exists()) {
+      throw new Error("Data toko kosong");
+    }
+
+    let foundPath = null;
+
+    tokoSnap.forEach((tokoChild) => {
+      const transaksi = tokoChild.child("transaksi");
+
+      transaksi.forEach((trx) => {
+        if (trx.key === transaksiId) {
+          foundPath =
+            `toko/${tokoChild.key}/transaksi/${transaksiId}`;
+        }
+      });
+    });
+
+    // =========================================
+    // SUDAH TIDAK ADA = SUCCESS
+    // =========================================
+    if (!foundPath) {
+      console.warn(
+        "⚠️ DATA SUDAH HILANG:",
+        transaksiId
+      );
+
+      return {
+        success: true,
+        message: "Data sudah terhapus",
+      };
+    }
+
+    // =========================================
+    // DELETE REAL FIREBASE
+    // =========================================
+    await remove(ref(db, foundPath));
+
+    console.log("✅ DELETE FIREBASE:", foundPath);
+
+    return {
+      success: true,
+      message: "Berhasil dihapus",
+    };
+
+  } catch (err) {
+    console.error("❌ deleteTransaksi ERROR:", err);
+
+    return {
+      success: false,
+      message: err.message,
+    };
+  }
 };
 
 /**
@@ -918,14 +984,33 @@ export const listenAllTransaksi = (callback) => {
       merged.sort((a, b) => {
         const ta =
           new Date(a.TANGGAL_TRANSAKSI || a.createdAt || 0).getTime() || 0;
+      
         const tb =
           new Date(b.TANGGAL_TRANSAKSI || b.createdAt || 0).getTime() || 0;
+      
         return tb - ta;
       });
-
-      console.log("🔥 TOTAL TRANSAKSI:", merged.length);
-
-      callback(merged);
+      
+      // =====================================
+      // 🔥 FIX DUPLIKAT REALTIME SNAPSHOT
+      // =====================================
+      const unique = new Map();
+      
+      merged.forEach((item) => {
+        if (!item?.id) return;
+      
+        unique.set(item.id, item);
+      });
+      
+      const finalRows = Array.from(unique.values());
+      
+      console.log(
+        "🔥 TOTAL TRANSAKSI FINAL:",
+        finalRows.length
+      );
+      
+      // 🔥 FIX CALLBACK
+      callback(finalRows);
     },
     (err) => {
       console.error("listenAllTransaksi error:", err);
