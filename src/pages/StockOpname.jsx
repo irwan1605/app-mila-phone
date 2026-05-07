@@ -71,6 +71,17 @@ const STOCKABLE_CATEGORY = [
   "JASA",
 ];
 
+const normalizeImei = (v) =>
+  String(v || "")
+    .toLowerCase()
+    .replace(/[^0-9]/g, "");
+
+    const normalizeText = (v) =>
+      String(v || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, " ");
+
 /* ======================================================
    COMPONENT
 ====================================================== */
@@ -211,6 +222,43 @@ export default function StockOpname() {
     }
   };
 
+  // ===============================
+  // 🔥 SUPPLIER LOOKUP FINAL
+  // ===============================
+  const supplierLookup = useMemo(() => {
+    const map = {};
+  
+    transaksi.forEach((t) => {
+      if (!t) return;
+  
+      const supplier =
+        t.NAMA_SUPPLIER ||
+        t.namaSupplier ||
+        t.SUPPLIER ||
+        "-";
+  
+      // 🔥 IMEI
+      if (t.IMEI) {
+        const imei = String(t.IMEI).trim();
+  
+        map[imei] = supplier;
+  
+        const clean = normalizeImei(imei);
+  
+        map[clean] = supplier;
+      }
+  
+      // 🔥 NON IMEI
+      const skuKey = `${normalizeText(
+        t.NAMA_BRAND
+      )}|${normalizeText(t.NAMA_BARANG)}`;
+  
+      map[skuKey] = supplier;
+    });
+  
+    return map;
+  }, [transaksi]);
+
   const stockOpnameData = useMemo(() => {
     const map = {};
 
@@ -238,7 +286,7 @@ export default function StockOpname() {
             key,
             tanggal: t.TANGGAL_TRANSAKSI || "-",
             toko,
-            supplier: t.NAMA_SUPPLIER || "-",
+            supplier: t.NAMA_SUPPLIER || t.namaSupplier || t.SUPPLIER || "-",
             brand: t.NAMA_BRAND,
             barang: t.NAMA_BARANG,
             imei: t.IMEI || "",
@@ -269,7 +317,12 @@ export default function StockOpname() {
               key,
               tanggal: t.tanggal || "-",
               toko,
-              supplier: "-",
+              supplier:
+                t.NAMA_SUPPLIER ||
+                t.namaSupplier ||
+                t.SUPPLIER ||
+                supplierLookup?.[`${it.namaBrand}|${it.namaBarang}`] ||
+                "-",
               brand: it.namaBrand,
               barang: it.namaBarang,
               imei: "",
@@ -313,16 +366,11 @@ export default function StockOpname() {
     );
   }, [allTransaksi]);
 
-  const normalizeImei = (v) =>
-    String(v || "").toLowerCase().replace(/[^0-9]/g, "");
-
   const normalizeKey = (t = {}) => {
     if (t.IMEI) return String(t.IMEI).trim();
     if (t.NOMOR_UNIK) return String(t.NOMOR_UNIK).trim();
     return `${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`.trim();
   };
-
-
 
   // ===============================
   // 4️⃣ DETAIL LOOKUP (WAJIB DI SINI)
@@ -378,10 +426,10 @@ export default function StockOpname() {
           supplier: t.NAMA_SUPPLIER || "-",
           imei: key,
         };
-        
+
         // 🔥 KEY NORMALIZE (ANTI BUG REFUND)
         const cleanKey = normalizeImei(t.IMEI);
-        
+
         map[cleanKey] = {
           tanggal: t.TANGGAL_TRANSAKSI || "-",
           supplier: t.NAMA_SUPPLIER || "-",
@@ -428,8 +476,6 @@ export default function StockOpname() {
     }));
   }, [stockOpnameData]);
 
-
-
   // ===============================
   // 5️⃣ AGGREGATED (BOLEH PAKAI detailStockLookup)
   // ===============================
@@ -443,7 +489,7 @@ export default function StockOpname() {
     return rows.map((r) => {
       const imeiRaw = String(r.imei || "").trim();
       const imeiKey = imeiRaw;
-      
+
       // 🔥 NORMALIZE UNTUK MATCH
       const imeiClean = normalizeImei(imeiRaw);
       const skuKey = `${r.brand}|${r.barang}`;
@@ -452,16 +498,22 @@ export default function StockOpname() {
       // 1. IMEI
       // 2. SKU (Accessories / Sparepart / Jasa)
       const meta =
-      (imeiKey && masterPembelianLookup[imeiKey]) ||
-      (imeiClean && masterPembelianLookup[imeiClean]) ||
-      (imeiKey && detailStockLookup[imeiKey]) ||
-      (imeiClean && detailStockLookup[imeiClean]) ||
-      detailStockLookup[skuKey] ||
-      masterPembelianLookup[skuKey];
+        (imeiKey && masterPembelianLookup[imeiKey]) ||
+        (imeiClean && masterPembelianLookup[imeiClean]) ||
+        (imeiKey && detailStockLookup[imeiKey]) ||
+        (imeiClean && detailStockLookup[imeiClean]) ||
+        detailStockLookup[skuKey] ||
+        masterPembelianLookup[skuKey];
       return {
         ...r,
         tanggal: meta?.tanggal || r.tanggal || "-",
-        supplier: meta?.supplier || r.supplier || "-",
+        supplier:
+          meta?.supplier ||
+          r.supplier ||
+          r.NAMA_SUPPLIER ||
+          r.namaSupplier ||
+          r.SUPPLIER ||
+          "-",
 
         // ✅ IMPORTANT
         imei: meta?.imei || imeiKey || "",
@@ -598,35 +650,24 @@ export default function StockOpname() {
 
   const fmt = (v) => Number(v || 0).toLocaleString("id-ID");
   const exportStockOpnameExcel = () => {
-
     // ==========================================
     // 🔥 EXPORT SOURCE
     // ==========================================
-    const exportSource =
-      exportMode === "semua"
-        ? aggregated
-        : tableData;
-  
+    const exportSource = exportMode === "semua" ? aggregated : tableData;
+
     // ==========================================
     // 🔥 FORMAT SESUAI TABLE UI
     // ==========================================
     const rows = exportSource.map((r, idx) => {
-  
       // ✅ stok fisik
       const fisik = Number(opnameMap[r.key] ?? "");
-  
+
       // ✅ selisih
-      const selisih =
-        Number.isNaN(fisik)
-          ? ""
-          : fisik - Number(r.qty || 0);
-  
+      const selisih = Number.isNaN(fisik) ? "" : fisik - Number(r.qty || 0);
+
       // ✅ status
-      const status =
-        r.qty > 0
-          ? "TERSEDIA"
-          : "TERJUAL";
-  
+      const status = r.qty > 0 ? "TERSEDIA" : "TERJUAL";
+
       // ✅ keterangan
       const keterangan =
         r.lastTransaksi === "TRANSFER_MASUK" ||
@@ -639,81 +680,70 @@ export default function StockOpname() {
           : r.lastTransaksi === "REJECT"
           ? "REJECT"
           : "-";
-  
+
       return {
         NO: idx + 1,
-  
+
         TANGGAL: r.tanggal || "-",
-  
+
         "NAMA TOKO": r.toko || "-",
-  
+
         "NAMA SUPPLIER": r.supplier || "-",
-  
+
         "NAMA BRAND": r.brand || "-",
-  
+
         "NAMA BARANG": r.barang || "-",
-  
-        "NO IMEI / SKU":
-          r.imei || r.sku || "NON-IMEI",
-  
+
+        "NO IMEI / SKU": r.imei || r.sku || "NON-IMEI",
+
         STATUS: status,
-  
+
         KETERANGAN: keterangan,
-  
+
         "STOK SISTEM": Number(r.qty || 0),
-  
-        "STOK FISIK":
-          opnameMap[r.key] ?? "",
-  
-        SELISIH:
-          selisih === ""
-            ? "-"
-            : selisih,
+
+        "STOK FISIK": opnameMap[r.key] ?? "",
+
+        SELISIH: selisih === "" ? "-" : selisih,
       };
     });
-  
+
     // ==========================================
     // 🔥 GENERATE SHEET
     // ==========================================
     const ws = XLSX.utils.json_to_sheet(rows);
-  
+
     // ==========================================
     // 🔥 AUTO WIDTH
     // ==========================================
     ws["!cols"] = [
-      { wch: 8 },   // NO
-      { wch: 18 },  // TANGGAL
-      { wch: 25 },  // TOKO
-      { wch: 30 },  // SUPPLIER
-      { wch: 25 },  // BRAND
-      { wch: 40 },  // BARANG
-      { wch: 30 },  // IMEI
-      { wch: 15 },  // STATUS
-      { wch: 25 },  // KETERANGAN
-      { wch: 15 },  // STOK SISTEM
-      { wch: 15 },  // STOK FISIK
-      { wch: 15 },  // SELISIH
+      { wch: 8 }, // NO
+      { wch: 18 }, // TANGGAL
+      { wch: 25 }, // TOKO
+      { wch: 30 }, // SUPPLIER
+      { wch: 25 }, // BRAND
+      { wch: 40 }, // BARANG
+      { wch: 30 }, // IMEI
+      { wch: 15 }, // STATUS
+      { wch: 25 }, // KETERANGAN
+      { wch: 15 }, // STOK SISTEM
+      { wch: 15 }, // STOK FISIK
+      { wch: 15 }, // SELISIH
     ];
-  
+
     // ==========================================
     // 🔥 WORKBOOK
     // ==========================================
     const wb = XLSX.utils.book_new();
-  
-    XLSX.utils.book_append_sheet(
-      wb,
-      ws,
-      "STOK_OPNAME"
-    );
-  
+
+    XLSX.utils.book_append_sheet(wb, ws, "STOK_OPNAME");
+
     // ==========================================
     // 🔥 EXPORT FILE
     // ==========================================
     XLSX.writeFile(
       wb,
-      `STOK_OPNAME_${exportMode}_${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx`
+      `STOK_OPNAME_${exportMode}_${new Date().toISOString().slice(0, 10)}.xlsx`
     );
   };
   const handleVoidOpname = async (record) => {
