@@ -402,6 +402,47 @@ const supplierLookup = useMemo(() => {
     return map;
   }, [masterBarang]);
 
+  // ======================================
+// 🔥 IMEI TERJUAL FINAL
+// ======================================
+const imeiTerjual = useMemo(() => {
+  const soldSet = new Set();
+
+  transaksi.forEach((t) => {
+    if (!t?.IMEI) return;
+
+    const imei = normalizeImei(t.IMEI);
+
+    const metode = String(
+      t.PAYMENT_METODE || ""
+    ).toUpperCase();
+
+    const status = String(
+      t.STATUS || ""
+    ).toUpperCase();
+
+    if (!["APPROVED", "REFUND"].includes(status)) {
+      return;
+    }
+
+    // =========================
+    // PENJUALAN = HILANGKAN
+    // =========================
+    if (metode === "PENJUALAN") {
+      soldSet.add(imei);
+    }
+
+    // =========================
+    // REFUND = BALIKKAN
+    // =========================
+    if (metode === "REFUND") {
+      soldSet.delete(imei);
+    }
+  });
+
+  return soldSet;
+}, [transaksi]);
+
   const imeiFinalMap = useMemo(() => {
     const map = {};
 
@@ -504,6 +545,14 @@ const rows = useMemo(() => {
     ).toUpperCase();
 
     if (!["AVAILABLE", "REFUND"].includes(status)) return;
+    // ======================================
+// 🔥 JANGAN TAMPILKAN YANG SUDAH TERJUAL
+// ======================================
+const soldImei = normalizeImei(s.imei);
+
+if (imeiTerjual.has(soldImei)) {
+  return;
+}
 
     if (!map[s.imei]) {
       map[s.imei] = {
@@ -650,6 +699,15 @@ const rows = useMemo(() => {
         ].includes(metode)
       ) {
         map[key].qty = 0;
+      
+        map[key].statusBarang = "TERJUAL";
+      
+        map[key].keterangan =
+          metode === "TRANSFER_KELUAR"
+            ? "TRANSFER BARANG"
+            : metode;
+      
+        return;
       }
 
       return;
@@ -700,11 +758,45 @@ const rows = useMemo(() => {
   // 🔥 FINAL CLEAN
   // ===============================
   return Object.values(map)
-    .filter((r) => Number(r.qty || 0) > 0)
-    .map((r) => ({
-      ...r,
-      statusBarang: "TERSEDIA",
-    }));
+  .filter((r) => {
+    // =====================================
+    // 🔥 FILTER IMEI TERJUAL
+    // =====================================
+    if (r.imei) {
+      const cleanImei = normalizeImei(r.imei);
+
+      // =====================================
+      // 🔥 HARD REMOVE BARANG TERJUAL
+      // =====================================
+      if (imeiTerjual.has(cleanImei)) {
+
+        // cek refund
+        const hasRefund = transaksi.some(
+          (t) =>
+            normalizeImei(t.IMEI) === cleanImei &&
+            String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" &&
+            String(t.STATUS || "").toUpperCase() === "APPROVED"
+        );
+
+        // belum refund = hilang
+        if (!hasRefund) {
+          return false;
+        }
+      }
+    }
+
+    // =====================================
+    // 🔥 QTY HARUS ADA
+    // =====================================
+    return Number(r.qty || 0) > 0;
+  })
+  .map((r) => ({
+    ...r,
+    statusBarang:
+      Number(r.qty || 0) > 0
+        ? "TERSEDIA"
+        : "TERJUAL",
+  }));
 
 }, [
   transaksi,
@@ -712,6 +804,7 @@ const rows = useMemo(() => {
   namaToko,
   supplierLookup,
   detailStock,
+  imeiTerjual,
 ]);
 
   /* ======================
