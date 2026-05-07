@@ -597,43 +597,125 @@ export default function StockOpname() {
   }
 
   const fmt = (v) => Number(v || 0).toLocaleString("id-ID");
-
   const exportStockOpnameExcel = () => {
 
-    // ✅ pilih data berdasarkan mode export
+    // ==========================================
+    // 🔥 EXPORT SOURCE
+    // ==========================================
     const exportSource =
       exportMode === "semua"
-        ? aggregated // 🔥 semua toko
-        : tableData; // 🔥 existing (ikut filter toko)
+        ? aggregated
+        : tableData;
   
-    const rows = exportSource.map((r, idx) => ({
-      NO: idx + 1,
-      TANGGAL: r.tanggal,
-      TOKO: r.toko,
-      SUPPLIER: r.supplier,
-      BRAND: r.brand,
-      BARANG: r.barang,
-      IMEI: r.imei || "NON-IMEI",
-      STOK_SISTEM: r.qty,
-      STOK_FISIK: opnameMap[r.key] ?? "",
-      SELISIH:
-        opnameMap[r.key] === undefined || opnameMap[r.key] === ""
+    // ==========================================
+    // 🔥 FORMAT SESUAI TABLE UI
+    // ==========================================
+    const rows = exportSource.map((r, idx) => {
+  
+      // ✅ stok fisik
+      const fisik = Number(opnameMap[r.key] ?? "");
+  
+      // ✅ selisih
+      const selisih =
+        Number.isNaN(fisik)
           ? ""
-          : Number(opnameMap[r.key]) - Number(r.qty),
-    }));
+          : fisik - Number(r.qty || 0);
   
+      // ✅ status
+      const status =
+        r.qty > 0
+          ? "TERSEDIA"
+          : "TERJUAL";
+  
+      // ✅ keterangan
+      const keterangan =
+        r.lastTransaksi === "TRANSFER_MASUK" ||
+        r.lastTransaksi === "TRANSFER_KELUAR"
+          ? "TRANSFER BARANG"
+          : r.lastTransaksi === "REFUND"
+          ? "REFUND"
+          : r.lastTransaksi === "RETUR"
+          ? "RETUR"
+          : r.lastTransaksi === "REJECT"
+          ? "REJECT"
+          : "-";
+  
+      return {
+        NO: idx + 1,
+  
+        TANGGAL: r.tanggal || "-",
+  
+        "NAMA TOKO": r.toko || "-",
+  
+        "NAMA SUPPLIER": r.supplier || "-",
+  
+        "NAMA BRAND": r.brand || "-",
+  
+        "NAMA BARANG": r.barang || "-",
+  
+        "NO IMEI / SKU":
+          r.imei || r.sku || "NON-IMEI",
+  
+        STATUS: status,
+  
+        KETERANGAN: keterangan,
+  
+        "STOK SISTEM": Number(r.qty || 0),
+  
+        "STOK FISIK":
+          opnameMap[r.key] ?? "",
+  
+        SELISIH:
+          selisih === ""
+            ? "-"
+            : selisih,
+      };
+    });
+  
+    // ==========================================
+    // 🔥 GENERATE SHEET
+    // ==========================================
     const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Detail_Stock");
   
+    // ==========================================
+    // 🔥 AUTO WIDTH
+    // ==========================================
+    ws["!cols"] = [
+      { wch: 8 },   // NO
+      { wch: 18 },  // TANGGAL
+      { wch: 25 },  // TOKO
+      { wch: 30 },  // SUPPLIER
+      { wch: 25 },  // BRAND
+      { wch: 40 },  // BARANG
+      { wch: 30 },  // IMEI
+      { wch: 15 },  // STATUS
+      { wch: 25 },  // KETERANGAN
+      { wch: 15 },  // STOK SISTEM
+      { wch: 15 },  // STOK FISIK
+      { wch: 15 },  // SELISIH
+    ];
+  
+    // ==========================================
+    // 🔥 WORKBOOK
+    // ==========================================
+    const wb = XLSX.utils.book_new();
+  
+    XLSX.utils.book_append_sheet(
+      wb,
+      ws,
+      "STOK_OPNAME"
+    );
+  
+    // ==========================================
+    // 🔥 EXPORT FILE
+    // ==========================================
     XLSX.writeFile(
       wb,
-      `Detail_Stock_${exportMode}_${new Date()
+      `STOK_OPNAME_${exportMode}_${new Date()
         .toISOString()
         .slice(0, 10)}.xlsx`
     );
   };
-
   const handleVoidOpname = async (record) => {
     if (!isSuperAdmin) return;
 
