@@ -443,7 +443,16 @@ export default function DetailStockToko() {
     // 🔥 FALLBACK detail_stock
     // ===============================
     Object.values(detailStock).forEach((s) => {
-      if (!s?.imei) return;
+      
+      // ======================================
+// 🔥 HAPUS DATA LIAR DETAIL STOCK
+// ======================================
+const cleanDetailImei = normalizeImei(s.imei);
+
+// ✅ IMEI SUDAH TIDAK ADA DI PEMBELIAN
+if (!activeImeiSet.has(cleanDetailImei)) {
+  return;
+}
       // 🔥 JANGAN DUPLIKAT REFUND
       if (refundImeiSet.has(String(s.imei).trim())) {
         return;
@@ -878,6 +887,7 @@ if (imeiTerjual.has(soldImei)) {
     deletedIds,
     imeiMasterLookup,
     imeiTerjual,
+    activeImeiSet,
   ]);
 
   /* ======================
