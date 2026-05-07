@@ -32,10 +32,10 @@ const rupiah = (n) =>
     maximumFractionDigits: 0,
   });
 
-  const normalizeImei = (imei) =>
-    String(imei || "")
-      .toLowerCase()
-      .replace(/[^0-9]/g, ""); // buang huruf seperti "inel"
+const normalizeImei = (imei) =>
+  String(imei || "")
+    .toLowerCase()
+    .replace(/[^0-9]/g, ""); // buang huruf seperti "inel"
 
 const TOKO_MAP = {
   1: "CILANGKAP PUSAT",
@@ -67,17 +67,17 @@ export default function TablePenjualan({ data = [] }) {
   const [deletedRows, setDeletedRows] = useState({});
   const [instantRefund, setInstantRefund] = useState({});
   const [masterSH, setMasterSH] = useState([]);
-const [masterKaryawan, setMasterKaryawan] = useState([]);
+  const [masterKaryawan, setMasterKaryawan] = useState([]);
 
-useEffect(() => {
-  const unsubSH = listenMasterStoreHead(setMasterSH);
-  const unsubKar = listenKaryawan(setMasterKaryawan);
+  useEffect(() => {
+    const unsubSH = listenMasterStoreHead(setMasterSH);
+    const unsubKar = listenKaryawan(setMasterKaryawan);
 
-  return () => {
-    unsubSH && unsubSH();
-    unsubKar && unsubKar();
-  };
-}, []);
+    return () => {
+      unsubSH && unsubSH();
+      unsubKar && unsubKar();
+    };
+  }, []);
 
   const pageSize = 10;
 
@@ -156,7 +156,7 @@ useEffect(() => {
     });
     return map;
   }, [masterSH]);
-  
+
   const salesHandleMap = useMemo(() => {
     const map = {};
     masterKaryawan.forEach((k) => {
@@ -166,7 +166,6 @@ useEffect(() => {
     });
     return map;
   }, [masterKaryawan]);
-  
 
   /* ================= FLATTEN DATA ================= */
   const tableRows = useMemo(() => {
@@ -179,6 +178,37 @@ useEffect(() => {
       /* ================= PAYMENT ================= */
       let paymentMetode = "-";
       let namaBank = "-";
+      // ======================================
+      // 🔥 MASTER BANK LOOKUP
+      // ======================================
+      const bankLookup = {};
+
+      // 🔥 SPLIT PAYMENT
+      if (Array.isArray(trx.payment?.splitPayment)) {
+        trx.payment.splitPayment.forEach((p) => {
+          if (p.bankNama) {
+            bankLookup[p.metode] = p.bankNama;
+          }
+        });
+      }
+
+      // 🔥 CASH NORMAL
+      if (trx.payment?.bankNama) {
+        bankLookup[trx.payment?.metode] = trx.payment.bankNama;
+      }
+
+      // 🔥 FALLBACK MASTER BANK
+      if (
+        !trx.payment?.bankNama &&
+        trx.payment?.metode &&
+        trx.payment?.bankId
+      ) {
+        bankLookup[trx.payment.metode] =
+          trx.payment.bankNama ||
+          trx.payment.namaBank ||
+          trx.payment.bank ||
+          "-";
+      }
       let nominalPaymentMetode = 0;
 
       if (
@@ -189,8 +219,15 @@ useEffect(() => {
           .map((p) => p.metode)
           .join(" + ");
 
-        namaBank = trx.payment.splitPayment
-          .map((p) => p.bankNama || "-")
+          namaBank = trx.payment.splitPayment
+          .map((p) => {
+            return (
+              p.bankNama ||
+              p.namaBank ||
+              bankLookup?.[p.metode] ||
+              "-"
+            );
+          })
           .join(" + ");
 
         nominalPaymentMetode = trx.payment.splitPayment.reduce(
@@ -199,7 +236,11 @@ useEffect(() => {
         );
       } else {
         paymentMetode = trx.payment?.metode || trx.payment?.status || "-";
-        namaBank = trx.payment?.bankNama || trx.payment?.namaBank || "-";
+        namaBank =
+        trx.payment?.bankNama ||
+        trx.payment?.namaBank ||
+        bankLookup?.[trx.payment?.metode] ||
+        "-";
         nominalPaymentMetode =
           Number(trx.payment?.nominalPayment || 0) ||
           Number(trx.payment?.nominal || 0) ||
@@ -228,9 +269,8 @@ useEffect(() => {
       const sisaKembalian =
         totalBayarFix > grandTotalFix ? totalBayarFix - grandTotalFix : 0;
 
-        
-        const tokoKey = String(trx.toko || "").toUpperCase();
-        const salesKey = String(trx.user?.namaSales || "").toUpperCase();
+      const tokoKey = String(trx.toko || "").toUpperCase();
+      const salesKey = String(trx.user?.namaSales || "").toUpperCase();
 
       /* ================= PUSH HANYA 1X PER INVOICE ================= */
       if (!map[trx.invoice]) {
@@ -248,21 +288,20 @@ useEffect(() => {
           idPelanggan: trx.user?.idPelanggan || "-",
           telp: trx.user?.noTlpPelanggan || "-",
 
-          
-          storeHead:
-            storeHeadMap[tokoKey] ||
-            trx.user?.storeHead ||
-            "-",
-          
+          storeHead: storeHeadMap[tokoKey] || trx.user?.storeHead || "-",
+
           sales: trx.user?.namaSales || "-",
-          
-          salesHandle:
-            salesHandleMap[salesKey] ||
-            trx.user?.salesHandle ||
-            "-",
+
+          salesHandle: salesHandleMap[salesKey] || trx.user?.salesHandle || "-",
 
           paymentMetode,
-          namaBank,
+
+          namaBank:
+            namaBank ||
+            trx.payment?.bankNama ||
+            trx.payment?.namaBank ||
+            "-",
+          
           nominalPaymentMetode,
 
           namaMdr: trx.payment?.namaMdr || "-",
@@ -658,7 +697,6 @@ useEffect(() => {
         for (const item of trx.items) {
           if (item.imeiList?.length) {
             for (const imei of item.imeiList) {
-            
               const cleanImei = normalizeImei(imei); // 🔥 WAJIB
 
               console.log("🔥 RESTORE IMEI:", cleanImei);

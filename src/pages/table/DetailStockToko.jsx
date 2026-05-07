@@ -25,7 +25,7 @@ const normalizeImei = (v) =>
     .toLowerCase()
     .replace(/[^0-9]/g, "");
 
-    // ======================================
+// ======================================
 // 🔥 NORMALIZE TEXT
 // ======================================
 const normalizeText = (v) =>
@@ -252,60 +252,44 @@ export default function DetailStockToko() {
   // ===============================
   const supplierLookup = useMemo(() => {
     const map = {};
-  
+
     transaksi.forEach((t) => {
       if (!t) return;
-  
-      const supplier =
-        t.NAMA_SUPPLIER ||
-        t.namaSupplier ||
-        t.SUPPLIER ||
-        "-";
-  
+
+      const supplier = t.NAMA_SUPPLIER || t.namaSupplier || t.SUPPLIER || "-";
+
       // =========================
       // 🔥 IMEI
       // =========================
       if (t.IMEI) {
         const imei = String(t.IMEI).trim();
-  
-        if (
-          supplier &&
-          supplier !== "-" &&
-          supplier !== "undefined"
-        ) {
+
+        if (supplier && supplier !== "-" && supplier !== "undefined") {
           map[imei] = supplier;
         }
-  
+
         const clean = normalizeImei(imei);
-  
-        if (
-          supplier &&
-          supplier !== "-" &&
-          supplier !== "undefined"
-        ) {
+
+        if (supplier && supplier !== "-" && supplier !== "undefined") {
           map[clean] = supplier;
         }
       }
-  
+
       // =========================
       // 🔥 NON IMEI
       // =========================
-      const skuKey = `${normalizeText(
-        t.NAMA_BRAND
-      )}|${normalizeText(t.NAMA_BARANG)}`;
-  
-    // ======================================
-// 🔥 ALWAYS UPDATE SUPPLIER
-// ======================================
-if (
-  supplier &&
-  supplier !== "-" &&
-  supplier !== "undefined"
-) {
-  map[skuKey] = supplier;
-}
+      const skuKey = `${normalizeText(t.NAMA_BRAND)}|${normalizeText(
+        t.NAMA_BARANG
+      )}`;
+
+      // ======================================
+      // 🔥 ALWAYS UPDATE SUPPLIER
+      // ======================================
+      if (supplier && supplier !== "-" && supplier !== "undefined") {
+        map[skuKey] = supplier;
+      }
     });
-  
+
     return map;
   }, [transaksi]);
 
@@ -425,11 +409,26 @@ if (
       }
     });
 
+    // =====================================
+    // 🔥 TRACK REFUND IMEI TERBARU
+    // =====================================
+    const refundImeiSet = new Set();
+
+    allEvents.forEach((t) => {
+      if (String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" && t.IMEI) {
+        refundImeiSet.add(String(t.IMEI).trim());
+      }
+    });
+
     // ===============================
     // 🔥 FALLBACK detail_stock
     // ===============================
     Object.values(detailStock).forEach((s) => {
       if (!s?.imei) return;
+      // 🔥 JANGAN DUPLIKAT REFUND
+      if (refundImeiSet.has(String(s.imei).trim())) {
+        return;
+      }
       if (normalize(s.toko) !== normalize(namaToko)) return;
 
       const status = String(s.STATUS || s.status || "").toUpperCase();
@@ -600,9 +599,9 @@ if (
       // ==================================================
       // 🔥 NON IMEI
       // ==================================================
-      const skuKey = `${normalizeText(
-        t.NAMA_BRAND
-      )}|${normalizeText(t.NAMA_BARANG)}`;
+      const skuKey = `${normalizeText(t.NAMA_BRAND)}|${normalizeText(
+        t.NAMA_BARANG
+      )}`;
 
       if (!map[skuKey]) {
         map[skuKey] = {
@@ -669,7 +668,60 @@ if (
     // ==================================================
     // 🔥 FINAL FILTER
     // ==================================================
-    return Object.values(map)
+    // ==================================================
+    // 🔥 FINAL FILTER
+    // ==================================================
+
+    // =======================================
+    // 🔥 PRIORITAS REFUND TERBARU
+    // =======================================
+    const finalMap = {};
+
+    Object.values(map).forEach((r) => {
+      if (!r) return;
+
+      const key = r.imei
+        ? `IMEI_${String(r.imei).trim()}`
+        : `SKU_${r.brand}|${r.barang}`;
+
+      // =======================================
+      // 🔥 BELUM ADA
+      // =======================================
+      if (!finalMap[key]) {
+        finalMap[key] = r;
+        return;
+      }
+
+      // =======================================
+      // 🔥 REFUND LEBIH PRIORITAS
+      // =======================================
+      const oldRefund = String(finalMap[key]?.keterangan || "")
+        .toUpperCase()
+        .includes("REFUND");
+
+      const newRefund = String(r?.keterangan || "")
+        .toUpperCase()
+        .includes("REFUND");
+
+      // ✅ kalau data baru REFUND → replace
+      if (!oldRefund && newRefund) {
+        finalMap[key] = r;
+        return;
+      }
+
+      // =======================================
+      // 🔥 TANGGAL TERBARU MENANG
+      // =======================================
+      const oldDate = new Date(finalMap[key]?.tanggal || 0).getTime();
+
+      const newDate = new Date(r?.tanggal || 0).getTime();
+
+      if (newDate >= oldDate) {
+        finalMap[key] = r;
+      }
+    });
+
+    return Object.values(finalMap)
       .map((r) => {
         if (!r || Number(r.qty || 0) <= 0) {
           return null;
