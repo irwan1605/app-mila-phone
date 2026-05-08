@@ -187,30 +187,29 @@ export default function MasterPembelian() {
 
   const [editData, setEditData] = useState(null);
   const [editAutoSaving, setEditAutoSaving] = useState(false);
-const editAutoSaveRef = useRef(null);
+  const editAutoSaveRef = useRef(null);
 
-// ======================================
-// AUTO SAVE EDIT PEMBELIAN REALTIME
-// ======================================
-useEffect(() => {
-  if (!showEdit) return;
-  if (!editData?.originalKey) return;
-
-}, [
-  editData?.tanggal,
-  editData?.noDo,
-  editData?.supplier,
-  editData?.namaToko,
-  editData?.brand,
-  editData?.kategoriBrand,
-  editData?.barang,
-  editData?.hargaSup,
-  editData?.hargaSRP,
-  editData?.hargaGrosir,
-  editData?.hargaReseller,
-  editData?.totalQty,
-  editData?.imeiList,
-]);
+  // ======================================
+  // AUTO SAVE EDIT PEMBELIAN REALTIME
+  // ======================================
+  useEffect(() => {
+    if (!showEdit) return;
+    if (!editData?.originalKey) return;
+  }, [
+    editData?.tanggal,
+    editData?.noDo,
+    editData?.supplier,
+    editData?.namaToko,
+    editData?.brand,
+    editData?.kategoriBrand,
+    editData?.barang,
+    editData?.hargaSup,
+    editData?.hargaSRP,
+    editData?.hargaGrosir,
+    editData?.hargaReseller,
+    editData?.totalQty,
+    editData?.imeiList,
+  ]);
 
   useEffect(() => {
     const unsub = listenMasterSupplier((rows) => {
@@ -1190,10 +1189,39 @@ useEffect(() => {
     // ===============================
     setEditData({
       ...item,
+
       imeiList: (item.imeis || []).join("\n"),
+
+      imeiLocked: imeiTerjual,
+
       originalToko: item.namaToko,
+
       originalKey: `${item.tanggal}|${item.noDo}|${item.supplier}|${item.brand}|${item.barang}`,
-      hargaSup: item.hargaSup || 0,
+
+      hargaSup: Number(item.hargaSup || 0),
+
+      // ===============================
+      // FIX MASTER HARGA
+      // ===============================
+      masterHargaId: masterRef?.id || "",
+
+      hargaSRP: Number(
+        masterRef?.hargaSRP || masterRef?.harga?.srp || item.hargaSRP || 0
+      ),
+
+      hargaGrosir: Number(
+        masterRef?.hargaGrosir ||
+          masterRef?.harga?.grosir ||
+          item.hargaGrosir ||
+          0
+      ),
+
+      hargaReseller: Number(
+        masterRef?.hargaReseller ||
+          masterRef?.harga?.reseller ||
+          item.hargaReseller ||
+          0
+      ),
     });
 
     setShowEdit(true);
@@ -1343,7 +1371,11 @@ useEffect(() => {
       for (const im of toDelete) {
         const row = rows.find((r) => String(r.IMEI) === im);
         if (row?.id) {
-          await deleteTransaksi(row.tokoId || 1, row.id);
+          const finalTokoId = getValidTokoId(row);
+
+          if (!finalTokoId) continue;
+
+          await deleteTransaksi(finalTokoId, row.id);
         }
       }
 
@@ -1359,7 +1391,14 @@ useEffect(() => {
 
         if (alreadyExist) continue;
 
-        await addTransaksi(rows[0].tokoId || 1, {
+        const finalTokoId = getValidTokoId(rows[0]);
+
+        if (!finalTokoId) {
+          alert("❌ TOKO ID tidak ditemukan");
+          return;
+        }
+
+        await addTransaksi(finalTokoId, {
           ...rows[0],
 
           IMEI: String(im).trim(),
@@ -1379,29 +1418,43 @@ useEffect(() => {
       // =========================
       for (const r of rows) {
         if (toKeep.includes(String(r.IMEI))) {
-       await updateTransaksi(r.tokoId || 1, r.id, {
-  ...r,
+          const finalTokoId = getValidTokoId(r);
 
-  TANGGAL_TRANSAKSI: editData.tanggal,
-  NO_INVOICE: editData.noDo,
+          if (!finalTokoId) {
+            console.error("TOKO ID INVALID:", r);
+            continue;
+          }
 
-  NAMA_SUPPLIER: editData.supplier,
-  NAMA_TOKO: newToko,
+          await updateTransaksi(finalTokoId, r.id, {
+            ...r,
 
-  NAMA_BRAND: editData.brand,
-  KATEGORI_BRAND: editData.kategoriBrand,
-  NAMA_BARANG: editData.barang,
+            TANGGAL_TRANSAKSI: editData.tanggal,
+            NO_INVOICE: editData.noDo,
 
-  HARGA_SUPLAYER: Number(editData.hargaSup),
+            NAMA_SUPPLIER: editData.supplier,
+            NAMA_TOKO: newToko,
 
-  QTY: Number(editData.totalQty),
+            NAMA_BRAND: editData.brand,
+            KATEGORI_BRAND: editData.kategoriBrand,
+            NAMA_BARANG: editData.barang,
 
-  TOTAL:
-    Number(editData.hargaSup || 0) *
-    Number(editData.totalQty || 0),
+            IMEI: String(r.IMEI || "").trim(),
 
-  UPDATED_AT: Date.now(),
-});
+            // 🔥 IMEI WAJIB 1
+            QTY: 1,
+
+            HARGA_SUPLAYER: Number(editData.hargaSup || 0),
+
+            HARGA_SRP: Number(editData.hargaSRP || 0),
+            HARGA_GROSIR: Number(editData.hargaGrosir || 0),
+            HARGA_RESELLER: Number(editData.hargaReseller || 0),
+
+            HARGA_UNIT: Number(editData.hargaSup || 0),
+
+            TOTAL: Number(editData.hargaSup || 0),
+
+            UPDATED_AT: Date.now(),
+          });
         }
       }
     }
@@ -1426,11 +1479,39 @@ useEffect(() => {
     if (!isKategoriImei) {
       const r = rows[0];
 
-      await updateTransaksi(r.tokoId || 1, r.id, {
+      const finalTokoId = getValidTokoId(r);
+
+      if (!finalTokoId) {
+        alert("❌ TOKO ID tidak ditemukan");
+        return;
+      }
+
+      await updateTransaksi(finalTokoId, r.id, {
         ...r,
-        QTY: Number(editData.totalQty),
-        TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
+
         TANGGAL_TRANSAKSI: editData.tanggal,
+        NO_INVOICE: editData.noDo,
+
+        NAMA_SUPPLIER: editData.supplier,
+        NAMA_TOKO: newToko,
+
+        NAMA_BRAND: editData.brand,
+        KATEGORI_BRAND: editData.kategoriBrand,
+        NAMA_BARANG: editData.barang,
+
+        QTY: Number(editData.totalQty || 0),
+
+        HARGA_SUPLAYER: Number(editData.hargaSup || 0),
+
+        HARGA_SRP: Number(editData.hargaSRP || 0),
+        HARGA_GROSIR: Number(editData.hargaGrosir || 0),
+        HARGA_RESELLER: Number(editData.hargaReseller || 0),
+
+        HARGA_UNIT: Number(editData.hargaSup || 0),
+
+        TOTAL: Number(editData.hargaSup || 0) * Number(editData.totalQty || 0),
+
+        UPDATED_AT: Date.now(),
       });
     }
 
@@ -1446,9 +1527,7 @@ useEffect(() => {
       diffQty,
     });
 
-   
-
-// jangan auto close modal
+    // jangan auto close modal
     setShowEdit(false);
   };
 
