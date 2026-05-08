@@ -911,40 +911,69 @@ export default function MasterPembelian() {
     return errors;
   };
 
-  const validateImeisEdit = (imeiLines, originalGroupKey) => {
+  const validateImeisEdit = (imeiLines, originalGroupKey, currentRows = []) => {
     const errors = [];
+
+    // =====================================
+    // DUPLIKAT DI INPUT SENDIRI
+    // =====================================
     const seen = new Set();
 
     for (const im of imeiLines) {
-      if (seen.has(im)) {
-        errors.push(`IMEI / No MESIN duplikat di input: ${im}`);
+      const clean = String(im || "").trim();
+
+      if (seen.has(clean)) {
+        errors.push(`IMEI / No MESIN duplikat di input: ${clean}`);
       }
-      seen.add(im);
+
+      seen.add(clean);
     }
+
     if (errors.length) return errors;
 
+    // =====================================
+    // AMBIL ID ROW YANG SEDANG DIEDIT
+    // =====================================
+    const currentIds = new Set(currentRows.map((r) => String(r.id || "")));
+
+    // =====================================
+    // VALIDASI KE DATABASE
+    // =====================================
     for (const im of imeiLines) {
+      const clean = String(im || "").trim();
+
       const conflict = (allTransaksi || []).find((t) => {
         const tImei = String(t.IMEI || "").trim();
-        if (!tImei || tImei !== im) return false;
 
-        const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
-          t.NAMA_SUPPLIER || ""
-        }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+        if (!tImei) return false;
 
-        if (k === originalGroupKey) return false;
+        // beda imei
+        if (tImei !== clean) return false;
+
+        // skip data yg sedang diedit
+        if (currentIds.has(String(t.id || ""))) {
+          return false;
+        }
+
+        // hanya cek pembelian
+        if (String(t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") {
+          return false;
+        }
+
         return true;
       });
 
       if (conflict) {
         errors.push(
-          `IMEI / No MESIN ${im} sudah dipakai di ${conflict.NAMA_BRAND} - ${
+          `IMEI / No MESIN ${clean} sudah dipakai di ${conflict.NAMA_BRAND} - ${
             conflict.NAMA_BARANG
           } (Supplier: ${conflict.NAMA_SUPPLIER || "-"})`
         );
+
         break;
       }
     }
+
     return errors;
   };
 
@@ -1196,7 +1225,14 @@ export default function MasterPembelian() {
 
       originalToko: item.namaToko,
 
-      originalKey: `${item.tanggal}|${item.noDo}|${item.supplier}|${item.brand}|${item.barang}`,
+      originalKey: makePembelianKey({
+        TANGGAL_TRANSAKSI: item.tanggal,
+        NO_INVOICE: item.noDo,
+        NAMA_SUPPLIER: item.supplier,
+        NAMA_TOKO: item.namaToko,
+        NAMA_BRAND: item.brand,
+        NAMA_BARANG: item.barang,
+      }),
 
       hargaSup: Number(item.hargaSup || 0),
 
@@ -1242,9 +1278,7 @@ export default function MasterPembelian() {
     // ===============================
     const rows = (allTransaksi || []).filter((t) => {
       if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return false;
-      const k = `${t.TANGGAL_TRANSAKSI || ""}|${t.NO_INVOICE || ""}|${
-        t.NAMA_SUPPLIER || ""
-      }|${t.NAMA_BRAND || ""}|${t.NAMA_BARANG || ""}`;
+      const k = makePembelianKey(t);
       return k === editData.originalKey;
     });
 
@@ -1292,18 +1326,13 @@ export default function MasterPembelian() {
     let imeis = [];
     let newQty = originalQty;
 
-    // ===============================
-    // UPDATE QTY (DELTA)
-    // ===============================
-    const diffQty = newQty - originalQty;
-
     if (isKategoriImei) {
       imeis = String(editData.imeiList || "")
         .split("\n")
         .map((x) => x.trim())
         .filter(Boolean);
 
-      const err = validateImeisEdit(imeis, editData.originalKey);
+      const err = validateImeisEdit(imeis, editData.originalKey, rows);
       if (err.length) {
         alert(err.join("\n"));
         return;
@@ -1314,6 +1343,11 @@ export default function MasterPembelian() {
       // 🔥 SEMUA NON IMEI MASUK SINI
       newQty = Number(editData.totalQty || originalQty);
     }
+
+    // ===============================
+    // UPDATE QTY (DELTA)
+    // ===============================
+    const diffQty = newQty - originalQty;
 
     // ===============================
     // PINDAH TOKO (JIKA BERUBAH)
@@ -1383,11 +1417,18 @@ export default function MasterPembelian() {
       // TAMBAH IMEI BARU
       // =========================
       for (const im of toAdd) {
-        const alreadyExist = (allTransaksi || []).some(
-          (x) =>
-            String(x.IMEI || "").trim() === String(im).trim() &&
-            (x.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN"
-        );
+        const alreadyExist = (allTransaksi || []).some((x) => {
+          if (String(x.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") {
+            return false;
+          }
+
+          // skip row lama yg sedang diedit
+          if (rows.some((r) => String(r.id) === String(x.id))) {
+            return false;
+          }
+
+          return String(x.IMEI || "").trim() === String(im).trim();
+        });
 
         if (alreadyExist) continue;
 
@@ -1397,9 +1438,27 @@ export default function MasterPembelian() {
           alert("❌ TOKO ID tidak ditemukan");
           return;
         }
+        // =====================================
+        // FIX DUPLIKAT ID FIREBASE
+        // =====================================
+        const cleanRow = { ...rows[0] };
+
+        delete cleanRow.id;
 
         await addTransaksi(finalTokoId, {
-          ...rows[0],
+          ...cleanRow,
+
+          id: undefined,
+
+          TANGGAL_TRANSAKSI: editData.tanggal,
+          NO_INVOICE: editData.noDo,
+
+          NAMA_SUPPLIER: editData.supplier,
+          NAMA_TOKO: newToko,
+
+          NAMA_BRAND: editData.brand,
+          KATEGORI_BRAND: editData.kategoriBrand,
+          NAMA_BARANG: editData.barang,
 
           IMEI: String(im).trim(),
 
@@ -1427,6 +1486,9 @@ export default function MasterPembelian() {
 
           await updateTransaksi(finalTokoId, r.id, {
             ...r,
+
+            LAST_EDIT: Date.now(),
+            EDIT_BY: "SYSTEM",
 
             TANGGAL_TRANSAKSI: editData.tanggal,
             NO_INVOICE: editData.noDo,
@@ -1457,20 +1519,6 @@ export default function MasterPembelian() {
           });
         }
       }
-    }
-
-    // ===============================
-    // NON IMEI → UPDATE QTY LANGSUNG
-    // ===============================
-    if (!isKategoriImei) {
-      const r = rows[0];
-
-      await updateTransaksi(r.tokoId || 1, r.id, {
-        ...r,
-        QTY: Number(editData.totalQty),
-        TOTAL: Number(editData.hargaSup) * Number(editData.totalQty),
-        TANGGAL_TRANSAKSI: editData.tanggal,
-      });
     }
 
     // ===============================
@@ -1526,6 +1574,10 @@ export default function MasterPembelian() {
       newQty,
       diffQty,
     });
+
+    setEditData(null);
+
+    await new Promise((r) => setTimeout(r, 1200));
 
     // jangan auto close modal
     setShowEdit(false);
