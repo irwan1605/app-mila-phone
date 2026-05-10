@@ -1422,15 +1422,21 @@ export default function MasterPembelian() {
             return false;
           }
 
-          // skip row lama yg sedang diedit
-          if (rows.some((r) => String(r.id) === String(x.id))) {
+          const isCurrentRow = rows.some(
+            (r) => String(r.id || "") === String(x.id || "")
+          );
+
+          if (isCurrentRow) {
             return false;
           }
 
-          return String(x.IMEI || "").trim() === String(im).trim();
+          return String(x.IMEI || "").trim() === String(im || "").trim();
         });
 
-        if (alreadyExist) continue;
+        if (alreadyExist) {
+          console.warn("IMEI SUDAH ADA:", im);
+          continue;
+        }
 
         const finalTokoId = getValidTokoId(rows[0]);
 
@@ -1438,6 +1444,7 @@ export default function MasterPembelian() {
           alert("❌ TOKO ID tidak ditemukan");
           return;
         }
+
         // =====================================
         // FIX DUPLIKAT ID FIREBASE
         // =====================================
@@ -1460,15 +1467,32 @@ export default function MasterPembelian() {
           KATEGORI_BRAND: editData.kategoriBrand,
           NAMA_BARANG: editData.barang,
 
-          IMEI: String(im).trim(),
+          IMEI: String(im || "").trim(),
 
           QTY: 1,
 
+          HARGA_SUPLAYER: Number(editData.hargaSup || 0),
+
+          HARGA_SRP: Number(editData.hargaSRP || 0),
+          HARGA_GROSIR: Number(editData.hargaGrosir || 0),
+          HARGA_RESELLER: Number(editData.hargaReseller || 0),
+
+          HARGA_UNIT: Number(editData.hargaSup || 0),
+
+          TOTAL: Number(editData.hargaSup || 0),
+
           NOMOR_UNIK: `PEMBELIAN|${editData.brand}|${editData.barang}|${String(
-            im
+            im || ""
           ).trim()}`,
 
           CREATED_AT: Date.now(),
+          UPDATED_AT: Date.now(),
+
+          LAST_EDIT: Date.now(),
+          EDIT_BY: "SYSTEM",
+
+          PAYMENT_METODE: "PEMBELIAN",
+          STATUS: "Approved",
         });
       }
 

@@ -465,7 +465,7 @@ export default function CardPenjualanToko() {
           if (!imei) throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
 
           const sold = await cekImeiSudahTerjual(imei);
-          if (sold) throw new Error(`IMEI ${imei} sudah pernah terjual`);
+          if (sold) throw new Error(`IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`);
 
           const sudahAdaDiTable = penjualanList.some(
             (trx) =>
@@ -480,7 +480,7 @@ export default function CardPenjualanToko() {
           );
 
           if (sudahAdaDiTable) {
-            throw new Error(`IMEI ${imei} sudah pernah terjual`);
+            throw new Error(`IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`);
           }
 
           await lockImeiRealtime(

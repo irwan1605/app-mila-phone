@@ -493,20 +493,43 @@ export default function SalesReport() {
 
       if (search.trim()) {
         const s = search.trim().toLowerCase();
+      
+        // =====================================
+        // 🔥 SEARCH IMEI DARI DETAIL ITEMS
+        // =====================================
+        const imeiFromItems = (r.DETAIL_ITEMS || [])
+          .flatMap((item) => item.imeiList || [])
+          .join(" ")
+          .toLowerCase();
+      
         ok =
           ok &&
-          (String(r.NO_INVOICE || "")
-            .toLowerCase()
-            .includes(s) ||
+          (
+            String(r.NO_INVOICE || "")
+              .toLowerCase()
+              .includes(s) ||
+      
             String(r.NAMA_USER || "")
               .toLowerCase()
               .includes(s) ||
+      
             String(r.NOMOR_UNIK || "")
               .toLowerCase()
               .includes(s) ||
+      
             String(r.NAMA_BARANG || "")
               .toLowerCase()
-              .includes(s));
+              .includes(s) ||
+      
+            // =====================================
+            // 🔥 SEARCH IMEI
+            // =====================================
+            String(r.IMEI || "")
+              .toLowerCase()
+              .includes(s) ||
+      
+            imeiFromItems.includes(s)
+          );
       }
 
       return ok;
@@ -743,7 +766,7 @@ export default function SalesReport() {
           <div className="flex items-center border rounded p-1">
             <FaSearch className="mx-2 text-gray-500" />
             <input
-              placeholder="Cari invoice, user, barang..."
+             placeholder="Cari IMEI, invoice, user, barang, ..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="p-1 outline-none"
