@@ -45,6 +45,9 @@ export default function TableTransferBarang({ currentRole }) {
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [filterToko, setFilterToko] = useState("");
   const [preview, setPreview] = useState(null);
+  // ================= SEARCH IMEI =================
+  // ================= SEARCH UNIVERSAL =================
+  const [searchText, setSearchText] = useState("");
 
   const [soldImeis, setSoldImeis] = useState([]);
 
@@ -350,21 +353,64 @@ export default function TableTransferBarang({ currentRole }) {
   const filteredRows = useMemo(() => {
     const filtered = rowsByToko.filter((r) => {
       // =========================
-      // FILTER STATUS (EXISTING)
+      // 🔥 FILTER STATUS
       // =========================
       const matchStatus = filterStatus === "ALL" || r.status === filterStatus;
 
       // =========================
-      // 🔥 FILTER TOKO (NEW)
+      // 🔥 FILTER TOKO
       // =========================
       const matchToko =
         !filterToko || r.tokoPengirim === filterToko || r.ke === filterToko;
 
-      return matchStatus && matchToko;
+      // =========================
+      // 🔥 UNIVERSAL SEARCH
+      // =========================
+      const s = String(searchText || "")
+        .toLowerCase()
+        .trim();
+
+      const matchSearch =
+        !s ||
+        // =========================
+        // 🔥 SEARCH IMEI
+        // =========================
+        (Array.isArray(r.imeis) &&
+          r.imeis.some((im) =>
+            String(im || "")
+              .toLowerCase()
+              .includes(s)
+          )) ||
+        // =========================
+        // 🔥 SEARCH NO DO
+        // =========================
+        String(r.noDo || "")
+          .toLowerCase()
+          .includes(s) ||
+        // =========================
+        // 🔥 SEARCH NO SURAT JALAN
+        // =========================
+        String(r.noSuratJalan || "")
+          .toLowerCase()
+          .includes(s) ||
+        // =========================
+        // 🔥 SEARCH BARANG
+        // =========================
+        String(r.barang || "")
+          .toLowerCase()
+          .includes(s) ||
+        // =========================
+        // 🔥 SEARCH BRAND
+        // =========================
+        String(r.brand || "")
+          .toLowerCase()
+          .includes(s);
+
+      return matchStatus && matchToko && matchSearch;
     });
 
     // =========================
-    // 🔥 DEDUPLICATE (TETAP)
+    // 🔥 DEDUPLICATE
     // =========================
     const map = new Map();
 
@@ -384,21 +430,29 @@ export default function TableTransferBarang({ currentRole }) {
         map.set(key, r);
       } else {
         const timeA = existing.createdAt || existing.approvedAt || 0;
+
         const timeB = r.createdAt || r.approvedAt || 0;
 
+        // =========================
+        // 🔥 AMBIL DATA TERBARU
+        // =========================
         if (timeB > timeA) {
           map.set(key, r);
         }
       }
     });
 
+    // =========================
+    // 🔥 SORT TERBARU
+    // =========================
     return Array.from(map.values()).sort((a, b) => {
       const timeA = a.createdAt || a.approvedAt || 0;
+
       const timeB = b.createdAt || b.approvedAt || 0;
 
       return timeB - timeA;
     });
-  }, [rowsByToko, filterStatus, filterToko]);
+  }, [rowsByToko, filterStatus, filterToko, searchText]);
 
   // ===============================
   // HITUNG DATA PAGINATION
@@ -411,25 +465,25 @@ export default function TableTransferBarang({ currentRole }) {
   const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
 
   // ================= GET ALL DO ITEMS (RAW FIREBASE) =================
-const getAllDoItems = async (noDo) => {
-  const snap = await get(ref(db, "transfer_barang"));
-  const result = [];
+  const getAllDoItems = async (noDo) => {
+    const snap = await get(ref(db, "transfer_barang"));
+    const result = [];
 
-  snap.forEach((c) => {
-    const val = c.val();
-    if (!val) return;
+    snap.forEach((c) => {
+      const val = c.val();
+      if (!val) return;
 
-    if (String(val.noDo || "").trim() === String(noDo).trim()) {
-      result.push({
-        id: c.key,
-        ...val,
-        imeis: Array.isArray(val.imeis) ? val.imeis : [],
-      });
-    }
-  });
+      if (String(val.noDo || "").trim() === String(noDo).trim()) {
+        result.push({
+          id: c.key,
+          ...val,
+          imeis: Array.isArray(val.imeis) ? val.imeis : [],
+        });
+      }
+    });
 
-  return result;
-};
+    return result;
+  };
 
   return (
     <div
@@ -441,33 +495,60 @@ const getAllDoItems = async (noDo) => {
       </h3>
 
       <div className="hover:bg-indigo-50 transition-colors p-2 flex gap-3 flex-wrap">
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="input max-w-xs"
-        >
-          <option value="ALL">SEMUA</option>
-          <option value="Pending">Pendding</option>
-          <option value="Approved">Approved</option>
-          <option value="Rejected">Rejected</option>
-          <option value="Voided">Voided</option>
-        </select>
+        <div>
+          <label className="text-xs font-semibold">Pilih Status</label>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="input max-w-xs"
+          >
+            <option value="ALL">SEMUA</option>
+            <option value="Pending">Pendding</option>
+            <option value="Approved">Approved</option>
+            <option value="Rejected">Rejected</option>
+            <option value="Voided">Voided</option>
+          </select>
+        </div>
 
-        <select
-          value={filterToko}
+        <div>
+          <label className="text-xs font-semibold">Pilih Toko</label>
+          <select
+            value={filterToko}
+            onChange={(e) => {
+              setFilterToko(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="input max-w-xs"
+          >
+            <option value="">SEMUA TOKO</option>
+            {tokoList.map((t, i) => (
+              <option key={i} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+
+
+        <input
+          type="text"
+          placeholder="Cari IMEI, Invoice, Barang..."
+          value={searchText}
           onChange={(e) => {
-            setFilterToko(e.target.value);
+            setSearchText(e.target.value);
             setCurrentPage(1);
           }}
-          className="input max-w-xs"
-        >
-          <option value="">SEMUA TOKO</option>
-          {tokoList.map((t, i) => (
-            <option key={i} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+          className="
+    border border-slate-300
+    rounded-xl
+    px-4 py-2
+    text-sm
+    w-[320px]
+    focus:outline-none
+    focus:ring-2
+    focus:ring-indigo-400
+  "
+        />
 
         <button
           onClick={handleExportExcel}
@@ -670,35 +751,45 @@ const getAllDoItems = async (noDo) => {
                         disabled={!canPrint}
                         onClick={async () => {
                           if (!canPrint) return;
-                        
+
                           try {
                             let sjId = r.suratJalanId;
-                        
+
                             // 🔥 AMBIL SEMUA DATA DO LANGSUNG DARI FIREBASE (BUKAN DARI rows)
                             const snap = await get(ref(db, "transfer_barang"));
                             const sameDoRows = [];
-                        
+
                             snap.forEach((c) => {
                               const val = c.val();
                               if (!val) return;
-                        
-                              if (String(val.noDo || "").trim() === String(r.noDo || "").trim()) {
+
+                              if (
+                                String(val.noDo || "").trim() ===
+                                String(r.noDo || "").trim()
+                              ) {
                                 sameDoRows.push({
                                   id: c.key,
                                   ...val,
-                                  imeis: Array.isArray(val.imeis) ? val.imeis : [],
+                                  imeis: Array.isArray(val.imeis)
+                                    ? val.imeis
+                                    : [],
                                 });
                               }
                             });
-                        
-                            console.log("🔥 TOTAL DO ITEMS:", sameDoRows.length);
-                        
+
+                            console.log(
+                              "🔥 TOTAL DO ITEMS:",
+                              sameDoRows.length
+                            );
+
                             // 🔥 GABUNGKAN SEMUA ITEM (TANPA FILTER)
                             const allItems = [];
-                        
+
                             sameDoRows.forEach((item) => {
-                              const imeis = Array.isArray(item.imeis) ? item.imeis : [];
-                        
+                              const imeis = Array.isArray(item.imeis)
+                                ? item.imeis
+                                : [];
+
                               allItems.push({
                                 brand: item.brand || "-",
                                 barang: item.barang || "-",
@@ -711,21 +802,27 @@ const getAllDoItems = async (noDo) => {
                                     : 1, // 🔥 WAJIB ADA (BIAR TIDAK HILANG)
                               });
                             });
-                        
+
                             // 🔥 OPTIONAL: SORT BIAR RAPI
-                            allItems.sort((a, b) => a.barang.localeCompare(b.barang));
-                        
+                            allItems.sort((a, b) =>
+                              a.barang.localeCompare(b.barang)
+                            );
+
                             // 🔥 TOTAL FINAL
-                            const totalQty = allItems.reduce((sum, item) => sum + item.qty, 0);
-                        
+                            const totalQty = allItems.reduce(
+                              (sum, item) => sum + item.qty,
+                              0
+                            );
+
                             console.log("🔥 FINAL ITEMS:", allItems);
-                        
+
                             // 🔥 CEK / BUAT NO SURAT JALAN
                             const noSuratJalanFix =
-                              r.noSuratJalan && String(r.noSuratJalan).trim() !== ""
+                              r.noSuratJalan &&
+                              String(r.noSuratJalan).trim() !== ""
                                 ? r.noSuratJalan
                                 : `SJ-${Date.now()}`;
-                        
+
                             // 🔥 JIKA SUDAH ADA → UPDATE (BIAR SELALU SYNC)
                             if (sjId) {
                               await update(ref(db, `surat_jalan/${sjId}`), {
@@ -736,7 +833,7 @@ const getAllDoItems = async (noDo) => {
                             } else {
                               // 🔥 BUAT BARU
                               const newRef = push(ref(db, "surat_jalan"));
-                        
+
                               const dataSuratJalan = {
                                 noDo: r.noDo,
                                 noSuratJalan: noSuratJalanFix,
@@ -744,27 +841,31 @@ const getAllDoItems = async (noDo) => {
                                 pengirim: r.pengirim,
                                 tokoPengirim: r.tokoPengirim,
                                 tokoTujuan: r.ke,
-                        
+
                                 items: allItems,
                                 totalQty,
-                        
-                                status: r.status === "Approved" ? "FINAL" : "DRAFT",
+
+                                status:
+                                  r.status === "Approved" ? "FINAL" : "DRAFT",
                                 createdAt: Date.now(),
                               };
-                        
+
                               await update(newRef, dataSuratJalan);
-                        
+
                               sjId = newRef.key;
-                        
+
                               // 🔥 SIMPAN KE SEMUA ROW DO
                               for (const item of sameDoRows) {
-                                await update(ref(db, `transfer_barang/${item.id}`), {
-                                  suratJalanId: sjId,
-                                  noSuratJalan: noSuratJalanFix,
-                                });
+                                await update(
+                                  ref(db, `transfer_barang/${item.id}`),
+                                  {
+                                    suratJalanId: sjId,
+                                    noSuratJalan: noSuratJalanFix,
+                                  }
+                                );
                               }
                             }
-                        
+
                             // 🔥 NAVIGATE KE PRINT
                             navigate(`/surat-jalan/${sjId}`);
                           } catch (err) {
