@@ -250,7 +250,17 @@ export default function MasterPembelian() {
     const unsub =
       typeof listenAllTransaksi === "function"
         ? listenAllTransaksi((rows) => {
-            setAllTransaksi(rows || []);
+            // =====================================
+            // FILTER DATA INVALID
+            // =====================================
+            const cleanRows = (rows || []).filter(
+              (r) =>
+                r &&
+                r.id &&
+                String(r.PAYMENT_METODE || "").toUpperCase() !== "VOID DELETE"
+            );
+
+            setAllTransaksi(cleanRows);
           })
         : null;
 
@@ -694,6 +704,14 @@ export default function MasterPembelian() {
 
       alert("✅ Pembelian berhasil disimpan ke MASTER PEMBELIAN");
 
+      // =====================================
+      // FORCE REALTIME REFRESH
+      // =====================================
+      setSearch("");
+      setCurrentPage(1);
+
+      await new Promise((r) => setTimeout(r, 500));
+
       // 🔥 RESET SEMUA
       setDraftItems([]);
       setShowDraftTable(false);
@@ -880,23 +898,55 @@ export default function MasterPembelian() {
     return filteredPurchases.slice(start, start + itemsPerPage);
   }, [filteredPurchases, currentPage]);
 
-  const validateImeisNew = (imeiLines) => {
+  const validateImeisNew = (imeiLines = []) => {
     const errors = [];
+
+    // =====================================
+    // NORMALIZE
+    // =====================================
+    const cleanImeis = imeiLines
+      .map((x) => String(x || "").trim())
+      .filter(Boolean);
+
+    // =====================================
+    // DUPLIKAT DI INPUT SENDIRI
+    // =====================================
     const seen = new Set();
 
-    for (const im of imeiLines) {
+    for (const im of cleanImeis) {
       if (seen.has(im)) {
         errors.push(`IMEI / No MESIN duplikat di input: ${im}`);
       }
+
       seen.add(im);
     }
+
     if (errors.length) return errors;
 
-    for (const im of imeiLines) {
+    // =====================================
+    // VALIDASI KE DATABASE
+    // HANYA CEK PEMBELIAN VALID
+    // =====================================
+    for (const im of cleanImeis) {
       const conflict = (allTransaksi || []).find((t) => {
-        const tImei = String(t.IMEI || "").trim();
-        if (!tImei) return false;
-        return tImei === im;
+        // skip data kosong
+        if (!t?.id) return false;
+
+        // hanya pembelian
+        if (String(t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") {
+          return false;
+        }
+
+        // skip void delete
+        if (String(t.STATUS || "").toUpperCase() === "VOID") {
+          return false;
+        }
+
+        const dbImei = String(t.IMEI || "").trim();
+
+        if (!dbImei) return false;
+
+        return dbImei === im;
       });
 
       if (conflict) {
@@ -905,9 +955,11 @@ export default function MasterPembelian() {
             conflict.NAMA_BARANG
           } (Supplier: ${conflict.NAMA_SUPPLIER || "-"})`
         );
+
         break;
       }
     }
+
     return errors;
   };
 
@@ -1824,7 +1876,15 @@ export default function MasterPembelian() {
     // ===============================
     const namaToko = tokoTujuan;
 
-    const tokoObj = masterToko.find((t) => t.namaToko === namaToko);
+    const tokoObj = masterToko.find(
+      (t) =>
+        String(t.nama || t.namaToko || "")
+          .trim()
+          .toUpperCase() ===
+        String(namaToko || "")
+          .trim()
+          .toUpperCase()
+    );
 
     if (!tokoObj) {
       alert("❌ Toko tidak ditemukan di Master Toko");
