@@ -149,6 +149,11 @@ export default function TablePenjualan({ data = [] }) {
 
   const refundLock = useRef({});
 
+  // ======================================
+  // 🔥 GLOBAL REFUND LOCK
+  // ======================================
+  const refundProcessRef = useRef(new Set());
+
   const storeHeadMap = useMemo(() => {
     const map = {};
     masterSH.forEach((sh) => {
@@ -219,14 +224,9 @@ export default function TablePenjualan({ data = [] }) {
           .map((p) => p.metode)
           .join(" + ");
 
-          namaBank = trx.payment.splitPayment
+        namaBank = trx.payment.splitPayment
           .map((p) => {
-            return (
-              p.bankNama ||
-              p.namaBank ||
-              bankLookup?.[p.metode] ||
-              "-"
-            );
+            return p.bankNama || p.namaBank || bankLookup?.[p.metode] || "-";
           })
           .join(" + ");
 
@@ -237,10 +237,10 @@ export default function TablePenjualan({ data = [] }) {
       } else {
         paymentMetode = trx.payment?.metode || trx.payment?.status || "-";
         namaBank =
-        trx.payment?.bankNama ||
-        trx.payment?.namaBank ||
-        bankLookup?.[trx.payment?.metode] ||
-        "-";
+          trx.payment?.bankNama ||
+          trx.payment?.namaBank ||
+          bankLookup?.[trx.payment?.metode] ||
+          "-";
         nominalPaymentMetode =
           Number(trx.payment?.nominalPayment || 0) ||
           Number(trx.payment?.nominal || 0) ||
@@ -297,11 +297,8 @@ export default function TablePenjualan({ data = [] }) {
           paymentMetode,
 
           namaBank:
-            namaBank ||
-            trx.payment?.bankNama ||
-            trx.payment?.namaBank ||
-            "-",
-          
+            namaBank || trx.payment?.bankNama || trx.payment?.namaBank || "-",
+
           nominalPaymentMetode,
 
           namaMdr: trx.payment?.namaMdr || "-",
@@ -581,10 +578,26 @@ export default function TablePenjualan({ data = [] }) {
       return;
     }
 
-    // ===============================
-    // 🔥 1. HARD LOCK (SYNC)
-    // ===============================
-    if (refundLock.current[row.id]) return;
+    // ======================================
+    // 🔥 HARD LOCK GLOBAL FINAL
+    // ======================================
+    const refundKey = row.invoice || row.id;
+
+    // 🔥 BLOCK DOUBLE CLICK
+    if (refundProcessRef.current.has(refundKey)) {
+      console.log("⛔ REFUND MASIH DIPROSES");
+      return;
+    }
+
+    // 🔥 LOCK SEKARANG
+    refundProcessRef.current.add(refundKey);
+
+    // 🔥 LEGACY LOCK
+    if (refundLock.current[row.id]) {
+      refundProcessRef.current.delete(refundKey);
+      return;
+    }
+
     refundLock.current[row.id] = true;
 
     try {
@@ -610,23 +623,28 @@ export default function TablePenjualan({ data = [] }) {
       }
 
       // ===============================
-      // 🔥 3. INSTANT UI UPDATE (NEW)
+      // 🔥 CONFIRM DULU
       // ===============================
-      // 🔥 langsung hilang dari table TANPA nunggu backend
-      setInstantRefund((prev) => ({
-        ...prev,
-        [row.invoice]: true,
-      }));
+      const ok = window.confirm("Yakin ingin REFUND?");
+
+      if (!ok) {
+        refundProcessRef.current.delete(refundKey);
+        refundLock.current[row.id] = false;
+        return;
+      }
 
       // ===============================
-      // 🔥 4. LOCK UI
+      // 🔥 LOCK UI
       // ===============================
       setRefundLoading(row.id);
 
       // ===============================
-      // 🔥 5. CONFIRM
+      // 🔥 INSTANT UI UPDATE
       // ===============================
-      const ok = window.confirm("Yakin ingin REFUND?");
+      setInstantRefund((prev) => ({
+        ...prev,
+        [row.invoice]: true,
+      }));
       if (!ok) {
         // rollback kalau cancel
         setInstantRefund((prev) => {
@@ -682,15 +700,22 @@ export default function TablePenjualan({ data = [] }) {
       }));
 
       // ===============================
-      // 🔥 KEMBALIKAN STOK (FIX FINAL)
+      // 🔥 KEMBALIKAN STOK FINAL
       // ===============================
-      if (items.length) {
-        if (items.length > 0) {
-          await tambahStokSetelahRefund({
-            toko: trx.toko,
-            items,
-          });
-        }
+
+      // 🔥 KHUSUS NON IMEI SAJA
+      const nonImeiItems = items.filter(
+        (x) => !x.imeiList || !x.imeiList.length
+      );
+
+      // ======================================
+      // 🔥 RESTORE STOCK NON IMEI
+      // ======================================
+      if (nonImeiItems.length > 0) {
+        await tambahStokSetelahRefund({
+          toko: trx.toko,
+          items: nonImeiItems,
+        });
         // ===============================
         // 🔥 BALIKIN IMEI KE detail_stock (WAJIB)
         // ===============================
@@ -721,24 +746,6 @@ export default function TablePenjualan({ data = [] }) {
         // ✅ IMEI → tulis satu-satu
         if (item.imeiList?.length) {
           for (const imei of item.imeiList) {
-            await addTransaksi(trx.tokoId, {
-              TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
-              NO_INVOICE: `REF-${Date.now()}`,
-
-              NAMA_TOKO: trx.toko,
-              NAMA_BARANG: item.namaBarang,
-              NAMA_BRAND: item.namaBrand,
-
-              IMEI: normalizeImei(imei), // 🔥 WAJIB SATU IMEI
-              QTY: 1,
-
-              PAYMENT_METODE: "REFUND",
-              STATUS: "Approved",
-              CREATED_AT: Date.now(),
-
-              SOURCE: "REFUND_BUTTON",
-              IS_REFUND: true,
-            });
           }
         }
 
@@ -785,12 +792,14 @@ export default function TablePenjualan({ data = [] }) {
       });
 
       alert("❌ Refund gagal: " + e.message);
-    } finally {
-      // ===============================
-      // 🔥 9. UNLOCK
-      // ===============================
+    }finally {
       setRefundLoading(null);
+    
       delete refundLock.current[row.id];
+    
+      refundProcessRef.current.delete(
+        row.invoice || row.id
+      );
     }
   };
   /* ================= EXPORT EXCEL ================= */

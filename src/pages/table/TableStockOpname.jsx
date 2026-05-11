@@ -9,8 +9,9 @@ export default function TableStockOpname({
   onSaveOpname,
   tableRef,
   onVoidOpname,
+  // 🔥 NEW
+  refundLoadingMap = {},
 }) {
-
   return (
     <div className="overflow-x-auto p-2" ref={tableRef}>
       <table className="w-full text-sm border">
@@ -34,24 +35,39 @@ export default function TableStockOpname({
 
         <tbody>
           {data.map((r, i) => {
-
             // ✅ stok fisik
             const fisik = Number(opnameMap[r.key] ?? "");
 
             // ✅ selisih
-            const selisih =
-              Number.isNaN(fisik) ? "" : fisik - Number(r.qty || 0);
+            const selisih = Number.isNaN(fisik)
+              ? ""
+              : fisik - Number(r.qty || 0);
 
-            // ✅ status hanya dari qty
-            const status = r.qty > 0 ? "TERSEDIA" : "TERJUAL";
+            // ======================================
+            // 🔥 REFUND FINAL STATUS
+            // ======================================
+            const isRefund =
+              String(r.lastTransaksi || "").toUpperCase() === "REFUND";
+
+            // ======================================
+            // 🔥 QTY REFUND FINAL
+            // ======================================
+            const refundQty = isRefund ? Math.max(1, Number(r.qty || 0)) : 0;
+
+            // ======================================
+            // 🔥 STATUS FINAL
+            // ======================================
+            const status = isRefund
+              ? `REFUND (${refundQty})`
+              : r.qty > 0
+              ? "TERSEDIA"
+              : "TERJUAL";
 
             return (
               <tr key={r.key} className="hover:bg-gray-50">
                 <td className="p-2 border text-center">{i + 1}</td>
 
-                <td className="p-2 border text-center">
-                  {r.tanggal || "-"}
-                </td>
+                <td className="p-2 border text-center">{r.tanggal || "-"}</td>
 
                 <td className="p-2 border">{r.toko}</td>
 
@@ -59,31 +75,29 @@ export default function TableStockOpname({
 
                 <td className="p-2 border">{r.brand}</td>
 
-                <td className="p-2 border font-medium">
-                  {r.barang}
-                </td>
+                <td className="p-2 border font-medium">{r.barang}</td>
 
                 <td className="p-2 border font-mono text-xs">
                   {r.imei || "NON-IMEI"}
                 </td>
 
                 {/* ✅ SOLD sudah tidak ada */}
-                <td className="p-2 border text-center font-bold">
-                  {status}
-                </td>
+                <td className="p-2 border text-center font-bold">{status}</td>
 
                 <td className="p-2 border text-xs text-gray-600">
                   {r.lastTransaksi === "TRANSFER_MASUK" ||
-                   r.lastTransaksi === "TRANSFER_KELUAR"
+                  r.lastTransaksi === "TRANSFER_KELUAR"
                     ? "TRANSFER BARANG"
                     : r.lastTransaksi === "REFUND"
-                    ? "REFUND"
+                    ? `REFUND BARANG (${refundQty})`
                     : "-"}
                 </td>
 
                 {/* ✅ stok dari engine */}
                 <td className="p-2 border text-center">
-                  {r.qty}
+                  {isRefund
+                    ? Math.max(1, Number(r.qty || 0))
+                    : Number(r.qty || 0)}
                 </td>
 
                 <td className="p-2 border">
