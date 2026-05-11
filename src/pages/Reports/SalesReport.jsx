@@ -22,7 +22,7 @@ import {
   deleteTransaksi,
   listenMasterStoreHead,
   listenKaryawan,
-  listenMasterPaymentMetode ,
+  listenMasterPaymentMetode,
 } from "../../services/FirebaseService";
 import { useLocation } from "react-router-dom";
 
@@ -45,9 +45,7 @@ const safe = (v) => Number(v || 0);
 const rupiah = (v) => `Rp ${safe(v).toLocaleString("id-ID")}`;
 
 const normalizePayment = (val = "") => {
-  return String(val)
-    .toUpperCase()
-    .replace(/\s+/g, "");
+  return String(val).toUpperCase().replace(/\s+/g, "");
 };
 
 export default function SalesReport() {
@@ -83,7 +81,7 @@ export default function SalesReport() {
     const unsub = listenMasterPaymentMetode((data) => {
       setMasterPayment(data || []);
     });
-  
+
     return () => unsub && unsub();
   }, []);
 
@@ -149,25 +147,28 @@ export default function SalesReport() {
 
   const resolvePaymentMetode = (val = "") => {
     if (!val || val === "-") return "-";
-  
+
     const parts = String(val).split("+");
-  
+
     const result = parts.map((p) => {
       const key = normalizePayment(p);
-  
+
       return (
         paymentMetodeMap[key] ||
-        String(p || "").toUpperCase().trim() ||
+        String(p || "")
+          .toUpperCase()
+          .trim() ||
         "-"
       );
     });
-  
+
     return result.join(" + ");
   };
 
   // ================= REALTIME =================
   useEffect(() => {
-    if (!masterSH.length || !masterKaryawan.length || !masterPayment.length) return;
+    if (!masterSH.length || !masterKaryawan.length || !masterPayment.length)
+      return;
 
     const unsub = listenPenjualan((data = []) => {
       const mapInvoice = {};
@@ -195,10 +196,12 @@ export default function SalesReport() {
         } else {
           paymentMetode = String(
             payment.metode ||
-            payment.paymentMethod ||
-            payment.jenisPembayaran ||
-            "-"
-          ).toUpperCase().trim();
+              payment.paymentMethod ||
+              payment.jenisPembayaran ||
+              "-"
+          )
+            .toUpperCase()
+            .trim();
         }
         let namaBank = "-";
         let nominalPayment = 0;
@@ -220,7 +223,6 @@ export default function SalesReport() {
             0
           );
         } else {
-        
           namaBank = payment.bankNama || "-";
           nominalPayment =
             Number(payment.nominalPayment || 0) || Number(payment.nominal || 0);
@@ -448,17 +450,17 @@ export default function SalesReport() {
 
   const paymentMetodeMap = useMemo(() => {
     const map = {};
-  
+
     masterPayment.forEach((p) => {
       (p.paymentMetode || []).forEach((m) => {
         const key = String(m || "")
           .toUpperCase()
           .replace(/\s+/g, "");
-  
+
         map[key] = m;
       });
     });
-  
+
     return map;
   }, [masterPayment]);
 
@@ -493,7 +495,7 @@ export default function SalesReport() {
 
       if (search.trim()) {
         const s = search.trim().toLowerCase();
-      
+
         // =====================================
         // 🔥 SEARCH IMEI DARI DETAIL ITEMS
         // =====================================
@@ -501,35 +503,28 @@ export default function SalesReport() {
           .flatMap((item) => item.imeiList || [])
           .join(" ")
           .toLowerCase();
-      
+
         ok =
           ok &&
-          (
-            String(r.NO_INVOICE || "")
-              .toLowerCase()
-              .includes(s) ||
-      
+          (String(r.NO_INVOICE || "")
+            .toLowerCase()
+            .includes(s) ||
             String(r.NAMA_USER || "")
               .toLowerCase()
               .includes(s) ||
-      
             String(r.NOMOR_UNIK || "")
               .toLowerCase()
               .includes(s) ||
-      
             String(r.NAMA_BARANG || "")
               .toLowerCase()
               .includes(s) ||
-      
             // =====================================
             // 🔥 SEARCH IMEI
             // =====================================
             String(r.IMEI || "")
               .toLowerCase()
               .includes(s) ||
-      
-            imeiFromItems.includes(s)
-          );
+            imeiFromItems.includes(s));
       }
 
       return ok;
@@ -617,9 +612,7 @@ export default function SalesReport() {
               // ===== PAYMENT (🔥 ONLY FIRST ROW) =====
               StatusBayar: idx === 0 ? r.STATUS_BAYAR : "",
               PaymentMetodeUser:
-              idx === 0
-                ? resolvePaymentMetode(r.PAYMENT_METODE)
-                : "",
+                idx === 0 ? resolvePaymentMetode(r.PAYMENT_METODE) : "",
 
               PaymentKredit: idx === 0 ? r.PAYMENT_KREDIT : "",
               DashboardKredit: idx === 0 ? Number(r.dashboardKredit || 0) : "",
@@ -693,8 +686,12 @@ export default function SalesReport() {
 
       {/* FILTER */}
       <div className="bg-white p-3 rounded shadow mb-4 flex flex-wrap gap-3 items-center">
+      <h2 className="text-2xl font-semibold mb-2 text-gray-800">
+            Filter Data
+          </h2>
+        
         <FaFilter className="text-gray-600" />
-
+      
         <select
           value={filterToko}
           onChange={(e) => setFilterToko(e.target.value)}
@@ -762,11 +759,15 @@ export default function SalesReport() {
           className="p-2 border rounded"
         />
 
-        <div className="ml-auto flex items-center space-x-2">
+        <div className="bg-white p-3 rounded shadow mb-2 flex flex-wrap gap-3 items-center">
+          <h2 className="text-2xl font-semibold mb-2 text-gray-800">
+            Pencarian Data
+          </h2>
+
           <div className="flex items-center border rounded p-1">
-            <FaSearch className="mx-2 text-gray-500" />
+            <FaSearch className="mx-8 text-gray-500" />
             <input
-             placeholder="Cari IMEI, invoice, user, barang, ..."
+              placeholder="Cari IMEI, invoice, user, barang, ..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="p-1 outline-none"
@@ -951,7 +952,9 @@ export default function SalesReport() {
 
                 {/* PAYMENT */}
                 <td className="p-2 border">{row.STATUS_BAYAR}</td>
-                <td className="p-2 border">{resolvePaymentMetode(row.PAYMENT_METODE)}</td>
+                <td className="p-2 border">
+                  {resolvePaymentMetode(row.PAYMENT_METODE)}
+                </td>
 
                 {/* 🔥 KREDIT */}
                 <td className="p-2 border">{row.PAYMENT_KREDIT}</td>
