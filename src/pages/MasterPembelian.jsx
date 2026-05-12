@@ -1143,7 +1143,7 @@ export default function MasterPembelian() {
 
             PAYMENT_METODE: "VOID DELETE",
 
-            KETERANGAN: "AUTO DELETE (FULL REVERSAL)",
+            KETERANGAN: "DELETE MANUAL (FULL REVERSAL)",
 
             STATUS: "APPROVED",
 
