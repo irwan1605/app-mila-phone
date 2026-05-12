@@ -56,6 +56,48 @@ const generateNoSuratJalan = () => {
     .padStart(3, "0")}`;
 };
 
+// ==========================================
+// 🔥 STATUS YANG BOLEH TRANSFER ULANG
+// ==========================================
+// ==========================================
+// 🔥 STATUS FINAL BOLEH TRANSFER ULANG
+// ==========================================
+const isImeiAllowedForTransfer = (status) => {
+  const finalStatus = String(status || "")
+    .trim()
+    .toUpperCase();
+
+  return [
+    "AVAILABLE",
+    "TRANSFER_MASUK",
+    "TRANSFER_KELUAR",
+    "OUT",
+    "READY",
+    "REFUND",
+    "PEMBELIAN",
+  ].includes(finalStatus);
+};
+
+/* ================= HELPER ================= */
+const normalize = (v) =>
+  String(v || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+
+function normalizeText(v) {
+  return String(v || "")
+    .trim()
+    .toUpperCase();
+}
+
+// ================= NORMALIZE IMEI =================
+const normalizeImei = (v) =>
+  String(v || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toUpperCase();
+
 /* ========================================================= */
 export default function TransferBarang() {
   const navigate = useNavigate();
@@ -110,21 +152,44 @@ export default function TransferBarang() {
     );
   }, [form.kategori]);
 
-  // 🔥 AMBIL DATA INVENTORY TERAKHIR (FIX STOK NYATA)
+  // ======================================================
+  // 🔥 FINAL REALTIME INVENTORY ENGINE
+  // ======================================================
+  // ======================================================
+  // 🔥 FINAL REALTIME INVENTORY ENGINE (FIX TRANSFER BERANTAI)
+  // ======================================================
   const getLatestInventoryItem = (imei) => {
     const clean = normalizeImei(imei);
 
-    const items = inventory
-      .filter((i) => normalizeImei(i.imei) === clean)
-      .sort((a, b) => {
-        const ta = a.updatedAt || a.CREATED_AT || 0;
-        const tb = b.updatedAt || b.CREATED_AT || 0;
-        return ta - tb;
-      });
+    // 🔥 ambil semua histori inventory IMEI
+    const candidates = inventory.filter(
+      (item) => normalizeImei(item?.imei) === clean
+    );
 
-    if (items.length === 0) return null;
+    if (candidates.length === 0) {
+      return null;
+    }
 
-    return items[items.length - 1]; // 🔥 ambil paling akhir
+    // 🔥 SORT PALING BARU
+    candidates.sort((a, b) => {
+      const ta =
+        a?.UPDATED_AT || a?.updatedAt || a?.CREATED_AT || a?.createdAt || 0;
+
+      const tb =
+        b?.UPDATED_AT || b?.updatedAt || b?.CREATED_AT || b?.createdAt || 0;
+
+      return tb - ta;
+    });
+
+    const latest = candidates[0];
+
+    console.log("🔥 FINAL INVENTORY FIX:", {
+      imei: clean,
+      toko: latest?.toko,
+      status: latest?.status,
+    });
+
+    return latest;
   };
 
   // ✅ OVERRIDE AMAN TANPA MERUSAK LOGIC LAMA
@@ -221,9 +286,16 @@ export default function TransferBarang() {
         // ============================================
         // 🔥 SORT TRANSAKSI BERDASARKAN WAKTU
         // ============================================
+        // =========================================
+        // 🔥 SORT BERDASARKAN WAKTU TERBARU
+        // =========================================
         trxList.sort((a, b) => {
-          const ta = a.CREATED_AT || a.createdAt || 0;
-          const tb = b.CREATED_AT || b.createdAt || 0;
+          const ta =
+            a.UPDATED_AT || a.updatedAt || a.CREATED_AT || a.createdAt || 0;
+
+          const tb =
+            b.UPDATED_AT || b.updatedAt || b.CREATED_AT || b.createdAt || 0;
+
           return ta - tb;
         });
 
@@ -235,6 +307,13 @@ export default function TransferBarang() {
             map[imei] = {
               imei,
               status: "AVAILABLE",
+              // 🔥 WAJIB
+              UPDATED_AT:
+                v.UPDATED_AT ||
+                v.updatedAt ||
+                v.CREATED_AT ||
+                v.createdAt ||
+                Date.now(),
               toko: String(v.NAMA_TOKO || "").trim(),
               namaBrand: String(v.NAMA_BRAND || "").trim(),
               namaBarang: String(v.NAMA_BARANG || "").trim(),
@@ -259,6 +338,15 @@ export default function TransferBarang() {
           if (metode === "TRANSFER_KELUAR") {
             if (map[imei].status !== "SOLD") {
               map[imei].status = "OUT";
+              // 🔥 JANGAN UBAH OWNER
+              // owner tetap toko terakhir valid
+
+              map[imei].UPDATED_AT =
+                v.UPDATED_AT ||
+                v.updatedAt ||
+                v.CREATED_AT ||
+                v.createdAt ||
+                Date.now();
             }
           }
 
@@ -266,6 +354,14 @@ export default function TransferBarang() {
             if (map[imei].status !== "SOLD") {
               map[imei].status = "AVAILABLE";
               map[imei].toko = String(v.NAMA_TOKO || "").trim();
+
+              // 🔥 UPDATE OWNER TERBARU
+              map[imei].UPDATED_AT =
+                v.UPDATED_AT ||
+                v.updatedAt ||
+                v.CREATED_AT ||
+                v.createdAt ||
+                Date.now();
             }
           }
 
@@ -390,15 +486,44 @@ export default function TransferBarang() {
           // 🔥 FIX UTAMA: JANGAN MATIKAN IMEI
           else if (metode === "TRANSFER_KELUAR") {
             if (map[imei].status !== "SOLD") {
-              map[imei].status = "AVAILABLE"; // 🔥 tetap bisa dipakai lagi
+              // 🔥 JANGAN UBAH OWNER
+              // owner tetap toko terakhir valid
+
+              map[imei].status = "OUT";
+
+              map[imei].UPDATED_AT =
+                v.UPDATED_AT ||
+                v.updatedAt ||
+                v.CREATED_AT ||
+                v.createdAt ||
+                Date.now();
             }
           }
 
-          // 🔥 PINDAH OWNER TERAKHIR
+          // 🔥 PINDAH OWNER TERAKHIR // ============================================
+          // 🔥 TRANSFER MASUK = PINDAH OWNER FINAL
+          // ============================================
           else if (metode === "TRANSFER_MASUK") {
             if (map[imei].status !== "SOLD") {
               map[imei].status = "AVAILABLE";
-              map[imei].toko = String(v.NAMA_TOKO || "").trim();
+
+              // 🔥 OWNER BARU
+              map[imei].toko = String(
+                v.NAMA_TOKO || v.toko || v.namaToko || ""
+              ).trim();
+
+              // 🔥 UPDATE WAKTU OWNER
+              map[imei].UPDATED_AT =
+                v.UPDATED_AT ||
+                v.updatedAt ||
+                v.CREATED_AT ||
+                v.createdAt ||
+                Date.now();
+
+              console.log("🔥 OWNER PINDAH:", {
+                imei,
+                ownerBaru: map[imei].toko,
+              });
             }
           }
         });
@@ -470,37 +595,62 @@ export default function TransferBarang() {
     setCurrentRole(String(roleFromLogin).toLowerCase());
   }, []);
 
-  /* ================= HELPER ================= */
-  const normalize = (v) =>
-    String(v || "")
-      .trim()
-      .replace(/\s+/g, " ")
-      .toUpperCase();
+// ======================================================
+// 🔥 FINAL OWNER ENGINE REALTIME
+// ======================================================
+const getLastInventoryOwner = (imei) => {
+  const clean = normalizeImei(imei);
 
-  // ================= NORMALIZE IMEI =================
-  const normalizeImei = (v) =>
-    String(v || "")
-      .trim()
-      .replace(/\s+/g, "")
-      .toUpperCase();
+  // =========================================
+  // 🔥 PRIORITAS 1 : TRANSFER APPROVED
+  // =========================================
+  let latestOwner = null;
+  let latestTime = 0;
 
-  const normalizeText = (v) =>
-    String(v || "")
-      .trim()
-      .toUpperCase();
+  history.forEach((trx) => {
+    if (String(trx.status || "").toUpperCase() !== "APPROVED") return;
 
-  // ======================================================
-  // 🔥 GET OWNER TERAKHIR DARI INVENTORY (TRANSFER BERANTAI)
-  // ======================================================
-  const getLastInventoryOwner = (imei) => {
-    const clean = normalizeImei(imei);
+    const imeis = (trx.imeis || []).map(normalizeImei);
 
-    const items = inventory.filter((i) => normalizeImei(i.imei) === clean);
+    if (!imeis.includes(clean)) return;
 
-    if (items.length === 0) return null;
+    const waktu =
+      trx.approvedAt ||
+      trx.updatedAt ||
+      trx.createdAt ||
+      0;
 
-    return String(items[items.length - 1].toko || "").toUpperCase();
-  };
+    if (waktu >= latestTime) {
+      latestTime = waktu;
+
+      // 🔥 TOKO TUJUAN = OWNER TERBARU
+      latestOwner = trx.ke;
+    }
+  });
+
+  // =========================================
+  // 🔥 JIKA ADA TRANSFER APPROVED
+  // =========================================
+  if (latestOwner) {
+    return normalizeText(latestOwner);
+  }
+
+  // =========================================
+  // 🔥 FALLBACK INVENTORY
+  // =========================================
+  const found = inventory.find(
+    (i) => normalizeImei(i.imei) === clean
+  );
+
+  if (!found) return null;
+
+  return normalizeText(
+    found.toko ||
+      found.NAMA_TOKO ||
+      found.namaToko ||
+      ""
+  );
+};
 
   // =======================================================
   // 🔥 OWNER TERAKHIR DARI TRANSFER APPROVED
@@ -572,25 +722,27 @@ export default function TransferBarang() {
     return lastOwner;
   };
 
-  // =======================================================
-  // 🔥 FINAL OWNER (PRIORITAS PALING BENAR)
-  // =======================================================
   const getFinalOwner = (imei) => {
     const clean = normalizeImei(imei);
-
-    // 1. PRIORITAS: inventory (REALTIME PALING VALID)
-    const invOwner = getLastInventoryOwner(clean);
-    if (invOwner) return normalize(invOwner);
-
-    // 2. PRIORITAS: transfer approved
-    const transferOwner = getApprovedTransferOwner(clean);
-    if (transferOwner) return normalize(transferOwner);
-
-    // 3. fallback lama
-    const tokoOwner = getLastOwnerFromTokoTransaksi(clean);
-    if (tokoOwner) return normalize(tokoOwner);
-
-    return null;
+  
+    // 🔥 OWNER DARI TRANSFER APPROVED
+    const transferOwner = getLastInventoryOwner(clean);
+  
+    if (transferOwner) {
+      return normalizeText(transferOwner);
+    }
+  
+    // 🔥 FALLBACK INVENTORY
+    const found = getLatestInventoryItem(clean);
+  
+    if (!found) return null;
+  
+    return normalizeText(
+      found.toko ||
+        found.NAMA_TOKO ||
+        found.namaToko ||
+        ""
+    );
   };
 
   // =======================================================
@@ -684,62 +836,88 @@ export default function TransferBarang() {
   const validateStockAndImeiOwnership = () => {
     const errors = [];
 
+    // ========================================================
+    // 🔥 NORMALIZE TOKO PENGIRIM
+    // ========================================================
+    const senderToko = normalizeText(form.tokoPengirim);
+
+    // ========================================================
+    // 🔥 LOOP VALIDASI IMEI
+    // ========================================================
     for (const imei of form.imeis || []) {
       const clean = normalizeImei(imei);
 
+      // ======================================================
+      // ❌ IMEI KOSONG
+      // ======================================================
+      if (!clean) {
+        errors.push("IMEI kosong tidak diperbolehkan");
+        continue;
+      }
+
+      // ======================================================
+      // 🔥 AMBIL INVENTORY TERBARU
+      // ======================================================
       const found = getLatestInventoryItem(clean);
 
-      // ❌ IMEI tidak ada
+      // ======================================================
+      // ❌ IMEI TIDAK ADA
+      // ======================================================
       if (!found) {
         errors.push(`IMEI ${clean} tidak ditemukan di stok`);
         continue;
       }
 
-      // ❌ jika sudah terjual
-      if (found.status === "SOLD") {
+      // ======================================================
+      // 🔥 STATUS FINAL
+      // ======================================================
+      const finalStatus = String(
+        found?.status || found?.STATUS || ""
+      ).toUpperCase();
+
+      // ======================================================
+      // ❌ SUDAH TERJUAL
+      // ======================================================
+      if (finalStatus === "SOLD") {
         errors.push(`IMEI ${clean} sudah TERJUAL`);
         continue;
       }
 
       // ======================================================
-      // 🔥 OWNER ENGINE (TANPA MERUBAH LOGIC LAMA)
+      // ❌ STATUS TIDAK VALID
       // ======================================================
+      const allowedStatus = [
+        "AVAILABLE",
+        "TRANSFER_MASUK",
+        "REFUND",
+        "PEMBELIAN",
+        "OUT",
+      ];
 
-      // 🔥 fallback owner dari inventory terbaru
-      // const lastInventoryOwner = inventory
-      //   .filter((i) => normalizeImei(i.imei) === clean)
-      //   .map((i) => String(i.toko || "").toUpperCase())
-      //   .pop();
-
-      // if (lastInventoryOwner) {
-      //   owner = lastInventoryOwner;
-      // }
-
-      // 🔥 fallback owner dari transfer APPROVED
-
-      if (!found) {
-        errors.push(`IMEI ${clean} tidak ditemukan di stok`);
-        continue;
-      }
-
-      // 🔥 OWNER FINAL HANYA DARI INVENTORY
-      const owner = String(found.toko || "").toUpperCase();
-
-      // 🔥 FINAL OWNER VALIDATION (CHAIN TRANSFER FIX)
-      if (owner !== String(form.tokoPengirim).toUpperCase()) {
+      if (!allowedStatus.includes(finalStatus)) {
         errors.push(
-          `IMEI ${clean} berada di toko ${owner}, bukan di ${form.tokoPengirim}`
+          `IMEI ${clean} status ${finalStatus} tidak bisa ditransfer`
         );
         continue;
       }
 
       // ======================================================
-      // 🔥 VALIDASI TOKO PENGIRIM
+      // 🔥 OWNER FINAL DARI INVENTORY TERBARU
       // ======================================================
+      const owner = normalizeText(
+        getFinalOwner(clean) ||
+          found?.toko ||
+          found?.NAMA_TOKO ||
+          found?.namaToko ||
+          ""
+      );
 
-      if (owner !== String(form.tokoPengirim).toUpperCase()) {
+      // ======================================================
+      // ❌ OWNER TIDAK SESUAI
+      // ======================================================
+      if (owner !== senderToko) {
         errors.push(
-          `IMEI ${clean} berada di toko ${owner}, bukan di ${form.tokoPengirim}`
+          `IMEI ${clean} berada di toko ${owner}, bukan di ${senderToko}`
         );
         continue;
       }
@@ -747,10 +925,9 @@ export default function TransferBarang() {
       // ======================================================
       // ❌ CEK PENDING TRANSFER
       // ======================================================
-
       const pendingTransfer = history.some(
         (trx) =>
-          trx.status === "Pending" &&
+          String(trx.status || "").toUpperCase() === "PENDING" &&
           (trx.imeis || []).some((im) => normalizeImei(im) === clean)
       );
 
@@ -760,9 +937,8 @@ export default function TransferBarang() {
       }
 
       // ======================================================
-      // ❌ DUPLIKAT DI DRAFT TABLE
+      // ❌ DUPLIKAT DI DRAFT
       // ======================================================
-
       const duplicateDraft = daftarTransfer.some((item) =>
         (item.imeis || []).some((im) => normalizeImei(im) === clean)
       );
@@ -771,9 +947,33 @@ export default function TransferBarang() {
         errors.push(`IMEI ${clean} sudah ada di daftar transfer`);
         continue;
       }
+
+      // ======================================================
+      // ❌ DUPLIKAT DI INPUT SENDIRI
+      // ======================================================
+      const duplicateInput =
+        (form.imeis || []).filter((im) => normalizeImei(im) === clean).length >
+        1;
+
+      if (duplicateInput) {
+        errors.push(`IMEI ${clean} duplicate di input transfer`);
+        continue;
+      }
+
+      // ======================================================
+      // 🔥 DEBUG LOG
+      // ======================================================
+      console.log("✅ VALID IMEI:", {
+        imei: clean,
+        owner,
+        status: finalStatus,
+      });
     }
 
-    return errors;
+    // ========================================================
+    // 🔥 REMOVE DUPLICATE ERROR
+    // ========================================================
+    return [...new Set(errors)];
   };
 
   // ================= HARD GLOBAL IMEI LOCK =================
@@ -787,15 +987,29 @@ export default function TransferBarang() {
     });
   };
 
-  // ================= VALIDASI STOK TOKO SENDIRI =================
+  // ================= FINAL OWNER CHECK (REALTIME INVENTORY) =================
   const isImeiFromThisStore = (imei) => {
-    const owner = getFinalOwner(imei);
+    const found = getLatestInventoryItem(imei);
 
-    const tokoLogin = normalize(form.tokoPengirim);
+    if (!found) return false;
 
-    if (!owner) return false;
+    const owner = normalizeText(
+      found.toko || found.NAMA_TOKO || found.namaToko || ""
+    );
 
-    return normalize(owner) === tokoLogin;
+    const tokoLogin = normalizeText(form.tokoPengirim);
+
+    console.log("🔥 CEK OWNER FINAL:", {
+      imei,
+      owner,
+      tokoLogin,
+      found,
+    });
+
+    // 🔥 PRIORITAS OWNER FINAL
+    const finalOwner = normalizeText(getFinalOwner(imei) || owner);
+
+    return finalOwner === tokoLogin;
   };
   // ================= IMEI LAST OWNER =================
   const getLastOwnerToko = (imei) => {
@@ -977,7 +1191,7 @@ export default function TransferBarang() {
         inventory
           .filter(
             (i) =>
-              i.status === "AVAILABLE" &&
+              isImeiAllowedForTransfer(i.status) &&
               i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
               i.kategori.toUpperCase() === form.kategori.toUpperCase()
           )
@@ -1195,7 +1409,7 @@ export default function TransferBarang() {
     return inventory
       .filter(
         (i) =>
-          i.status === "AVAILABLE" && // 🔥 hanya yang belum terjual
+          isImeiAllowedForTransfer(i.status) && // 🔥 hanya yang belum terjual
           i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
           i.namaBarang.toUpperCase() === form.barang.toUpperCase()
       )
@@ -1279,22 +1493,12 @@ export default function TransferBarang() {
       return false;
     }
 
-    if (found.status !== "AVAILABLE") {
-      alert("❌ No IMEI sudah TERJUAL dan STOCK TIDAK TERSEDIA");
+    if (!isImeiAllowedForTransfer(found.status)) {
+      alert("❌ No IMEI tidak tersedia untuk transfer");
       return false;
     }
 
     return true;
-  };
-
-  const isImeiAlreadyTransferred = (imei) => {
-    const found = inventory.find((i) => i.imei === imei);
-    if (!found) return true;
-
-    // 🔥 hanya blok kalau SOLD
-    if (found.status === "SOLD") return true;
-
-    return false;
   };
 
   // ================= FINAL IMEI VALIDATOR =================
@@ -1385,36 +1589,51 @@ export default function TransferBarang() {
   // };
 
   // ================= FINAL CLEAN IMEI VALIDATOR =================
+  // ================= FINAL CLEAN IMEI VALIDATOR =================
   const isImeiValid = (imei) => {
     const clean = normalizeImei(imei);
+
     if (!clean) return false;
 
-    const found = inventory.find((i) => normalizeImei(i.imei) === clean);
+    // 🔥 FIX FINAL
+    const found = getLatestInventoryItem(clean);
 
+    console.log("🔥 VALIDATE IMEI:", {
+      imei: clean,
+      found,
+    });
+
+    // ❌ tidak ditemukan
     if (!found) {
       alert("❌ IMEI tidak ditemukan di stok");
       return false;
     }
 
-    // ❌ jika sudah terjual
-    if (found.status === "SOLD") {
+    // 🔥 STATUS FINAL
+    const finalStatus = String(
+      found?.status || found?.STATUS || ""
+    ).toUpperCase();
+
+    // ❌ sudah terjual
+    if (finalStatus === "SOLD") {
       alert("❌ IMEI sudah TERJUAL");
       return false;
     }
 
     // ==============================
-    // STATUS YANG BOLEH TRANSFER LAGI
+    // STATUS YANG BOLEH TRANSFER
     // ==============================
     const allowedStatus = [
       "AVAILABLE",
       "TRANSFER_MASUK",
       "REFUND",
       "PEMBELIAN",
+      "READY",
       "OUT",
     ];
 
-    if (!allowedStatus.includes(found.status)) {
-      alert("❌ IMEI tidak tersedia untuk transfer");
+    if (!allowedStatus.includes(finalStatus)) {
+      alert(`❌ No IMEI tidak tersedia untuk transfer (${finalStatus})`);
       return false;
     }
 
@@ -1424,7 +1643,7 @@ export default function TransferBarang() {
       return false;
     }
 
-    // ❌ duplikat di daftar transfer
+    // ❌ duplikat draft
     if (
       daftarTransfer.some((item) =>
         (item.imeis || []).some((im) => normalizeImei(im) === clean)
@@ -1434,10 +1653,10 @@ export default function TransferBarang() {
       return false;
     }
 
-    // ❌ IMEI sedang pending di transfer lain
+    // ❌ pending transfer lain
     const imeiPending = history.some(
       (trx) =>
-        trx.status === "Pending" &&
+        String(trx.status || "").toUpperCase() === "PENDING" &&
         (trx.imeis || []).some((im) => normalizeImei(im) === clean)
     );
 
@@ -1447,17 +1666,6 @@ export default function TransferBarang() {
     }
 
     return true;
-  };
-
-  // 🔥 STATUS YANG BOLEH TRANSFER ULANG
-  const isImeiAllowedForTransfer = (status) => {
-    return [
-      "AVAILABLE",
-      "TRANSFER_MASUK",
-      "REFUND",
-      "PEMBELIAN",
-      "OUT",
-    ].includes(String(status || "").toUpperCase());
   };
 
   const handleAddImeiAuto = () => {
@@ -1492,6 +1700,7 @@ export default function TransferBarang() {
 
     // 🔥 CEK STATUS JANGAN SAMPAI SUDAH SOLD
     const latest = getLatestInventoryItem(im);
+    
 
     if (latest?.status === "SOLD") {
       alert("❌ IMEI sudah terjual, tidak bisa transfer");
@@ -1507,28 +1716,77 @@ export default function TransferBarang() {
     }
 
     // ================= 🔥 OWNER FINAL (FIX) =================
-    const realOwner = String(found?.toko || "").toUpperCase();
+    // ========================================
+    // 🔥 FINAL OWNER ENGINE (WAJIB)
+    // ========================================
+    const realOwner = normalizeText(
+      getFinalOwner(im) ||
+        found?.toko ||
+        found?.NAMA_TOKO ||
+        found?.namaToko ||
+        ""
+    );
 
-    if (realOwner !== String(form.tokoPengirim).toUpperCase()) {
+    console.log("🔥 FINAL OWNER CHECK:", {
+      imei: im,
+      realOwner,
+      tokoPengirim: form.tokoPengirim,
+      found,
+    });
+
+    const finalOwner = normalizeText(getFinalOwner(im) || realOwner);
+
+    if (finalOwner !== normalizeText(form.tokoPengirim)) {
       alert(
-        `❌ IMEI ${im} berada di toko ${realOwner}, bukan di ${form.tokoPengirim}`
+        `❌ IMEI ${im} berada di toko ${finalOwner}, bukan di ${form.tokoPengirim}`
       );
       return;
     }
 
     // ================= 🔥 STATUS VALIDATION (FIX TRANSFER BERANTAI) =================
-    if (!isImeiAllowedForTransfer(found.status)) {
-      alert("❌ IMEI tidak tersedia untuk transfer");
-      return;
+    // ======================================================
+    // 🔥 FINAL STATUS VALIDATION ENGINE
+    // ======================================================
+
+    const finalStatus = String(
+      found?.status || found?.STATUS || ""
+    ).toUpperCase();
+
+    // 🔥 STATUS YANG BOLEH DITRANSFER
+    const allowedTransferStatus = [
+      "AVAILABLE",
+      "TRANSFER_MASUK",
+      "REFUND",
+      "PEMBELIAN",
+      "READY",
+      "OUT",
+    ];
+
+    // ========================================
+    // 🔥 BLOCK HANYA YANG BENAR-BENAR TERJUAL
+    // ========================================
+    if (finalStatus === "SOLD" || finalStatus === "TERJUAL") {
+      alert(`❌ IMEI ${im} sudah TERJUAL`);
+      return false;
+    }
+
+    // 🔥 IZINKAN TRANSFER BERULANG
+    if (!isImeiAllowedForTransfer(finalStatus)) {
+      console.log("⚠️ STATUS TETAP DIIJINKAN:", finalStatus);
     }
 
     // ================= 🔥 CEK STOK REAL (FIX BUG UTAMA) =================
-    const stokAvailable = inventory.filter(
-      (i) =>
-        isImeiAllowedForTransfer(i.status) &&
-        i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
-        i.namaBarang.toUpperCase() === found.namaBarang.toUpperCase()
-    ).length;
+    const stokAvailable = inventory.filter((i) => {
+      const status = String(i.status || "")
+        .trim()
+        .toUpperCase();
+
+      return (
+        isImeiAllowedForTransfer(status) &&
+        normalizeText(i.toko) === normalizeText(form.tokoPengirim) &&
+        normalizeText(i.namaBarang) === normalizeText(found.namaBarang)
+      );
+    }).length;
 
     if (stokAvailable <= 0) {
       alert("❌ Stok barang tidak tersedia di toko ini");
@@ -1610,8 +1868,17 @@ export default function TransferBarang() {
       return;
     }
 
-    if (found.status !== "AVAILABLE") {
-      alert("❌ No IMEI tidak tersedia untuk transfer");
+    const finalStatus = String(found?.status || "").toUpperCase();
+
+    // ❌ hanya block SOLD
+    if (finalStatus === "SOLD" || finalStatus === "TERJUAL") {
+      alert("❌ IMEI sudah TERJUAL");
+      return;
+    }
+
+    // 🔥 transfer berantai diizinkan
+    if (!isImeiAllowedForTransfer(finalStatus)) {
+      alert(`❌ Status IMEI tidak valid (${finalStatus})`);
       return;
     }
 
@@ -1744,10 +2011,15 @@ export default function TransferBarang() {
         return;
       }
 
-      if (
-        String(found.toko).toUpperCase() !==
-        String(form.tokoPengirim).toUpperCase()
-      ) {
+      const realOwner = normalizeText(
+        getFinalOwner(clean) ||
+          found?.toko ||
+          found?.NAMA_TOKO ||
+          found?.namaToko ||
+          ""
+      );
+
+      if (realOwner !== normalizeText(form.tokoPengirim)) {
         alert(
           `❌ IMEI ${clean} berada di toko ${found.toko}, bukan di ${form.tokoPengirim}`
         );
@@ -1913,7 +2185,7 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
 
     // 🔹 HITUNG IMEI (AVAILABLE saja)
     inventory.forEach((item) => {
-      if (item.status === "AVAILABLE") {
+      if (isImeiAllowedForTransfer(item.status)) {
         const key = `${item.toko}|${item.namaBrand}|${item.namaBarang}`;
         if (!map[key]) map[key] = 0;
         map[key]++;
@@ -1935,7 +2207,7 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
 
     return inventory.filter(
       (i) =>
-        i.status === "AVAILABLE" &&
+        isImeiAllowedForTransfer(i.status) &&
         i.toko.toUpperCase() === form.tokoPengirim.toUpperCase() &&
         i.namaBarang.toUpperCase() === form.barang.toUpperCase()
     ).length;
@@ -1994,7 +2266,7 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
   const cleanOrphanLock = async (imei) => {
     const invRef = ref(db, `inventory/${form.tokoPengirim}/${imei}`);
 
-    const found = inventory.find((i) => i.imei === imei);
+    const found = getLatestInventoryItem(imei);
     if (!found) return;
 
     // Kalau status AVAILABLE tapi masih LOCK → berarti orphan lock
@@ -2028,9 +2300,19 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
 
       for (const item of transferList) {
         for (const im of item.imeis || []) {
-          const found = inventory.find(
+          const candidates = inventory.filter(
             (i) => normalizeImei(i.imei) === normalizeImei(im)
           );
+
+          // 🔥 ambil data terbaru
+          candidates.sort((a, b) => {
+            const ta = a.updatedAt || a.UPDATED_AT || a.createdAt || 0;
+            const tb = b.updatedAt || b.UPDATED_AT || b.createdAt || 0;
+
+            return tb - ta;
+          });
+
+          const found = candidates[0];
           console.log("DEBUG INVENTORY IMEI:", found);
         }
       }
@@ -2126,20 +2408,20 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
         // ===============================
         if (Array.isArray(item.imeis) && item.imeis.length > 0) {
           const invalidImeis = item.imeis.filter((im) => {
-            const found = inventory.find((i) => i.imei === im);
+            const found = getLatestInventoryItem(im);
 
             if (!found) return true;
-            if (found.status === "SOLD") return true;
+            const finalStatus = String(found?.status || "").toUpperCase();
 
-            const allowedStatus = [
-              "AVAILABLE",
-              "REFUND",
-              "TRANSFER_MASUK",
-              "PEMBELIAN",
-              "OUT", // ✅ TAMBAHAN
-            ];
+            // ❌ block hanya SOLD
+            if (finalStatus === "SOLD" || finalStatus === "TERJUAL") {
+              return true;
+            }
 
-            if (!allowedStatus.includes(found.status)) return true;
+            // 🔥 transfer ulang tetap boleh
+            if (!isImeiAllowedForTransfer(finalStatus)) {
+              return false;
+            }
 
             return false;
           });
