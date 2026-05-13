@@ -84,7 +84,7 @@ const normalizeText = (v) =>
     .toUpperCase()
     .replace(/\s+/g, " ");
 
-    // ======================================
+// ======================================
 // 🔥 NORMALIZE UNIVERSAL
 // ======================================
 const normalize = (v) =>
@@ -363,107 +363,197 @@ export default function StockOpname() {
   const stockOpnameData = useMemo(() => {
     const map = {};
 
+    // ======================================
+    // 🔥 CLONE EVENT FINAL
+    // ======================================
+    const allEvents = allTransaksi.filter(
+      (t) =>
+        t &&
+        ["APPROVED", "REFUND"].includes(String(t.STATUS || "").toUpperCase())
+    );
+
+    // ======================================
+    // 🔥 REFUND NON IMEI
+    // ======================================
     transaksi.forEach((t) => {
-      if (!t) return;
-
-      // ===============================
-      // 1️⃣ TRANSAKSI STOK NORMAL
-      // ===============================
-      if (t.PAYMENT_METODE && t.NAMA_BARANG) {
-        if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
-
-        const toko = t.NAMA_TOKO || t.tokoPengirim || t.ke;
-
-        if (!toko) return;
-
-        const key = t.IMEI
-          ? `${toko}|${t.IMEI}`
-          : `${toko}|${t.NAMA_BRAND}|${t.NAMA_BARANG}`;
-
-        const effect = getStockEffectV3(t);
-
-        // ======================================
-        // 🔥 REFUND IMEI = BALIKKAN KE TOKO ASAL
-        // ======================================
-        if (
-          String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" &&
-          t.IMEI
-        ) {
-          map[key] = {
-            ...(map[key] || {}),
-            key,
-            tanggal: t.TANGGAL_TRANSAKSI || "-",
-            toko,
-            supplier: t.NAMA_SUPPLIER || t.namaSupplier || t.SUPPLIER || "-",
-
-            brand: t.NAMA_BRAND,
-            barang: t.NAMA_BARANG,
-            imei: t.IMEI || "",
-            qty: 1,
-            lastTransaksi: "REFUND",
-          };
-
-          return;
-        }
-
-        if (!map[key]) {
-          map[key] = {
-            key,
-            tanggal: t.TANGGAL_TRANSAKSI || "-",
-            toko,
-            supplier: t.NAMA_SUPPLIER || t.namaSupplier || t.SUPPLIER || "-",
-            brand: t.NAMA_BRAND,
-            barang: t.NAMA_BARANG,
-            imei: t.IMEI || "",
-            qty: 0,
-            lastTransaksi: t.PAYMENT_METODE,
-          };
-        }
-
-        map[key].qty += effect;
-      }
-
-      // ===============================
-      // 2️⃣ REFUND DARI TRANSAKSI PENJUALAN
-      // (ACCESSORIES / SPAREPART / JASA)
-      // ===============================
       if (t.statusPembayaran === "REFUND" && Array.isArray(t.items)) {
-        const toko = t.toko || t.NAMA_TOKO;
-        if (!toko) return;
-
         t.items.forEach((it) => {
-          // hanya non IMEI
           if (it.imeiList?.length) return;
 
-          const key = `${toko}|${it.namaBrand}|${it.namaBarang}`;
+          allEvents.push({
+            STATUS: "APPROVED",
 
-          if (!map[key]) {
-            map[key] = {
-              key,
-              tanggal: t.tanggal || "-",
-              toko,
-              supplier:
-                t.NAMA_SUPPLIER ||
-                t.namaSupplier ||
-                t.SUPPLIER ||
-                supplierLookup?.[`${it.namaBrand}|${it.namaBarang}`] ||
-                "-",
-              brand: it.namaBrand,
-              barang: it.namaBarang,
-              imei: "",
-              qty: 0,
-              lastTransaksi: "REFUND",
-            };
-          }
+            PAYMENT_METODE: "REFUND",
 
-          // ✅ REFUND = +QTY
-          map[key].qty += Number(it.qty || 0);
+            NAMA_TOKO: t.toko,
+
+            NAMA_BRAND: it.namaBrand,
+
+            NAMA_BARANG: it.namaBarang,
+
+            QTY: it.qty,
+
+            IMEI: "",
+
+            NO_INVOICE: t.invoice,
+
+            TANGGAL_TRANSAKSI: t.tanggal,
+
+            NAMA_SUPPLIER:
+              supplierLookup?.[
+                `${normalizeText(it.namaBrand)}|${normalizeText(it.namaBarang)}`
+              ] || "-",
+          });
         });
       }
     });
 
     // ======================================
-    // 🔥 FALLBACK detail_stock FINAL
+    // 🔥 PROCESS EVENT FINAL
+    // ======================================
+    allEvents.forEach((t) => {
+      if (!t) return;
+
+      const status = String(t.STATUS || "").toUpperCase();
+
+      if (!["APPROVED", "REFUND"].includes(status)) {
+        return;
+      }
+
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+      const toko = t.NAMA_TOKO || t.toko || t.ke || t.tokoPengirim;
+
+      if (!toko) return;
+
+      // ======================================
+      // 🔥 FILTER TOKO
+      // ======================================
+      if (filterToko !== "semua" && normalize(toko) !== normalize(filterToko)) {
+        return;
+      }
+
+      // ======================================
+      // 🔥 IMEI
+      // ======================================
+      if (t.IMEI) {
+        const cleanImei = normalizeImei(t.IMEI);
+
+        const key = `${normalize(toko)}|${cleanImei}`;
+
+        if (!map[key]) {
+          map[key] = {
+            key,
+
+            tanggal: t.TANGGAL_TRANSAKSI || t.tanggal || "-",
+
+            toko,
+
+            supplier: t.NAMA_SUPPLIER || supplierLookup?.[cleanImei] || "-",
+
+            brand: t.NAMA_BRAND || "-",
+
+            barang: t.NAMA_BARANG || "-",
+
+            imei: t.IMEI,
+
+            qty: 0,
+
+            lastTransaksi: metode,
+          };
+        }
+
+        // ======================================
+        // 🔥 STOCK MASUK
+        // ======================================
+        if (
+          [
+            "PEMBELIAN",
+            "TRANSFER_MASUK",
+            "REFUND",
+            "RETUR",
+            "VOID OPNAME",
+          ].includes(metode)
+        ) {
+          map[key].qty = 1;
+
+          map[key].lastTransaksi = metode;
+        }
+
+        // ======================================
+        // 🔥 STOCK KELUAR
+        // ======================================
+        if (["PENJUALAN", "TRANSFER_KELUAR", "STOK OPNAME"].includes(metode)) {
+          map[key].qty = 0;
+
+          map[key].lastTransaksi = metode;
+        }
+
+        return;
+      }
+
+      // ======================================
+      // 🔥 NON IMEI
+      // ======================================
+      const skuKey =
+        `${normalize(toko)}|` +
+        `${normalizeText(t.NAMA_BRAND)}|` +
+        `${normalizeText(t.NAMA_BARANG)}`;
+
+      if (!map[skuKey]) {
+        map[skuKey] = {
+          key: skuKey,
+
+          tanggal: t.TANGGAL_TRANSAKSI || t.tanggal || "-",
+
+          toko,
+
+          supplier:
+            t.NAMA_SUPPLIER ||
+            supplierLookup?.[
+              `${normalizeText(t.NAMA_BRAND)}|${normalizeText(t.NAMA_BARANG)}`
+            ] ||
+            "-",
+
+          brand: t.NAMA_BRAND || "-",
+
+          barang: t.NAMA_BARANG || "-",
+
+          imei: "",
+
+          qty: 0,
+
+          lastTransaksi: metode,
+        };
+      }
+
+      const qty = Number(t.QTY || 0);
+
+      // ======================================
+      // 🔥 STOCK MASUK
+      // ======================================
+      if (
+        [
+          "PEMBELIAN",
+          "TRANSFER_MASUK",
+          "REFUND",
+          "RETUR",
+          "VOID OPNAME",
+        ].includes(metode)
+      ) {
+        map[skuKey].qty += Math.abs(qty);
+      }
+
+      // ======================================
+      // 🔥 STOCK KELUAR
+      // ======================================
+      if (["PENJUALAN", "TRANSFER_KELUAR", "STOK OPNAME"].includes(metode)) {
+        map[skuKey].qty -= Math.abs(qty);
+      }
+    });
+
+    // ======================================
+    // 🔥 FALLBACK DETAIL STOCK
     // ======================================
     Object.values(detailStock || {}).forEach((s) => {
       if (!s?.imei) return;
@@ -471,24 +561,31 @@ export default function StockOpname() {
       const cleanImei = normalizeImei(s.imei);
 
       // ======================================
-      // 🔥 BARANG TERJUAL HILANG
+      // 🔥 BARANG TERJUAL
       // ======================================
       if (imeiTerjual.has(cleanImei) && !refundAvailableSet.has(cleanImei)) {
         return;
       }
 
       // ======================================
-      // 🔥 DUPLIKAT IMEI
+      // 🔥 FILTER TOKO
       // ======================================
-      const key = `${s.toko}|${cleanImei}`;
+      if (
+        filterToko !== "semua" &&
+        normalize(s.toko) !== normalize(filterToko)
+      ) {
+        return;
+      }
 
+      const key = `${normalize(s.toko)}|${cleanImei}`;
+
+      // ======================================
+      // 🔥 DUPLIKAT
+      // ======================================
       if (map[key]) {
         return;
       }
 
-      // ======================================
-      // 🔥 HANYA STOCK AKTIF
-      // ======================================
       const status = String(s.STATUS || s.status || "").toUpperCase();
 
       if (!["AVAILABLE", "REFUND"].includes(status)) {
@@ -498,7 +595,7 @@ export default function StockOpname() {
       map[key] = {
         key,
 
-        tanggal: "-",
+        tanggal: s.updatedAt || s.tanggal || "-",
 
         toko: s.toko || "-",
 
@@ -513,131 +610,119 @@ export default function StockOpname() {
 
         qty: 1,
 
-        lastTransaksi: "DETAIL_STOCK",
+        lastTransaksi: String(
+          s.LAST_ACTION || s.lastAction || "DETAIL_STOCK"
+        ).toUpperCase(),
       };
     });
 
-    // tampilkan hanya stok tersedia
-    return (
-      Object.values(map)
-        .filter((r) => {
-          // ======================================
-          // 🔥 REFUND WAJIB MUNCUL
-          // ======================================
-          if (String(r.lastTransaksi || "").toUpperCase() === "REFUND") {
-            return true;
-          }
+    // ======================================
+    // 🔥 FINAL FILTER
+    // ======================================
+    const finalRows = Object.values(map).filter((r) => {
+      // NON IMEI
+      if (!r.imei) {
+        return Number(r.qty || 0) > 0;
+      }
 
-          return r.qty > 0;
-        })
+      const cleanImei = normalizeImei(r.imei);
 
-        // =====================================
-        // 🔥 HAPUS DATA LIAR IMEI LAMA
-        // =====================================
-        .filter((r) => {
-          // ======================================
-          // 🔥 NON IMEI
-          // ======================================
-          if (!r.imei) {
-            return Number(r.qty || 0) > 0;
-          }
-        
-          const cleanImei = normalizeImei(r.imei);
-        
-          // ======================================
-          // 🔥 BARANG TERJUAL HILANG
-          // ======================================
-          if (
-            imeiTerjual.has(cleanImei) &&
-            !refundAvailableSet.has(cleanImei)
-          ) {
-            return false;
-          }
-        
-          // ======================================
-          // 🔥 HANYA STOCK AKTIF
-          // ======================================
-          const masihAktif =
-            refundAvailableSet.has(cleanImei) ||
-        
-            allTransaksi.some(
-              (t) =>
-                normalizeImei(t.IMEI) === cleanImei &&
-                [
-                  "PEMBELIAN",
-                  "TRANSFER_MASUK",
-                  "REFUND",
-                  "RETUR",
-                  "VOID OPNAME",
-                ].includes(
-                  String(
-                    t.PAYMENT_METODE || ""
-                  ).toUpperCase()
-                ) &&
-                String(
-                  t.STATUS || ""
-                ).toUpperCase() === "APPROVED"
-            );
-        
-          if (!masihAktif) {
-            return false;
-          }
-        
-          // ======================================
-          // 🔥 TRANSFER TERAKHIR
-          // ======================================
-          const latestTransfer = allTransaksi
-            .filter(
-              (t) =>
-                normalizeImei(t.IMEI) === cleanImei &&
-                String(
-                  t.PAYMENT_METODE || ""
-                ).toUpperCase() ===
-                  "TRANSFER_MASUK" &&
-                String(
-                  t.STATUS || ""
-                ).toUpperCase() === "APPROVED"
-            )
-        
-            .sort(
-              (a, b) =>
-                new Date(
-                  b.TANGGAL_TRANSAKSI || 0
-                ).getTime() -
-                new Date(
-                  a.TANGGAL_TRANSAKSI || 0
-                ).getTime()
-            )[0];
-        
-          if (latestTransfer) {
-            const latestTransferDate = new Date(
-              latestTransfer.TANGGAL_TRANSAKSI || 0
-            ).getTime();
-        
-            const currentDate = new Date(
-              r.tanggal || 0
-            ).getTime();
-        
-            if (
-              currentDate < latestTransferDate &&
-              normalize(r.toko) !==
-                normalize(latestTransfer.NAMA_TOKO)
-            ) {
-              return false;
-            }
-          }
-        
-          return Number(r.qty || 0) > 0;
-        })
-    );
+      // ======================================
+      // 🔥 HILANGKAN TERJUAL
+      // ======================================
+      if (imeiTerjual.has(cleanImei) && !refundAvailableSet.has(cleanImei)) {
+        return false;
+      }
+
+      // ======================================
+      // 🔥 TRANSFER TERAKHIR
+      // ======================================
+      const latestTransfer = allTransaksi
+        .filter(
+          (t) =>
+            normalizeImei(t.IMEI) === cleanImei &&
+            String(t.PAYMENT_METODE || "").toUpperCase() === "TRANSFER_MASUK" &&
+            String(t.STATUS || "").toUpperCase() === "APPROVED"
+        )
+
+        .sort(
+          (a, b) =>
+            new Date(b.TANGGAL_TRANSAKSI || 0).getTime() -
+            new Date(a.TANGGAL_TRANSAKSI || 0).getTime()
+        )[0];
+
+      // ======================================
+      // 🔥 HANYA TOKO TERBARU
+      // ======================================
+      if (latestTransfer) {
+        const latestTransferDate = new Date(
+          latestTransfer.TANGGAL_TRANSAKSI || 0
+        ).getTime();
+
+        const currentDate = new Date(r.tanggal || 0).getTime();
+
+        if (
+          currentDate < latestTransferDate &&
+          normalize(r.toko) !== normalize(latestTransfer.NAMA_TOKO)
+        ) {
+          return false;
+        }
+      }
+
+      return Number(r.qty || 0) > 0;
+    });
+
+    // ======================================
+    // 🔥 REMOVE DUPLIKAT FINAL
+    // ======================================
+    const uniqueMap = new Map();
+
+    finalRows.forEach((r) => {
+      const uniqueKey = r.imei
+        ? normalizeImei(r.imei)
+        : `${normalizeText(r.brand)}|${normalizeText(r.barang)}|${normalize(
+            r.toko
+          )}`;
+
+      if (!uniqueMap.has(uniqueKey)) {
+        uniqueMap.set(uniqueKey, r);
+        return;
+      }
+
+      const oldRow = uniqueMap.get(uniqueKey);
+
+      const oldDate = new Date(oldRow?.tanggal || 0).getTime();
+
+      const newDate = new Date(r?.tanggal || 0).getTime();
+
+      // ======================================
+      // 🔥 REFUND PRIORITAS
+      // ======================================
+      if (String(r.lastTransaksi || "").toUpperCase() === "REFUND") {
+        uniqueMap.set(uniqueKey, r);
+        return;
+      }
+
+      // ======================================
+      // 🔥 DATA TERBARU MENANG
+      // ======================================
+      if (newDate >= oldDate) {
+        uniqueMap.set(uniqueKey, r);
+      }
+    });
+
+    // ======================================
+    // 🔥 RETURN FINAL
+    // ======================================
+    return Array.from(uniqueMap.values());
   }, [
     transaksi,
     allTransaksi,
     detailStock,
     supplierLookup,
-    activeImeiSet,
     imeiTerjual,
     refundAvailableSet,
+    filterToko,
   ]);
 
   // ===============================
@@ -785,6 +870,31 @@ export default function StockOpname() {
       rows = rows.filter((r) => r.toko === filterToko);
     }
 
+    // ======================================
+    // 🔥 VALIDASI DUPLIKAT IMEI
+    // ======================================
+    const duplicateCheck = new Set();
+
+    rows = rows.filter((r) => {
+      // NON IMEI
+      if (!r.imei) {
+        return Number(r.qty || 0) > 0;
+      }
+
+      const cleanImei = normalizeImei(r.imei);
+
+      // ======================================
+      // 🔥 DUPLIKAT IMEI
+      // ======================================
+      if (duplicateCheck.has(cleanImei)) {
+        return false;
+      }
+
+      duplicateCheck.add(cleanImei);
+
+      return Number(r.qty || 0) > 0;
+    });
+
     return rows.map((r) => {
       const imeiRaw = String(r.imei || "").trim();
       const imeiKey = imeiRaw;
@@ -825,6 +935,33 @@ export default function StockOpname() {
 
   const tableData = aggregated;
 
+  // ======================================
+  // 🔥 TOTAL STOCK TOKO FINAL
+  // ======================================
+  const totalStockToko = useMemo(() => {
+    return aggregated.reduce((sum, item) => {
+      return sum + Number(item.qty || 0);
+    }, 0);
+  }, [aggregated]);
+
+  // ======================================
+  // 🔥 TOTAL IMEI TOKO FINAL
+  // ======================================
+  const totalImeiToko = useMemo(() => {
+    return aggregated.filter((x) => x.imei && Number(x.qty || 0) > 0).length;
+  }, [aggregated]);
+
+  // ======================================
+  // 🔥 TOTAL NON IMEI FINAL
+  // ======================================
+  const totalNonImeiToko = useMemo(() => {
+    return aggregated
+      .filter((x) => !x.imei && Number(x.qty || 0) > 0)
+      .reduce((sum, item) => {
+        return sum + Number(item.qty || 0);
+      }, 0);
+  }, [aggregated]);
+
   // PASTIKAN INI DI BAWAH deklarasi aggregated
   useEffect(() => {
     if (aggregated.length) {
@@ -857,6 +994,17 @@ export default function StockOpname() {
       if (
         filterImei &&
         !r.imei?.toLowerCase().includes(filterImei.toLowerCase())
+      ) {
+        return false;
+      }
+
+      // ======================================
+      // 🔥 GHOST STOCK REMOVE
+      // ======================================
+      if (
+        r.imei &&
+        imeiTerjual.has(normalizeImei(r.imei)) &&
+        !refundAvailableSet.has(normalizeImei(r.imei))
       ) {
         return false;
       }
@@ -1149,9 +1297,28 @@ export default function StockOpname() {
         <span className="text-sm text-gray-500">Inventory / Stock Opname</span>
       </div>
 
-      <h2 className="text-xl font-bold mb-4 text-blue-700">
-        Stok Opname & Inventory Management Mila Phone
-      </h2>
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
+        <h2 className="text-xl font-bold text-blue-700">
+          Stok Opname & Inventory Management Mila Phone
+        </h2>
+
+        {/* ====================================== */}
+        {/* 🔥 STOCK REALTIME */}
+        {/* ====================================== */}
+        <div className="flex flex-wrap gap-2">
+          <div className="bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-lg font-bold">
+            TOTAL STOCK : {totalStockToko}
+          </div>
+
+          <div className="bg-blue-600 text-white px-4 py-2 rounded-xl shadow-lg font-bold">
+            IMEI : {totalImeiToko}
+          </div>
+
+          <div className="bg-orange-500 text-white px-4 py-2 rounded-xl shadow-lg font-bold">
+            NON IMEI : {totalNonImeiToko}
+          </div>
+        </div>
+      </div>
 
       {/* CONTROL BAR */}
       <div className="bg-white rounded-xl shadow-md p-3 mb-4 transition hover:shadow-lg">
