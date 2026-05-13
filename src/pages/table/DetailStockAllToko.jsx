@@ -308,11 +308,11 @@ export default function DetailStockAllToko() {
           "VOID OPNAME",
         ].includes(metode)
       ) {
-        map[skuKey].qty += Math.abs(qty);
+        map[skuKey].qty = Number(map[skuKey].qty || 0) + Math.abs(qty);
       }
 
       if (["PENJUALAN", "TRANSFER_KELUAR", "STOK OPNAME"].includes(metode)) {
-        map[skuKey].qty -= Math.abs(qty);
+        map[skuKey].qty = Number(map[skuKey].qty || 0) - Math.abs(qty);
       }
     });
 
@@ -371,6 +371,17 @@ export default function DetailStockAllToko() {
     const finalRows = Object.values(map).filter((r) => {
       if (!r.imei) {
         return Number(r.qty || 0) > 0;
+      }
+
+      // ======================================
+      // 🔥 HAPUS DATA LIAR
+      // ======================================
+      if (!String(r.brand || "").trim() || !String(r.barang || "").trim()) {
+        return false;
+      }
+
+      if (Number(r.qty || 0) <= 0) {
+        return false;
       }
 
       const cleanImei = normalizeImei(r.imei);
