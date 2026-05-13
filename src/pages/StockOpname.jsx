@@ -229,9 +229,10 @@ export default function StockOpname() {
 
     switch (metode) {
       case "PEMBELIAN":
-      case "TRANSFER_MASUK":
-      case "REFUND":
-        return Math.abs(qty);
+        case "TRANSFER_MASUK":
+        case "TRANSFER_REJECT":
+        case "REFUND":
+          return Math.abs(qty);
 
       case "PENJUALAN":
       case "TRANSFER_KELUAR":

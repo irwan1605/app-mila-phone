@@ -89,7 +89,14 @@ export default function DetailStockToko() {
     const metode = String(t.PAYMENT_METODE || "").toUpperCase();
     const qtyBase = t.IMEI ? 1 : Number(t.QTY || 0);
 
-    if (["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode)) {
+    if (
+      [
+        "PEMBELIAN",
+        "TRANSFER_MASUK",
+        "TRANSFER_REJECT",
+        "REFUND",
+      ].includes(metode)
+    ) {
       return qtyBase;
     }
 

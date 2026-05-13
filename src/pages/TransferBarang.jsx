@@ -365,6 +365,22 @@ export default function TransferBarang() {
             }
           }
 
+          if (metode === "TRANSFER_REJECT") {
+            if (map[imei].status !== "SOLD") {
+              map[imei].status = "AVAILABLE";
+          
+              // 🔥 KEMBALIKAN OWNER KE TOKO ASAL
+              map[imei].toko = String(v.NAMA_TOKO || "").trim();
+          
+              map[imei].UPDATED_AT =
+                v.UPDATED_AT ||
+                v.updatedAt ||
+                v.CREATED_AT ||
+                v.createdAt ||
+                Date.now();
+            }
+          }
+
           if (metode === "PENJUALAN") {
             map[imei].status = "SOLD";
           }

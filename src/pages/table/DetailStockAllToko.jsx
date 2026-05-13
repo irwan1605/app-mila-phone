@@ -240,6 +240,7 @@ export default function DetailStockAllToko() {
           [
             "PEMBELIAN",
             "TRANSFER_MASUK",
+            "TRANSFER_REJECT",
             "REFUND",
             "RETUR",
             "VOID OPNAME",

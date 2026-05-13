@@ -766,6 +766,7 @@ export default function DashboardToko(props) {
           "PEMBELIAN",
           "TRANSFER_MASUK",
           "REFUND",
+          "TRANSFER_REJECT",
           "RETUR",
           "VOID OPNAME",
         ].includes(metode)
