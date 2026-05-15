@@ -174,35 +174,51 @@ export default function TablePenjualan({ data = [] }) {
   }, [masterKaryawan]);
 
   /* ================= FLATTEN DATA ================= */
+  /* ================= FLATTEN DATA ================= */
   const tableRows = useMemo(() => {
     const map = {};
 
     (rows || []).forEach((trx) => {
       // ======================================
-      // 🔥 FILTER REFUND FINAL
+      // 🔥 NORMALIZE STATUS
       // ======================================
       const statusPembayaran = String(trx.statusPembayaran || "")
-        .toUpperCase()
-        .trim();
+        .trim()
+        .toUpperCase();
 
       const status = String(trx.STATUS || "")
-        .toUpperCase()
-        .trim();
+        .trim()
+        .toUpperCase();
 
-      // 🔥 SEMUA REFUND HILANGKAN
+      const paymentMetode = String(trx.PAYMENT_METODE || "")
+        .trim()
+        .toUpperCase();
+
+      // ======================================
+      // 🔥 HIDE SEMUA DATA REFUND
+      // ======================================
       if (
         statusPembayaran === "REFUND" ||
         status === "REFUND" ||
+        paymentMetode === "REFUND" ||
         trx.refundProcessed === true ||
         trx.IS_REFUND === true
       ) {
         return;
       }
-      if (!Array.isArray(trx.items)) return;
+
+      // ======================================
+      // 🔥 VALIDASI ITEMS
+      // ======================================
+      if (!Array.isArray(trx.items)) {
+        return;
+      }
 
       /* ================= PAYMENT ================= */
-      let paymentMetode = "-";
+      let paymentMetodeUser = "-";
       let namaBank = "-";
+      let nominalPaymentMetode = 0;
+
       // ======================================
       // 🔥 MASTER BANK LOOKUP
       // ======================================
@@ -234,13 +250,15 @@ export default function TablePenjualan({ data = [] }) {
           trx.payment.bank ||
           "-";
       }
-      let nominalPaymentMetode = 0;
 
+      // ======================================
+      // 🔥 SPLIT PAYMENT
+      // ======================================
       if (
         Array.isArray(trx.payment?.splitPayment) &&
         trx.payment.splitPayment.length
       ) {
-        paymentMetode = trx.payment.splitPayment
+        paymentMetodeUser = trx.payment.splitPayment
           .map((p) => p.metode)
           .join(" + ");
 
@@ -255,12 +273,14 @@ export default function TablePenjualan({ data = [] }) {
           0
         );
       } else {
-        paymentMetode = trx.payment?.metode || trx.payment?.status || "-";
+        paymentMetodeUser = trx.payment?.metode || trx.payment?.status || "-";
+
         namaBank =
           trx.payment?.bankNama ||
           trx.payment?.namaBank ||
           bankLookup?.[trx.payment?.metode] ||
           "-";
+
         nominalPaymentMetode =
           Number(trx.payment?.nominalPayment || 0) ||
           Number(trx.payment?.nominal || 0) ||
@@ -278,7 +298,9 @@ export default function TablePenjualan({ data = [] }) {
 
       /* ================= AGREGASI ITEM ================= */
       const allBarang = trx.items.map((i) => i.namaBarang).join(", ");
+
       const allIMEI = trx.items.flatMap((i) => i.imeiList || []).join(", ");
+
       const totalQty = trx.items.reduce((s, i) => s + Number(i.qty || 0), 0);
 
       const totalBayarFix = Number(nominalPaymentMetode || 0);
@@ -290,22 +312,30 @@ export default function TablePenjualan({ data = [] }) {
         totalBayarFix > grandTotalFix ? totalBayarFix - grandTotalFix : 0;
 
       const tokoKey = String(trx.toko || "").toUpperCase();
+
       const salesKey = String(trx.user?.namaSales || "").toUpperCase();
 
-      /* ================= PUSH HANYA 1X PER INVOICE ================= */
+      /* ================= PUSH HANYA 1X ================= */
       if (!map[trx.invoice]) {
         map[trx.invoice] = {
           DETAIL_ITEMS: trx.items || [],
+
           id: trx.id,
+
           trxKey: trx.trxKey,
+
           tokoId: trx.tokoId,
 
           tanggal: trx.tanggal || trx.createdAt,
-          invoice: trx.invoice,
+
+          invoice: trx.invoice || "-",
+
           toko: trx.toko || "-",
 
           pelanggan: trx.user?.namaPelanggan || "-",
+
           idPelanggan: trx.user?.idPelanggan || "-",
+
           telp: trx.user?.noTlpPelanggan || "-",
 
           storeHead: storeHeadMap[tokoKey] || trx.user?.storeHead || "-",
@@ -314,7 +344,7 @@ export default function TablePenjualan({ data = [] }) {
 
           salesHandle: salesHandleMap[salesKey] || trx.user?.salesHandle || "-",
 
-          paymentMetode,
+          paymentMetode: paymentMetodeUser,
 
           namaBank:
             namaBank || trx.payment?.bankNama || trx.payment?.namaBank || "-",
@@ -322,20 +352,25 @@ export default function TablePenjualan({ data = [] }) {
           nominalPaymentMetode,
 
           namaMdr: trx.payment?.namaMdr || "-",
+
           dpTalangan: Number(trx.payment?.dpTalangan || 0),
+
           paymentKredit: trx.payment?.status === "PIUTANG" ? "KREDIT" : "LUNAS",
 
-          /* 🔥 AGREGASI */
           kategoriBarang:
             trx.items?.length === 1
               ? trx.items[0]?.kategoriBarang || "-"
               : trx.items?.map((i) => i.kategoriBarang).join(", "),
+
           namaBrand:
             trx.items?.length === 1
               ? trx.items[0]?.namaBrand || "-"
               : [...new Set(trx.items.map((i) => i.namaBrand))].join(", "),
+
           namaBarang: allBarang,
+
           imei: allIMEI,
+
           qty: totalQty,
 
           hargaSRP: trx.items.reduce(
@@ -357,7 +392,9 @@ export default function TablePenjualan({ data = [] }) {
           ),
 
           statusBayar: trx.payment?.status || "-",
+
           nominalMdr: trx.payment?.nominalMdr || 0,
+
           dashboardKredit: Number(trx.payment?.dashboardPayment || 0),
 
           paymentKreditNominal:
@@ -367,30 +404,18 @@ export default function TablePenjualan({ data = [] }) {
                 Number(trx.payment?.dpTalangan || 0)
               : 0,
 
-          paymentMetodeUser: (() => {
-            if (
-              Array.isArray(trx.payment?.splitPayment) &&
-              trx.payment.splitPayment.length
-            ) {
-              return trx.payment.splitPayment
-                .map((p) => (p.metode || "").toUpperCase())
-                .filter(Boolean)
-                .join(" + ");
-            }
+          paymentMetodeUser,
 
-            if (trx.payment?.metode) {
-              return String(trx.payment.metode).toUpperCase();
-            }
-
-            return String(trx.payment?.paymentMethod || "-").toUpperCase();
-          })(),
           tenor: trx.payment?.tenor || "-",
+
           cicilan: trx.payment?.cicilan || 0,
 
           KURANG_BAYAR: kurangBayar,
+
           SISA_KEMBALIAN: sisaKembalian,
 
           grandTotal: grandTotalFix,
+
           grandTotalDisplay: grandTotalFix,
 
           status: trx.statusPembayaran || "OK",
@@ -399,7 +424,7 @@ export default function TablePenjualan({ data = [] }) {
     });
 
     return Object.values(map);
-  }, [rows]);
+  }, [rows, storeHeadMap, salesHandleMap]);
 
   /* ================= FILTER ================= */
   const filteredRows = useMemo(() => {
@@ -408,11 +433,22 @@ export default function TablePenjualan({ data = [] }) {
         .trim()
         .toUpperCase();
 
+      const paymentMetode = String(
+        r.paymentMetode || r.paymentMetodeUser || r.PAYMENT_METODE || ""
+      )
+        .trim()
+        .toUpperCase();
+
       // 🔥 HARD FILTER REFUND FINAL
+      // ======================================
+      // 🔥 HARD FILTER REFUND FINAL
+      // ======================================
       if (
         status === "REFUND" ||
+        paymentMetode === "REFUND" ||
         r.refundProcessed === true ||
-        r.IS_REFUND === true
+        r.IS_REFUND === true ||
+        String(r.statusPembayaran || "").toUpperCase() === "REFUND"
       ) {
         return false;
       }
@@ -518,9 +554,22 @@ export default function TablePenjualan({ data = [] }) {
       return alert("Barang ini sudah Pernah Di Refund");
     }
 
-    const trx = rows.find(
-      (x) => String(x.invoice || "").trim() === String(row.invoice || "").trim()
-    );
+    const trx = rows.find((x) => {
+      const invoiceA = String(x.invoice || x.NO_INVOICE || x.noInvoice || "")
+        .trim()
+        .toUpperCase();
+
+      const invoiceB = String(
+        row.invoice || row.NO_INVOICE || row.noInvoice || ""
+      )
+        .trim()
+        .toUpperCase();
+
+      return invoiceA === invoiceB;
+    });
+
+    console.log("🔥 TRX REFUND:", trx);
+
     if (!trx) return alert("Data transaksi tidak ditemukan");
 
     setPrintData(trx);
@@ -715,17 +764,28 @@ export default function TablePenjualan({ data = [] }) {
       // ===============================
       // 🔥 UPDATE STATUS PENJUALAN
       // ===============================
+      const trxKey = trx?.trxKey || trx?.id || row?.trxKey || row?.id;
+
+      if (!trxKey) {
+        console.error("❌ TRX KEY TIDAK ADA", {
+          trx,
+          row,
+        });
+
+        throw new Error("Transaksi tidak ditemukan");
+      }
+
       await updateTransaksiPenjualan(
-        trx.id || row.trxKey,
+        trxKey,
         {
           statusPembayaran: "REFUND",
-      
+
           STATUS: "REFUND",
-      
+
           refundProcessed: true,
-      
+
           IS_REFUND: true,
-      
+
           refundAt: Date.now(),
         },
         userLogin
@@ -749,15 +809,15 @@ export default function TablePenjualan({ data = [] }) {
 
         imeiList: Array.isArray(item.imeiList) ? item.imeiList : [],
 
-        qty: Math.abs(Number(item.qty || 0)),
+        qty: 1,
       }));
 
       // ===============================
       // 🔥 NON IMEI ITEMS
       // ===============================
-      const nonImeiItems = items.filter(
-        (x) => !x.imeiList || !x.imeiList.length
-      );
+      const nonImeiItems = items.filter((x) => {
+        return !Array.isArray(x.imeiList) || x.imeiList.length === 0;
+      });
 
       // ===============================
       // 🔥 VALIDASI FINAL QTY
@@ -770,9 +830,6 @@ export default function TablePenjualan({ data = [] }) {
       // ======================================
       // 🔥 RESTORE STOCK NON IMEI
       // ======================================
-      // ======================================
-      // 🔥 RESTORE STOCK NON IMEI
-      // ======================================
       if (finalNonImeiItems.length > 0) {
         await tambahStokSetelahRefund({
           toko: trx.toko,
@@ -780,7 +837,7 @@ export default function TablePenjualan({ data = [] }) {
         });
 
         // ======================================
-        // 🔥 CATAT EVENT REFUND NON IMEI
+        // 🔥 SIMPAN EVENT REFUND NON IMEI
         // ======================================
         for (const item of finalNonImeiItems) {
           await addTransaksi(trx.tokoId, {
@@ -788,15 +845,17 @@ export default function TablePenjualan({ data = [] }) {
 
             NO_INVOICE: `REF-${Date.now()}`,
 
-            NAMA_TOKO: trx.toko,
+            NAMA_TOKO: trx.toko || "-",
+
+            NAMA_SUPPLIER: item.namaSupplier || trx.namaSupplier || "-",
 
             NAMA_BARANG: item.namaBarang || "-",
 
             NAMA_BRAND: item.namaBrand || "-",
 
-            IMEI: "",
+            IMEI: "NON-IMEI",
 
-            QTY: Math.abs(Number(item.qty || 0)),
+            QTY: 1,
 
             PAYMENT_METODE: "REFUND",
 
@@ -807,9 +866,44 @@ export default function TablePenjualan({ data = [] }) {
             SOURCE: "REFUND_BUTTON",
 
             IS_REFUND: true,
+
+            refundProcessed: true,
+
+            statusPembayaran: "REFUND",
           });
+
+          // ======================================
+          // 🔥 RESTORE STOK TOKO NON IMEI
+          // ======================================
+          const nonImeiKey =
+            `${String(item.namaBrand || "")
+              .trim()
+              .toUpperCase()}|` +
+            `${String(item.namaBarang || "")
+              .trim()
+              .toUpperCase()}`;
+
+          await update(
+            ref(db, `stokToko/${trx.tokoId}/NON_IMEI/${nonImeiKey}`),
+            {
+              namaBrand: item.namaBrand || "-",
+
+              namaBarang: item.namaBarang || "-",
+
+              qty: 1,
+
+              toko: trx.toko || "-",
+
+              status: "TERSEDIA",
+
+              updatedAt: Date.now(),
+
+              lastAction: "REFUND",
+            }
+          );
         }
       }
+
       // ======================================
       // 🔥 RESTORE IMEI
       // ======================================
