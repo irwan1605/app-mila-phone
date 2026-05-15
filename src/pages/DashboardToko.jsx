@@ -644,22 +644,9 @@ export default function DashboardToko(props) {
             normalize(t.NAMA_TOKO) === normalize(item.namaToko) &&
             normalizeText(t.NAMA_BRAND) === normalizeText(item.brand) &&
             normalizeText(t.NAMA_BARANG) === normalizeText(item.barang) &&
-            (
-              !String(
-                t.IMEI ||
-                t.NO_IMEI ||
-                t.NOMOR_UNIK ||
-                ""
-              ).trim()
-            
-              ||
-            
-              normalizeImei(
-                t.IMEI ||
-                t.NO_IMEI ||
-                t.NOMOR_UNIK
-              ) === "NON-IMEI"
-            )&&
+            (!String(t.IMEI || t.NO_IMEI || t.NOMOR_UNIK || "").trim() ||
+              normalizeImei(t.IMEI || t.NO_IMEI || t.NOMOR_UNIK) ===
+                "NON-IMEI") &&
             String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" &&
             String(t.STATUS || "").toUpperCase() === "APPROVED"
         );
@@ -1144,6 +1131,35 @@ export default function DashboardToko(props) {
         }
       }
 
+      // ======================================
+      // 🔥 HAPUS QTY 0
+      // ======================================
+      if (Number(r.qty || 0) <= 0) {
+        return false;
+      }
+
+      // ======================================
+      // 🔥 IMEI FILTER
+      // ======================================
+      if (r.imei) {
+        const cleanImei = normalizeImei(r.imei);
+
+        if (imeiTerjual.has(cleanImei) && !refundAvailableSet.has(cleanImei)) {
+          return false;
+        }
+
+        const hasPembelianApproved = transaksi.some(
+          (t) =>
+            normalizeImei(t.IMEI) === cleanImei &&
+            String(t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
+            String(t.STATUS || "").toUpperCase() === "APPROVED"
+        );
+
+        if (!hasPembelianApproved) {
+          return false;
+        }
+      }
+
       return true;
     });
   }, [
@@ -1162,6 +1178,9 @@ export default function DashboardToko(props) {
   // ======================================
   // 🔥 MERGE DASHBOARD + STOCK OPNAME
   // ======================================
+  // ======================================
+  // 🔥 MERGE DASHBOARD + STOCK OPNAME
+  // ======================================
   const mergedRows = useMemo(() => {
     const baseRows = [...rows];
 
@@ -1177,7 +1196,6 @@ export default function DashboardToko(props) {
         const exists = baseRows.some((r) => {
           const rowImei = normalizeImei(r.imei);
 
-          // skip NON IMEI
           if (!rowImei || rowImei === "NON-IMEI") {
             return false;
           }
@@ -1189,9 +1207,6 @@ export default function DashboardToko(props) {
           baseRows.push({
             ...item,
 
-            // ======================================
-            // 🔥 AMBIL HARGA DARI MASTER
-            // ======================================
             hargaSRP:
               masterMap?.[`${item.brand}|${item.barang}`]?.hargaSRP ||
               item.hargaSRP ||
@@ -1209,9 +1224,6 @@ export default function DashboardToko(props) {
 
             statusBarang: "TERSEDIA",
 
-            // ======================================
-            // 🔥 REFUND PRIORITAS
-            // ======================================
             keterangan: String(item.keterangan || "")
               .toUpperCase()
               .includes("REFUND")
@@ -1234,14 +1246,8 @@ export default function DashboardToko(props) {
       );
 
       if (!existsSku) {
-        // ======================================
-        // 🔥 KEY MASTER
-        // ======================================
         const masterKey = `${item.brand}|${item.barang}`;
 
-        // ======================================
-        // 🔥 CEK ADA REFUND
-        // ======================================
         const hasRefund = transaksi.some(
           (t) =>
             normalize(t.NAMA_TOKO) === normalize(item.namaToko) &&
@@ -1255,9 +1261,6 @@ export default function DashboardToko(props) {
         baseRows.push({
           ...item,
 
-          // ======================================
-          // 🔥 HARGA MASTER
-          // ======================================
           hargaSRP: masterMap?.[masterKey]?.hargaSRP || item.hargaSRP || 0,
 
           hargaGrosir:
@@ -1266,14 +1269,8 @@ export default function DashboardToko(props) {
           hargaReseller:
             masterMap?.[masterKey]?.hargaReseller || item.hargaReseller || 0,
 
-          // ======================================
-          // 🔥 STATUS FINAL
-          // ======================================
           statusBarang: "TERSEDIA",
 
-          // ======================================
-          // 🔥 PRIORITAS KETERANGAN FINAL
-          // ======================================
           keterangan: String(item.keterangan || "")
             .toUpperCase()
             .includes("REFUND")
@@ -1285,8 +1282,59 @@ export default function DashboardToko(props) {
       }
     });
 
-    return baseRows;
-  }, [rows, stockOpnameSyncRows, masterMap]);
+    return baseRows
+      .filter((r) => {
+        // ======================================
+        // 🔥 INVALID
+        // ======================================
+        if (!r) return false;
+
+        if (!r.brand || !r.barang) {
+          return false;
+        }
+
+        // ======================================
+        // 🔥 FILTER TOKO
+        // ======================================
+        if (normalize(r.namaToko || r.toko) !== normalize(namaToko)) {
+          return false;
+        }
+
+        // ======================================
+        // 🔥 QTY HABIS
+        // ======================================
+        if (Number(r.qty || 0) <= 0) {
+          return false;
+        }
+
+        // ======================================
+        // 🔥 IMEI TERJUAL
+        // ======================================
+        if (
+          r.imei &&
+          imeiTerjual.has(normalizeImei(r.imei)) &&
+          !refundAvailableSet.has(normalizeImei(r.imei))
+        ) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        return (
+          new Date(b.tanggal || 0).getTime() -
+          new Date(a.tanggal || 0).getTime()
+        );
+      });
+  }, [
+    rows,
+    stockOpnameSyncRows,
+    masterMap,
+    transaksi,
+    namaToko,
+    imeiTerjual,
+    refundAvailableSet,
+  ]);
 
   // ======================================
   // 🔥 SORT FINAL
