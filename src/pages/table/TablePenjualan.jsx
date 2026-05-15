@@ -52,7 +52,40 @@ const TOKO_MAP = {
 };
 
 export default function TablePenjualan({ data = [] }) {
-  const rows = data;
+  const rows = useMemo(() => {
+    return (data || []).filter((trx) => {
+      const status = String(trx?.STATUS || "")
+        .trim()
+        .toUpperCase();
+
+      const paymentMetode = String(trx?.PAYMENT_METODE || "")
+        .trim()
+        .toUpperCase();
+
+      const statusPembayaran = String(trx?.statusPembayaran || "")
+        .trim()
+        .toUpperCase();
+
+      // 🔥 HARD REFUND BLOCK GLOBAL
+      const isRefund =
+      
+        trx.deleted === true ||
+        trx.deletedFromPenjualan === true ||
+        status === "REFUND" ||
+        paymentMetode === "REFUND" ||
+        trx.refundProcessed === true ||
+        trx.IS_REFUND === true ||
+        trx.refundLocked === true ||
+        String(trx.statusPembayaran || "").toUpperCase() === "REFUND";
+
+      // 🔥 HILANGKAN GLOBAL SEMUA ROLE
+      if (isRefund) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [data]);
   const [refundLoading, setRefundLoading] = useState(null);
   const [page, setPage] = useState(1);
   const [printData, setPrintData] = useState(null);
@@ -67,6 +100,7 @@ export default function TablePenjualan({ data = [] }) {
   const [localHiddenRefund, setLocalHiddenRefund] = useState({});
   const [deletedRows, setDeletedRows] = useState({});
   const [instantRefund, setInstantRefund] = useState({});
+ 
   const [masterSH, setMasterSH] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
 
@@ -195,6 +229,8 @@ export default function TablePenjualan({ data = [] }) {
         .toUpperCase();
 
       const isRefund =
+        trx.deleted === true ||
+        trx.deletedFromPenjualan === true ||
         status === "REFUND" ||
         paymentMetode === "REFUND" ||
         trx.refundProcessed === true ||
@@ -330,6 +366,23 @@ export default function TablePenjualan({ data = [] }) {
 
           tokoId: trx.tokoId,
 
+          // 🔥 WAJIB TAMBAH INI
+          deleted: trx.deleted === true,
+
+          deletedFromPenjualan: trx.deletedFromPenjualan === true,
+
+          refundProcessed: trx.refundProcessed === true,
+
+          IS_REFUND: trx.IS_REFUND === true,
+
+          refundLocked: trx.refundLocked === true,
+
+          statusPembayaran: trx.statusPembayaran || "",
+
+          PAYMENT_METODE: trx.PAYMENT_METODE || "",
+
+          STATUS: trx.STATUS || "",
+
           tanggal: trx.tanggal || trx.createdAt,
 
           invoice: trx.invoice || "-",
@@ -444,7 +497,11 @@ export default function TablePenjualan({ data = [] }) {
         .trim()
         .toUpperCase();
 
-      const isRefund =
+        const isRefund =
+      
+      
+        r.deleted === true ||
+        r.deletedFromPenjualan === true ||
         status === "REFUND" ||
         paymentMetode === "REFUND" ||
         r.refundProcessed === true ||
@@ -632,6 +689,8 @@ export default function TablePenjualan({ data = [] }) {
   const handleSaveEdit = async () => {
     try {
       await updateTransaksiPenjualan(editData.id, editData, userLogin);
+      // 🔥 FORCE REALTIME REFRESH
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       alert("✅ Transaksi berhasil diupdate");
       setShowEdit(false);
@@ -819,6 +878,10 @@ export default function TablePenjualan({ data = [] }) {
 
           refundLocked: true,
 
+          deleted: true,
+
+          deletedFromPenjualan: true,
+
           deletedAt: Date.now(),
 
           refundInvoice: row.invoice,
@@ -880,11 +943,8 @@ export default function TablePenjualan({ data = [] }) {
         // 🔥 SIMPAN EVENT REFUND NON IMEI
         // ======================================
         for (const item of finalNonImeiItems) {
-          // ======================================
-          // 🔥 ANTI DUPLIKAT REFUND
-          // ======================================
           const refundUniqueKey =
-            `${row.invoice}_${item.namaBarang}_${item.namaBrand}`
+            `${trx.invoice}_${item.namaBarang}_${item.namaBrand}_${trx.tokoId}`
               .replace(/\s+/g, "_")
               .toUpperCase();
 
@@ -892,70 +952,13 @@ export default function TablePenjualan({ data = [] }) {
 
           const refundSnap = await get(refundRef);
 
-          // ======================================
           // 🔥 BLOCK DOUBLE REFUND
-          // ======================================
           if (refundSnap.exists()) {
-            console.log("⛔ REFUND SUDAH ADA:", refundUniqueKey);
+            console.log("⛔ NON IMEI SUDAH DIREFOUND");
 
             continue;
           }
 
-          // ======================================
-          // 🔥 SIMPAN EVENT REFUND
-          // ======================================
-          await addTransaksi(trx.tokoId, {
-            TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
-
-            NO_INVOICE: `REF-${trx.invoice}-${Date.now()}`,
-
-            NAMA_TOKO: trx.toko || "-",
-
-            NAMA_SUPPLIER: item.namaSupplier || trx.namaSupplier || "-",
-
-            NAMA_BARANG: item.namaBarang || "-",
-
-            NAMA_BRAND: item.namaBrand || "-",
-
-            IMEI: "NON-IMEI",
-
-            QTY: Number(item.qty || 1),
-
-            PAYMENT_METODE: "REFUND",
-
-            STATUS: "APPROVED",
-
-            CREATED_AT: Date.now(),
-
-            SOURCE: "REFUND_BUTTON",
-
-            IS_REFUND: true,
-
-            refundProcessed: true,
-
-            statusPembayaran: "REFUND",
-          });
-
-          // ======================================
-          // 🔥 SIMPAN HISTORY REFUND
-          // ======================================
-          await update(refundRef, {
-            createdAt: Date.now(),
-
-            invoice: row.invoice,
-
-            namaBarang: item.namaBarang,
-
-            namaBrand: item.namaBrand,
-
-            qty: Number(item.qty || 1),
-
-            toko: trx.toko || "-",
-          });
-
-          // ======================================
-          // 🔥 RESTORE STOK TOKO NON IMEI
-          // ======================================
           const nonImeiKey =
             `${String(item.namaBrand || "")
               .trim()
@@ -973,15 +976,15 @@ export default function TablePenjualan({ data = [] }) {
 
           const oldQty = Number(snapshot.val()?.qty || 0);
 
-          // ======================================
-          // 🔥 RESTORE STOK TOKO NON IMEI
-          // ======================================
+          const refundQty = Number(item.qty || 0);
+
+          // 🔥 RESTORE STOK
           await update(stokRef, {
             namaBrand: item.namaBrand || "-",
 
             namaBarang: item.namaBarang || "-",
 
-            qty: oldQty + 1,
+            qty: oldQty + refundQty,
 
             toko: trx.toko || "-",
 
@@ -989,9 +992,61 @@ export default function TablePenjualan({ data = [] }) {
 
             sold: false,
 
+            refundProcessed: true,
+
             updatedAt: Date.now(),
 
             lastAction: "REFUND",
+          });
+
+          // 🔥 HISTORY REFUND
+          await update(refundRef, {
+            createdAt: Date.now(),
+
+            invoice: trx.invoice,
+
+            namaBarang: item.namaBarang,
+
+            namaBrand: item.namaBrand,
+
+            qty: refundQty,
+
+            toko: trx.toko || "-",
+
+            tokoId: trx.tokoId,
+          });
+
+          // 🔥 TRANSAKSI REFUND
+          await addTransaksi(trx.tokoId, {
+            TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+
+            NO_INVOICE: `REF-${trx.invoice}-${Date.now()}`,
+
+            NAMA_TOKO: trx.toko || "-",
+
+            NAMA_SUPPLIER: item.namaSupplier || trx.namaSupplier || "-",
+
+            NAMA_BARANG: item.namaBarang || "-",
+
+            NAMA_BRAND: item.namaBrand || "-",
+
+            IMEI: "NON-IMEI",
+
+            QTY: refundQty,
+
+            PAYMENT_METODE: "REFUND",
+
+            STATUS: "APPROVED",
+
+            CREATED_AT: Date.now(),
+
+            SOURCE: "REFUND_BUTTON",
+
+            IS_REFUND: true,
+
+            refundProcessed: true,
+
+            statusPembayaran: "REFUND",
           });
         }
       }
@@ -1020,7 +1075,7 @@ export default function TablePenjualan({ data = [] }) {
 
               namaBrand: item.namaBrand || "-",
 
-              status: "AVAILABLE",
+              status: "TERSEDIA",
 
               LAST_ACTION: "REFUND",
 
@@ -1151,6 +1206,9 @@ export default function TablePenjualan({ data = [] }) {
         ...prev,
         [row.invoice]: true,
       }));
+
+      // 🔥 SIMPAN HARD REFUND
+   
 
       // ======================================
       // 🔥 HARD REMOVE REALTIME
@@ -1590,8 +1648,11 @@ export default function TablePenjualan({ data = [] }) {
                         onClick={() => handleRefund(row)}
                         disabled={
                           refundLoading === row.id ||
+                          refundProcessRef.current.has(row.invoice) ||
                           instantRefund[row.invoice] ||
-                          deletedRows[row.invoice]
+                          deletedRows[row.invoice] ||
+                          row.refundProcessed === true ||
+                          row.IS_REFUND === true
                         }
                         className={`px-2 py-1 rounded text-xs text-white ${
                           refundLoading === row.id
