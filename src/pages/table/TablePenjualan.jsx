@@ -194,16 +194,22 @@ export default function TablePenjualan({ data = [] }) {
         .trim()
         .toUpperCase();
 
-      // ======================================
-      // 🔥 HIDE SEMUA DATA REFUND
-      // ======================================
-      if (
+      const isRefund =
         statusPembayaran === "REFUND" ||
         status === "REFUND" ||
         paymentMetode === "REFUND" ||
         trx.refundProcessed === true ||
-        trx.IS_REFUND === true
-      ) {
+        trx.IS_REFUND === true;
+
+      // ======================================
+      // 🔥 HIDE SEMUA DATA REFUND
+      // ======================================
+      // ======================================
+      // 🔥 HARD REMOVE REFUND
+      // ======================================
+      if (isRefund) {
+        console.log("⛔ HIDE REFUND:", trx.invoice);
+
         return;
       }
 
@@ -316,7 +322,7 @@ export default function TablePenjualan({ data = [] }) {
       const salesKey = String(trx.user?.namaSales || "").toUpperCase();
 
       /* ================= PUSH HANYA 1X ================= */
-      if (!map[trx.invoice]) {
+      if (!map[trx.invoice] && !isRefund) {
         map[trx.invoice] = {
           DETAIL_ITEMS: trx.items || [],
 
@@ -418,7 +424,11 @@ export default function TablePenjualan({ data = [] }) {
 
           grandTotalDisplay: grandTotalFix,
 
-          status: trx.statusPembayaran || "OK",
+          status:
+          trx.statusPembayaran ||
+          trx.STATUS ||
+          trx.PAYMENT_METODE ||
+          "OK",
         };
       }
     });
@@ -439,17 +449,19 @@ export default function TablePenjualan({ data = [] }) {
         .trim()
         .toUpperCase();
 
-      // 🔥 HARD FILTER REFUND FINAL
-      // ======================================
-      // 🔥 HARD FILTER REFUND FINAL
-      // ======================================
-      if (
+      const isRefund =
         status === "REFUND" ||
         paymentMetode === "REFUND" ||
         r.refundProcessed === true ||
         r.IS_REFUND === true ||
-        String(r.statusPembayaran || "").toUpperCase() === "REFUND"
-      ) {
+        String(r.statusPembayaran || "").toUpperCase() === "REFUND";
+
+      // 🔥 HARD FILTER REFUND FINAL
+      // ======================================
+      // ======================================
+      // 🔥 FINAL BLOCK REFUND
+      // ======================================
+      if (isRefund) {
         return false;
       }
 

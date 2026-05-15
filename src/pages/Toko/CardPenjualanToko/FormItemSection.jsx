@@ -1157,16 +1157,46 @@ export default function FormItemSection({
 
         const [brand, namaBarang] = key.split("|");
 
-        const barangMaster = masterBarang.find(
-          (b) => normalize(b.namaBarang) === normalize(namaBarang)
-        );
+        const barangMaster = masterBarang.find((b) => {
+          const namaMaster = String(
+            b.namaBarang ||
+              b.barang ||
+              ""
+          )
+            .trim()
+            .toUpperCase();
+        
+          const namaStok = String(
+            namaBarang || ""
+          )
+            .trim()
+            .toUpperCase();
+        
+          return namaMaster === namaStok;
+        });
 
         list.push({
-          kategoriBarang: barangMaster?.kategoriBarang || "UNKNOWN",
-          namaBrand: brand,
-          namaBarang,
-          harga: barangMaster?.harga || {},
-          stok: qty,
+          kategoriBarang:
+            barangMaster?.kategoriBarang ||
+            item.kategoriBarang ||
+            "UNKNOWN",
+        
+          namaBrand:
+            barangMaster?.namaBrand ||
+            brand,
+        
+          namaBarang:
+            barangMaster?.namaBarang ||
+            namaBarang,
+        
+          harga:
+            barangMaster?.harga || {
+              srp: 0,
+              grosir: 0,
+              reseller: 0,
+            },
+        
+          stok: Number(qty || 0),
         });
       });
 
@@ -1422,6 +1452,9 @@ export default function FormItemSection({
 
       {items.map((item, idx) => {
         const barangByKategori = barangByKategoriMap[idx] || [];
+        const barangReady = barangByKategori.filter(
+          (b) => Number(b.stok || 0) > 0
+        );
         // 🔥 jika sedang edit → tampilkan item yang diedit
         if (editIndex !== null) {
           if (editIndex !== idx) return null;
@@ -1603,7 +1636,7 @@ export default function FormItemSection({
 
             {/* 🔥 DATA LIST SESUAI KATEGORI (ACCESSORIES) */}
             <datalist id={`barang-${idx}`}>
-              {barangByKategori
+            {barangReady
                 .filter((b) => {
                   const key = `${normalize(b.namaBrand || b.brand)}|${normalize(
                     b.namaBarang
