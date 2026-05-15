@@ -22,12 +22,10 @@ const rupiah = (n) =>
 
 const normalizeImei = (v) =>
   String(v || "")
-    .toLowerCase()
-    .replace(/[^0-9]/g, "");
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
 
-// ======================================
-// 🔥 NORMALIZE TEXT
-// ======================================
 const normalizeText = (v) =>
   String(v || "")
     .trim()
@@ -126,23 +124,6 @@ export default function DetailStockToko() {
     String(v || "")
       .trim()
       .toUpperCase();
-
-  // ======================================
-  // 🔥 NORMALIZE IMEI
-  // ======================================
-  const normalizeImei = (v) =>
-    String(v || "")
-      .toLowerCase()
-      .replace(/[^0-9]/g, "");
-
-  // ======================================
-  // 🔥 NORMALIZE TEXT
-  // ======================================
-  const normalizeText = (v) =>
-    String(v || "")
-      .trim()
-      .toUpperCase()
-      .replace(/\s+/g, " ");
 
   /* ======================
      MAP MASTER BARANG
@@ -447,7 +428,22 @@ export default function DetailStockToko() {
     const map = {};
 
     transaksi.forEach((t) => {
-      if (String(t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") {
+      const metode = String(
+        t.PAYMENT_METODE || ""
+      ).toUpperCase();
+      
+      // ======================================
+      // 🔥 STOCK MASUK FINAL
+      // ======================================
+      if (
+        ![
+          "PEMBELIAN",
+          "TRANSFER_MASUK",
+          "REFUND",
+          "TRANSFER_REJECT",
+          "VOID OPNAME",
+        ].includes(metode)
+      ) {
         return;
       }
 
@@ -576,6 +572,51 @@ export default function DetailStockToko() {
     allEvents.forEach((t) => {
       if (String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" && t.IMEI) {
         refundImeiSet.add(String(t.IMEI).trim());
+      }
+    });
+
+    // =====================================
+    // 🔥 SINKRON DENGAN STOCK OPNAME
+    // =====================================
+    Object.values(masterPembelianActiveMap || {}).forEach((item) => {
+      if (!item) return;
+
+      // FILTER TOKO
+      if (normalize(item.namaToko) !== normalize(namaToko)) {
+        return;
+      }
+
+      // =========================
+      // 🔥 IMEI
+      // =========================
+      if (
+        item.imei &&
+        normalizeImei(item.imei) !== "NON-IMEI"
+      ) {
+        const cleanImei = normalizeImei(item.imei);
+
+        // skip jika sudah terjual
+        if (imeiTerjual.has(cleanImei) && !refundAvailableSet.has(cleanImei)) {
+          return;
+        }
+
+        if (!map[item.imei]) {
+          map[item.imei] = {
+            tanggal: item.tanggal || "-",
+            noDo: item.noDo || "-",
+            supplier: item.supplier || "-",
+            namaToko: item.namaToko || "-",
+            brand: item.brand || "-",
+            barang: item.barang || "-",
+            imei: item.imei,
+            qty: 1,
+            hargaSRP: 0,
+            hargaGrosir: 0,
+            hargaReseller: 0,
+            statusBarang: "TERSEDIA",
+            keterangan: "SINKRON STOCK OPNAME",
+          };
+        }
       }
     });
 

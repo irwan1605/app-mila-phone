@@ -21,22 +21,16 @@ const rupiah = (n) =>
     minimumFractionDigits: 0,
   });
 
-// ======================================
-// 🔥 NORMALIZE IMEI
-// ======================================
-const normalizeImei = (v) =>
-  String(v || "")
-    .toLowerCase()
-    .replace(/[^0-9]/g, "");
-
-// ======================================
-// 🔥 NORMALIZE TEXT
-// ======================================
-const normalizeText = (v) =>
-  String(v || "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, " ");
+  const normalizeImei = (v) =>
+    String(v || "")
+      .toLowerCase()
+      .replace(/[^0-9]/g, "");
+  
+  const normalizeText = (v) =>
+    String(v || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, " ");
 
 // ======================================
 // 🔥 NORMALIZE UNIVERSAL

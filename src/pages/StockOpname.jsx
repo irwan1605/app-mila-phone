@@ -75,8 +75,9 @@ const STOCKABLE_CATEGORY = [
 
 const normalizeImei = (v) =>
   String(v || "")
-    .toLowerCase()
-    .replace(/[^0-9]/g, "");
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
 
 const normalizeText = (v) =>
   String(v || "")
@@ -229,10 +230,10 @@ export default function StockOpname() {
 
     switch (metode) {
       case "PEMBELIAN":
-        case "TRANSFER_MASUK":
-        case "TRANSFER_REJECT":
-        case "REFUND":
-          return Math.abs(qty);
+      case "TRANSFER_MASUK":
+      case "TRANSFER_REJECT":
+      case "REFUND":
+        return Math.abs(qty);
 
       case "PENJUALAN":
       case "TRANSFER_KELUAR":
@@ -355,7 +356,12 @@ export default function StockOpname() {
         t.NAMA_BARANG
       )}`;
 
-      map[skuKey] = supplier;
+      if (
+        String(t.PAYMENT_METODE || "").toUpperCase() ===
+        "PEMBELIAN"
+      ) {
+        map[skuKey] = supplier;
+      }
     });
 
     return map;
@@ -372,42 +378,6 @@ export default function StockOpname() {
         t &&
         ["APPROVED", "REFUND"].includes(String(t.STATUS || "").toUpperCase())
     );
-
-    // ======================================
-    // 🔥 REFUND NON IMEI
-    // ======================================
-    transaksi.forEach((t) => {
-      if (t.statusPembayaran === "REFUND" && Array.isArray(t.items)) {
-        t.items.forEach((it) => {
-          if (it.imeiList?.length) return;
-
-          allEvents.push({
-            STATUS: "APPROVED",
-
-            PAYMENT_METODE: "REFUND",
-
-            NAMA_TOKO: t.toko,
-
-            NAMA_BRAND: it.namaBrand,
-
-            NAMA_BARANG: it.namaBarang,
-
-            QTY: it.qty,
-
-            IMEI: "",
-
-            NO_INVOICE: t.invoice,
-
-            TANGGAL_TRANSAKSI: t.tanggal,
-
-            NAMA_SUPPLIER:
-              supplierLookup?.[
-                `${normalizeText(it.namaBrand)}|${normalizeText(it.namaBarang)}`
-              ] || "-",
-          });
-        });
-      }
-    });
 
     // ======================================
     // 🔥 PROCESS EVENT FINAL
@@ -497,9 +467,10 @@ export default function StockOpname() {
       // 🔥 NON IMEI
       // ======================================
       const skuKey =
-        `${normalize(toko)}|` +
-        `${normalizeText(t.NAMA_BRAND)}|` +
-        `${normalizeText(t.NAMA_BARANG)}`;
+      `${normalize(toko)}|` +
+      `${normalizeText(t.NAMA_BRAND)}|` +
+      `${normalizeText(t.NAMA_BARANG)}|` +
+      `${String(metode).toUpperCase()}`;
 
       if (!map[skuKey]) {
         map[skuKey] = {
@@ -542,6 +513,10 @@ export default function StockOpname() {
           "VOID OPNAME",
         ].includes(metode)
       ) {
+        map[skuKey].lastTransaksi = metode;
+
+        map[skuKey].tanggal =
+          t.TANGGAL_TRANSAKSI || t.tanggal || map[skuKey].tanggal;
         map[skuKey].qty += Math.abs(qty);
       }
 
@@ -623,7 +598,10 @@ export default function StockOpname() {
     const finalRows = Object.values(map).filter((r) => {
       // NON IMEI
       if (!r.imei) {
-        return Number(r.qty || 0) > 0;
+        return (
+          Number(r.qty || 0) > 0 &&
+          normalize(r.toko) === normalize(filterToko || r.toko)
+        );
       }
 
       const cleanImei = normalizeImei(r.imei);
@@ -683,7 +661,7 @@ export default function StockOpname() {
         ? normalizeImei(r.imei)
         : `${normalizeText(r.brand)}|${normalizeText(r.barang)}|${normalize(
             r.toko
-          )}`;
+          )}|${String(r.lastTransaksi || "").toUpperCase()}`;
 
       if (!uniqueMap.has(uniqueKey)) {
         uniqueMap.set(uniqueKey, r);
@@ -772,6 +750,10 @@ export default function StockOpname() {
         return;
 
       const key = normalizeKey(t);
+      const skuKey =
+  `${normalizeText(t.NAMA_BRAND)}|${normalizeText(
+    t.NAMA_BARANG
+  )}`;
       if (!key) return;
 
       // simpan data pembelian pertama saja
@@ -879,7 +861,10 @@ export default function StockOpname() {
     rows = rows.filter((r) => {
       // NON IMEI
       if (!r.imei) {
-        return Number(r.qty || 0) > 0;
+        return (
+          Number(r.qty || 0) > 0 &&
+          normalize(r.toko) === normalize(filterToko || r.toko)
+        );
       }
 
       const cleanImei = normalizeImei(r.imei);
@@ -902,7 +887,7 @@ export default function StockOpname() {
 
       // 🔥 NORMALIZE UNTUK MATCH
       const imeiClean = normalizeImei(imeiRaw);
-      const skuKey = `${r.brand}|${r.barang}`;
+      const skuKey = `${normalizeText(r.brand)}|${normalizeText(r.barang)}`;
 
       // ✅ PRIORITAS:
       // 1. IMEI
@@ -910,9 +895,14 @@ export default function StockOpname() {
       const meta =
         (imeiKey && masterPembelianLookup[imeiKey]) ||
         (imeiClean && masterPembelianLookup[imeiClean]) ||
-        (imeiKey && detailStockLookup[imeiKey]) ||
+        (imeiKey &&
+          detailStockLookup[
+            `${normalizeText(r.brand)}|${normalizeText(r.barang)}`
+          ]) ||
         (imeiClean && detailStockLookup[imeiClean]) ||
-        detailStockLookup[skuKey] ||
+        detailStockLookup[
+          `${normalizeText(r.brand)}|${normalizeText(r.barang)}`
+        ] ||
         masterPembelianLookup[skuKey];
       return {
         ...r,

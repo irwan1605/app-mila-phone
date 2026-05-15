@@ -44,6 +44,7 @@ import {
   endAt,
   child,
   off,
+  serverTimestamp,
 } from "firebase/database";
 
 export const listenTransaksi = (callback) => {
@@ -907,8 +908,7 @@ export const deleteTransaksi = async (tokoId, transaksiId) => {
 
       transaksi.forEach((trx) => {
         if (trx.key === transaksiId) {
-          foundPath =
-            `toko/${tokoChild.key}/transaksi/${transaksiId}`;
+          foundPath = `toko/${tokoChild.key}/transaksi/${transaksiId}`;
         }
       });
     });
@@ -917,10 +917,7 @@ export const deleteTransaksi = async (tokoId, transaksiId) => {
     // SUDAH TIDAK ADA = SUCCESS
     // =========================================
     if (!foundPath) {
-      console.warn(
-        "⚠️ DATA SUDAH HILANG:",
-        transaksiId
-      );
+      console.warn("⚠️ DATA SUDAH HILANG:", transaksiId);
 
       return {
         success: true,
@@ -939,7 +936,6 @@ export const deleteTransaksi = async (tokoId, transaksiId) => {
       success: true,
       message: "Berhasil dihapus",
     };
-
   } catch (err) {
     console.error("❌ deleteTransaksi ERROR:", err);
 
@@ -984,31 +980,28 @@ export const listenAllTransaksi = (callback) => {
       merged.sort((a, b) => {
         const ta =
           new Date(a.TANGGAL_TRANSAKSI || a.createdAt || 0).getTime() || 0;
-      
+
         const tb =
           new Date(b.TANGGAL_TRANSAKSI || b.createdAt || 0).getTime() || 0;
-      
+
         return tb - ta;
       });
-      
+
       // =====================================
       // 🔥 FIX DUPLIKAT REALTIME SNAPSHOT
       // =====================================
       const unique = new Map();
-      
+
       merged.forEach((item) => {
         if (!item?.id) return;
-      
+
         unique.set(item.id, item);
       });
-      
+
       const finalRows = Array.from(unique.values());
-      
-      console.log(
-        "🔥 TOTAL TRANSAKSI FINAL:",
-        finalRows.length
-      );
-      
+
+      console.log("🔥 TOTAL TRANSAKSI FINAL:", finalRows.length);
+
       // 🔥 FIX CALLBACK
       callback(finalRows);
     },
@@ -2379,14 +2372,13 @@ export const approveTransferFINAL = async ({ transfer }) => {
   // 3️⃣ TRANSAKSI STOK
   // =====================================================
   if (safeImeis.length > 0) {
-
     for (let i = 0; i < safeImeis.length; i++) {
       const imei = safeImeis[i];
-  
+
       if (!imei) {
         throw new Error(`❌ IMEI kosong di index ${i}`);
       }
-  
+
       console.log("🚀 PROSES IMEI:", imei);
       // 🔻 TRANSFER KELUAR
       await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
@@ -2438,13 +2430,13 @@ export const approveTransferFINAL = async ({ transfer }) => {
       });
     }
   } else {
-  // ===============================
-// 🔥 FIX QTY NON IMEI
-// ===============================
-const safeQty =
-safeImeis.length > 0
-  ? safeImeis.length // kalau ada IMEI → pakai ini
-  : Number(qty || 1);
+    // ===============================
+    // 🔥 FIX QTY NON IMEI
+    // ===============================
+    const safeQty =
+      safeImeis.length > 0
+        ? safeImeis.length // kalau ada IMEI → pakai ini
+        : Number(qty || 1);
 
     await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
       TANGGAL_TRANSAKSI: tanggal,
@@ -2977,69 +2969,167 @@ export async function createRefundTransaksi(trx) {
 
 export const refundRestorePenjualan = async (trx) => {
   try {
+    // =====================================
+    // 🔥 VALIDASI
+    // =====================================
+    if (!trx?.trxKey || !trx?.tokoId) {
+      throw new Error("TRX tidak valid");
+    }
+
+    // =====================================
+    // 🔥 CEK TRANSAKSI ASLI
+    // =====================================
+    const trxRef = ref(db, `toko/${trx.tokoId}/transaksi/${trx.trxKey}`);
+
+    const trxSnap = await get(trxRef);
+
+    if (!trxSnap.exists()) {
+      throw new Error("Data transaksi tidak ditemukan");
+    }
+
+    const trxData = trxSnap.val();
+
+    // =====================================
+    // 🔥 ANTI DOUBLE REFUND
+    // =====================================
+    if (
+      String(trxData.statusPembayaran || "")
+        .toUpperCase()
+        .trim() === "REFUND"
+    ) {
+      throw new Error("Barang sudah direfund");
+    }
+
     const updates = {};
 
-    // =========================
-    // 1. UPDATE STATUS TRANSAKSI
-    // =========================
+    // =====================================
+    // 🔥 UPDATE STATUS PENJUALAN
+    // =====================================
     updates[`toko/${trx.tokoId}/transaksi/${trx.trxKey}/statusPembayaran`] =
       "REFUND";
 
+    updates[`toko/${trx.tokoId}/transaksi/${trx.trxKey}/STATUS`] = "REFUND";
+
     updates[`toko/${trx.tokoId}/transaksi/${trx.trxKey}/refundAt`] = Date.now();
 
-    // =========================
-    // 2. KEMBALIKAN STOCK + BUAT RETUR
-    // =========================
-    if (Array.isArray(trx.items)) {
-      trx.items.forEach((item) => {
-        if (!item?.imei) return;
+    // =====================================
+    // 🔥 RESTORE STOCK
+    // =====================================
+    if (Array.isArray(trxData.items)) {
+      for (const item of trxData.items) {
+        const qtyRefund = Number(item.qty || 0);
 
-        const imei = String(item.imei).trim();
+        // =================================
+        // 🔥 IMEI
+        // =================================
+        if (Array.isArray(item.imeiList) && item.imeiList.length) {
+          for (const rawImei of item.imeiList) {
+            const imei = String(rawImei || "")
+              .trim()
+              .replace(/[^0-9]/g, "");
 
-        // ✅ stock kembali tersedia
-        updates[`stokToko/${trx.tokoId}/${imei}/status`] = "TERSEDIA";
-        updates[`stokToko/${trx.tokoId}/${imei}/sold`] = false;
-        updates[`stokToko/${trx.tokoId}/${imei}/invoice`] = null;
-        updates[`stokToko/${trx.tokoId}/${imei}/updatedAt`] = Date.now();
+            if (!imei) continue;
 
-        // ✅ unlock imei
-        updates[`imeiLock/${imei}`] = null;
+            // =============================
+            // 🔥 DETAIL STOCK REALTIME
+            // =============================
+            updates[`detail_stock/${imei}`] = {
+              imei,
+              toko: trxData.toko,
+              namaBarang: item.namaBarang || "-",
+              namaBrand: item.namaBrand || "-",
 
-        // =========================
-        // ✅ BUAT TRANSAKSI RETUR
-        // =========================
-        const returKey = push(ref(db, `transaksi/${trx.tokoId}`)).key;
+              status: "AVAILABLE",
 
-        updates[`transaksi/${trx.tokoId}/${returKey}`] = {
-          TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+              LAST_ACTION: "REFUND",
 
-          NO_INVOICE: `RET-${Date.now()}`,
+              PAYMENT_METODE: "REFUND",
 
-          NAMA_TOKO: trx.toko,
-          NAMA_BARANG: item.namaBarang,
-          NAMA_BRAND: item.namaBrand,
+              STATUS: "APPROVED",
 
-          IMEI: imei,
-          NOMOR_UNIK: imei,
+              NO_INVOICE: trxData.invoice || "-",
 
-          QTY: 1,
-          PAYMENT_METODE: "RETUR",
-          STATUS: "Approved",
-          KETERANGAN: "REFUND PENJUALAN",
+              updatedAt: Date.now(),
+            };
 
-          createdAt: Date.now(),
-        };
-      });
+            // =============================
+            // 🔥 UNLOCK IMEI
+            // =============================
+            updates[`imeiLock/${imei}`] = null;
+            updates[`imei_lock/${imei}`] = null;
+            updates[`stokLock/${imei}`] = null;
+
+            // =============================
+            // 🔥 AGAR BISA DIJUAL LAGI
+            // =============================
+            updates[`stokToko/${trx.tokoId}/${imei}/status`] = "TERSEDIA";
+
+            updates[`stokToko/${trx.tokoId}/${imei}/sold`] = false;
+
+            updates[`stokToko/${trx.tokoId}/${imei}/invoice`] = null;
+
+            updates[`stokToko/${trx.tokoId}/${imei}/updatedAt`] = Date.now();
+
+            // =============================
+            // 🔥 LOG REFUND
+            // =============================
+            const refundKey = push(ref(db, "refund_log")).key;
+
+            updates[`refund_log/${refundKey}`] = {
+              id: refundKey,
+
+              SOURCE: "REFUND_BUTTON",
+
+              PAYMENT_METODE: "REFUND",
+
+              STATUS: "APPROVED",
+
+              IMEI: imei,
+
+              QTY: 1,
+
+              NAMA_TOKO: trxData.toko,
+
+              NAMA_BARANG: item.namaBarang || "-",
+
+              NAMA_BRAND: item.namaBrand || "-",
+
+              NO_INVOICE: trxData.invoice || "-",
+
+              createdAt: Date.now(),
+            };
+          }
+        } else {
+          // =================================
+          // 🔥 NON IMEI
+          // =================================
+          const stockKey = `${item.namaBrand}|${item.namaBarang}`;
+
+          const stockRef = ref(db, `stock/${trxData.toko}/${stockKey}`);
+
+          const stockSnap = await get(stockRef);
+
+          const currentQty = Number(stockSnap.val() || 0);
+
+          // =============================
+          // 🔥 FIX QTY SESUAI REFUND
+          // =============================
+          updates[`stock/${trxData.toko}/${stockKey}`] = currentQty + qtyRefund;
+        }
+      }
     }
 
+    // =====================================
+    // 🔥 EXECUTE
+    // =====================================
     await update(ref(db), updates);
 
-    console.log("✅ REFUND RESTORE STOCK BERHASIL");
+    console.log("✅ REFUND BERHASIL");
 
     return true;
   } catch (err) {
-    console.error("REFUND ERROR:", err);
-    return false;
+    console.error("❌ REFUND ERROR:", err);
+    throw err;
   }
 };
 
@@ -3091,10 +3181,29 @@ export const listenPenjualan = (cb) => {
       const transaksi = toko?.transaksi || {};
 
       Object.entries(transaksi).forEach(([key, trx]) => {
+        // ======================================
+        // 🔥 FILTER REFUND FINAL
+        // ======================================
+        const statusPembayaran = String(
+          trx.statusPembayaran || ""
+        )
+          .toUpperCase()
+          .trim();
+
+        const status = String(
+          trx.STATUS || ""
+        )
+          .toUpperCase()
+          .trim();
+
+        // ======================================
+        // 🔥 SEMUA REFUND JANGAN TAMPIL
+        // ======================================
         if (
-          String(trx.statusPembayaran || "")
-            .toUpperCase()
-            .trim() === "REFUND"
+          statusPembayaran === "REFUND" ||
+          status === "REFUND" ||
+          trx.refundProcessed === true ||
+          trx.IS_REFUND === true
         ) {
           return;
         }
@@ -3108,12 +3217,18 @@ export const listenPenjualan = (cb) => {
       });
     });
 
-    // 🔥 SORT TERBARU DI ATAS
+    // ======================================
+    // 🔥 SORT TERBARU
+    // ======================================
     result.sort((a, b) => {
-      return Number(b.createdAt || 0) - Number(a.createdAt || 0);
+      return Number(b.createdAt || 0) -
+        Number(a.createdAt || 0);
     });
 
-    console.log("🔥 TABLE PENJUALAN:", result);
+    console.log(
+      "🔥 TABLE PENJUALAN FINAL:",
+      result
+    );
 
     cb(result);
   });
