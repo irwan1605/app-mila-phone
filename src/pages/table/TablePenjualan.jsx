@@ -782,6 +782,8 @@ export default function TablePenjualan({ data = [] }) {
 
           STATUS: "REFUND",
 
+          PAYMENT_METODE: "REFUND",
+
           refundProcessed: true,
 
           IS_REFUND: true,
@@ -824,7 +826,9 @@ export default function TablePenjualan({ data = [] }) {
       // ===============================
       const finalNonImeiItems = nonImeiItems.map((x) => ({
         ...x,
-        qty: Math.abs(Number(x.qty || 0)),
+
+        // 🔥 REFUND SELALU 1 ITEM
+        qty: 1,
       }));
 
       // ======================================
@@ -843,7 +847,7 @@ export default function TablePenjualan({ data = [] }) {
           await addTransaksi(trx.tokoId, {
             TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
 
-            NO_INVOICE: `REF-${Date.now()}`,
+            NO_INVOICE: `REF-${trx.invoice}-${Date.now()}`,
 
             NAMA_TOKO: trx.toko || "-",
 
@@ -883,24 +887,35 @@ export default function TablePenjualan({ data = [] }) {
               .trim()
               .toUpperCase()}`;
 
-          await update(
-            ref(db, `stokToko/${trx.tokoId}/NON_IMEI/${nonImeiKey}`),
-            {
-              namaBrand: item.namaBrand || "-",
-
-              namaBarang: item.namaBarang || "-",
-
-              qty: 1,
-
-              toko: trx.toko || "-",
-
-              status: "TERSEDIA",
-
-              updatedAt: Date.now(),
-
-              lastAction: "REFUND",
-            }
+          const stokRef = ref(
+            db,
+            `stokToko/${trx.tokoId}/NON_IMEI/${nonImeiKey}`
           );
+
+          const snapshot = await get(stokRef);
+
+          const oldQty = Number(snapshot.val()?.qty || 0);
+
+          // ======================================
+          // 🔥 RESTORE STOK TOKO NON IMEI
+          // ======================================
+          await update(stokRef, {
+            namaBrand: item.namaBrand || "-",
+
+            namaBarang: item.namaBarang || "-",
+
+            qty: oldQty + 1,
+
+            toko: trx.toko || "-",
+
+            status: "TERSEDIA",
+
+            sold: false,
+
+            updatedAt: Date.now(),
+
+            lastAction: "REFUND",
+          });
         }
       }
 
@@ -955,15 +970,58 @@ export default function TablePenjualan({ data = [] }) {
             // ======================================
             // 🔥 RESTORE STOCK TOKO
             // ======================================
-            await update(ref(db, `stokToko/${trx.tokoId}/${cleanImei}`), {
-              status: "TERSEDIA",
+            const stokImeiRef = ref(db, `stokToko/${trx.tokoId}/${cleanImei}`);
 
-              sold: false,
+            const stokSnapshot = await get(stokImeiRef);
 
-              invoice: null,
+            // ======================================
+            // 🔥 CEK AGAR TIDAK DOUBLE RESTORE
+            // ======================================
+            if (!stokSnapshot.exists()) {
+              await update(stokImeiRef, {
+                imei: imeiRaw,
 
-              updatedAt: Date.now(),
-            });
+                namaBarang: item.namaBarang || "-",
+
+                namaBrand: item.namaBrand || "-",
+
+                toko: trx.toko || "-",
+
+                status: "TERSEDIA",
+
+                sold: false,
+
+                invoice: null,
+
+                updatedAt: Date.now(),
+
+                lastAction: "REFUND",
+              });
+            } else {
+              await update(stokImeiRef, {
+                status: "TERSEDIA",
+
+                sold: false,
+
+                invoice: null,
+
+                updatedAt: Date.now(),
+
+                lastAction: "REFUND",
+              });
+            }
+
+            const refundImeiKey = `refund_history/${trx.invoice}/${cleanImei}`;
+
+            const refundSnap = await get(ref(db, refundImeiKey));
+
+            // ======================================
+            // 🔥 BLOCK DUPLIKAT REFUND IMEI
+            // ======================================
+            if (refundSnap.exists()) {
+              console.log("⛔ REFUND IMEI SUDAH ADA:", cleanImei);
+              continue;
+            }
 
             // ======================================
             // 🔥 CATAT REFUND IMEI
@@ -971,7 +1029,7 @@ export default function TablePenjualan({ data = [] }) {
             await addTransaksi(trx.tokoId, {
               TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
 
-              NO_INVOICE: `REF-${Date.now()}`,
+              NO_INVOICE: `REF-${trx.invoice}-${Date.now()}`,
 
               NAMA_TOKO: trx.toko,
 
@@ -992,6 +1050,18 @@ export default function TablePenjualan({ data = [] }) {
               SOURCE: "REFUND_BUTTON",
 
               IS_REFUND: true,
+            });
+            // ======================================
+            // 🔥 SIMPAN HISTORY REFUND IMEI
+            // ======================================
+            await update(ref(db, refundImeiKey), {
+              imei: cleanImei,
+
+              invoice: trx.invoice,
+
+              refundAt: Date.now(),
+
+              toko: trx.toko,
             });
           }
         }
