@@ -194,18 +194,14 @@ export default function TablePenjualan({ data = [] }) {
         .trim()
         .toUpperCase();
 
-        const isRefund =
+      const isRefund =
         status === "REFUND" ||
         paymentMetode === "REFUND" ||
         trx.refundProcessed === true ||
         trx.IS_REFUND === true ||
-        String(
-          trx.statusPembayaran || ""
-        ).toUpperCase() === "REFUND";
+        trx.refundLocked === true ||
+        String(trx.statusPembayaran || "").toUpperCase() === "REFUND";
 
-      // ======================================
-      // 🔥 HIDE SEMUA DATA REFUND
-      // ======================================
       // ======================================
       // 🔥 HARD REMOVE REFUND
       // ======================================
@@ -453,6 +449,7 @@ export default function TablePenjualan({ data = [] }) {
         paymentMetode === "REFUND" ||
         r.refundProcessed === true ||
         r.IS_REFUND === true ||
+        r.refundLocked === true ||
         String(r.statusPembayaran || "").toUpperCase() === "REFUND";
 
       // 🔥 HARD FILTER REFUND FINAL
@@ -566,13 +563,11 @@ export default function TablePenjualan({ data = [] }) {
     }
 
     const trx = rows.find((x) => {
-      const invoiceA = String(x.invoice || x.NO_INVOICE || x.noInvoice || "")
+      const invoiceA = String(x.invoice || x.NO_INVOICE || "")
         .trim()
         .toUpperCase();
 
-      const invoiceB = String(
-        row.invoice || row.NO_INVOICE || row.noInvoice || ""
-      )
+      const invoiceB = String(row.invoice || row.NO_INVOICE || "")
         .trim()
         .toUpperCase();
 
@@ -674,7 +669,9 @@ export default function TablePenjualan({ data = [] }) {
     // ======================================
     // 🔥 HARD LOCK GLOBAL FINAL
     // ======================================
-    const refundKey = row.invoice || row.id;
+    const refundKey = String(row.invoice || row.id || row.trxKey)
+      .trim()
+      .toUpperCase();
 
     // 🔥 BLOCK DOUBLE CLICK
     if (refundProcessRef.current.has(refundKey)) {
@@ -821,6 +818,8 @@ export default function TablePenjualan({ data = [] }) {
           IS_REFUND: true,
 
           refundLocked: true,
+
+          deletedAt: Date.now(),
 
           refundInvoice: row.invoice,
 
@@ -1149,6 +1148,19 @@ export default function TablePenjualan({ data = [] }) {
       // 🔥 HIDE FINAL
       // ===============================
       setDeletedRows((prev) => ({
+        ...prev,
+        [row.invoice]: true,
+      }));
+
+      // ======================================
+      // 🔥 HARD REMOVE REALTIME
+      // ======================================
+      setInstantRefund((prev) => ({
+        ...prev,
+        [row.invoice]: true,
+      }));
+
+      setLocalHiddenRefund((prev) => ({
         ...prev,
         [row.invoice]: true,
       }));
@@ -1576,14 +1588,20 @@ export default function TablePenjualan({ data = [] }) {
                     {isSuperAdmin && (
                       <button
                         onClick={() => handleRefund(row)}
-                        disabled={refundLoading === row.id}
+                        disabled={
+                          refundLoading === row.id ||
+                          instantRefund[row.invoice] ||
+                          deletedRows[row.invoice]
+                        }
                         className={`px-2 py-1 rounded text-xs text-white ${
                           refundLoading === row.id
                             ? "bg-gray-400 cursor-not-allowed"
                             : "bg-orange-500 hover:bg-orange-600"
                         }`}
                       >
-                        {refundLoading === row.id ? "Processing..." : "Refund"}
+                        {refundLoading === row.id || instantRefund[row.invoice]
+                          ? "Processing..."
+                          : "Refund"}
                       </button>
                     )}
                     {/* {isSuperAdmin && row.status !== "REFUND" && (
