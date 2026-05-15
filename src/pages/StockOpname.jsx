@@ -356,10 +356,7 @@ export default function StockOpname() {
         t.NAMA_BARANG
       )}`;
 
-      if (
-        String(t.PAYMENT_METODE || "").toUpperCase() ===
-        "PEMBELIAN"
-      ) {
+      if (String(t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN") {
         map[skuKey] = supplier;
       }
     });
@@ -467,10 +464,9 @@ export default function StockOpname() {
       // 🔥 NON IMEI
       // ======================================
       const skuKey =
-      `${normalize(toko)}|` +
-      `${normalizeText(t.NAMA_BRAND)}|` +
-      `${normalizeText(t.NAMA_BARANG)}|` +
-      `${String(metode).toUpperCase()}`;
+        `${normalize(toko)}|` +
+        `${normalizeText(t.NAMA_BRAND)}|` +
+        `${normalizeText(t.NAMA_BARANG)}`;
 
       if (!map[skuKey]) {
         map[skuKey] = {
@@ -513,7 +509,16 @@ export default function StockOpname() {
           "VOID OPNAME",
         ].includes(metode)
       ) {
-        map[skuKey].lastTransaksi = metode;
+        // ======================================
+        // 🔥 PRIORITAS REFUND
+        // ======================================
+        if (metode === "REFUND") {
+          map[skuKey].lastTransaksi = "REFUND";
+        } else if (
+          String(map[skuKey].lastTransaksi || "").toUpperCase() !== "REFUND"
+        ) {
+          map[skuKey].lastTransaksi = metode;
+        }
 
         map[skuKey].tanggal =
           t.TANGGAL_TRANSAKSI || t.tanggal || map[skuKey].tanggal;
@@ -750,10 +755,9 @@ export default function StockOpname() {
         return;
 
       const key = normalizeKey(t);
-      const skuKey =
-  `${normalizeText(t.NAMA_BRAND)}|${normalizeText(
-    t.NAMA_BARANG
-  )}`;
+      const skuKey = `${normalizeText(t.NAMA_BRAND)}|${normalizeText(
+        t.NAMA_BARANG
+      )}`;
       if (!key) return;
 
       // simpan data pembelian pertama saja

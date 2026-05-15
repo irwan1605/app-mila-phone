@@ -194,12 +194,14 @@ export default function TablePenjualan({ data = [] }) {
         .trim()
         .toUpperCase();
 
-      const isRefund =
-        statusPembayaran === "REFUND" ||
+        const isRefund =
         status === "REFUND" ||
         paymentMetode === "REFUND" ||
         trx.refundProcessed === true ||
-        trx.IS_REFUND === true;
+        trx.IS_REFUND === true ||
+        String(
+          trx.statusPembayaran || ""
+        ).toUpperCase() === "REFUND";
 
       // ======================================
       // 🔥 HIDE SEMUA DATA REFUND
@@ -425,10 +427,7 @@ export default function TablePenjualan({ data = [] }) {
           grandTotalDisplay: grandTotalFix,
 
           status:
-          trx.statusPembayaran ||
-          trx.STATUS ||
-          trx.PAYMENT_METODE ||
-          "OK",
+            trx.statusPembayaran || trx.STATUS || trx.PAYMENT_METODE || "OK",
         };
       }
     });
@@ -724,6 +723,27 @@ export default function TablePenjualan({ data = [] }) {
           String(x.invoice || "").trim() === String(row.invoice || "").trim()
       );
 
+      // ======================================
+      // 🔥 HARD CHECK DATABASE FINAL
+      // ======================================
+      const alreadyRefund =
+        trx?.refundProcessed === true ||
+        trx?.IS_REFUND === true ||
+        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
+        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
+        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
+
+      if (alreadyRefund) {
+        alert("❌ Transaksi sudah pernah di refund");
+
+        setInstantRefund((prev) => ({
+          ...prev,
+          [row.invoice]: true,
+        }));
+
+        return;
+      }
+
       if (!trx) {
         throw new Error("Data transaksi tidak ditemukan");
       }
@@ -800,6 +820,12 @@ export default function TablePenjualan({ data = [] }) {
 
           IS_REFUND: true,
 
+          refundLocked: true,
+
+          refundInvoice: row.invoice,
+
+          refundBy: userLogin?.username || "SYSTEM",
+
           refundAt: Date.now(),
         },
         userLogin
@@ -839,8 +865,7 @@ export default function TablePenjualan({ data = [] }) {
       const finalNonImeiItems = nonImeiItems.map((x) => ({
         ...x,
 
-        // 🔥 REFUND SELALU 1 ITEM
-        qty: 1,
+        qty: Number(x.qty || 0),
       }));
 
       // ======================================
@@ -856,6 +881,30 @@ export default function TablePenjualan({ data = [] }) {
         // 🔥 SIMPAN EVENT REFUND NON IMEI
         // ======================================
         for (const item of finalNonImeiItems) {
+          // ======================================
+          // 🔥 ANTI DUPLIKAT REFUND
+          // ======================================
+          const refundUniqueKey =
+            `${row.invoice}_${item.namaBarang}_${item.namaBrand}`
+              .replace(/\s+/g, "_")
+              .toUpperCase();
+
+          const refundRef = ref(db, `refund_history/${refundUniqueKey}`);
+
+          const refundSnap = await get(refundRef);
+
+          // ======================================
+          // 🔥 BLOCK DOUBLE REFUND
+          // ======================================
+          if (refundSnap.exists()) {
+            console.log("⛔ REFUND SUDAH ADA:", refundUniqueKey);
+
+            continue;
+          }
+
+          // ======================================
+          // 🔥 SIMPAN EVENT REFUND
+          // ======================================
           await addTransaksi(trx.tokoId, {
             TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
 
@@ -871,7 +920,7 @@ export default function TablePenjualan({ data = [] }) {
 
             IMEI: "NON-IMEI",
 
-            QTY: 1,
+            QTY: Number(item.qty || 1),
 
             PAYMENT_METODE: "REFUND",
 
@@ -886,6 +935,23 @@ export default function TablePenjualan({ data = [] }) {
             refundProcessed: true,
 
             statusPembayaran: "REFUND",
+          });
+
+          // ======================================
+          // 🔥 SIMPAN HISTORY REFUND
+          // ======================================
+          await update(refundRef, {
+            createdAt: Date.now(),
+
+            invoice: row.invoice,
+
+            namaBarang: item.namaBarang,
+
+            namaBrand: item.namaBrand,
+
+            qty: Number(item.qty || 1),
+
+            toko: trx.toko || "-",
           });
 
           // ======================================

@@ -636,11 +636,47 @@ export default function DashboardToko(props) {
       )}`;
 
       if (!map[skuKey]) {
+        // ======================================
+        // 🔥 CEK REFUND NON IMEI
+        // ======================================
+        const hasRefundNonImei = transaksi.some(
+          (t) =>
+            normalize(t.NAMA_TOKO) === normalize(item.namaToko) &&
+            normalizeText(t.NAMA_BRAND) === normalizeText(item.brand) &&
+            normalizeText(t.NAMA_BARANG) === normalizeText(item.barang) &&
+            (
+              !String(
+                t.IMEI ||
+                t.NO_IMEI ||
+                t.NOMOR_UNIK ||
+                ""
+              ).trim()
+            
+              ||
+            
+              normalizeImei(
+                t.IMEI ||
+                t.NO_IMEI ||
+                t.NOMOR_UNIK
+              ) === "NON-IMEI"
+            )&&
+            String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" &&
+            String(t.STATUS || "").toUpperCase() === "APPROVED"
+        );
+
         map[skuKey] = {
           ...item,
+
           qty: Number(item.qty || 0),
+
           statusBarang: "TERSEDIA",
-          keterangan: item.keterangan || "SYNC STOCK OPNAME",
+
+          // ======================================
+          // 🔥 REFUND PRIORITAS
+          // ======================================
+          keterangan: hasRefundNonImei
+            ? "REFUND"
+            : item.keterangan || "SYNC STOCK OPNAME",
         };
       } else {
         map[skuKey].qty += Number(item.qty || 0);
@@ -1025,7 +1061,48 @@ export default function DashboardToko(props) {
         };
       }
 
-      map[skuKey].qty += effect;
+      // ======================================
+      // 🔥 NON IMEI FINAL ENGINE
+      // ======================================
+
+      // STOCK MASUK
+      if (
+        [
+          "PEMBELIAN",
+          "TRANSFER_MASUK",
+          "TRANSFER_REJECT",
+          "REFUND",
+          "RETUR",
+          "VOID OPNAME",
+        ].includes(metode)
+      ) {
+        map[skuKey].qty =
+          Number(map[skuKey].qty || 0) + Math.abs(Number(t.QTY || 0));
+      }
+
+      // STOCK KELUAR
+      if (
+        ["PENJUALAN", "TRANSFER_KELUAR", "REJECT", "STOK OPNAME"].includes(
+          metode
+        )
+      ) {
+        map[skuKey].qty =
+          Number(map[skuKey].qty || 0) - Math.abs(Number(t.QTY || 0));
+      }
+
+      // ======================================
+      // 🔥 FIX NEGATIF
+      // ======================================
+      if (Number(map[skuKey].qty || 0) < 0) {
+        map[skuKey].qty = 0;
+      }
+
+      // ======================================
+      // 🔥 REFUND PRIORITAS
+      // ======================================
+      if (metode === "REFUND") {
+        map[skuKey].keterangan = "REFUND";
+      }
     });
 
     // ======================================
@@ -1112,15 +1189,34 @@ export default function DashboardToko(props) {
           baseRows.push({
             ...item,
 
-            hargaSRP: 0,
+            // ======================================
+            // 🔥 AMBIL HARGA DARI MASTER
+            // ======================================
+            hargaSRP:
+              masterMap?.[`${item.brand}|${item.barang}`]?.hargaSRP ||
+              item.hargaSRP ||
+              0,
 
-            hargaGrosir: 0,
+            hargaGrosir:
+              masterMap?.[`${item.brand}|${item.barang}`]?.hargaGrosir ||
+              item.hargaGrosir ||
+              0,
 
-            hargaReseller: 0,
+            hargaReseller:
+              masterMap?.[`${item.brand}|${item.barang}`]?.hargaReseller ||
+              item.hargaReseller ||
+              0,
 
             statusBarang: "TERSEDIA",
 
-            keterangan: "SYNC STOCK OPNAME",
+            // ======================================
+            // 🔥 REFUND PRIORITAS
+            // ======================================
+            keterangan: String(item.keterangan || "")
+              .toUpperCase()
+              .includes("REFUND")
+              ? "REFUND"
+              : "SYNC STOCK OPNAME",
           });
         }
 
@@ -1138,24 +1234,59 @@ export default function DashboardToko(props) {
       );
 
       if (!existsSku) {
+        // ======================================
+        // 🔥 KEY MASTER
+        // ======================================
+        const masterKey = `${item.brand}|${item.barang}`;
+
+        // ======================================
+        // 🔥 CEK ADA REFUND
+        // ======================================
+        const hasRefund = transaksi.some(
+          (t) =>
+            normalize(t.NAMA_TOKO) === normalize(item.namaToko) &&
+            normalizeText(t.NAMA_BRAND) === normalizeText(item.brand) &&
+            normalizeText(t.NAMA_BARANG) === normalizeText(item.barang) &&
+            !String(t.IMEI || t.NO_IMEI || t.NOMOR_UNIK || "").trim() &&
+            String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" &&
+            String(t.STATUS || "").toUpperCase() === "APPROVED"
+        );
+
         baseRows.push({
           ...item,
 
-          hargaSRP: 0,
+          // ======================================
+          // 🔥 HARGA MASTER
+          // ======================================
+          hargaSRP: masterMap?.[masterKey]?.hargaSRP || item.hargaSRP || 0,
 
-          hargaGrosir: 0,
+          hargaGrosir:
+            masterMap?.[masterKey]?.hargaGrosir || item.hargaGrosir || 0,
 
-          hargaReseller: 0,
+          hargaReseller:
+            masterMap?.[masterKey]?.hargaReseller || item.hargaReseller || 0,
 
+          // ======================================
+          // 🔥 STATUS FINAL
+          // ======================================
           statusBarang: "TERSEDIA",
 
-          keterangan: "SYNC STOCK OPNAME",
+          // ======================================
+          // 🔥 PRIORITAS KETERANGAN FINAL
+          // ======================================
+          keterangan: String(item.keterangan || "")
+            .toUpperCase()
+            .includes("REFUND")
+            ? "REFUND"
+            : hasRefund
+            ? "REFUND"
+            : "SYNC STOCK OPNAME",
         });
       }
     });
 
     return baseRows;
-  }, [rows, stockOpnameSyncRows]);
+  }, [rows, stockOpnameSyncRows, masterMap]);
 
   // ======================================
   // 🔥 SORT FINAL
