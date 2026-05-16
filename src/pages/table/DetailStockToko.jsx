@@ -963,6 +963,16 @@ export default function DetailStockToko() {
 
     return Object.values(finalMap).filter((r) => {
       // ======================================
+      // 🔥 HAPUS BARANG LIAR
+      // ======================================
+      if (
+        String(r.keterangan || "")
+          .toUpperCase()
+          .includes("SYNC STOCK OPNAME")
+      ) {
+        return false;
+      }
+      // ======================================
       // 🔥 QTY HABIS
       // ======================================
       if (Number(r.qty || 0) <= 0) {
