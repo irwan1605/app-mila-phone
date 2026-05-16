@@ -110,7 +110,7 @@ export default function DetailStockToko(props) {
       return qtyBase;
     }
 
-    if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+    if (["PENJUALAN"].includes(metode)) {
       return -qtyBase;
     }
 
@@ -128,7 +128,7 @@ export default function DetailStockToko(props) {
       return qtyBase;
     }
 
-    if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+    if (["PENJUALAN"].includes(metode)) {
       return -qtyBase;
     }
 
@@ -798,17 +798,31 @@ export default function DetailStockToko(props) {
         }
 
         // STOCK KELUAR
-        if (
-          ["PENJUALAN", "TRANSFER_KELUAR", "REJECT", "STOK OPNAME"].includes(
-            metode
-          )
-        ) {
+        // ======================================
+        // 🔥 PENJUALAN = BENAR-BENAR HABIS
+        // ======================================
+        if (["PENJUALAN", "REJECT", "STOK OPNAME"].includes(metode)) {
           map[key].qty = 0;
 
           map[key].statusBarang = "TERJUAL";
 
-          map[key].keterangan =
-            metode === "TRANSFER_KELUAR" ? "TRANSFER BARANG" : metode;
+          map[key].keterangan = metode;
+
+          return;
+        }
+
+        // ======================================
+        // 🔥 TRANSFER KELUAR ≠ HABIS
+        // ======================================
+        if (metode === "TRANSFER_KELUAR") {
+          // ✅ qty tetap 1
+          map[key].qty = 1;
+
+          // ✅ status khusus transfer
+          map[key].statusBarang = "TRANSFER";
+
+          // ✅ keterangan transfer
+          map[key].keterangan = "TRANSFER BARANG";
 
           return;
         }
@@ -1096,50 +1110,50 @@ export default function DetailStockToko(props) {
     refundFinalTracker,
   ]);
 
- /* ======================
+  /* ======================
    SEARCH FILTER UNIVERSAL
 ====================== */
-const filtered = useMemo(() => {
-  const keyword = String(search || "")
-    .trim()
-    .toLowerCase();
-
-  if (!keyword) return mergedRows;
-
-  return mergedRows.filter((r) => {
-    const imei = String(r.imei || "").toLowerCase();
-
-    const barang = String(r.barang || "").toLowerCase();
-
-    const toko = String(r.namaToko || r.toko || "").toLowerCase();
-
-    const brand = String(r.brand || "").toLowerCase();
-
-    const noDo = String(r.noDo || "").toLowerCase();
-
-    const tanggal = String(r.tanggal || "")
-      .replace("T", " ")
+  const filtered = useMemo(() => {
+    const keyword = String(search || "")
+      .trim()
       .toLowerCase();
 
-    const supplier = String(r.supplier || "").toLowerCase();
+    if (!keyword) return mergedRows;
 
-    const status = String(r.statusBarang || "").toLowerCase();
+    return mergedRows.filter((r) => {
+      const imei = String(r.imei || "").toLowerCase();
 
-    const keterangan = String(r.keterangan || "").toLowerCase();
+      const barang = String(r.barang || "").toLowerCase();
 
-    return (
-      imei.includes(keyword) ||
-      barang.includes(keyword) ||
-      toko.includes(keyword) ||
-      brand.includes(keyword) ||
-      noDo.includes(keyword) ||
-      tanggal.includes(keyword) ||
-      supplier.includes(keyword) ||
-      status.includes(keyword) ||
-      keterangan.includes(keyword)
-    );
-  });
-}, [mergedRows, search]);
+      const toko = String(r.namaToko || r.toko || "").toLowerCase();
+
+      const brand = String(r.brand || "").toLowerCase();
+
+      const noDo = String(r.noDo || "").toLowerCase();
+
+      const tanggal = String(r.tanggal || "")
+        .replace("T", " ")
+        .toLowerCase();
+
+      const supplier = String(r.supplier || "").toLowerCase();
+
+      const status = String(r.statusBarang || "").toLowerCase();
+
+      const keterangan = String(r.keterangan || "").toLowerCase();
+
+      return (
+        imei.includes(keyword) ||
+        barang.includes(keyword) ||
+        toko.includes(keyword) ||
+        brand.includes(keyword) ||
+        noDo.includes(keyword) ||
+        tanggal.includes(keyword) ||
+        supplier.includes(keyword) ||
+        status.includes(keyword) ||
+        keterangan.includes(keyword)
+      );
+    });
+  }, [mergedRows, search]);
 
   // ======================================
   // 🔥 TOTAL STOK FINAL
