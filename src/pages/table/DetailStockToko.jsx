@@ -8,7 +8,12 @@ import {
 import { ref, remove, get, onValue } from "firebase/database";
 import { db } from "../../firebase";
 import * as XLSX from "xlsx";
-import { FaSearch, FaExchangeAlt } from "react-icons/fa";
+import {
+  FaSearch,
+  FaExchangeAlt,
+  FaFileExcel,
+  FaCashRegister,
+} from "react-icons/fa";
 
 /* ======================
    HELPER RUPIAH
@@ -34,19 +39,29 @@ const normalizeText = (v) =>
 
 const isApproved = (t) => String(t.STATUS || "").toUpperCase() === "APPROVED";
 
-export default function DetailStockToko() {
+export default function DetailStockToko(props) {
   const { state } = useLocation();
   const navigate = useNavigate();
   const tableRef = useRef(null);
 
-  const namaToko = state?.namaToko || "";
+  const namaToko = props?.namaToko || state?.namaToko || "";
 
   /* ======================
      STATE
   ====================== */
   const [transaksi, setTransaksi] = useState([]);
   const [masterBarang, setMasterBarang] = useState([]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(props?.searchTerm || "");
+
+  // ======================================
+  // 🔥 SYNC SEARCH DASHBOARD
+  // ======================================
+  useEffect(() => {
+    if (props?.searchTerm !== undefined) {
+      setSearch(props.searchTerm);
+    }
+  }, [props?.searchTerm]);
+
   const [page, setPage] = useState(1);
   const [deletedIds, setDeletedIds] = useState(new Set());
   const [detailStock, setDetailStock] = useState({});
@@ -265,6 +280,60 @@ export default function DetailStockToko() {
 
     return set;
   }, [transaksi, detailStock]);
+
+  // ======================================
+  // 🔥 FINAL REFUND ACTIVE TRACKER
+  // ======================================
+  const refundFinalTracker = useMemo(() => {
+    const map = {};
+
+    // ======================================
+    // 🔥 SORT TERLAMA -> TERBARU
+    // ======================================
+    const sorted = [...transaksi].sort(
+      (a, b) =>
+        new Date(a.CREATED_AT || a.TANGGAL_TRANSAKSI || 0).getTime() -
+        new Date(b.CREATED_AT || b.TANGGAL_TRANSAKSI || 0).getTime()
+    );
+
+    sorted.forEach((t) => {
+      if (!t?.IMEI) return;
+
+      const imei = normalizeImei(t.IMEI);
+
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+      const status = String(t.STATUS || "").toUpperCase();
+
+      if (!["APPROVED", "REFUND"].includes(status)) {
+        return;
+      }
+
+      // ======================================
+      // 🔥 REFUND MASUK STOCK
+      // ======================================
+      if (metode === "REFUND") {
+        map[imei] = {
+          active: true,
+          metode: "REFUND",
+        };
+      }
+
+      // ======================================
+      // 🔥 SUDAH TERJUAL LAGI
+      // ======================================
+      if (metode === "PENJUALAN") {
+        if (map[imei]?.active) {
+          map[imei] = {
+            active: false,
+            metode: "PENJUALAN",
+          };
+        }
+      }
+    });
+
+    return map;
+  }, [transaksi]);
 
   // const imeiTransferKeluar = useMemo(() => {
   //   const set = new Set();
@@ -992,6 +1061,25 @@ export default function DetailStockToko() {
       if (r.imei) {
         const cleanImei = normalizeImei(r.imei);
 
+        // ======================================
+        // 🔥 REFUND SUDAH TERJUAL LAGI
+        // ======================================
+        if (
+          String(r.keterangan || "")
+            .toUpperCase()
+            .includes("REFUND")
+        ) {
+          const refundState = refundFinalTracker?.[cleanImei];
+
+          // ✅ refund sudah dijual lagi
+          if (refundState && refundState.active === false) {
+            return false;
+          }
+        }
+
+        // ======================================
+        // 🔥 STOCK TERJUAL NORMAL
+        // ======================================
         if (imeiTerjual.has(cleanImei) && !refundAvailableSet.has(cleanImei)) {
           return false;
         }
@@ -999,22 +1087,59 @@ export default function DetailStockToko() {
 
       return true;
     });
-  }, [rows, namaToko, transaksi, imeiTerjual, refundAvailableSet]);
+  }, [
+    rows,
+    namaToko,
+    transaksi,
+    imeiTerjual,
+    refundAvailableSet,
+    refundFinalTracker,
+  ]);
 
-  /* ======================
-     SEARCH FILTER
-  ====================== */
-  const filtered = useMemo(() => {
-    if (!search) return mergedRows;
-    const q = search.toLowerCase();
-    return mergedRows.filter(
-      (r) =>
-        r.brand.toLowerCase().includes(q) ||
-        r.barang.toLowerCase().includes(q) ||
-        r.imei.toLowerCase().includes(q) ||
-        r.noDo.toLowerCase().includes(q)
+ /* ======================
+   SEARCH FILTER UNIVERSAL
+====================== */
+const filtered = useMemo(() => {
+  const keyword = String(search || "")
+    .trim()
+    .toLowerCase();
+
+  if (!keyword) return mergedRows;
+
+  return mergedRows.filter((r) => {
+    const imei = String(r.imei || "").toLowerCase();
+
+    const barang = String(r.barang || "").toLowerCase();
+
+    const toko = String(r.namaToko || r.toko || "").toLowerCase();
+
+    const brand = String(r.brand || "").toLowerCase();
+
+    const noDo = String(r.noDo || "").toLowerCase();
+
+    const tanggal = String(r.tanggal || "")
+      .replace("T", " ")
+      .toLowerCase();
+
+    const supplier = String(r.supplier || "").toLowerCase();
+
+    const status = String(r.statusBarang || "").toLowerCase();
+
+    const keterangan = String(r.keterangan || "").toLowerCase();
+
+    return (
+      imei.includes(keyword) ||
+      barang.includes(keyword) ||
+      toko.includes(keyword) ||
+      brand.includes(keyword) ||
+      noDo.includes(keyword) ||
+      tanggal.includes(keyword) ||
+      supplier.includes(keyword) ||
+      status.includes(keyword) ||
+      keterangan.includes(keyword)
     );
-  }, [rows, search]);
+  });
+}, [mergedRows, search]);
 
   // ======================================
   // 🔥 TOTAL STOK FINAL
@@ -1118,34 +1243,37 @@ export default function DetailStockToko() {
         </div>
       ) : (
         <>
-          <h2 className="text-xl font-bold mb-4">
-            Detail Stok Toko : {namaToko}
-          </h2>
+          {props?.mode !== "dashboard" && (
+            <h2 className="text-xl font-bold mb-4">
+              Detail Stok Toko : {namaToko}
+            </h2>
+          )}
 
-          <div
-            ref={tableRef}
-            className="bg-white/10 p-4 rounded-xl mb-4 flex items-center"
-          >
-            <FaSearch />
-            <input
-              className="ml-3 flex-1 bg-transparent outline-none"
-              placeholder="Cari NO DO / Brand / Barang / IMEI"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-            />
-            <button
-              onClick={() =>
-                navigate("/toko/:tokoId/penjualan", {
-                  state: {
-                    namaToko: namaToko,
-                    source: "DETAIL_STOCK_TOKO",
-                  },
-                })
-              }
-              className="
+          {props?.mode !== "dashboard" && (
+            <div
+              ref={tableRef}
+              className="bg-white/10 p-4 rounded-xl mb-4 flex items-center"
+            >
+              <FaSearch />
+              <input
+                className="ml-3 flex-1 bg-transparent outline-none"
+                placeholder="Cari NO DO / Brand / Barang / IMEI"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+              />
+              <button
+                onClick={() =>
+                  navigate("/toko/:tokoId/penjualan", {
+                    state: {
+                      namaToko: namaToko,
+                      source: "DETAIL_STOCK_TOKO",
+                    },
+                  })
+                }
+                className="
     flex items-center gap-2
     px-5 py-2 rounded-xl
     bg-gradient-to-r from-red-500 to-emerald-600
@@ -1154,20 +1282,21 @@ export default function DetailStockToko() {
     shadow-lg hover:shadow-green-400/50
     transition-all duration-200
   "
-            >
-              🛒 PENJUALAN
-            </button>
-            <button
-              onClick={exportExcel}
-              className="ml-4 bg-green-600 px-4 py-2 rounded   bg-gradient-to-r from-green-500 to-emerald-600
+              >
+                🛒 PENJUALAN
+              </button>
+              <button
+                onClick={exportExcel}
+                className="ml-4 bg-green-600 px-4 py-2 rounded   bg-gradient-to-r from-green-500 to-emerald-600
     hover:from-emerald-600 hover:to-blue-500
     text-white font-semibold
     shadow-lg hover:shadow-blue-400/50
     transition-all duration-200"
-            >
-              Export
-            </button>
-          </div>
+              >
+                Export
+              </button>
+            </div>
+          )}
 
           <div className="bg-white text-slate-800 rounded-2xl shadow-xl overflow-x-auto scrollbar-dark">
             <table className="w-full min-w-[2200px] text-sm">
