@@ -15,6 +15,124 @@ import {
   FaCashRegister,
 } from "react-icons/fa";
 
+// ======================================
+// 🔥 EXPORT EXCEL UNIVERSAL
+// ======================================
+export const exportDetailStockExcel = (
+  mergedRows,
+  TOKO_AKTIF,
+  normalize
+) => {
+  try {
+
+    // ======================================
+    // 🔥 FILTER TOKO FINAL
+    // ======================================
+    const dataToko = mergedRows.filter(
+      (item) =>
+        normalize(item.namaToko || item.toko) ===
+        normalize(TOKO_AKTIF)
+    );
+
+    // ======================================
+    // 🔥 SORT TERBARU
+    // ======================================
+    const sortedData = [...dataToko].sort((a, b) => {
+      const aDate = new Date(
+        a.tanggal || a.createdAt || 0
+      ).getTime();
+
+      const bDate = new Date(
+        b.tanggal || b.createdAt || 0
+      ).getTime();
+
+      return bDate - aDate;
+    });
+
+    // ======================================
+    // 🔥 EXPORT DATA
+    // ======================================
+    const exportData = sortedData.map((item, index) => ({
+      NO: index + 1,
+
+      TANGGAL: item.tanggal || "-",
+
+      NO_DO: item.noDo || "-",
+
+      SUPPLIER: item.supplier || "-",
+
+      TOKO: item.namaToko || "-",
+
+      BRAND: item.brand || "-",
+
+      BARANG: item.barang || "-",
+
+      IMEI: item.imei || "-",
+
+      QTY: Number(item.qty || 0),
+
+      STATUS: item.statusBarang || "TERSEDIA",
+
+      KETERANGAN: item.keterangan || "-",
+
+      HARGA_SRP: Number(item.hargaSRP || 0),
+
+      HARGA_GROSIR: Number(item.hargaGrosir || 0),
+
+      HARGA_RESELLER: Number(item.hargaReseller || 0),
+    }));
+
+    // ======================================
+    // 🔥 WORKSHEET
+    // ======================================
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    ws["!cols"] = [
+      { wch: 8 },
+      { wch: 18 },
+      { wch: 20 },
+      { wch: 28 },
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 35 },
+      { wch: 25 },
+      { wch: 10 },
+      { wch: 18 },
+      { wch: 25 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 18 },
+    ];
+
+    // ======================================
+    // 🔥 WORKBOOK
+    // ======================================
+    const wb = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+      wb,
+      ws,
+      "DETAIL STOCK"
+    );
+
+    // ======================================
+    // 🔥 EXPORT FILE
+    // ======================================
+    XLSX.writeFile(
+      wb,
+      `DETAIL_STOCK_${TOKO_AKTIF}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx`
+    );
+
+  } catch (err) {
+
+    console.error(err);
+
+    alert("❌ Gagal export excel");
+  }
+};
+
 /* ======================
    HELPER RUPIAH
 ====================== */

@@ -15,7 +15,9 @@ import {
 
 import { ref, onValue, get } from "firebase/database";
 import { db } from "../firebase";
-import DetailStockToko from "./table/DetailStockToko";
+import DetailStockToko, {
+  exportDetailStockExcel,
+} from "./table/DetailStockToko";
 
 import {
   listenPenjualanHemat,
@@ -1462,15 +1464,12 @@ export default function DashboardToko(props) {
       }
     });
 
-    // ======================================
-    // 🔥 FINAL FILTER FIX
-    // ======================================
     return Object.values(map).filter((r) => {
-      // ======================================
-      // 🔥 HILANGKAN DATA LIAR SUDAH TERJUAL
-      // ======================================
       const metode = String(r.keterangan || "").toUpperCase();
 
+      // ======================================
+      // 🔥 HILANGKAN DATA LIAR
+      // ======================================
       if (
         [
           "PENJUALAN",
@@ -1484,14 +1483,14 @@ export default function DashboardToko(props) {
       }
 
       // ======================================
-      // 🔥 HANYA QTY AKTIF
+      // 🔥 QTY HABIS
       // ======================================
       if (Number(r.qty || 0) <= 0) {
         return false;
       }
 
       // ======================================
-      // 🔥 FILTER IMEI TRANSFER SUDAH TERJUAL
+      // 🔥 FILTER IMEI
       // ======================================
       if (r.imei) {
         const imei = normalizeImei(r.imei);
@@ -1512,71 +1511,9 @@ export default function DashboardToko(props) {
       }
 
       // ======================================
-      // 🔥 HANYA TOKO AKTIF
+      // 🔥 FILTER TOKO FINAL
       // ======================================
       if (normalize(r.namaToko || r.toko) !== normalize(namaToko)) {
-        return false;
-      }
-
-      // ======================================
-      // 🔥 FILTER IMEI
-      // ======================================
-      if (r.imei) {
-        const cleanImei = normalizeImei(r.imei);
-
-        // ======================================
-        // 🔥 TERJUAL
-        // ======================================
-        if (imeiTerjual.has(cleanImei) && !refundAvailableSet.has(cleanImei)) {
-          return false;
-        }
-
-        // ======================================
-        // 🔥 REFUND SUDAH DIJUAL LAGI
-        // ======================================
-        const refundState = refundFinalTracker?.[cleanImei];
-
-        if (refundState && refundState.active === false) {
-          return false;
-        }
-
-        // ======================================
-        // 🔥 OWNER TERAKHIR
-        // ======================================
-        const latestTracker = imeiTransferTracker?.[cleanImei];
-
-        if (
-          latestTracker &&
-          normalize(latestTracker.toko) !== normalize(namaToko)
-        ) {
-          return false;
-        }
-
-        // ======================================
-        // 🔥 VALIDASI IMEI ADA
-        // ======================================
-        const latest = imeiFinalMap?.[cleanImei];
-
-        if (!latest) {
-          return false;
-        }
-
-        // ======================================
-        // 🔥 TOKO TERAKHIR
-        // ======================================
-        if (normalize(latest.toko) !== normalize(namaToko)) {
-          return false;
-        }
-      }
-
-      // ======================================
-      // 🔥 HILANGKAN DATA LIAR
-      // ======================================
-      if (
-        String(r.keterangan || "")
-          .toUpperCase()
-          .includes("SYNC STOCK OPNAME")
-      ) {
         return false;
       }
 
@@ -1884,96 +1821,16 @@ export default function DashboardToko(props) {
     ? "bg-slate-900/70 border border-slate-700/80 text-slate-100"
     : "bg-white border border-slate-200 text-slate-900";
 
-  // ======================================
-  // 🔥 EXPORT FINAL DARI TABLE DETAIL STOCK
-  // ======================================
-  // ======================================
-  // 🔥 EXPORT FINAL PER TOKO
-  // ======================================
-  const exportDashboardStock = () => {
-    try {
-      // ======================================
-      // 🔥 FILTER TOKO AKTIF
-      // ======================================
-      const dataToko = mergedRows.filter(
-        (item) => normalize(item.namaToko) === normalize(TOKO_AKTIF)
-      );
-
-      // ======================================
-      // 🔥 DATA EXPORT
-      // ======================================
-      const exportData = dataToko.map((item, index) => ({
-        NO: index + 1,
-
-        TANGGAL: item.tanggal || "-",
-
-        NO_DO: item.noDo || "-",
-
-        SUPPLIER: item.supplier || "-",
-
-        TOKO: item.namaToko || "-",
-
-        BRAND: item.brand || "-",
-
-        NAMA_BARANG: item.barang || "-",
-
-        IMEI: item.imei || "-",
-
-        QTY: Number(item.qty || 0),
-
-        HARGA_SRP: Number(item.hargaSRP || 0),
-
-        HARGA_GROSIR: Number(item.hargaGrosir || 0),
-
-        HARGA_RESELLER: Number(item.hargaReseller || 0),
-
-        STATUS: item.statusBarang || "-",
-
-        KETERANGAN: item.keterangan || "-",
-      }));
-
-      // ======================================
-      // 🔥 WORKSHEET
-      // ======================================
-      const ws = XLSX.utils.json_to_sheet(exportData);
-
-      // ======================================
-      // 🔥 AUTO WIDTH
-      // ======================================
-      ws["!cols"] = [
-        { wch: 8 },
-        { wch: 18 },
-        { wch: 20 },
-        { wch: 25 },
-        { wch: 20 },
-        { wch: 18 },
-        { wch: 35 },
-        { wch: 25 },
-        { wch: 10 },
-        { wch: 18 },
-        { wch: 18 },
-        { wch: 18 },
-        { wch: 18 },
-        { wch: 25 },
-      ];
-
-      // ======================================
-      // 🔥 WORKBOOK
-      // ======================================
-      const wb = XLSX.utils.book_new();
-
-      XLSX.utils.book_append_sheet(wb, ws, "DETAIL STOCK TOKO");
-
-      // ======================================
-      // 🔥 EXPORT FILE
-      // ======================================
-      XLSX.writeFile(wb, `DETAIL_STOCK_${TOKO_AKTIF}.xlsx`);
-    } catch (err) {
-      console.error(err);
-
-      alert("❌ Gagal export excel");
-    }
-  };
+// ======================================
+// 🔥 EXPORT LANGSUNG DARI DETAIL STOCK
+// ======================================
+const exportDashboardStock = () => {
+  exportDetailStockExcel(
+    mergedRows,
+    TOKO_AKTIF,
+    normalize
+  );
+};
 
   return (
     <div className={`min-h-screen ${rootBgClass} p-4 sm:p-6`}>
