@@ -486,145 +486,82 @@ export default function FormItemSection({
     return [...map].filter(Boolean).sort((a, b) => a.localeCompare(b));
   };
 
-const barangList = (kategori, brand) => {
-  const finalMap = {};
-
-  // =====================================
-  // 🔥 DEBUG
-  // =====================================
-  console.log("🔥 stockDetailFinal:", stockDetailFinal);
-  console.log("🔥 kategori:", kategori);
-  console.log("🔥 brand:", brand);
-
-  // =====================================
-  // 🔥 LOOP STOCK FINAL
-  // =====================================
-  Object.entries(stockDetailFinal || {}).forEach(([key, qty]) => {
-    // =====================================
-    // 🔥 STOCK HABIS
-    // =====================================
-    if (Number(qty || 0) <= 0) {
-      return;
-    }
+  const barangList = (kategori, brand) => {
+    const finalMap = {};
 
     // =====================================
-    // 🔥 SPLIT KEY
+    // 🔥 AMBIL DARI STOCK FINAL TOKO
     // =====================================
-    const splitKey = String(key || "").split("|");
-
-    const brandStock = splitKey[0] || "";
-
-    const namaBarangStock = splitKey.slice(1).join("|") || "";
-
-    // =====================================
-    // 🔥 FILTER BRAND
-    // =====================================
-    if (
-      normalize(brandStock) !==
-      normalize(brand)
-    ) {
-      return;
-    }
-
-    // =====================================
-    // 🔥 CARI MASTER BARANG
-    // =====================================
-    const barangMaster = masterBarang.find((b) => {
-      const namaMaster = normalize(
-        b.namaBarang ||
-          b.barang ||
-          b.NAMA_BARANG
-      );
-
-      const namaStock = normalize(
-        namaBarangStock
-      );
-
-      return namaMaster === namaStock;
-    });
-
-    // =====================================
-    // 🔥 MASTER TIDAK ADA
-    // =====================================
-    if (!barangMaster) {
+    Object.entries(stockDetailFinal || {}).forEach(([key, qty]) => {
       // =====================================
-      // 🔥 FALLBACK MANUAL
+      // 🔥 STOCK HABIS
       // =====================================
-      const finalKey =
-        `${normalize(brandStock)}|` +
-        `${normalize(namaBarangStock)}`;
+      if (Number(qty || 0) <= 0) {
+        return;
+      }
+
+      const [brandStock, namaBarangStock] = String(key).split("|");
+
+      // =====================================
+      // 🔥 FILTER BRAND
+      // =====================================
+      if (normalize(brandStock) !== normalize(brand)) {
+        return;
+      }
+
+      // =====================================
+      // 🔥 CARI MASTER
+      // =====================================
+      const barangMaster = masterBarang.find((b) => {
+        const namaMaster = String(b.namaBarang || b.barang || "")
+          .trim()
+          .toUpperCase();
+
+        const namaStock = String(namaBarangStock || "")
+          .trim()
+          .toUpperCase();
+
+        return namaMaster === namaStock;
+      });
+
+      if (!barangMaster) {
+        return;
+      }
+
+      // =====================================
+      // 🔥 FILTER KATEGORI
+      // =====================================
+      if (normalize(barangMaster.kategoriBarang) !== normalize(kategori)) {
+        return;
+      }
+
+      // =====================================
+      // 🔥 FINAL KEY
+      // =====================================
+      const finalKey = `${normalize(brandStock)}|${normalize(namaBarangStock)}`;
+
+      // =====================================
+      // 🔥 NO DUPLICATE
+      // =====================================
+      if (finalMap[finalKey]) {
+        return;
+      }
 
       finalMap[finalKey] = {
-        kategoriBarang: kategori,
+        ...barangMaster,
 
         namaBrand: brandStock,
 
         namaBarang: namaBarangStock,
 
-        harga: {
-          srp: 0,
-          grosir: 0,
-          reseller: 0,
-        },
-
         stok: Number(qty || 0),
       };
+    });
 
-      return;
-    }
-
-    // =====================================
-    // 🔥 FILTER KATEGORI
-    // =====================================
-    if (
-      normalize(barangMaster.kategoriBarang) !==
-      normalize(kategori)
-    ) {
-      return;
-    }
-
-    // =====================================
-    // 🔥 FINAL KEY
-    // =====================================
-    const finalKey =
-      `${normalize(brandStock)}|` +
-      `${normalize(namaBarangStock)}`;
-
-    // =====================================
-    // 🔥 NO DUPLICATE
-    // =====================================
-    if (finalMap[finalKey]) {
-      return;
-    }
-
-    // =====================================
-    // 🔥 INSERT FINAL
-    // =====================================
-    finalMap[finalKey] = {
-      ...barangMaster,
-
-      namaBrand:
-        barangMaster.namaBrand ||
-        barangMaster.brand ||
-        brandStock,
-
-      namaBarang:
-        barangMaster.namaBarang ||
-        namaBarangStock,
-
-      stok: Number(qty || 0),
-    };
-  });
-
-  // =====================================
-  // 🔥 FINAL RESULT
-  // =====================================
-  return Object.values(finalMap).sort((a, b) =>
-    String(a.namaBarang || "").localeCompare(
-      String(b.namaBarang || "")
-    )
-  );
-};
+    return Object.values(finalMap).sort((a, b) =>
+      String(a.namaBarang).localeCompare(String(b.namaBarang))
+    );
+  };
 
   /* ================= IMEI BY BARANG ================= */
   /* ================= IMEI BY BARANG ================= */

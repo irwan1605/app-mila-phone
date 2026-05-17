@@ -1022,7 +1022,10 @@ export default function DetailStockToko(props) {
 
           supplier: r.supplier || finalMap[skuKey].supplier,
 
-          qty: Math.max(Number(finalMap[skuKey].qty || 0), Number(r.qty || 0)),
+          // ======================================
+          // 🔥 QTY FINAL REALTIME
+          // ======================================
+          qty: Number(r.qty || 0),
 
           hargaSRP: r.hargaSRP || finalMap[skuKey].hargaSRP || 0,
 

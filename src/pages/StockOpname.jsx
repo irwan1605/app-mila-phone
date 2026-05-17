@@ -60,18 +60,8 @@ const fallbackTokoNames = [
 ];
 
 const rowsPerPageDefault = 12;
-const FORM_STORAGE_KEY = "stockOpnameFormDraft";
 
-const STOCKABLE_CATEGORY = [
-  "MOTOR LISTRIK",
-  "SEPEDA LISTRIK",
-  "HANDPHONE",
 
-  // ✅ tambahan
-  "ACCESSORIES",
-  "SPARE PART",
-  "JASA",
-];
 
 const normalizeImei = (v) =>
   String(v || "")
