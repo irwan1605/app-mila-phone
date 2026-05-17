@@ -249,6 +249,57 @@ export default function DetailStockToko(props) {
   }, [transaksi]);
 
   // ======================================
+  // 🔥 IMEI TRANSFER SUDAH TERJUAL
+  // ======================================
+  const imeiTransferSoldSet = useMemo(() => {
+    const set = new Set();
+
+    // SORT TERLAMA → TERBARU
+    const sorted = [...transaksi].sort(
+      (a, b) =>
+        new Date(a.CREATED_AT || 0).getTime() -
+        new Date(b.CREATED_AT || 0).getTime()
+    );
+
+    const transferMap = {};
+
+    sorted.forEach((t) => {
+      if (!t?.IMEI) return;
+
+      const imei = normalizeImei(t.IMEI);
+
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+      const status = String(t.STATUS || "").toUpperCase();
+
+      if (status !== "APPROVED") return;
+
+      // =========================
+      // TRANSFER MASUK
+      // =========================
+      if (metode === "TRANSFER_MASUK") {
+        transferMap[imei] = true;
+      }
+
+      // =========================
+      // SUDAH DIJUAL
+      // =========================
+      if (metode === "PENJUALAN" && transferMap[imei]) {
+        set.add(imei);
+      }
+
+      // =========================
+      // REFUND BALIKKAN LAGI
+      // =========================
+      if (metode === "REFUND") {
+        set.delete(imei);
+      }
+    });
+
+    return set;
+  }, [transaksi]);
+
+  // ======================================
   // 🔥 IMEI REFUND ACTIVE
   // ======================================
   // ======================================
@@ -679,8 +730,7 @@ export default function DetailStockToko(props) {
 
         statusBarang: "TERSEDIA",
 
-        keterangan:
-        String(s.LAST_ACTION || "")
+        keterangan: String(s.LAST_ACTION || "")
           .toUpperCase()
           .includes("PENJUALAN")
           ? "TERJUAL"
@@ -925,6 +975,27 @@ export default function DetailStockToko(props) {
 
       if (Number(r.qty || 0) <= 0) {
         return false;
+      }
+
+      // ======================================
+      // 🔥 FILTER IMEI TRANSFER SUDAH TERJUAL
+      // ======================================
+      if (r.imei) {
+        const imei = normalizeImei(r.imei);
+
+        // ======================================
+        // 🔥 SUDAH TERJUAL
+        // ======================================
+        if (imeiTerjual.has(imei)) {
+          return false;
+        }
+
+        // ======================================
+        // 🔥 TRANSFER SUDAH TERJUAL
+        // ======================================
+        if (imeiTransferSoldSet.has(imei)) {
+          return false;
+        }
       }
 
       if (normalize(r.namaToko || r.toko) !== normalize(namaToko)) {
