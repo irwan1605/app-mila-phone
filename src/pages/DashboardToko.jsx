@@ -1821,16 +1821,62 @@ export default function DashboardToko(props) {
     ? "bg-slate-900/70 border border-slate-700/80 text-slate-100"
     : "bg-white border border-slate-200 text-slate-900";
 
-// ======================================
-// 🔥 EXPORT LANGSUNG DARI DETAIL STOCK
-// ======================================
-const exportDashboardStock = () => {
-  exportDetailStockExcel(
-    mergedRows,
-    TOKO_AKTIF,
-    normalize
-  );
-};
+  // ======================================
+  // 🔥 EXPORT FINAL DETAIL STOCK
+  // ======================================
+  const exportDashboardStock = () => {
+    try {
+      exportDetailStockExcel(
+        rows.filter(Boolean).filter((r) => {
+          // ======================================
+          // 🔥 FILTER TOKO
+          // ======================================
+          if (normalize(r.namaToko || r.toko) !== normalize(TOKO_AKTIF)) {
+            return false;
+          }
+
+          // ======================================
+          // 🔥 HAPUS DATA LIAR
+          // ======================================
+          if (
+            String(r.keterangan || "")
+              .toUpperCase()
+              .includes("SYNC STOCK OPNAME")
+          ) {
+            return false;
+          }
+
+          // ======================================
+          // 🔥 HAPUS TERJUAL
+          // ======================================
+          if (
+            String(r.statusBarang || "")
+              .toUpperCase()
+              .includes("TERJUAL")
+          ) {
+            return false;
+          }
+
+          // ======================================
+          // 🔥 HAPUS QTY 0
+          // ======================================
+          if (Number(r.qty || 0) <= 0) {
+            return false;
+          }
+
+          return true;
+        }),
+
+        TOKO_AKTIF,
+        normalize,
+        normalizeImei
+      );
+    } catch (err) {
+      console.error(err);
+
+      alert("❌ Gagal export excel");
+    }
+  };
 
   return (
     <div className={`min-h-screen ${rootBgClass} p-4 sm:p-6`}>

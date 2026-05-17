@@ -16,43 +16,199 @@ import {
 } from "react-icons/fa";
 
 // ======================================
-// 🔥 EXPORT EXCEL UNIVERSAL
+// 🔥 EXPORT EXCEL FINAL UNIVERSAL
 // ======================================
 export const exportDetailStockExcel = (
   mergedRows,
   TOKO_AKTIF,
-  normalize
+  normalize,
+  normalizeImei
 ) => {
   try {
-
     // ======================================
-    // 🔥 FILTER TOKO FINAL
+    // 🔥 FILTER FINAL
     // ======================================
-    const dataToko = mergedRows.filter(
-      (item) =>
-        normalize(item.namaToko || item.toko) ===
-        normalize(TOKO_AKTIF)
-    );
+    const finalRows = mergedRows.filter((item) => {
+      // ======================================
+      // 🔥 FILTER TOKO
+      // ======================================
+      if (normalize(item.namaToko || item.toko) !== normalize(TOKO_AKTIF)) {
+        return false;
+      }
 
-    // ======================================
-    // 🔥 SORT TERBARU
-    // ======================================
-    const sortedData = [...dataToko].sort((a, b) => {
-      const aDate = new Date(
-        a.tanggal || a.createdAt || 0
-      ).getTime();
+      // ======================================
+      // 🔥 HAPUS DATA LIAR
+      // ======================================
+      if (
+        String(item.keterangan || "")
+          .toUpperCase()
+          .includes("SYNC STOCK OPNAME")
+      ) {
+        return false;
+      }
 
-      const bDate = new Date(
-        b.tanggal || b.createdAt || 0
-      ).getTime();
+      // ======================================
+      // 🔥 HAPUS DATA HABIS
+      // ======================================
+      if (Number(item.qty || 0) <= 0) {
+        return false;
+      }
 
-      return bDate - aDate;
+      // ======================================
+      // 🔥 HAPUS TERJUAL
+      // ======================================
+      if (
+        String(item.statusBarang || "")
+          .toUpperCase()
+          .includes("TERJUAL")
+      ) {
+        return false;
+      }
+
+      // ======================================
+      // 🔥 HAPUS TRANSFER SUDAH TERJUAL
+      // ======================================
+      if (
+        String(item.statusBarang || "")
+          .toUpperCase()
+          .includes("TRANSFER") &&
+        Number(item.qty || 0) <= 0
+      ) {
+        return false;
+      }
+
+      // ======================================
+      // 🔥 HAPUS DATA KOSONG
+      // ======================================
+      if (!item.brand || !item.barang) {
+        return false;
+      }
+
+      return true;
     });
+
+    // ======================================
+    // 🔥 REMOVE DUPLICATE
+    // ======================================
+    const uniqueMap = {};
+
+    finalRows.forEach((item) => {
+      // ======================================
+      // 🔥 IMEI
+      // ======================================
+      if (item.imei) {
+        const imeiKey = normalizeImei(item.imei);
+
+        uniqueMap[`IMEI_${imeiKey}`] = {
+          ...item,
+          qty: 1,
+        };
+
+        return;
+      }
+
+      // ======================================
+      // 🔥 NON IMEI
+      // ======================================
+      const skuKey =
+        `${normalize(item.namaToko)}|` +
+        `${String(item.brand || "")
+          .trim()
+          .toUpperCase()}|` +
+        `${String(item.barang || "")
+          .trim()
+          .toUpperCase()}`;
+
+      // ======================================
+      // 🔥 AMBIL DATA TERBARU
+      // ======================================
+      if (!uniqueMap[skuKey]) {
+        uniqueMap[skuKey] = {
+          ...item,
+        };
+      } else {
+        const oldDate = new Date(uniqueMap[skuKey].tanggal || 0).getTime();
+
+        const newDate = new Date(item.tanggal || 0).getTime();
+
+        // ======================================
+        // 🔥 DATA TERBARU MENANG
+        // ======================================
+        if (newDate >= oldDate) {
+          uniqueMap[skuKey] = {
+            ...item,
+          };
+        }
+      }
+    });
+
+    // ======================================
+    // 🔥 FINAL CLEAN EXPORT
+    // ======================================
+    const exportRows = Object.values(uniqueMap)
+
+      // ======================================
+      // 🔥 HAPUS DATA LIAR
+      // ======================================
+      .filter((item) => {
+        // HAPUS QTY 0
+        if (Number(item.qty || 0) <= 0) {
+          return false;
+        }
+
+        // HAPUS TERJUAL
+        if (
+          String(item.statusBarang || "")
+            .toUpperCase()
+            .includes("TERJUAL")
+        ) {
+          return false;
+        }
+
+        // HAPUS SYNC LIAR
+        if (
+          String(item.keterangan || "")
+            .toUpperCase()
+            .includes("SYNC STOCK OPNAME")
+        ) {
+          return false;
+        }
+
+        // HAPUS TRANSFER SUDAH TERJUAL
+        if (
+          String(item.keterangan || "")
+            .toUpperCase()
+            .includes("TRANSFER") &&
+          Number(item.qty || 0) <= 0
+        ) {
+          return false;
+        }
+
+        // HAPUS DATA KOSONG
+        if (!item.brand || !item.barang) {
+          return false;
+        }
+
+        return true;
+      })
+
+      // ======================================
+      // 🔥 SORT TERBARU
+      // ======================================
+      .sort((a, b) => {
+        const aDate = new Date(a.tanggal || a.createdAt || 0).getTime();
+
+        const bDate = new Date(b.tanggal || b.createdAt || 0).getTime();
+
+        return bDate - aDate;
+      });
 
     // ======================================
     // 🔥 EXPORT DATA
     // ======================================
-    const exportData = sortedData.map((item, index) => ({
+    const exportData = exportRows
+    .filter(Boolean)
+    .map((item, index) => ({
       NO: index + 1,
 
       TANGGAL: item.tanggal || "-",
@@ -109,24 +265,16 @@ export const exportDetailStockExcel = (
     // ======================================
     const wb = XLSX.utils.book_new();
 
-    XLSX.utils.book_append_sheet(
-      wb,
-      ws,
-      "DETAIL STOCK"
-    );
+    XLSX.utils.book_append_sheet(wb, ws, "DETAIL STOCK");
 
     // ======================================
     // 🔥 EXPORT FILE
     // ======================================
     XLSX.writeFile(
       wb,
-      `DETAIL_STOCK_${TOKO_AKTIF}_${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx`
+      `DETAIL_STOCK_${TOKO_AKTIF}_${new Date().toISOString().slice(0, 10)}.xlsx`
     );
-
   } catch (err) {
-
     console.error(err);
 
     alert("❌ Gagal export excel");
