@@ -486,82 +486,145 @@ export default function FormItemSection({
     return [...map].filter(Boolean).sort((a, b) => a.localeCompare(b));
   };
 
-  const barangList = (kategori, brand) => {
-    const finalMap = {};
+const barangList = (kategori, brand) => {
+  const finalMap = {};
+
+  // =====================================
+  // 🔥 DEBUG
+  // =====================================
+  console.log("🔥 stockDetailFinal:", stockDetailFinal);
+  console.log("🔥 kategori:", kategori);
+  console.log("🔥 brand:", brand);
+
+  // =====================================
+  // 🔥 LOOP STOCK FINAL
+  // =====================================
+  Object.entries(stockDetailFinal || {}).forEach(([key, qty]) => {
+    // =====================================
+    // 🔥 STOCK HABIS
+    // =====================================
+    if (Number(qty || 0) <= 0) {
+      return;
+    }
 
     // =====================================
-    // 🔥 AMBIL DARI STOCK FINAL TOKO
+    // 🔥 SPLIT KEY
     // =====================================
-    Object.entries(stockGabunganToko || {}).forEach(([key, qty]) => {
-      // =====================================
-      // 🔥 STOCK HABIS
-      // =====================================
-      if (Number(qty || 0) <= 0) {
-        return;
-      }
+    const splitKey = String(key || "").split("|");
 
-      const [brandStock, namaBarangStock] = String(key).split("|");
+    const brandStock = splitKey[0] || "";
 
-      // =====================================
-      // 🔥 FILTER BRAND
-      // =====================================
-      if (normalize(brandStock) !== normalize(brand)) {
-        return;
-      }
+    const namaBarangStock = splitKey.slice(1).join("|") || "";
 
-      // =====================================
-      // 🔥 CARI MASTER
-      // =====================================
-      const barangMaster = masterBarang.find((b) => {
-        const namaMaster = String(b.namaBarang || b.barang || "")
-          .trim()
-          .toUpperCase();
+    // =====================================
+    // 🔥 FILTER BRAND
+    // =====================================
+    if (
+      normalize(brandStock) !==
+      normalize(brand)
+    ) {
+      return;
+    }
 
-        const namaStock = String(namaBarangStock || "")
-          .trim()
-          .toUpperCase();
+    // =====================================
+    // 🔥 CARI MASTER BARANG
+    // =====================================
+    const barangMaster = masterBarang.find((b) => {
+      const namaMaster = normalize(
+        b.namaBarang ||
+          b.barang ||
+          b.NAMA_BARANG
+      );
 
-        return namaMaster === namaStock;
-      });
+      const namaStock = normalize(
+        namaBarangStock
+      );
 
-      if (!barangMaster) {
-        return;
-      }
+      return namaMaster === namaStock;
+    });
 
+    // =====================================
+    // 🔥 MASTER TIDAK ADA
+    // =====================================
+    if (!barangMaster) {
       // =====================================
-      // 🔥 FILTER KATEGORI
+      // 🔥 FALLBACK MANUAL
       // =====================================
-      if (normalize(barangMaster.kategoriBarang) !== normalize(kategori)) {
-        return;
-      }
-
-      // =====================================
-      // 🔥 FINAL KEY
-      // =====================================
-      const finalKey = `${normalize(brandStock)}|${normalize(namaBarangStock)}`;
-
-      // =====================================
-      // 🔥 NO DUPLICATE
-      // =====================================
-      if (finalMap[finalKey]) {
-        return;
-      }
+      const finalKey =
+        `${normalize(brandStock)}|` +
+        `${normalize(namaBarangStock)}`;
 
       finalMap[finalKey] = {
-        ...barangMaster,
+        kategoriBarang: kategori,
 
         namaBrand: brandStock,
 
         namaBarang: namaBarangStock,
 
+        harga: {
+          srp: 0,
+          grosir: 0,
+          reseller: 0,
+        },
+
         stok: Number(qty || 0),
       };
-    });
 
-    return Object.values(finalMap).sort((a, b) =>
-      String(a.namaBarang).localeCompare(String(b.namaBarang))
-    );
-  };
+      return;
+    }
+
+    // =====================================
+    // 🔥 FILTER KATEGORI
+    // =====================================
+    if (
+      normalize(barangMaster.kategoriBarang) !==
+      normalize(kategori)
+    ) {
+      return;
+    }
+
+    // =====================================
+    // 🔥 FINAL KEY
+    // =====================================
+    const finalKey =
+      `${normalize(brandStock)}|` +
+      `${normalize(namaBarangStock)}`;
+
+    // =====================================
+    // 🔥 NO DUPLICATE
+    // =====================================
+    if (finalMap[finalKey]) {
+      return;
+    }
+
+    // =====================================
+    // 🔥 INSERT FINAL
+    // =====================================
+    finalMap[finalKey] = {
+      ...barangMaster,
+
+      namaBrand:
+        barangMaster.namaBrand ||
+        barangMaster.brand ||
+        brandStock,
+
+      namaBarang:
+        barangMaster.namaBarang ||
+        namaBarangStock,
+
+      stok: Number(qty || 0),
+    };
+  });
+
+  // =====================================
+  // 🔥 FINAL RESULT
+  // =====================================
+  return Object.values(finalMap).sort((a, b) =>
+    String(a.namaBarang || "").localeCompare(
+      String(b.namaBarang || "")
+    )
+  );
+};
 
   /* ================= IMEI BY BARANG ================= */
   /* ================= IMEI BY BARANG ================= */
@@ -1330,6 +1393,138 @@ if (
 
     return list;
   }, [stockGabunganToko, masterBarang]);
+
+  // =====================================
+// 🔥 FINAL STOCK SESUAI DetailStockToko.jsx
+// =====================================
+const stockDetailFinal = useMemo(() => {
+  const map = {};
+
+  // =====================================
+  // 🔥 LOOP TRANSAKSI
+  // =====================================
+  allTransaksi.forEach((t) => {
+    if (!t) return;
+
+    const status = String(t.STATUS || "").toUpperCase();
+
+    if (!["APPROVED", "REFUND"].includes(status)) {
+      return;
+    }
+
+    const toko =
+      t.NAMA_TOKO ||
+      t.toko ||
+      "";
+
+    // =====================================
+    // 🔥 FILTER TOKO
+    // =====================================
+    if (
+      normalize(toko) !==
+      normalize(tokoLogin)
+    ) {
+      return;
+    }
+
+    const metode = String(
+      t.PAYMENT_METODE || ""
+    ).toUpperCase();
+
+    const brand =
+      t.NAMA_BRAND ||
+      t.namaBrand ||
+      "";
+
+    const barang =
+      t.NAMA_BARANG ||
+      t.namaBarang ||
+      "";
+
+    const key =
+      `${normalize(brand)}|${normalize(barang)}`;
+
+    // =====================================
+    // 🔥 INIT
+    // =====================================
+    if (!map[key]) {
+      map[key] = 0;
+    }
+
+    // =====================================
+    // 🔥 IMEI
+    // =====================================
+    if (t.IMEI) {
+      // STOCK MASUK
+      if (
+        [
+          "PEMBELIAN",
+          "TRANSFER_MASUK",
+          "REFUND",
+          "RETUR",
+          "VOID OPNAME",
+        ].includes(metode)
+      ) {
+        map[key] += 1;
+      }
+
+      // STOCK KELUAR
+      if (
+        [
+          "PENJUALAN",
+          "TRANSFER_KELUAR",
+          "REJECT",
+          "STOK OPNAME",
+        ].includes(metode)
+      ) {
+        map[key] -= 1;
+      }
+    }
+
+    // =====================================
+    // 🔥 NON IMEI
+    // =====================================
+    else {
+      const qty = Number(t.QTY || 0);
+
+      // STOCK MASUK
+      if (
+        [
+          "PEMBELIAN",
+          "TRANSFER_MASUK",
+          "REFUND",
+          "RETUR",
+          "VOID OPNAME",
+        ].includes(metode)
+      ) {
+        map[key] += qty;
+      }
+
+      // STOCK KELUAR
+      if (
+        [
+          "PENJUALAN",
+          "TRANSFER_KELUAR",
+          "REJECT",
+          "STOK OPNAME",
+        ].includes(metode)
+      ) {
+        map[key] -= qty;
+      }
+    }
+  });
+
+  // =====================================
+  // 🔥 HAPUS NEGATIF
+  // =====================================
+  Object.keys(map).forEach((k) => {
+    if (map[k] < 0) {
+      map[k] = 0;
+    }
+  });
+
+  return map;
+}, [allTransaksi, tokoLogin]);
 
   // ===============================
   // HELPER: Cari toko asal IMEI
