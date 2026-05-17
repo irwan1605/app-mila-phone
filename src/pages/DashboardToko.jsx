@@ -1569,49 +1569,29 @@ export default function DashboardToko(props) {
     refundFinalTracker,
   ]);
 
+  
+
 // ======================================
-// 🔥 FINAL DASHBOARD = DETAIL STOCK
+// 🔥 MERGED ROWS FINAL (SAMAKAN DETAIL STOCK)
 // ======================================
 const mergedRows = useMemo(() => {
-
-  // ======================================
-  // 🔥 MAP FINAL
-  // ======================================
   const finalMap = {};
 
   rows.forEach((r) => {
-
-    // ======================================
-    // 🔥 FILTER TOKO
-    // ======================================
-    if (
-      normalize(r.namaToko || r.toko) !==
-      normalize(namaToko)
-    ) {
-      return;
-    }
-
-    // ======================================
-    // 🔥 QTY INVALID
-    // ======================================
-    if (Number(r.qty || 0) <= 0) {
-      return;
-    }
-
     // ======================================
     // 🔥 IMEI
     // ======================================
     if (r.imei) {
-
-      const imeiKey =
-        normalizeImei(r.imei);
+      const imeiKey = normalizeImei(r.imei);
 
       finalMap[`IMEI_${imeiKey}`] = {
         ...r,
 
         qty: 1,
 
-        statusBarang: "TERSEDIA",
+        statusBarang: Number(r.qty || 0) > 0
+          ? "TERSEDIA"
+          : "HABIS",
       };
 
       return;
@@ -1625,131 +1605,55 @@ const mergedRows = useMemo(() => {
       `${normalizeText(r.brand)}|` +
       `${normalizeText(r.barang)}`;
 
-    // ======================================
-    // 🔥 PAKAI DATA TERBARU
-    // ======================================
     if (!finalMap[skuKey]) {
-
       finalMap[skuKey] = {
         ...r,
 
         qty: Number(r.qty || 0),
 
-        statusBarang: "TERSEDIA",
+        statusBarang:
+          Number(r.qty || 0) > 0
+            ? "TERSEDIA"
+            : "HABIS",
+
+        keterangan: String(r.keterangan || "")
+          .toUpperCase()
+          .includes("REFUND")
+          ? "REFUND"
+          : r.keterangan || "SYNC STOCK OPNAME",
       };
-
     } else {
+      finalMap[skuKey] = {
+        ...finalMap[skuKey],
 
-      const oldDate = new Date(
-        finalMap[skuKey].tanggal || 0
-      ).getTime();
+        qty: Math.max(
+          Number(finalMap[skuKey].qty || 0),
+          Number(r.qty || 0)
+        ),
 
-      const newDate = new Date(
-        r.tanggal || 0
-      ).getTime();
+        statusBarang:
+          Number(r.qty || 0) > 0
+            ? "TERSEDIA"
+            : "HABIS",
 
-      // ======================================
-      // 🔥 DATA TERBARU MENANG
-      // ======================================
-      if (newDate >= oldDate) {
-
-        finalMap[skuKey] = {
-          ...r,
-
-          qty: Number(r.qty || 0),
-
-          statusBarang: "TERSEDIA",
-        };
-      }
+        keterangan: String(r.keterangan || "")
+          .toUpperCase()
+          .includes("REFUND")
+          ? "REFUND"
+          : r.keterangan || finalMap[skuKey].keterangan,
+      };
     }
   });
 
-  // ======================================
-  // 🔥 FINAL RESULT
-  // ======================================
   return Object.values(finalMap)
-
-    .filter((r) =>
-      Number(r.qty || 0) > 0
-    )
-
+    .filter((r) => Number(r.qty || 0) > 0)
     .sort((a, b) => {
-      return (
-        new Date(b.tanggal || 0) -
-        new Date(a.tanggal || 0)
-      );
+      const aDate = new Date(a.tanggal || 0).getTime();
+      const bDate = new Date(b.tanggal || 0).getTime();
+
+      return bDate - aDate;
     });
-
-}, [rows, namaToko]);
-
-  // ======================================
-  // 🔥 SORT FINAL
-  // ======================================
-  mergedRows.sort((a, b) => {
-    return new Date(b.tanggal || 0) - new Date(a.tanggal || 0);
-  });
-
-  /* ======================
-   SEARCH FILTER
-====================== */
-  /* ======================
-   SEARCH FILTER UNIVERSAL
-====================== */
-  const filtered = useMemo(() => {
-    const keyword = String(dashboardSearch || search || "")
-      .trim()
-      .toLowerCase();
-
-    // ======================================
-    // 🔥 TANPA SEARCH
-    // ======================================
-    if (!keyword) {
-      return mergedRows;
-    }
-
-    return mergedRows.filter((r) => {
-      // ======================================
-      // 🔥 FORMAT TANGGAL
-      // ======================================
-      const tanggal = String(r.tanggal || "")
-        .replace("T", " ")
-        .toLowerCase();
-
-      // ======================================
-      // 🔥 FIELD UNIVERSAL
-      // ======================================
-      const imei = String(r.imei || "").toLowerCase();
-
-      const barang = String(r.barang || "").toLowerCase();
-
-      const toko = String(r.namaToko || r.toko || "").toLowerCase();
-
-      const brand = String(r.brand || "").toLowerCase();
-
-      const noDo = String(r.noDo || "").toLowerCase();
-
-      const supplier = String(r.supplier || "").toLowerCase();
-
-      const status = String(r.statusBarang || "").toLowerCase();
-
-      const keterangan = String(r.keterangan || "").toLowerCase();
-
-      // ======================================
-      // 🔥 UNIVERSAL SEARCH
-      // ======================================
-      return (
-        imei.includes(keyword) ||
-        barang.includes(keyword) ||
-        toko.includes(keyword) ||
-        brand.includes(keyword) ||
-        noDo.includes(keyword) ||
-        tanggal.includes(keyword) ||
-        supplier.includes(keyword) ||
-        status.includes(keyword) ||
-        keterangan.includes(keyword)
-      );
-    });
-  }, [mergedRows, dashboardSearch, search]);
+}, [rows]);
 
   // ======================================
   // 🔥 TOTAL STOCK FINAL DASHBOARD
@@ -1879,6 +1783,61 @@ const mergedRows = useMemo(() => {
     });
   }, [stockToko, searchStock]);
 
+  // ======================================
+// 🔥 FILTER FINAL DASHBOARD
+// ======================================
+const filtered = useMemo(() => {
+  const keyword = String(dashboardSearch || "")
+    .trim()
+    .toLowerCase();
+
+  // ======================================
+  // 🔥 TANPA SEARCH
+  // ======================================
+  if (!keyword) {
+    return mergedRows;
+  }
+
+  // ======================================
+  // 🔥 SEARCH UNIVERSAL
+  // ======================================
+  return mergedRows.filter((item) => {
+    return (
+      String(item.tanggal || "")
+        .toLowerCase()
+        .includes(keyword) ||
+
+      String(item.noDo || "")
+        .toLowerCase()
+        .includes(keyword) ||
+
+      String(item.supplier || "")
+        .toLowerCase()
+        .includes(keyword) ||
+
+      String(item.namaToko || "")
+        .toLowerCase()
+        .includes(keyword) ||
+
+      String(item.brand || "")
+        .toLowerCase()
+        .includes(keyword) ||
+
+      String(item.barang || "")
+        .toLowerCase()
+        .includes(keyword) ||
+
+      String(item.imei || "")
+        .toLowerCase()
+        .includes(keyword) ||
+
+      String(item.keterangan || "")
+        .toLowerCase()
+        .includes(keyword)
+    );
+  });
+}, [mergedRows, dashboardSearch]);
+
   /* ======================
      PAGINATION
   ====================== */
@@ -1921,36 +1880,24 @@ const mergedRows = useMemo(() => {
   // ======================================
 // 🔥 EXPORT FINAL DARI TABLE DETAIL STOCK
 // ======================================
+// ======================================
+// 🔥 EXPORT FINAL PER TOKO
+// ======================================
 const exportDashboardStock = () => {
   try {
-  // ======================================
-// 🔥 AMBIL HASIL FINAL DARI DETAIL STOCK
-// ======================================
-const finalRows = filtered
-      .filter((r) => {
-        // ======================================
-        // 🔥 HAPUS DATA LIAR
-        // ======================================
-        if (
-          String(r.keterangan || "")
-            .toUpperCase()
-            .includes("SYNC STOCK OPNAME")
-        ) {
-          return false;
-        }
-
-        // ======================================
-        // 🔥 HANYA QTY AKTIF
-        // ======================================
-        return Number(r.qty || 0) > 0;
-      })
-
-    
 
     // ======================================
-    // 🔥 FINAL EXPORT ARRAY
+    // 🔥 FILTER TOKO AKTIF
     // ======================================
-    const exportRows = Object.values(finalRows).map((item, index) => ({
+    const dataToko = mergedRows.filter(
+      (item) =>
+        normalize(item.namaToko) === normalize(TOKO_AKTIF)
+    );
+
+    // ======================================
+    // 🔥 DATA EXPORT
+    // ======================================
+    const exportData = dataToko.map((item, index) => ({
       NO: index + 1,
 
       TANGGAL: item.tanggal || "-",
@@ -1963,34 +1910,34 @@ const finalRows = filtered
 
       BRAND: item.brand || "-",
 
-      BARANG: item.barang || "-",
+      NAMA_BARANG: item.barang || "-",
 
       IMEI: item.imei || "-",
 
-      // ======================================
-      // 🔥 QTY FINAL TABLE
-      // ======================================
       QTY: Number(item.qty || 0),
-
-      STATUS_BARANG: item.statusBarang || "-",
-
-      KETERANGAN: item.keterangan || "-",
 
       HARGA_SRP: Number(item.hargaSRP || 0),
 
       HARGA_GROSIR: Number(item.hargaGrosir || 0),
 
       HARGA_RESELLER: Number(item.hargaReseller || 0),
+
+      STATUS: item.statusBarang || "-",
+
+      KETERANGAN: item.keterangan || "-",
     }));
 
     // ======================================
-    // 🔥 XLSX
+    // 🔥 WORKSHEET
     // ======================================
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const ws = XLSX.utils.json_to_sheet(exportData);
 
-    worksheet["!cols"] = [
-      { wch: 6 },
-      { wch: 20 },
+    // ======================================
+    // 🔥 AUTO WIDTH
+    // ======================================
+    ws["!cols"] = [
+      { wch: 8 },
+      { wch: 18 },
       { wch: 20 },
       { wch: 25 },
       { wch: 20 },
@@ -1999,26 +1946,31 @@ const finalRows = filtered
       { wch: 25 },
       { wch: 10 },
       { wch: 18 },
-      { wch: 22 },
       { wch: 18 },
       { wch: 18 },
       { wch: 18 },
+      { wch: 25 },
     ];
 
-    const workbook = XLSX.utils.book_new();
+    // ======================================
+    // 🔥 WORKBOOK
+    // ======================================
+    const wb = XLSX.utils.book_new();
 
     XLSX.utils.book_append_sheet(
-      workbook,
-      worksheet,
-      "DETAIL_STOCK"
+      wb,
+      ws,
+      "DETAIL STOCK TOKO"
     );
 
+    // ======================================
+    // 🔥 EXPORT FILE
+    // ======================================
     XLSX.writeFile(
-      workbook,
-      `DETAIL_STOCK_${TOKO_AKTIF}_${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx`
+      wb,
+      `DETAIL_STOCK_${TOKO_AKTIF}.xlsx`
     );
+
   } catch (err) {
     console.error(err);
 

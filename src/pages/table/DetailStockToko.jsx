@@ -110,7 +110,7 @@ export default function DetailStockToko(props) {
       return qtyBase;
     }
 
-    if (["PENJUALAN"].includes(metode)) {
+    if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
       return -qtyBase;
     }
 
@@ -128,7 +128,7 @@ export default function DetailStockToko(props) {
       return qtyBase;
     }
 
-    if (["PENJUALAN"].includes(metode)) {
+    if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
       return -qtyBase;
     }
 
@@ -798,31 +798,17 @@ export default function DetailStockToko(props) {
         }
 
         // STOCK KELUAR
-        // ======================================
-        // 🔥 PENJUALAN = BENAR-BENAR HABIS
-        // ======================================
-        if (["PENJUALAN", "REJECT", "STOK OPNAME"].includes(metode)) {
+        if (
+          ["PENJUALAN", "TRANSFER_KELUAR", "REJECT", "STOK OPNAME"].includes(
+            metode
+          )
+        ) {
           map[key].qty = 0;
 
           map[key].statusBarang = "TERJUAL";
 
-          map[key].keterangan = metode;
-
-          return;
-        }
-
-        // ======================================
-        // 🔥 TRANSFER KELUAR ≠ HABIS
-        // ======================================
-        if (metode === "TRANSFER_KELUAR") {
-          // ✅ qty tetap 1
-          map[key].qty = 1;
-
-          // ✅ status khusus transfer
-          map[key].statusBarang = "TRANSFER";
-
-          // ✅ keterangan transfer
-          map[key].keterangan = "TRANSFER BARANG";
+          map[key].keterangan =
+            metode === "TRANSFER_KELUAR" ? "TRANSFER BARANG" : metode;
 
           return;
         }
@@ -1022,10 +1008,7 @@ export default function DetailStockToko(props) {
 
           supplier: r.supplier || finalMap[skuKey].supplier,
 
-          // ======================================
-          // 🔥 QTY FINAL REALTIME
-          // ======================================
-          qty: Number(r.qty || 0),
+          qty: Math.max(Number(finalMap[skuKey].qty || 0), Number(r.qty || 0)),
 
           hargaSRP: r.hargaSRP || finalMap[skuKey].hargaSRP || 0,
 
@@ -1113,50 +1096,50 @@ export default function DetailStockToko(props) {
     refundFinalTracker,
   ]);
 
-  /* ======================
+ /* ======================
    SEARCH FILTER UNIVERSAL
 ====================== */
-  const filtered = useMemo(() => {
-    const keyword = String(search || "")
-      .trim()
+const filtered = useMemo(() => {
+  const keyword = String(search || "")
+    .trim()
+    .toLowerCase();
+
+  if (!keyword) return mergedRows;
+
+  return mergedRows.filter((r) => {
+    const imei = String(r.imei || "").toLowerCase();
+
+    const barang = String(r.barang || "").toLowerCase();
+
+    const toko = String(r.namaToko || r.toko || "").toLowerCase();
+
+    const brand = String(r.brand || "").toLowerCase();
+
+    const noDo = String(r.noDo || "").toLowerCase();
+
+    const tanggal = String(r.tanggal || "")
+      .replace("T", " ")
       .toLowerCase();
 
-    if (!keyword) return mergedRows;
+    const supplier = String(r.supplier || "").toLowerCase();
 
-    return mergedRows.filter((r) => {
-      const imei = String(r.imei || "").toLowerCase();
+    const status = String(r.statusBarang || "").toLowerCase();
 
-      const barang = String(r.barang || "").toLowerCase();
+    const keterangan = String(r.keterangan || "").toLowerCase();
 
-      const toko = String(r.namaToko || r.toko || "").toLowerCase();
-
-      const brand = String(r.brand || "").toLowerCase();
-
-      const noDo = String(r.noDo || "").toLowerCase();
-
-      const tanggal = String(r.tanggal || "")
-        .replace("T", " ")
-        .toLowerCase();
-
-      const supplier = String(r.supplier || "").toLowerCase();
-
-      const status = String(r.statusBarang || "").toLowerCase();
-
-      const keterangan = String(r.keterangan || "").toLowerCase();
-
-      return (
-        imei.includes(keyword) ||
-        barang.includes(keyword) ||
-        toko.includes(keyword) ||
-        brand.includes(keyword) ||
-        noDo.includes(keyword) ||
-        tanggal.includes(keyword) ||
-        supplier.includes(keyword) ||
-        status.includes(keyword) ||
-        keterangan.includes(keyword)
-      );
-    });
-  }, [mergedRows, search]);
+    return (
+      imei.includes(keyword) ||
+      barang.includes(keyword) ||
+      toko.includes(keyword) ||
+      brand.includes(keyword) ||
+      noDo.includes(keyword) ||
+      tanggal.includes(keyword) ||
+      supplier.includes(keyword) ||
+      status.includes(keyword) ||
+      keterangan.includes(keyword)
+    );
+  });
+}, [mergedRows, search]);
 
   // ======================================
   // 🔥 TOTAL STOK FINAL
