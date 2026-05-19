@@ -364,6 +364,103 @@ export default function StockOpname() {
     return map;
   }, [transaksi]);
 
+  // ======================================
+// 🔥 FINAL OWNER TRACKER
+// ======================================
+const finalOwnerTracker = useMemo(() => {
+  const map = {};
+
+  // ======================================
+  // 🔥 SORT HISTORI TRANSAKSI
+  // ======================================
+  const sorted = [...transaksi].sort(
+    (a, b) =>
+      new Date(a.CREATED_AT || 0).getTime() -
+      new Date(b.CREATED_AT || 0).getTime()
+  );
+
+  sorted.forEach((t) => {
+    if (!t?.IMEI) return;
+
+    const imei = normalizeImei(t.IMEI);
+
+    const metode = String(
+      t.PAYMENT_METODE || ""
+    ).toUpperCase();
+
+    const status = String(
+      t.STATUS || ""
+    ).toUpperCase();
+
+    if (!["APPROVED", "REFUND"].includes(status)) {
+      return;
+    }
+
+    // ======================================
+    // 🔥 STOCK MASUK / PINDAH OWNER
+    // ======================================
+    if (
+      [
+        "PEMBELIAN",
+        "TRANSFER_MASUK",
+        "REFUND",
+        "TRANSFER_REJECT",
+        "VOID OPNAME",
+      ].includes(metode)
+    ) {
+      map[imei] = {
+        toko: t.NAMA_TOKO || "-",
+        active: true,
+        metode,
+      };
+
+      return;
+    }
+
+    // ======================================
+    // 🔥 TRANSFER KELUAR
+    // ======================================
+    // JANGAN MATIKAN STOCK
+    // karena owner akan pindah
+    // saat TRANSFER_MASUK berikutnya
+    // ======================================
+    if (metode === "TRANSFER_KELUAR") {
+      map[imei] = {
+        toko: t.TOKO_TUJUAN ||
+          t.ke ||
+          t.tokoTujuan ||
+          t.NAMA_TOKO ||
+          "-",
+
+        active: true,
+
+        metode,
+      };
+
+      return;
+    }
+
+    // ======================================
+    // 🔥 STOCK BENAR-BENAR KELUAR
+    // ======================================
+    if (
+      [
+        "PENJUALAN",
+        "REJECT",
+        "STOK OPNAME",
+      ].includes(metode)
+    ) {
+      map[imei] = {
+        toko: t.NAMA_TOKO || "-",
+        active: false,
+        metode,
+      };
+    }
+  });
+
+  return map;
+}, [transaksi]);
+
   const stockOpnameData = useMemo(() => {
     const map = {};
 

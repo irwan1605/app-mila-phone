@@ -579,9 +579,12 @@ export function getAvailableIMEIByToko(allTransaksi, tokoLogin) {
       map[key].qty += qty;
     }
 
-    if (["PENJUALAN", "TRANSFER_KELUAR"].includes(t.PAYMENT_METODE)) {
-      map[key].qty -= qty;
-    }
+    // ======================================
+// 🔥 HANYA PENJUALAN YANG MENGHILANGKAN STOCK
+// ======================================
+if (["PENJUALAN"].includes(t.PAYMENT_METODE)) {
+  map[key].qty -= qty;
+}
   });
 
   return Object.values(map).filter((i) => i.qty > 0 && i.toko === tokoLogin);
