@@ -866,82 +866,89 @@ export default function DetailStockToko(props) {
       // ======================================
       // 🔥 IMEI
       // ======================================
+      // ======================================
+      // 🔥 IMEI FINAL OWNER ENGINE
+      // ======================================
       if (t.IMEI && normalizeImei(t.IMEI) !== "NON-IMEI") {
-        const key = String(t.IMEI).trim();
+        const key = normalizeImei(t.IMEI);
 
-        const clean = normalizeImei(key);
+        // ======================================
+        // 🔥 CEK OWNER FINAL
+        // ======================================
+        const finalOwner = finalOwnerTracker?.[key];
 
-        if (!map[key]) {
-          map[key] = {
-            tanggal: t.TANGGAL_TRANSAKSI || "-",
-
-            noDo: t.NO_INVOICE || "-",
-
-            supplier:
-              supplierLookup?.[key] ||
-              supplierLookup?.[clean] ||
-              t.NAMA_SUPPLIER ||
-              "-",
-
-            namaToko: t.NAMA_TOKO || "-",
-
-            brand: t.NAMA_BRAND || "-",
-
-            barang: t.NAMA_BARANG || "-",
-
-            imei: key,
-
-            qty: 0,
-
-            hargaSRP:
-              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
-
-            hargaGrosir:
-              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
-
-            hargaReseller:
-              masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller ||
-              0,
-
-            statusBarang: "TERSEDIA",
-          };
-        }
-
-        // STOCK MASUK
+        // ======================================
+        // 🔥 BUKAN OWNER AKTIF
+        // ======================================
         if (
-          [
-            "PEMBELIAN",
-            "TRANSFER_MASUK",
-            "REFUND",
-            "RETUR",
-            "VOID OPNAME",
-          ].includes(metode)
+          !finalOwner?.active ||
+          normalize(finalOwner?.toko) !== normalize(namaToko)
         ) {
-          map[key].qty = 1;
-
-          map[key].statusBarang = "TERSEDIA";
-
-          map[key].keterangan =
-            metode === "TRANSFER_MASUK" ? "TRANSFER BARANG" : metode;
+          // ======================================
+          // 🔥 HAPUS DATA NYANGKUT
+          // ======================================
+          delete map[key];
 
           return;
         }
 
-        // STOCK KELUAR
-        if (
-          ["PENJUALAN", "TRANSFER_KELUAR", "REJECT", "STOK OPNAME"].includes(
-            metode
-          )
-        ) {
-          map[key].qty = 0;
-
-          map[key].statusBarang = "TERJUAL";
-
-          map[key].keterangan =
-            metode === "TRANSFER_KELUAR" ? "TRANSFER BARANG" : metode;
+        // ======================================
+        // 🔥 PENJUALAN / REJECT / OPNAME
+        // ======================================
+        if (["PENJUALAN", "REJECT", "STOK OPNAME"].includes(metode)) {
+          delete map[key];
 
           return;
         }
+
+        // ======================================
+        // 🔥 TRANSFER KELUAR
+        // ======================================
+        if (metode === "TRANSFER_KELUAR") {
+          // ======================================
+          // 🔥 HAPUS DARI TOKO ASAL
+          // ======================================
+          delete map[key];
+
+          return;
+        }
+
+        // ======================================
+        // 🔥 FINAL OWNER ONLY
+        // ======================================
+        map[key] = {
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
+
+          noDo: t.NO_INVOICE || "-",
+
+          supplier: supplierLookup?.[key] || t.NAMA_SUPPLIER || "-",
+
+          namaToko: finalOwner?.toko || t.NAMA_TOKO || "-",
+
+          brand: t.NAMA_BRAND || "-",
+
+          barang: t.NAMA_BARANG || "-",
+
+          imei: t.IMEI,
+
+          qty: 1,
+
+          hargaSRP:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
+
+          hargaGrosir:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
+
+          hargaReseller:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+
+          statusBarang: "TERSEDIA",
+
+          // ======================================
+          // 🔥 KETERANGAN FINAL
+          // ======================================
+          keterangan: metode === "TRANSFER_MASUK" ? "TRANSFER BARANG" : metode,
+        };
 
         return;
       }
