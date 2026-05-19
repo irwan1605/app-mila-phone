@@ -785,11 +785,14 @@ export default function DashboardToko(props) {
 
             noDo: t.NO_SURAT_JALAN || t.NO_INVOICE || "-",
 
-            supplier: supplierLookup?.[
-              `${normalize(t.NAMA_TOKO)}|${normalizeText(
-                t.NAMA_BRAND
-              )}|${normalizeText(t.NAMA_BARANG)}`
-            ] || t.NAMA_SUPPLIER || "-",
+            supplier:
+              supplierLookup?.[
+                `${normalize(t.NAMA_TOKO)}|${normalizeText(
+                  t.NAMA_BRAND
+                )}|${normalizeText(t.NAMA_BARANG)}`
+              ] ||
+              t.NAMA_SUPPLIER ||
+              "-",
 
             namaToko: t.NAMA_TOKO || "-",
 
@@ -962,10 +965,9 @@ export default function DashboardToko(props) {
           qty: 1,
           statusBarang: "TERSEDIA",
           keterangan:
-          metode === "TRANSFER_KELUAR" ||
-          metode === "TRANSFER_MASUK"
-            ? "TRANSFER BARANG"
-            : metode,
+            metode === "TRANSFER_KELUAR" || metode === "TRANSFER_MASUK"
+              ? "TRANSFER BARANG"
+              : metode,
         };
       }
 
@@ -1467,56 +1469,49 @@ export default function DashboardToko(props) {
       // 🔥 NON IMEI FINAL ENGINE
       // ======================================
 
-     // STOCK MASUK
-if (
-  [
-    "PEMBELIAN",
-    "TRANSFER_MASUK",
-    "TRANSFER_REJECT",
-    "REFUND",
-    "RETUR",
-    "VOID OPNAME",
-  ].includes(metode)
-) {
-  const qtyMasuk =
-    metode === "REFUND"
-      ? 1
-      : Math.abs(Number(t.QTY || 0));
+      // STOCK MASUK
+      if (
+        [
+          "PEMBELIAN",
+          "TRANSFER_MASUK",
+          "TRANSFER_REJECT",
+          "REFUND",
+          "RETUR",
+          "VOID OPNAME",
+        ].includes(metode)
+      ) {
+        const qtyMasuk = metode === "REFUND" ? 1 : Math.abs(Number(t.QTY || 0));
 
-  map[skuKey].qty =
-    Number(map[skuKey].qty || 0) + qtyMasuk;
+        map[skuKey].qty = Number(map[skuKey].qty || 0) + qtyMasuk;
 
-  // ======================================
-  // 🔥 KETERANGAN FINAL
-  // ======================================
-  map[skuKey].keterangan =
-    metode === "TRANSFER_KELUAR" ||
-    metode === "TRANSFER_MASUK"
-      ? "TRANSFER BARANG"
-      : metode;
-}
+        // ======================================
+        // 🔥 KETERANGAN FINAL
+        // ======================================
+        map[skuKey].keterangan =
+          metode === "TRANSFER_KELUAR" || metode === "TRANSFER_MASUK"
+            ? "TRANSFER BARANG"
+            : metode;
+      }
 
-// STOCK KELUAR
-if (
-  ["PENJUALAN", "TRANSFER_KELUAR", "REJECT", "STOK OPNAME"].includes(
-    metode
-  )
-) {
-  map[skuKey].qty = Math.max(
-    0,
-    Number(map[skuKey].qty || 0) -
-      Math.abs(Number(t.QTY || 0))
-  );
+      // STOCK KELUAR
+      if (
+        ["PENJUALAN", "TRANSFER_KELUAR", "REJECT", "STOK OPNAME"].includes(
+          metode
+        )
+      ) {
+        map[skuKey].qty = Math.max(
+          0,
+          Number(map[skuKey].qty || 0) - Math.abs(Number(t.QTY || 0))
+        );
 
-  // ======================================
-  // 🔥 KETERANGAN FINAL
-  // ======================================
-  map[skuKey].keterangan =
-    metode === "TRANSFER_KELUAR" ||
-    metode === "TRANSFER_MASUK"
-      ? "TRANSFER BARANG"
-      : metode;
-}
+        // ======================================
+        // 🔥 KETERANGAN FINAL
+        // ======================================
+        map[skuKey].keterangan =
+          metode === "TRANSFER_KELUAR" || metode === "TRANSFER_MASUK"
+            ? "TRANSFER BARANG"
+            : metode;
+      }
 
       // ======================================
       // 🔥 FIX NEGATIF
@@ -1705,214 +1700,43 @@ if (
     refundFinalTracker,
   ]);
 
-  /* ======================
-   SEARCH FILTER
-====================== */
   // ======================================
-  // 🔥 MERGE DASHBOARD + STOCK OPNAME
-  // ======================================
-  // ======================================
-  // 🔥 MERGE DASHBOARD + STOCK OPNAME
+  // 🔥 FINAL MERGED ROWS
+  // SYNC DETAIL STOCK
   // ======================================
   const mergedRows = useMemo(() => {
-    const baseRows = [...rows];
-
-    stockOpnameSyncRows.forEach((item) => {
-      if (!item) return;
-
-      // =========================
-      // 🔥 IMEI
-      // =========================
-      if (item.imei && normalizeImei(item.imei) !== "NON-IMEI") {
-        const cleanImei = normalizeImei(item.imei);
-
-        const exists = baseRows.some((r) => {
-          const rowImei = normalizeImei(r.imei);
-
-          if (!rowImei || rowImei === "NON-IMEI") {
+    return (
+      (rows || [])
+        .filter((r) => {
+          // ======================================
+          // 🔥 FILTER STOCK AKTIF
+          // ======================================
+          if (Number(r.qty || 0) <= 0) {
             return false;
           }
 
-          return rowImei === cleanImei;
-        });
-
-        if (!exists) {
-          baseRows.push({
-            ...item,
-
-            hargaSRP:
-              masterMap?.[`${item.brand}|${item.barang}`]?.hargaSRP ||
-              item.hargaSRP ||
-              0,
-
-            hargaGrosir:
-              masterMap?.[`${item.brand}|${item.barang}`]?.hargaGrosir ||
-              item.hargaGrosir ||
-              0,
-
-            hargaReseller:
-              masterMap?.[`${item.brand}|${item.barang}`]?.hargaReseller ||
-              item.hargaReseller ||
-              0,
-
-            statusBarang: "TERSEDIA",
-
-            keterangan: String(item.keterangan || "")
-              .toUpperCase()
-              .includes("REFUND")
-              ? "REFUND"
-              : "SYNC STOCK OPNAME",
-          });
-        }
-
-        return;
-      }
-
-      // =========================
-      // 🔥 NON IMEI
-      // =========================
-      const existsSku = baseRows.some(
-        (r) =>
-          normalizeText(r.brand) === normalizeText(item.brand) &&
-          normalizeText(r.barang) === normalizeText(item.barang) &&
-          normalize(r.namaToko) === normalize(item.namaToko)
-      );
-
-      if (!existsSku) {
-        const masterKey = `${item.brand}|${item.barang}`;
-
-        const hasRefund = transaksi.some(
-          (t) =>
-            normalize(t.NAMA_TOKO) === normalize(item.namaToko) &&
-            normalizeText(t.NAMA_BRAND) === normalizeText(item.brand) &&
-            normalizeText(t.NAMA_BARANG) === normalizeText(item.barang) &&
-            !String(t.IMEI || t.NO_IMEI || t.NOMOR_UNIK || "").trim() &&
-            String(t.PAYMENT_METODE || "").toUpperCase() === "REFUND" &&
-            String(t.STATUS || "").toUpperCase() === "APPROVED"
-        );
-
-        baseRows.push({
-          ...item,
-
-          hargaSRP: masterMap?.[masterKey]?.hargaSRP || item.hargaSRP || 0,
-
-          hargaGrosir:
-            masterMap?.[masterKey]?.hargaGrosir || item.hargaGrosir || 0,
-
-          hargaReseller:
-            masterMap?.[masterKey]?.hargaReseller || item.hargaReseller || 0,
-
-          statusBarang: "TERSEDIA",
-
-          keterangan: String(item.keterangan || "")
-            .toUpperCase()
-            .includes("REFUND")
-            ? "REFUND"
-            : hasRefund
-            ? "REFUND"
-            : "SYNC STOCK OPNAME",
-        });
-      }
-    });
-
-    return baseRows
-      .filter((r) => {
-        // ======================================
-        // 🔥 HILANGKAN BARANG LIAR
-        // ======================================
-        if (
-          String(r.keterangan || "")
-            .toUpperCase()
-            .includes("SYNC STOCK OPNAME")
-        ) {
-          return false;
-        }
-
-        // ======================================
-        // 🔥 INVALID
-        // ======================================
-        if (!r) return false;
-        // ======================================
-        // 🔥 INVALID
-        // ======================================
-        if (!r) return false;
-
-        if (!r.brand || !r.barang) {
-          return false;
-        }
-
-        // ======================================
-        // 🔥 FILTER TOKO
-        // ======================================
-        if (normalize(r.namaToko || r.toko) !== normalize(namaToko)) {
-          return false;
-        }
-
-        // ======================================
-        // 🔥 QTY HABIS
-        // ======================================
-        if (Number(r.qty || 0) <= 0) {
-          return false;
-        }
-
-        if (r.imei) {
-          const cleanImei = normalizeImei(r.imei);
-
           // ======================================
-          // 🔥 REFUND SUDAH TERJUAL LAGI
+          // 🔥 FILTER TOKO
           // ======================================
-          if (
-            String(r.keterangan || "")
-              .toUpperCase()
-              .includes("REFUND")
-          ) {
-            const refundState = refundFinalTracker?.[cleanImei];
-
-            // ✅ REFUND SUDAH DIJUAL LAGI
-            if (refundState && refundState.active === false) {
-              return false;
-            }
-          }
-
-          // ======================================
-          // 🔥 IMEI TERJUAL NORMAL
-          // ======================================
-          if (
-            imeiTerjual.has(cleanImei) &&
-            !refundAvailableSet.has(cleanImei)
-          ) {
-            const latestTracker = imeiTransferTracker?.[cleanImei];
-
-            // ======================================
-            // 🔥 MASIH TRANSFER AKTIF
-            // ======================================
-            if (latestTracker && latestTracker.metode !== "PENJUALAN") {
-              return true;
-            }
-
+          if (normalize(r.namaToko) !== normalize(TOKO_AKTIF)) {
             return false;
           }
-        }
 
-        return true;
-      })
-      .sort((a, b) => {
-        return (
-          new Date(b.tanggal || 0).getTime() -
-          new Date(a.tanggal || 0).getTime()
-        );
-      });
-  }, [
-    rows,
-    stockOpnameSyncRows,
-    masterMap,
-    transaksi,
-    namaToko,
-    imeiTerjual,
-    refundAvailableSet,
-    refundFinalTracker,
-    imeiTransferTracker,
-  ]);
+          return true;
+        })
+
+        // ======================================
+        // 🔥 SORT FINAL
+        // ======================================
+        .sort((a, b) => {
+          const brandA = String(a.brand || "").toUpperCase();
+
+          const brandB = String(b.brand || "").toUpperCase();
+
+          return brandA.localeCompare(brandB);
+        })
+    );
+  }, [rows, TOKO_AKTIF]);
 
   // ======================================
   // 🔥 SORT FINAL
@@ -2151,37 +1975,176 @@ if (
     : "bg-white border border-slate-200 text-slate-900";
 
   // ======================================
-  // 🔥 EXPORT DETAIL STOCK
+  // 🔥 FILTER TABLE REAL
+  // ======================================
+  const filteredRows = (rows || []).filter((item) => {
+    // ======================================
+    // 🔥 QTY VALID
+    // ======================================
+    if (Number(item.qty || 0) <= 0) {
+      return false;
+    }
+
+    // ======================================
+    // 🔥 SEARCH FILTER
+    // ======================================
+    const keyword = String(dashboardSearch || searchStock || "")
+      .trim()
+      .toUpperCase();
+
+    // ======================================
+    // 🔥 TANPA SEARCH
+    // ======================================
+    if (!keyword) {
+      return true;
+    }
+
+    return (
+      String(item.brand || "")
+        .toUpperCase()
+        .includes(keyword) ||
+      String(item.barang || "")
+        .toUpperCase()
+        .includes(keyword) ||
+      String(item.imei || "")
+        .toUpperCase()
+        .includes(keyword) ||
+      String(item.namaToko || "")
+        .toUpperCase()
+        .includes(keyword)
+    );
+  });
+
+  // ======================================
+  // 🔥 EXPORT DETAIL STOCK FINAL REAL
   // ======================================
   const exportDashboardStock = () => {
     try {
-      const exportRows = mergedRows.map((item, index) => ({
+      // ======================================
+      // 🔥 PAKAI DATA TABLE ASLI
+      // BUKAN DATA ENGINE
+      // ======================================
+      const tableSource = Array.isArray(filteredRows)
+        ? filteredRows
+        : Array.isArray(rows)
+        ? rows
+        : [];
+
+      // ======================================
+      // 🔥 FINAL REAL TABLE
+      // ======================================
+      const finalRows = tableSource
+        .filter((item) => {
+          return Number(item.qty || 0) > 0;
+        })
+
+        // ======================================
+        // 🔥 STRICT DUPLICATE REMOVE
+        // ======================================
+        .reduce((acc, item) => {
+          const key = item.imei
+            ? `IMEI_${String(item.imei).trim()}`
+            : `NONIMEI_${String(item.namaToko).trim()}_${String(
+                item.brand
+              ).trim()}_${String(item.barang).trim()}`;
+
+          // ======================================
+          // 🔥 SKIP DUPLICATE
+          // ======================================
+          if (acc.some((x) => x.__key === key)) {
+            return acc;
+          }
+
+          acc.push({
+            ...item,
+            __key: key,
+          });
+
+          return acc;
+        }, [])
+
+        // ======================================
+        // 🔥 CLEAN INTERNAL KEY
+        // ======================================
+        .map(({ __key, ...rest }) => rest)
+
+        // ======================================
+        // 🔥 SORT FINAL
+        // ======================================
+        .sort((a, b) => {
+          return String(a.brand || "").localeCompare(String(b.brand || ""));
+        });
+
+      // ======================================
+      // 🔥 EXPORT ROWS
+      // ======================================
+      const exportRows = finalRows.map((item, index) => ({
         NO: index + 1,
+
         TANGGAL: item.tanggal || "-",
+
         NO_DO: item.noDo || "-",
+
         SUPPLIER: item.supplier || "-",
+
         TOKO: item.namaToko || "-",
+
         BRAND: item.brand || "-",
+
         BARANG: item.barang || "-",
+
         IMEI: item.imei || "-",
-        QTY: item.qty || 0,
+
+        QTY: Number(item.qty || 0),
+
         STATUS: item.statusBarang || "-",
+
         KETERANGAN: item.keterangan || "-",
+
+        HARGA_SRP: Number(item.hargaSRP || 0),
+
+        HARGA_GROSIR: Number(item.hargaGrosir || 0),
+
+        HARGA_RESELLER: Number(item.hargaReseller || 0),
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(exportRows);
+
+      worksheet["!cols"] = [
+        { wch: 8 },
+        { wch: 15 },
+        { wch: 22 },
+        { wch: 25 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 35 },
+        { wch: 25 },
+        { wch: 10 },
+        { wch: 20 },
+        { wch: 25 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+      ];
 
       const workbook = XLSX.utils.book_new();
 
       XLSX.utils.book_append_sheet(workbook, worksheet, "DETAIL_STOCK");
 
-      XLSX.writeFile(workbook, `DETAIL_STOCK_${TOKO_AKTIF}.xlsx`);
+      XLSX.writeFile(
+        workbook,
+        `DETAIL_STOCK_${TOKO_AKTIF}_${
+          new Date().toISOString().split("T")[0]
+        }.xlsx`
+      );
+
+      alert("✅ Export Excel berhasil");
     } catch (err) {
       console.error(err);
+
       alert("❌ Gagal export excel");
     }
   };
-
   return (
     <div className={`min-h-screen ${rootBgClass} p-4 sm:p-6`}>
       <div className="max-w-6xl mx-auto space-y-5">
