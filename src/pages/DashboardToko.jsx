@@ -1074,11 +1074,11 @@ export default function DashboardToko(props) {
       // 🔥 NON IMEI
       // ======================================
       const skuKey =
-      `${normalize(r.namaToko)}|` +
-      `${normalizeText(r.brand)}|` +
-      `${normalizeText(r.barang)}|` +
-      `${normalize(r.supplier)}|` +
-      `${normalize(r.noDo)}`;
+        `${normalize(r.namaToko)}|` +
+        `${normalizeText(r.brand)}|` +
+        `${normalizeText(r.barang)}|` +
+        `${normalize(r.supplier)}|` +
+        `${normalize(r.noDo)}`;
 
       if (!finalMap[skuKey]) {
         finalMap[skuKey] = {
@@ -1222,12 +1222,10 @@ export default function DashboardToko(props) {
 
     cleanedRows.forEach((item) => {
       const key = item.imei
-      ? `IMEI_${normalizeImei(item.imei)}`
-      : `NONIMEI_${normalize(item.namaToko)}_${normalizeText(
-          item.brand
-        )}_${normalizeText(item.barang)}_${normalize(
-          item.supplier
-        )}`;
+        ? `IMEI_${normalizeImei(item.imei)}`
+        : `NONIMEI_${normalize(item.namaToko)}_${normalizeText(
+            item.brand
+          )}_${normalizeText(item.barang)}_${normalize(item.supplier)}`;
 
       // ======================================
       // 🔥 AMBIL DATA QTY TERBESAR
@@ -1321,11 +1319,11 @@ export default function DashboardToko(props) {
   console.log("🔥 FIREBASE TOKO ID:", firebaseTokoId);
 
   /// ======================================
-// 🔥 FILTER FINAL CLEAN
-// ======================================
-const filteredRows = useMemo(() => {
-  return finalTableRows;
-}, [finalTableRows]);
+  // 🔥 FILTER FINAL CLEAN
+  // ======================================
+  const filteredRows = useMemo(() => {
+    return finalTableRows;
+  }, [finalTableRows]);
 
   // ======================= HANDLE TIDAK ADA TOKO =======================
   if (!toko) {
@@ -1356,26 +1354,43 @@ const filteredRows = useMemo(() => {
   const exportDashboardStock = () => {
     try {
       // =====================================
-      // 🔥 WAJIB SAMA PERSIS DENGAN TABLE
+      // 🔥 EXPORT FINAL EXACT SAME TABLE
       // =====================================
-      const exportRows = Array.isArray(finalTableRows)
-        ? finalTableRows.filter(
-            (item) =>
-              String(item.namaToko || "")
-                .trim()
-                .toUpperCase() ===
-              String(namaToko || "")
-                .trim()
-                .toUpperCase()
-          )
-        : [];
+      const uniqueExportMap = {};
+
+      (filteredRows || []).forEach((item) => {
+        // =====================================
+        // 🔥 KEY IMEI
+        // =====================================
+        const key = item.imei
+          ? `IMEI_${String(item.imei).trim().toUpperCase()}`
+          : `NONIMEI_${String(item.namaToko || "")
+              .trim()
+              .toUpperCase()}_${String(item.brand || "")
+              .trim()
+              .toUpperCase()}_${String(item.barang || "")
+              .trim()
+              .toUpperCase()}_${String(item.supplier || "")
+              .trim()
+              .toUpperCase()}`;
+
+        // =====================================
+        // 🔥 ANTI DUPLIKAT
+        // =====================================
+        if (!uniqueExportMap[key]) {
+          uniqueExportMap[key] = item;
+        }
+      });
 
       // =====================================
-      // 🔥 DEBUG
+      // 🔥 FINAL EXPORT
       // =====================================
-      console.log("TABLE ROWS:", filteredRows.length);
-      console.log("EXPORT ROWS:", exportRows.length);
+      const exportRows = Object.values(uniqueExportMap).filter(
+        (x) => Number(x.qty || 0) > 0
+      );
 
+      console.log("FINAL TABLE =", filteredRows.length);
+      console.log("FINAL EXPORT =", exportRows.length);
       // =====================================
       // 🔥 FORMAT EXCEL
       // =====================================
