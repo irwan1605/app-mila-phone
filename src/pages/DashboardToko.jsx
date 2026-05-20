@@ -1074,9 +1074,11 @@ export default function DashboardToko(props) {
       // 🔥 NON IMEI
       // ======================================
       const skuKey =
-        `${normalize(r.namaToko)}|` +
-        `${normalizeText(r.brand)}|` +
-        `${normalizeText(r.barang)}`;
+      `${normalize(r.namaToko)}|` +
+      `${normalizeText(r.brand)}|` +
+      `${normalizeText(r.barang)}|` +
+      `${normalize(r.supplier)}|` +
+      `${normalize(r.noDo)}`;
 
       if (!finalMap[skuKey]) {
         finalMap[skuKey] = {
@@ -1093,7 +1095,10 @@ export default function DashboardToko(props) {
         finalMap[skuKey] = {
           ...finalMap[skuKey],
 
-          qty: Math.max(Number(finalMap[skuKey].qty || 0), Number(r.qty || 0)),
+          qty:
+            Number(r.qty || 0) > Number(finalMap[skuKey].qty || 0)
+              ? Number(r.qty || 0)
+              : Number(finalMap[skuKey].qty || 0),
 
           tanggal: r.tanggal || finalMap[skuKey].tanggal,
 
@@ -1185,6 +1190,9 @@ export default function DashboardToko(props) {
       .trim()
       .toLowerCase();
 
+    // ======================================
+    // 🔥 SEARCH FINAL
+    // ======================================
     if (keyword) {
       cleanedRows = cleanedRows.filter((item) => {
         return (
@@ -1206,6 +1214,36 @@ export default function DashboardToko(props) {
         );
       });
     }
+
+    // ======================================
+    // 🔥 REMOVE FINAL DUPLICATE
+    // ======================================
+    const uniqueMap = {};
+
+    cleanedRows.forEach((item) => {
+      const key = item.imei
+      ? `IMEI_${normalizeImei(item.imei)}`
+      : `NONIMEI_${normalize(item.namaToko)}_${normalizeText(
+          item.brand
+        )}_${normalizeText(item.barang)}_${normalize(
+          item.supplier
+        )}`;
+
+      // ======================================
+      // 🔥 AMBIL DATA QTY TERBESAR
+      // ======================================
+      if (
+        !uniqueMap[key] ||
+        Number(item.qty || 0) > Number(uniqueMap[key].qty || 0)
+      ) {
+        uniqueMap[key] = item;
+      }
+    });
+
+    // ======================================
+    // 🔥 FINAL CLEAN UNIQUE
+    // ======================================
+    cleanedRows = Object.values(uniqueMap);
 
     // ======================================
     // 🔥 SORT FINAL
@@ -1282,26 +1320,12 @@ export default function DashboardToko(props) {
 
   console.log("🔥 FIREBASE TOKO ID:", firebaseTokoId);
 
-  // ======================================
-  // 🔥 FILTER TABLE REAL
-  // ======================================
-  const filteredRows = useMemo(() => {
-    return rows.filter((item) => {
-      const q = search.toLowerCase();
-
-      return (
-        String(item.brand || "")
-          .toLowerCase()
-          .includes(q) ||
-        String(item.barang || "")
-          .toLowerCase()
-          .includes(q) ||
-        String(item.imei || "")
-          .toLowerCase()
-          .includes(q)
-      );
-    });
-  }, [rows, search]);
+  /// ======================================
+// 🔥 FILTER FINAL CLEAN
+// ======================================
+const filteredRows = useMemo(() => {
+  return finalTableRows;
+}, [finalTableRows]);
 
   // ======================= HANDLE TIDAK ADA TOKO =======================
   if (!toko) {

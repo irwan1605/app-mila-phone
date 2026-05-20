@@ -112,7 +112,21 @@ export default function TableTransferBarang({ currentRole }) {
           } else if (metode === "TRANSFER_MASUK") {
             if (map[imei].status !== "SOLD") {
               map[imei].status = "AVAILABLE";
-              map[imei].toko = String(v.NAMA_TOKO || "").toUpperCase(); // 🔥 pindah owner
+
+              // ======================================
+              // 🔥 OWNER FINAL
+              // ======================================
+              map[imei].toko = String(
+                v.NAMA_TOKO || v.ke || v.tokoTujuan || "-"
+              ).toUpperCase();
+
+              // ======================================
+              // 🔥 TRACK REFUND
+              // ======================================
+              map[imei].isRefundTransfer =
+                String(v.SUMBER_STOCK || "").toUpperCase() === "REFUND";
+
+              map[imei].lastAction = v.LAST_ACTION || "TRANSFER_MASUK";
             }
           }
         });
@@ -150,7 +164,9 @@ export default function TableTransferBarang({ currentRole }) {
             "AVAILABLE",
             "REFUND",
             "TRANSFER_MASUK",
-            "OUT", // ✅ ini yang bikin barang transfer bisa transfer lagi
+            "TRANSFER_KELUAR",
+            "OUT",
+            "PEMBELIAN",
           ].includes(found.status)
         );
       });
@@ -529,7 +545,6 @@ export default function TableTransferBarang({ currentRole }) {
           </select>
         </div>
 
-
         <input
           type="text"
           placeholder="Cari IMEI, Invoice, Barang..."
@@ -684,6 +699,16 @@ export default function TableTransferBarang({ currentRole }) {
                               return;
                             }
 
+                            // ======================================
+                            // 🔥 REFUND BOLEH TRANSFER LAGI
+                            // ======================================
+                            if (
+                              String(found.status || "").toUpperCase() ===
+                              "REFUND"
+                            ) {
+                              console.log("🔥 REFUND ACTIVE:", imei);
+                            }
+
                             // 🔒 cek owner hanya untuk user biasa
                             if (!canRoleApprove) {
                               const owner = String(
@@ -702,9 +727,59 @@ export default function TableTransferBarang({ currentRole }) {
                             }
                           }
 
+                          // ======================================
+                          // 🔥 DETECT REFUND ITEM
+                          // ======================================
+                          const refundImeis = [];
+
+                          for (const imei of r.imeis || []) {
+                            const found = inventory.find(
+                              (i) =>
+                                String(i.imei).trim() === String(imei).trim()
+                            );
+
+                            // ======================================
+                            // 🔥 REFUND ACTIVE
+                            // ======================================
+                            if (
+                              found &&
+                              [
+                                "REFUND",
+                                "AVAILABLE",
+                                "TRANSFER_MASUK",
+                              ].includes(
+                                String(found.status || "").toUpperCase()
+                              )
+                            ) {
+                              refundImeis.push(imei);
+                            }
+                          }
+
+                          // ======================================
+                          // 🔥 APPROVE FINAL
+                          // ======================================
                           const sjId =
                             await FirebaseService.approveTransferFINAL({
-                              transfer: r,
+                              transfer: {
+                                ...r,
+
+                                // ======================================
+                                // 🔥 ELEMENT BARU
+                                // ======================================
+                                IS_REFUND_TRANSFER: refundImeis.length > 0,
+
+                                SUMBER_STOCK:
+                                  refundImeis.length > 0 ? "REFUND" : "NORMAL",
+
+                                REFUND_IMEIS: refundImeis,
+
+                                LAST_ACTION:
+                                  refundImeis.length > 0
+                                    ? "REFUND"
+                                    : "TRANSFER",
+
+                                APPROVED_AT: Date.now(),
+                              },
                             });
 
                           navigate(`/surat-jalan/${sjId}`);

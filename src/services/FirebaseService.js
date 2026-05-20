@@ -580,11 +580,11 @@ export function getAvailableIMEIByToko(allTransaksi, tokoLogin) {
     }
 
     // ======================================
-// 🔥 HANYA PENJUALAN YANG MENGHILANGKAN STOCK
-// ======================================
-if (["PENJUALAN"].includes(t.PAYMENT_METODE)) {
-  map[key].qty -= qty;
-}
+    // 🔥 HANYA PENJUALAN YANG MENGHILANGKAN STOCK
+    // ======================================
+    if (["PENJUALAN"].includes(t.PAYMENT_METODE)) {
+      map[key].qty -= qty;
+    }
   });
 
   return Object.values(map).filter((i) => i.qty > 0 && i.toko === tokoLogin);
@@ -2300,6 +2300,11 @@ export const approveTransferFINAL = async ({ transfer }) => {
       let waktuTerakhir = 0;
       let sudahTerjual = false;
 
+      // ======================================
+      // 🔥 REFUND ACTIVE TRACKER
+      // ======================================
+      let refundActive = false;
+
       Object.values(allTokoData).forEach((toko) => {
         const transaksi = toko.transaksi || {};
 
@@ -2316,15 +2321,35 @@ export const approveTransferFINAL = async ({ transfer }) => {
             lokasiTerakhir = trx.NAMA_TOKO;
           }
 
+          // ======================================
+          // 🔥 STOCK MASUK
+          // ======================================
           if (metode === "PEMBELIAN") saldo += 1;
+
           if (metode === "TRANSFER_MASUK") saldo += 1;
-          if (metode === "REFUND") saldo += 1;
 
-          if (metode === "TRANSFER_KELUAR") saldo -= 1;
+          if (metode === "REFUND") {
+            saldo += 1;
 
-          if (metode === "PENJUALAN") {
-            saldo -= 1;
-            sudahTerjual = true;
+            // ======================================
+            // 🔥 REFUND ACTIVE
+            // ======================================
+            refundActive = true;
+
+            // ======================================
+            // 🔥 BARANG AKTIF LAGI
+            // ======================================
+            sudahTerjual = false;
+          }
+
+          // ======================================
+          // 🔥 TRANSFER KELUAR
+          // ======================================
+          // JANGAN KURANGI SALDO
+          // karena barang hanya pindah toko
+          // ======================================
+          if (metode === "TRANSFER_KELUAR") {
+            console.log("📦 TRANSFER OWNER:", imei);
           }
         });
       });
@@ -2345,7 +2370,10 @@ export const approveTransferFINAL = async ({ transfer }) => {
       }
 
       // ❌ BLOK JIKA SALDO HABIS
-      if (saldo <= 0) {
+      // ======================================
+      // 🔥 REFUND ACTIVE MASIH VALID
+      // ======================================
+      if (saldo <= 0 && !refundActive) {
         throw new Error(`IMEI ${imei} tidak tersedia`);
       }
     }
@@ -2412,6 +2440,14 @@ export const approveTransferFINAL = async ({ transfer }) => {
         IMEI: imei,
         QTY: 1,
         PAYMENT_METODE: "TRANSFER_MASUK",
+        // ======================================
+        // 🔥 TRACK REFUND TRANSFER
+        // ======================================
+        SUMBER_STOCK: transfer?.SUMBER_STOCK || "NORMAL",
+
+        IS_REFUND_TRANSFER: transfer?.IS_REFUND_TRANSFER || false,
+
+        LAST_ACTION: transfer?.LAST_ACTION || "TRANSFER",
         SYSTEM_PAYMENT: "SYSTEM",
         STATUS: "Approved",
         CREATED_AT: approvedAt,
@@ -3187,15 +3223,11 @@ export const listenPenjualan = (cb) => {
         // ======================================
         // 🔥 FILTER REFUND FINAL
         // ======================================
-        const statusPembayaran = String(
-          trx.statusPembayaran || ""
-        )
+        const statusPembayaran = String(trx.statusPembayaran || "")
           .toUpperCase()
           .trim();
 
-        const status = String(
-          trx.STATUS || ""
-        )
+        const status = String(trx.STATUS || "")
           .toUpperCase()
           .trim();
 
@@ -3224,14 +3256,10 @@ export const listenPenjualan = (cb) => {
     // 🔥 SORT TERBARU
     // ======================================
     result.sort((a, b) => {
-      return Number(b.createdAt || 0) -
-        Number(a.createdAt || 0);
+      return Number(b.createdAt || 0) - Number(a.createdAt || 0);
     });
 
-    console.log(
-      "🔥 TABLE PENJUALAN FINAL:",
-      result
-    );
+    console.log("🔥 TABLE PENJUALAN FINAL:", result);
 
     cb(result);
   });
