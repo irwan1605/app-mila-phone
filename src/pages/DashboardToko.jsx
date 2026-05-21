@@ -1322,7 +1322,7 @@ export default function DashboardToko(props) {
   // 🔥 FILTER FINAL CLEAN
   // ======================================
   const filteredRows = useMemo(() => {
-    return finalTableRows;
+    return [...finalTableRows];
   }, [finalTableRows]);
 
   // ======================= HANDLE TIDAK ADA TOKO =======================
@@ -1348,128 +1348,110 @@ export default function DashboardToko(props) {
     ? "bg-slate-900/70 border border-slate-700/80 text-slate-100"
     : "bg-white border border-slate-200 text-slate-900";
   // ======================================
-  // 🔥 EXPORT DETAIL STOCK FINAL REAL
-  // SYNC 100% DENGAN TABLE
-  // ======================================
-  const exportDashboardStock = () => {
-    try {
-      // =====================================
-      // 🔥 EXPORT FINAL EXACT SAME TABLE
-      // =====================================
-      const uniqueExportMap = {};
+// 🔥 EXPORT EXCEL SYNC DETAIL STOCK
+// HASIL 100% SAMA DENGAN DetailStockToko.jsx
+// ======================================
+// ======================================
+// 🔥 EXPORT EXCEL TERHUBUNG DETAIL STOCK
+// SYNC 100% DENGAN DetailStockToko.jsx
+// ======================================
+const exportDashboardStock = () => {
+  try {
+    // ======================================
+    // 🔥 SOURCE DATA SAMA DENGAN TABLE
+    // ======================================
+    const exportSource = Array.isArray(filteredRows)
+      ? [...filteredRows]
+      : [];
 
-      (filteredRows || []).forEach((item) => {
-        // =====================================
-        // 🔥 KEY IMEI
-        // =====================================
-        const key = item.imei
-          ? `IMEI_${String(item.imei).trim().toUpperCase()}`
-          : `NONIMEI_${String(item.namaToko || "")
-              .trim()
-              .toUpperCase()}_${String(item.brand || "")
-              .trim()
-              .toUpperCase()}_${String(item.barang || "")
-              .trim()
-              .toUpperCase()}_${String(item.supplier || "")
-              .trim()
-              .toUpperCase()}`;
+    console.log("🔥 EXPORT ROWS:", exportSource.length);
 
-        // =====================================
-        // 🔥 ANTI DUPLIKAT
-        // =====================================
-        if (!uniqueExportMap[key]) {
-          uniqueExportMap[key] = item;
-        }
-      });
+    // ======================================
+    // 🔥 FORMAT SAMA PERSIS
+    // DENGAN DetailStockToko.jsx
+    // ======================================
+    const exportRows = exportSource.map((r, i) => ({
+      NO: i + 1,
 
-      // =====================================
-      // 🔥 FINAL EXPORT
-      // =====================================
-      const exportRows = Object.values(uniqueExportMap).filter(
-        (x) => Number(x.qty || 0) > 0
-      );
+      TANGGAL: r.tanggal || "-",
 
-      console.log("FINAL TABLE =", filteredRows.length);
-      console.log("FINAL EXPORT =", exportRows.length);
-      // =====================================
-      // 🔥 FORMAT EXCEL
-      // =====================================
-      const excelData = exportRows.map((item, index) => ({
-        NO: index + 1,
+      "NO DO": r.noDo || "-",
 
-        TANGGAL: item.tanggal || "-",
+      SUPPLIER: r.supplier || "-",
 
-        NO_DO: item.noDo || "-",
+      TOKO: r.namaToko || r.toko || "-",
 
-        SUPPLIER: item.supplier || "-",
+      BRAND: r.brand || "-",
 
-        TOKO: item.namaToko || "-",
+      BARANG: r.barang || "-",
 
-        BRAND: item.brand || "-",
+      IMEI: r.imei || "NON IMEI",
 
-        NAMA_BARANG: item.barang || "-",
+      QTY: Number(r.qty || 0),
 
-        IMEI: item.imei || "-",
+      "HARGA SRP": Number(r.hargaSRP || 0),
 
-        QTY: Number(item.qty || 0),
+      "HARGA GROSIR": Number(r.hargaGrosir || 0),
 
-        HARGA_SRP: Number(item.hargaSRP || 0),
+      "HARGA RESELLER": Number(r.hargaReseller || 0),
 
-        HARGA_GROSIR: Number(item.hargaGrosir || 0),
+      STATUS: r.statusBarang || "-",
 
-        HARGA_RESELLER: Number(item.hargaReseller || 0),
+      KETERANGAN: r.keterangan || "-",
+    }));
 
-        STATUS: item.statusBarang || "-",
+    // ======================================
+    // 🔥 GENERATE SHEET
+    // ======================================
+    const ws = XLSX.utils.json_to_sheet(exportRows);
 
-        KETERANGAN: item.keterangan || "-",
-      }));
+    // ======================================
+    // 🔥 AUTO WIDTH
+    // ======================================
+    ws["!cols"] = [
+      { wch: 8 },  // NO
+      { wch: 18 }, // TANGGAL
+      { wch: 25 }, // NO DO
+      { wch: 35 }, // SUPPLIER
+      { wch: 25 }, // TOKO
+      { wch: 20 }, // BRAND
+      { wch: 40 }, // BARANG
+      { wch: 28 }, // IMEI
+      { wch: 10 }, // QTY
+      { wch: 18 }, // SRP
+      { wch: 18 }, // GROSIR
+      { wch: 18 }, // RESELLER
+      { wch: 15 }, // STATUS
+      { wch: 30 }, // KETERANGAN
+    ];
 
-      // =====================================
-      // 🔥 CREATE SHEET
-      // =====================================
-      const ws = XLSX.utils.json_to_sheet(excelData);
+    // ======================================
+    // 🔥 WORKBOOK
+    // ======================================
+    const wb = XLSX.utils.book_new();
 
-      // =====================================
-      // 🔥 AUTO WIDTH
-      // =====================================
-      ws["!cols"] = [
-        { wch: 6 },
-        { wch: 18 },
-        { wch: 20 },
-        { wch: 20 },
-        { wch: 18 },
-        { wch: 18 },
-        { wch: 35 },
-        { wch: 25 },
-        { wch: 10 },
-        { wch: 15 },
-        { wch: 15 },
-        { wch: 15 },
-        { wch: 15 },
-        { wch: 25 },
-      ];
+    XLSX.utils.book_append_sheet(
+      wb,
+      ws,
+      "DETAIL_STOCK_TOKO"
+    );
 
-      // =====================================
-      // 🔥 WORKBOOK
-      // =====================================
-      const wb = XLSX.utils.book_new();
+    // ======================================
+    // 🔥 EXPORT FILE
+    // ======================================
+    XLSX.writeFile(
+      wb,
+      `DETAIL_STOCK_${TOKO_AKTIF}_${
+        new Date().toISOString().slice(0, 10)
+      }.xlsx`
+    );
 
-      XLSX.utils.book_append_sheet(wb, ws, "DETAIL STOCK TOKO");
-
-      // =====================================
-      // 🔥 EXPORT
-      // =====================================
-      XLSX.writeFile(
-        wb,
-        `DETAIL_STOCK_${namaToko}_${new Date().toISOString().slice(0, 10)}.xlsx`
-      );
-
-      console.log("✅ EXPORT SUCCESS");
-    } catch (err) {
-      console.error("❌ EXPORT ERROR:", err);
-      alert("❌ Gagal export excel");
-    }
-  };
+    console.log("✅ EXPORT SUCCESS");
+  } catch (err) {
+    console.error("❌ EXPORT ERROR:", err);
+    alert("❌ Gagal export excel");
+  }
+};
 
   return (
     <div className={`min-h-screen ${rootBgClass} p-4 sm:p-6`}>
