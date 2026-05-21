@@ -1154,6 +1154,7 @@ export default function DashboardToko(props) {
 
       // ======================================
       // 🔥 IMEI FINAL CLEAN
+      // SYNC DETAIL STOCK
       // ======================================
       .filter((r) => {
         if (!r.imei) return true;
@@ -1161,28 +1162,34 @@ export default function DashboardToko(props) {
         const cleanImei = normalizeImei(r.imei);
 
         // ======================================
-        // 🔥 TERJUAL
+        // 🔥 TERJUAL NORMAL
         // ======================================
         if (imeiTerjual.has(cleanImei) && !refundAvailableSet.has(cleanImei)) {
           return false;
         }
 
         // ======================================
-        // 🔥 OWNER FINAL
+        // 🔥 REFUND SUDAH TERJUAL LAGI
         // ======================================
-        const owner = finalOwnerTracker?.[cleanImei];
+        if (
+          String(r.keterangan || "")
+            .toUpperCase()
+            .includes("REFUND")
+        ) {
+          const refundState = refundFinalTracker?.[cleanImei];
 
-        if (!owner?.active) {
-          return false;
+          if (refundState && refundState.active === false) {
+            return false;
+          }
         }
 
-        if (normalize(owner.toko) !== normalize(TOKO_AKTIF)) {
-          return false;
-        }
+        // ======================================
+        // 🔥 JANGAN FILTER OWNER
+        // BIARKAN SAMA DENGAN DETAIL STOCK
+        // ======================================
 
         return true;
       });
-
     // ======================================
     // 🔥 SEARCH FINAL
     // ======================================
@@ -1218,22 +1225,41 @@ export default function DashboardToko(props) {
     // ======================================
     // 🔥 REMOVE FINAL DUPLICATE
     // ======================================
+    // ======================================
+    // 🔥 REMOVE FINAL DUPLICATE
+    // FIX FINAL REAL
+    // ======================================
     const uniqueMap = {};
 
     cleanedRows.forEach((item) => {
+      // ======================================
+      // 🔥 IMEI = UNIQUE BY IMEI
+      // ======================================
       const key = item.imei
         ? `IMEI_${normalizeImei(item.imei)}`
-        : `NONIMEI_${normalize(item.namaToko)}_${normalizeText(
+        : // ======================================
+          // 🔥 NON IMEI
+          // WAJIB TAMBAH NO DO + TANGGAL
+          // AGAR TIDAK KETIMPA
+          // ======================================
+          `NONIMEI_${normalize(item.namaToko)}_${normalizeText(
             item.brand
-          )}_${normalizeText(item.barang)}_${normalize(item.supplier)}`;
+          )}_${normalizeText(item.barang)}_${normalize(
+            item.supplier
+          )}_${normalize(item.noDo)}_${normalize(item.tanggal)}`;
 
       // ======================================
-      // 🔥 AMBIL DATA QTY TERBESAR
+      // 🔥 SIMPAN SEMUA DATA REAL
       // ======================================
-      if (
-        !uniqueMap[key] ||
-        Number(item.qty || 0) > Number(uniqueMap[key].qty || 0)
-      ) {
+      if (!uniqueMap[key]) {
+        uniqueMap[key] = item;
+        return;
+      }
+
+      // ======================================
+      // 🔥 AMBIL QTY TERBESAR
+      // ======================================
+      if (Number(item.qty || 0) > Number(uniqueMap[key].qty || 0)) {
         uniqueMap[key] = item;
       }
     });
@@ -1321,9 +1347,58 @@ export default function DashboardToko(props) {
   /// ======================================
   // 🔥 FILTER FINAL CLEAN
   // ======================================
+  // ======================================
+  // 🔥 FINAL EXPORT SOURCE
+  // SAMA PERSIS DENGAN DetailStockToko
+  // ======================================
   const filteredRows = useMemo(() => {
-    return [...finalTableRows];
-  }, [finalTableRows]);
+    const keyword = String(dashboardSearch || search || "")
+      .trim()
+      .toLowerCase();
+
+    let rowsFinal = [...finalTableRows];
+
+    // ======================================
+    // 🔥 SEARCH SYNC DETAIL STOCK
+    // ======================================
+    if (keyword) {
+      rowsFinal = rowsFinal.filter((r) => {
+        const imei = String(r.imei || "").toLowerCase();
+
+        const barang = String(r.barang || "").toLowerCase();
+
+        const toko = String(r.namaToko || r.toko || "").toLowerCase();
+
+        const brand = String(r.brand || "").toLowerCase();
+
+        const noDo = String(r.noDo || "").toLowerCase();
+
+        const tanggal = String(r.tanggal || "")
+          .replace("T", " ")
+          .toLowerCase();
+
+        const supplier = String(r.supplier || "").toLowerCase();
+
+        const status = String(r.statusBarang || "").toLowerCase();
+
+        const keterangan = String(r.keterangan || "").toLowerCase();
+
+        return (
+          imei.includes(keyword) ||
+          barang.includes(keyword) ||
+          toko.includes(keyword) ||
+          brand.includes(keyword) ||
+          noDo.includes(keyword) ||
+          tanggal.includes(keyword) ||
+          supplier.includes(keyword) ||
+          status.includes(keyword) ||
+          keterangan.includes(keyword)
+        );
+      });
+    }
+
+    return rowsFinal;
+  }, [finalTableRows, dashboardSearch, search]);
 
   // ======================= HANDLE TIDAK ADA TOKO =======================
   if (!toko) {
@@ -1347,111 +1422,105 @@ export default function DashboardToko(props) {
   const cardBgClass = isDark
     ? "bg-slate-900/70 border border-slate-700/80 text-slate-100"
     : "bg-white border border-slate-200 text-slate-900";
+
   // ======================================
-// 🔥 EXPORT EXCEL SYNC DETAIL STOCK
-// HASIL 100% SAMA DENGAN DetailStockToko.jsx
-// ======================================
-// ======================================
-// 🔥 EXPORT EXCEL TERHUBUNG DETAIL STOCK
-// SYNC 100% DENGAN DetailStockToko.jsx
-// ======================================
-const exportDashboardStock = () => {
-  try {
-    // ======================================
-    // 🔥 SOURCE DATA SAMA DENGAN TABLE
-    // ======================================
-    const exportSource = Array.isArray(filteredRows)
-      ? [...filteredRows]
-      : [];
+  // 🔥 EXPORT EXCEL FINAL
+  // 100% SYNC DETAIL STOCK TOKO
+  // ======================================
+  const exportDashboardStock = () => {
+    try {
+      // ======================================
+      // 🔥 SOURCE = TABLE FINAL
+      // ======================================
+      const exportRows = filteredRows.map((r, i) => ({
+        NO: i + 1,
 
-    console.log("🔥 EXPORT ROWS:", exportSource.length);
+        TANGGAL: r.tanggal || "-",
 
-    // ======================================
-    // 🔥 FORMAT SAMA PERSIS
-    // DENGAN DetailStockToko.jsx
-    // ======================================
-    const exportRows = exportSource.map((r, i) => ({
-      NO: i + 1,
+        "NO DO": r.noDo || "-",
 
-      TANGGAL: r.tanggal || "-",
+        SUPPLIER: r.supplier || "-",
 
-      "NO DO": r.noDo || "-",
+        TOKO: r.namaToko || "-",
 
-      SUPPLIER: r.supplier || "-",
+        BRAND: r.brand || "-",
 
-      TOKO: r.namaToko || r.toko || "-",
+        BARANG: r.barang || "-",
 
-      BRAND: r.brand || "-",
+        IMEI: r.imei || "NON IMEI",
 
-      BARANG: r.barang || "-",
+        QTY: Number(r.qty || 0),
 
-      IMEI: r.imei || "NON IMEI",
+        "HARGA SRP": Number(r.hargaSRP || 0),
 
-      QTY: Number(r.qty || 0),
+        "HARGA GROSIR": Number(r.hargaGrosir || 0),
 
-      "HARGA SRP": Number(r.hargaSRP || 0),
+        "HARGA RESELLER": Number(r.hargaReseller || 0),
 
-      "HARGA GROSIR": Number(r.hargaGrosir || 0),
+        STATUS: r.statusBarang || "-",
 
-      "HARGA RESELLER": Number(r.hargaReseller || 0),
+        KETERANGAN: r.keterangan || "-",
+      }));
 
-      STATUS: r.statusBarang || "-",
+      console.log("🔥 EXPORT ROWS:", exportRows.length);
 
-      KETERANGAN: r.keterangan || "-",
-    }));
+      // ======================================
+      // 🔥 VALIDASI
+      // ======================================
+      if (!exportRows.length) {
+        alert("❌ Tidak ada data untuk export");
+        return;
+      }
 
-    // ======================================
-    // 🔥 GENERATE SHEET
-    // ======================================
-    const ws = XLSX.utils.json_to_sheet(exportRows);
+      // ======================================
+      // 🔥 GENERATE SHEET
+      // ======================================
+      const ws = XLSX.utils.json_to_sheet(exportRows);
 
-    // ======================================
-    // 🔥 AUTO WIDTH
-    // ======================================
-    ws["!cols"] = [
-      { wch: 8 },  // NO
-      { wch: 18 }, // TANGGAL
-      { wch: 25 }, // NO DO
-      { wch: 35 }, // SUPPLIER
-      { wch: 25 }, // TOKO
-      { wch: 20 }, // BRAND
-      { wch: 40 }, // BARANG
-      { wch: 28 }, // IMEI
-      { wch: 10 }, // QTY
-      { wch: 18 }, // SRP
-      { wch: 18 }, // GROSIR
-      { wch: 18 }, // RESELLER
-      { wch: 15 }, // STATUS
-      { wch: 30 }, // KETERANGAN
-    ];
+      // ======================================
+      // 🔥 AUTO WIDTH
+      // ======================================
+      ws["!cols"] = [
+        { wch: 8 },
+        { wch: 18 },
+        { wch: 25 },
+        { wch: 35 },
+        { wch: 25 },
+        { wch: 20 },
+        { wch: 40 },
+        { wch: 28 },
+        { wch: 10 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 15 },
+        { wch: 30 },
+      ];
 
-    // ======================================
-    // 🔥 WORKBOOK
-    // ======================================
-    const wb = XLSX.utils.book_new();
+      // ======================================
+      // 🔥 WORKBOOK
+      // ======================================
+      const wb = XLSX.utils.book_new();
 
-    XLSX.utils.book_append_sheet(
-      wb,
-      ws,
-      "DETAIL_STOCK_TOKO"
-    );
+      XLSX.utils.book_append_sheet(wb, ws, "DETAIL_STOCK_TOKO");
 
-    // ======================================
-    // 🔥 EXPORT FILE
-    // ======================================
-    XLSX.writeFile(
-      wb,
-      `DETAIL_STOCK_${TOKO_AKTIF}_${
-        new Date().toISOString().slice(0, 10)
-      }.xlsx`
-    );
+      // ======================================
+      // 🔥 EXPORT FILE
+      // ======================================
+      XLSX.writeFile(
+        wb,
+        `DETAIL_STOCK_${TOKO_AKTIF}_${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`
+      );
 
-    console.log("✅ EXPORT SUCCESS");
-  } catch (err) {
-    console.error("❌ EXPORT ERROR:", err);
-    alert("❌ Gagal export excel");
-  }
-};
+      console.log("✅ EXPORT SUCCESS");
+    } catch (err) {
+      console.error(err);
+
+      alert("❌ Gagal export excel");
+    }
+  };
 
   return (
     <div className={`min-h-screen ${rootBgClass} p-4 sm:p-6`}>

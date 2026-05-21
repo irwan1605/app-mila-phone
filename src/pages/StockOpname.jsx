@@ -1188,103 +1188,117 @@ const finalOwnerTracker = useMemo(() => {
   }
 
   const fmt = (v) => Number(v || 0).toLocaleString("id-ID");
-  const exportStockOpnameExcel = () => {
-    // ==========================================
-    // 🔥 EXPORT SOURCE
-    // ==========================================
-    const exportSource = exportMode === "semua" ? aggregated : tableData;
+  // ==========================================
+// 🔥 EXPORT EXCEL SYNC DETAIL STOCK TOKO
+// HASIL 100% SAMA DENGAN DetailStockToko.jsx
+// ==========================================
+const exportStockOpnameExcel = () => {
+  try {
+    // ======================================
+    // 🔥 SOURCE HARUS TABLE FINAL
+    // ======================================
+    const exportSource = Array.isArray(filteredTableData)
+      ? [...filteredTableData]
+      : [];
 
-    // ==========================================
-    // 🔥 FORMAT SESUAI TABLE UI
-    // ==========================================
-    const rows = exportSource.map((r, idx) => {
-      // ✅ stok fisik
-      const fisik = Number(opnameMap[r.key] ?? "");
+    console.log("🔥 EXPORT ROWS:", exportSource.length);
 
-      // ✅ selisih
-      const selisih = Number.isNaN(fisik) ? "" : fisik - Number(r.qty || 0);
+    // ======================================
+    // 🔥 FORMAT SAMA DENGAN DETAIL STOCK
+    // ======================================
+    const exportRows = exportSource.map((r, i) => ({
+      NO: i + 1,
 
-      // ✅ status
-      const status = r.qty > 0 ? "TERSEDIA" : "TERJUAL";
+      TANGGAL: r.tanggal || "-",
 
-      // ✅ keterangan
-      const keterangan =
+      "NO DO": r.noDo || "-",
+
+      SUPPLIER: r.supplier || "-",
+
+      TOKO: r.toko || r.namaToko || "-",
+
+      BRAND: r.brand || "-",
+
+      BARANG: r.barang || "-",
+
+      IMEI: r.imei || r.sku || "NON IMEI",
+
+      QTY: Number(r.qty || 0),
+
+      "HARGA SRP": Number(r.hargaSRP || 0),
+
+      "HARGA GROSIR": Number(r.hargaGrosir || 0),
+
+      "HARGA RESELLER": Number(r.hargaReseller || 0),
+
+      STATUS:
+        Number(r.qty || 0) > 0
+          ? "TERSEDIA"
+          : "HABIS",
+
+      KETERANGAN:
         r.lastTransaksi === "TRANSFER_MASUK" ||
         r.lastTransaksi === "TRANSFER_KELUAR"
           ? "TRANSFER BARANG"
           : r.lastTransaksi === "REFUND"
           ? "REFUND"
-          : r.lastTransaksi === "RETUR"
-          ? "RETUR"
-          : r.lastTransaksi === "REJECT"
-          ? "REJECT"
-          : "-";
+          : r.lastTransaksi || "-",
+    }));
 
-      return {
-        NO: idx + 1,
-
-        TANGGAL: r.tanggal || "-",
-
-        "NAMA TOKO": r.toko || "-",
-
-        "NAMA SUPPLIER": r.supplier || "-",
-
-        "NAMA BRAND": r.brand || "-",
-
-        "NAMA BARANG": r.barang || "-",
-
-        "NO IMEI / SKU": r.imei || r.sku || "NON-IMEI",
-
-        STATUS: status,
-
-        KETERANGAN: keterangan,
-
-        "STOK SISTEM": Number(r.qty || 0),
-
-        "STOK FISIK": opnameMap[r.key] ?? "",
-
-        SELISIH: selisih === "" ? "-" : selisih,
-      };
-    });
-
-    // ==========================================
+    // ======================================
     // 🔥 GENERATE SHEET
-    // ==========================================
-    const ws = XLSX.utils.json_to_sheet(rows);
+    // ======================================
+    const ws = XLSX.utils.json_to_sheet(exportRows);
 
-    // ==========================================
+    // ======================================
     // 🔥 AUTO WIDTH
-    // ==========================================
+    // ======================================
     ws["!cols"] = [
       { wch: 8 }, // NO
       { wch: 18 }, // TANGGAL
+      { wch: 25 }, // NO DO
+      { wch: 35 }, // SUPPLIER
       { wch: 25 }, // TOKO
-      { wch: 30 }, // SUPPLIER
-      { wch: 25 }, // BRAND
+      { wch: 20 }, // BRAND
       { wch: 40 }, // BARANG
-      { wch: 30 }, // IMEI
+      { wch: 28 }, // IMEI
+      { wch: 10 }, // QTY
+      { wch: 18 }, // SRP
+      { wch: 18 }, // GROSIR
+      { wch: 18 }, // RESELLER
       { wch: 15 }, // STATUS
-      { wch: 25 }, // KETERANGAN
-      { wch: 15 }, // STOK SISTEM
-      { wch: 15 }, // STOK FISIK
-      { wch: 15 }, // SELISIH
+      { wch: 30 }, // KETERANGAN
     ];
 
-    // ==========================================
+    // ======================================
     // 🔥 WORKBOOK
-    // ==========================================
+    // ======================================
     const wb = XLSX.utils.book_new();
 
-    XLSX.utils.book_append_sheet(wb, ws, "STOK_OPNAME");
+    XLSX.utils.book_append_sheet(
+      wb,
+      ws,
+      "DETAIL_STOCK_TOKO"
+    );
 
-    // ==========================================
+    // ======================================
     // 🔥 EXPORT FILE
-    // ==========================================
+    // ======================================
     XLSX.writeFile(
       wb,
-      `STOK_OPNAME_${exportMode}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      `DETAIL_STOCK_${filterToko || "SEMUA"}_${
+        new Date().toISOString().slice(0, 10)
+      }.xlsx`
     );
-  };
+
+    console.log("✅ EXPORT SUCCESS");
+  } catch (err) {
+    console.error("❌ EXPORT ERROR:", err);
+    alert("❌ Gagal export excel");
+  }
+};
+
+
   const handleVoidOpname = async (record) => {
     if (!isSuperAdmin) return;
 
