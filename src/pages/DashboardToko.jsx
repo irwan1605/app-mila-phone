@@ -22,8 +22,10 @@ import {
   listenTransaksiByTokoHemat,
   listenAllTransaksi,
   listenMasterBarang,
+  listenMasterToko,
 } from "../services/FirebaseService";
-import { buildFinalStockRows } from "../utils/buildFinalStockRows";
+
+import { buildFinalStockRows } from "../transfer";
 
 import * as XLSX from "xlsx";
 
@@ -107,6 +109,7 @@ export default function DashboardToko(props) {
 
   // ✅ LIST GLOBAL (HEMAT) UNTUK CHART PENJUALAN & STOK PER TOKO
   const [allTransaksi, setAllTransaksi] = useState([]);
+  const [masterToko, setMasterToko] = useState([]);
 
   // ✅ LIST KHUSUS TOKO INI (HEMAT) UNTUK IMEI, VOID, RETURN
   const [transaksiToko, setTransaksiToko] = useState([]);
@@ -135,9 +138,12 @@ export default function DashboardToko(props) {
     const unsub1 = listenAllTransaksi((rows) => setTransaksi(rows || []));
     const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
 
+    const unsub3 = listenMasterToko((rows) => setMasterToko(rows || []));
+
     return () => {
       unsub1 && unsub1();
       unsub2 && unsub2();
+      unsub3 && unsub3();
     };
   }, []);
 
@@ -288,6 +294,21 @@ export default function DashboardToko(props) {
       .trim()
       .toUpperCase()
       .replace(/\s+/g, "");
+
+      const isNonImei = (imei) => {
+        const clean = String(imei || "")
+          .trim()
+          .toUpperCase();
+      
+        return (
+          !clean ||
+          clean === "-" ||
+          clean === "--" ||
+          clean === "NON IMEI" ||
+          clean === "NON-IMEI" ||
+          clean === "NONIMEI"
+        );
+      };
 
   const normalizeText = (v) =>
     String(v || "")
@@ -661,10 +682,11 @@ export default function DashboardToko(props) {
       // ======================================
       // 🔥 NON IMEI
       // ======================================
-      if (!imei) {
-        const skuKey = `SKU_${normalizeText(t.NAMA_BRAND)}|${normalizeText(
-          t.NAMA_BARANG
-        )}`;
+      if (!imei || normalizeImei(imei) === "NON-IMEI") {
+        const skuKey =
+          `SKU_${normalize(t.NAMA_TOKO)}|` +
+          `${normalizeText(t.NAMA_BRAND)}|` +
+          `${normalizeText(t.NAMA_BARANG)}`;
         if (!map[skuKey]) {
           map[skuKey] = {
             tanggal: t.TANGGAL_TRANSAKSI || "-",
@@ -680,7 +702,7 @@ export default function DashboardToko(props) {
               t.NAMA_SUPPLIER ||
               "-",
 
-            namaToko: t.NAMA_TOKO || "-",
+            namaToko: t.NAMA_TOKO || t.ke || t.tokoTujuan || "-",
 
             brand: t.NAMA_BRAND || "-",
 
@@ -1041,7 +1063,8 @@ export default function DashboardToko(props) {
       detailStock,
       namaToko,
       masterMap,
-      supplierLookup,
+      masterBarang,
+      masterToko,
     });
   }, [transaksi, detailStock, namaToko, masterMap, supplierLookup]);
 
@@ -1058,7 +1081,7 @@ export default function DashboardToko(props) {
       // ======================================
       // 🔥 IMEI
       // ======================================
-      if (r.imei) {
+      if (r.imei && !isNonImei(r.imei)) {
         const imeiKey = normalizeImei(r.imei);
 
         finalMap[`IMEI_${imeiKey}`] = {
@@ -1096,7 +1119,8 @@ export default function DashboardToko(props) {
           ...finalMap[skuKey],
 
           qty:
-            Number(r.qty || 0) > Number(finalMap[skuKey].qty || 0)
+          Number(finalMap[skuKey].qty || 0) +
+          Number(r.qty || 0)
               ? Number(r.qty || 0)
               : Number(finalMap[skuKey].qty || 0),
 
@@ -1120,7 +1144,7 @@ export default function DashboardToko(props) {
       .filter((r) => normalize(r.namaToko || r.toko) === normalize(TOKO_AKTIF))
 
       // ======================================
-      // 🔥 HAPUS QTY HABIS
+      // 🔥 HANYA STOCK AKTIF
       // ======================================
       .filter((r) => Number(r.qty || 0) > 0)
 
@@ -1129,7 +1153,7 @@ export default function DashboardToko(props) {
       // ======================================
       .filter((r) => {
         // IMEI wajib punya transaksi asli
-        if (r.imei) {
+        if (r.imei && !isNonImei(r.imei)) {
           return transaksi.some(
             (t) =>
               normalizeImei(t.IMEI) === normalizeImei(r.imei) &&
@@ -1157,7 +1181,9 @@ export default function DashboardToko(props) {
       // SYNC DETAIL STOCK
       // ======================================
       .filter((r) => {
-        if (!r.imei) return true;
+        if (!r.imei || isNonImei(r.imei)) {
+          return true;
+        }
 
         const cleanImei = normalizeImei(r.imei);
 
@@ -1235,7 +1261,8 @@ export default function DashboardToko(props) {
       // ======================================
       // 🔥 IMEI = UNIQUE BY IMEI
       // ======================================
-      const key = item.imei
+      const key =
+      item.imei && !isNonImei(item.imei)
         ? `IMEI_${normalizeImei(item.imei)}`
         : // ======================================
           // 🔥 NON IMEI
@@ -1447,7 +1474,10 @@ export default function DashboardToko(props) {
 
         BARANG: r.barang || "-",
 
-        IMEI: r.imei || "NON IMEI",
+        IMEI:
+        isNonImei(r.imei)
+          ? "NON IMEI"
+          : r.imei,
 
         QTY: Number(r.qty || 0),
 

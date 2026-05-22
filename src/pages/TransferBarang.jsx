@@ -16,6 +16,11 @@ import { ref, onValue, update, push, off } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
 import TableTransferBarang from "./table/TableTransferBarang";
 import PrintSuratJalan from "./Print/PrintSuratJalan";
+import {
+  buildInventoryTracker,
+  canTransferImei,
+  buildRefundTracker,
+} from "../transfer";
 
 const initialForm = {
   tanggal: new Date().toISOString().slice(0, 10),
@@ -351,11 +356,35 @@ export default function TransferBarang() {
 
         const trxList = [];
 
+        const isNonImei = (v) => {
+          const imei = String(v?.IMEI || "")
+            .trim()
+            .toUpperCase();
+
+          return (
+            !imei ||
+            imei === "-" ||
+            imei === "--" ||
+            imei === "NON IMEI" ||
+            imei === "NON-IMEI" ||
+            imei === "NONIMEI"
+          );
+        };
+
         transaksiSnap.forEach((trx) => {
           const v = trx.val();
-          if (!v || !v.IMEI) return;
 
-          trxList.push(v);
+          if (!v) return;
+
+          // ======================================
+          // 🔥 IZINKAN NON IMEI MASUK
+          // ======================================
+
+          trxList.push({
+            ...v,
+
+            __IS_NON_IMEI__: isNonImei(v),
+          });
         });
 
         // ============================================
@@ -480,6 +509,24 @@ export default function TransferBarang() {
           }
 
           if (metode === "PENJUALAN") {
+            // ======================================
+            // 🔥 NON IMEI
+            // ======================================
+            if (isNonImei(v)) {
+              const qtyJual = Number(v.QTY || v.qty || v.JUMLAH || 1);
+
+              map[imei].qty = Number(map[imei].qty || 0) - qtyJual;
+
+              if (map[imei].qty <= 0) {
+                map[imei].status = "SOLD";
+              }
+
+              return;
+            }
+
+            // ======================================
+            // 🔥 IMEI
+            // ======================================
             map[imei].status = "SOLD";
           }
         });
@@ -549,11 +596,35 @@ export default function TransferBarang() {
         // ===============================
         // 🔥 AMBIL SEMUA TRANSAKSI DULU
         // ===============================
+        const isNonImei = (v) => {
+          const imei = String(v?.IMEI || "")
+            .trim()
+            .toUpperCase();
+
+          return (
+            !imei ||
+            imei === "-" ||
+            imei === "--" ||
+            imei === "NON IMEI" ||
+            imei === "NON-IMEI" ||
+            imei === "NONIMEI"
+          );
+        };
+
         transaksiSnap.forEach((trx) => {
           const v = trx.val();
-          if (!v || !v.IMEI) return;
 
-          trxList.push(v);
+          if (!v) return;
+
+          // ======================================
+          // 🔥 IZINKAN NON IMEI MASUK
+          // ======================================
+
+          trxList.push({
+            ...v,
+
+            __IS_NON_IMEI__: isNonImei(v),
+          });
         });
 
         // ===============================
@@ -569,16 +640,41 @@ export default function TransferBarang() {
         // 🔥 PROSES SATU PERSATU
         // ===============================
         trxList.forEach((v) => {
-          const imei = String(v.IMEI).trim();
+          const imei = isNonImei(v)
+            ? `NONIMEI-${String(v.NAMA_TOKO || "")
+                .trim()
+                .toUpperCase()}-${String(v.NAMA_BRAND || "")
+                .trim()
+                .toUpperCase()}-${String(v.NAMA_BARANG || "")
+                .trim()
+                .toUpperCase()}`
+            : String(v.IMEI).trim();
           const metode = String(v.PAYMENT_METODE || "").toUpperCase();
 
           if (!map[imei]) {
             map[imei] = {
               imei,
+
               status: "AVAILABLE",
+
+              // ======================================
+              // 🔥 QTY NON IMEI
+              // ======================================
+              qty: Number(v.QTY || v.qty || v.JUMLAH || v.jumlah || 1),
+
+              UPDATED_AT:
+                v.UPDATED_AT ||
+                v.updatedAt ||
+                v.CREATED_AT ||
+                v.createdAt ||
+                Date.now(),
+
               toko: String(v.NAMA_TOKO || "").trim(),
+
               namaBrand: String(v.NAMA_BRAND || "").trim(),
+
               namaBarang: String(v.NAMA_BARANG || "").trim(),
+
               kategori: String(
                 v.KATEGORI_BRAND || v.kategori || v.kategoriBarang || ""
               ).trim(),

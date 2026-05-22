@@ -2274,6 +2274,11 @@ export const approveTransferFINAL = async ({ transfer }) => {
   const approvedAt = Date.now();
 
   // =====================================================
+  // 🔥 SAFE QTY GLOBAL
+  // =====================================================
+  const safeQty = safeImeis.length > 0 ? safeImeis.length : Number(qty || 1);
+
+  // =====================================================
   // 🔒 CEK DOUBLE APPROVE
   // =====================================================
   const transferSnap = await get(ref(db, `transfer_barang/${id}`));
@@ -2403,6 +2408,9 @@ export const approveTransferFINAL = async ({ transfer }) => {
   // 3️⃣ TRANSAKSI STOK
   // =====================================================
   if (safeImeis.length > 0) {
+    // =====================================================
+    // 🔥 IMEI ENGINE
+    // =====================================================
     for (let i = 0; i < safeImeis.length; i++) {
       const imei = safeImeis[i];
 
@@ -2411,20 +2419,28 @@ export const approveTransferFINAL = async ({ transfer }) => {
       }
 
       console.log("🚀 PROSES IMEI:", imei);
+
       // 🔻 TRANSFER KELUAR
       await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
         NO_INVOICE: noDo,
         NO_SURAT_JALAN: noSuratJalan,
+
         NAMA_TOKO: tokoPengirim,
+
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
         KATEGORI_BRAND: kategori,
+
         IMEI: imei,
+
         QTY: 1,
+
         PAYMENT_METODE: "TRANSFER_KELUAR",
+
         SYSTEM_PAYMENT: "SYSTEM",
         STATUS: "Approved",
+
         CREATED_AT: approvedAt,
       });
 
@@ -2433,23 +2449,29 @@ export const approveTransferFINAL = async ({ transfer }) => {
         TANGGAL_TRANSAKSI: tanggal,
         NO_INVOICE: noSuratJalan,
         NO_SURAT_JALAN: noSuratJalan,
+
         NAMA_TOKO: ke,
+
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
         KATEGORI_BRAND: kategori,
+
         IMEI: imei,
+
         QTY: 1,
+
         PAYMENT_METODE: "TRANSFER_MASUK",
-        // ======================================
-        // 🔥 TRACK REFUND TRANSFER
-        // ======================================
+
+        // 🔥 TRACK REFUND
         SUMBER_STOCK: transfer?.SUMBER_STOCK || "NORMAL",
 
         IS_REFUND_TRANSFER: transfer?.IS_REFUND_TRANSFER || false,
 
         LAST_ACTION: transfer?.LAST_ACTION || "TRANSFER",
+
         SYSTEM_PAYMENT: "SYSTEM",
         STATUS: "Approved",
+
         CREATED_AT: approvedAt,
       });
 
@@ -2462,34 +2484,44 @@ export const approveTransferFINAL = async ({ transfer }) => {
         ke,
         noSuratJalan,
         tanggal,
+
         approvedBy,
         approvedRole,
         approvedToko,
+
         createdAt: approvedAt,
       });
     }
   } else {
-    // ===============================
-    // 🔥 FIX QTY NON IMEI
-    // ===============================
-    const safeQty =
-      safeImeis.length > 0
-        ? safeImeis.length // kalau ada IMEI → pakai ini
-        : Number(qty || 1);
+    // =====================================================
+    // 🔥 NON IMEI ENGINE
+    // =====================================================
 
     await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
       TANGGAL_TRANSAKSI: tanggal,
       NO_INVOICE: noDo,
       NO_SURAT_JALAN: noSuratJalan,
+
       NAMA_TOKO: tokoPengirim,
+
+      // 🔥 WAJIB
+      tokoPengirim,
+      ke,
+      tokoTujuan: ke,
+
       NAMA_BRAND: brand,
       NAMA_BARANG: barang,
       KATEGORI_BRAND: kategori,
+
       IMEI: "",
+
       QTY: safeQty,
+
       PAYMENT_METODE: "TRANSFER_KELUAR",
+
       SYSTEM_PAYMENT: "SYSTEM",
       STATUS: "Approved",
+
       CREATED_AT: approvedAt,
     });
 
@@ -2497,15 +2529,27 @@ export const approveTransferFINAL = async ({ transfer }) => {
       TANGGAL_TRANSAKSI: tanggal,
       NO_INVOICE: noSuratJalan,
       NO_SURAT_JALAN: noSuratJalan,
+
       NAMA_TOKO: ke,
+
+      // 🔥 WAJIB
+      tokoPengirim,
+      ke,
+      tokoTujuan: ke,
+
       NAMA_BRAND: brand,
       NAMA_BARANG: barang,
       KATEGORI_BRAND: kategori,
+
       IMEI: "",
+
       QTY: safeQty,
+
       PAYMENT_METODE: "TRANSFER_MASUK",
+
       SYSTEM_PAYMENT: "SYSTEM",
       STATUS: "Approved",
+
       CREATED_AT: approvedAt,
     });
   }

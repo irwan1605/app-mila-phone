@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   listenAllTransaksi,
   listenMasterBarang,
+  listenMasterToko,
   deleteTransaksi,
 } from "../../services/FirebaseService";
 import { ref, remove, get, onValue } from "firebase/database";
@@ -14,7 +15,7 @@ import {
   FaFileExcel,
   FaCashRegister,
 } from "react-icons/fa";
-import { buildFinalStockRows } from "../../utils/buildFinalStockRows";
+import { buildFinalStockRows } from "../../transfer";
 /* ======================
    HELPER RUPIAH
 ====================== */
@@ -52,6 +53,7 @@ export default function DetailStockToko(props) {
   const [transaksi, setTransaksi] = useState([]);
   const [masterBarang, setMasterBarang] = useState([]);
   const [search, setSearch] = useState(props?.searchTerm || "");
+  const [masterToko, setMasterToko] = useState([]);
 
   // ======================================
   // 🔥 SYNC SEARCH DASHBOARD
@@ -89,9 +91,12 @@ export default function DetailStockToko(props) {
 
     const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
 
+    const unsub3 = listenMasterToko((rows) => setMasterToko(rows || []));
+
     return () => {
       unsub1 && unsub1();
       unsub2 && unsub2();
+      unsub3 && unsub3();
     };
   }, [deletedIds]); // 🔥 WAJIB
 
@@ -696,21 +701,17 @@ export default function DetailStockToko(props) {
   /* ======================
    BUILD ROWS (FIX FINAL)
 ====================== */
-const rows = useMemo(() => {
-  return buildFinalStockRows({
-    transaksi,
-    detailStock,
-    namaToko,
-    masterMap,
-    supplierLookup,
-  });
-}, [
-  transaksi,
-  detailStock,
-  namaToko,
-  masterMap,
-  supplierLookup,
-]);
+  const rows = useMemo(() => {
+    return buildFinalStockRows({
+      transaksi,
+      detailStock,
+      namaToko,
+      masterMap,
+      supplierLookup,
+      masterBarang,
+      masterToko,
+    });
+  }, [transaksi, detailStock, namaToko, masterMap, supplierLookup]);
 
   // ======================================
   // 🔥 MERGED ROWS FINAL
@@ -720,9 +721,14 @@ const rows = useMemo(() => {
 
     rows.forEach((r) => {
       // ======================================
-      // 🔥 IMEI
+      // 🔥 IMEI ASLI ONLY
       // ======================================
-      if (r.imei) {
+      if (
+        r.imei &&
+        !["NON IMEI", "NON-IMEI", "NONIMEI", "-"].includes(
+          String(r.imei).trim().toUpperCase()
+        )
+      ) {
         const imeiKey = normalizeImei(r.imei);
 
         finalMap[`IMEI_${imeiKey}`] = {
@@ -744,6 +750,11 @@ const rows = useMemo(() => {
         `${normalizeText(r.brand)}|` +
         `${normalizeText(r.barang)}`;
 
+      // ======================================
+      // 🔥 FINAL STOCK SUDAH DIBUAT ENGINE
+      // ======================================
+      // JANGAN HITUNG ULANG QTY DI UI
+      // ======================================
       if (!finalMap[skuKey]) {
         finalMap[skuKey] = {
           ...r,
@@ -760,8 +771,14 @@ const rows = useMemo(() => {
 
           barang: r.barang || "-",
 
-          imei: r.imei || "",
+          imei:
+            !r.imei || ["-", "--"].includes(String(r.imei).trim())
+              ? "NON IMEI"
+              : r.imei,
 
+          // ======================================
+          // 🔥 QTY FINAL DARI ENGINE
+          // ======================================
           qty: Number(r.qty || 0),
 
           hargaSRP:
@@ -779,35 +796,6 @@ const rows = useMemo(() => {
 
           statusBarang: Number(r.qty || 0) > 0 ? "TERSEDIA" : "HABIS",
 
-          keterangan: String(r.keterangan || "")
-            .toUpperCase()
-            .includes("REFUND")
-            ? "REFUND"
-            : r.keterangan || "SYNC STOCK OPNAME",
-        };
-      } else {
-        // ======================================
-        // 🔥 AMBIL DATA TERBARU
-        // ======================================
-        finalMap[skuKey] = {
-          ...finalMap[skuKey],
-
-          tanggal: r.tanggal || finalMap[skuKey].tanggal,
-
-          noDo: r.noDo || finalMap[skuKey].noDo,
-
-          supplier: r.supplier || finalMap[skuKey].supplier,
-
-          qty: Math.max(Number(finalMap[skuKey].qty || 0), Number(r.qty || 0)),
-
-          hargaSRP: r.hargaSRP || finalMap[skuKey].hargaSRP || 0,
-
-          hargaGrosir: r.hargaGrosir || finalMap[skuKey].hargaGrosir || 0,
-
-          hargaReseller: r.hargaReseller || finalMap[skuKey].hargaReseller || 0,
-
-          statusBarang: Number(r.qty || 0) > 0 ? "TERSEDIA" : "HABIS",
-
           // ======================================
           // 🔥 REFUND PRIORITAS
           // ======================================
@@ -815,8 +803,18 @@ const rows = useMemo(() => {
             .toUpperCase()
             .includes("REFUND")
             ? "REFUND"
-            : finalMap[skuKey].keterangan || "-",
+            : r.keterangan || "PEMBELIAN",
         };
+      } else {
+        // ======================================
+        // 🔥 SKIP DUPLICATE NON IMEI
+        // ======================================
+        // buildFinalStockRows()
+        // SUDAH menghasilkan FINAL STOCK
+        // jadi UI tidak boleh merge qty lagi
+        // ======================================
+
+        return;
       }
     });
 
