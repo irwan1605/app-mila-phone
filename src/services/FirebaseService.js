@@ -2315,7 +2315,16 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         Object.values(transaksi).forEach((trx) => {
           if (String(trx.IMEI).trim() !== imei) return;
-          if (trx.STATUS !== "Approved") return;
+          // ======================================
+          // 🔥 FINAL STATUS VALIDATOR
+          // ======================================
+          const trxStatus = String(trx.STATUS || trx.status || "")
+            .trim()
+            .toUpperCase();
+
+          if (!["APPROVED", "APPROVE"].includes(trxStatus)) {
+            return;
+          }
 
           const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
           const waktu = trx.CREATED_AT || trx.createdAt || 0;
@@ -2323,7 +2332,10 @@ export const approveTransferFINAL = async ({ transfer }) => {
           // update lokasi terakhir
           if (waktu >= waktuTerakhir) {
             waktuTerakhir = waktu;
-            lokasiTerakhir = trx.NAMA_TOKO;
+            // ======================================
+            // 🔥 FINAL OWNER ENGINE
+            // ======================================
+            lokasiTerakhir = trx.ke || trx.tokoTujuan || trx.NAMA_TOKO || "-";
           }
 
           // ======================================
@@ -2331,7 +2343,19 @@ export const approveTransferFINAL = async ({ transfer }) => {
           // ======================================
           if (metode === "PEMBELIAN") saldo += 1;
 
-          if (metode === "TRANSFER_MASUK") saldo += 1;
+          // ======================================
+          // 🔥 TRANSFER MASUK
+          // JANGAN TAMBAH SALDO
+          // HANYA PINDAH OWNER
+          // ======================================
+          if (metode === "TRANSFER_MASUK") {
+            lokasiTerakhir = trx.ke || trx.tokoTujuan || trx.NAMA_TOKO;
+
+            console.log("📦 TRANSFER MASUK:", {
+              imei,
+              owner: lokasiTerakhir,
+            });
+          }
 
           if (metode === "REFUND") {
             saldo += 1;
@@ -2345,6 +2369,15 @@ export const approveTransferFINAL = async ({ transfer }) => {
             // 🔥 BARANG AKTIF LAGI
             // ======================================
             sudahTerjual = false;
+          }
+
+          // ======================================
+          // 🔥 PENJUALAN
+          // ======================================
+          if (metode === "PENJUALAN") {
+            saldo -= 1;
+
+            sudahTerjual = true;
           }
 
           // ======================================
@@ -2445,12 +2478,24 @@ export const approveTransferFINAL = async ({ transfer }) => {
       });
 
       // 🔺 TRANSFER MASUK
+      // 🔺 TRANSFER MASUK
       await push(ref(db, `toko/${ke}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
+
         NO_INVOICE: noSuratJalan,
         NO_SURAT_JALAN: noSuratJalan,
 
+        // ======================================
+        // 🔥 OWNER BARU
+        // ======================================
         NAMA_TOKO: ke,
+
+        // ======================================
+        // 🔥 TRACK OWNER
+        // ======================================
+        tokoPengirim,
+        ke,
+        tokoTujuan: ke,
 
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
@@ -2462,34 +2507,31 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         PAYMENT_METODE: "TRANSFER_MASUK",
 
-        // 🔥 TRACK REFUND
-        SUMBER_STOCK: transfer?.SUMBER_STOCK || "NORMAL",
+        // =====================================
+        // 🔥 SETELAH TRANSFER
+        // STOCK MENJADI NORMAL
+        // =====================================
+        SUMBER_STOCK: "NORMAL",
 
-        IS_REFUND_TRANSFER: transfer?.IS_REFUND_TRANSFER || false,
+        // =====================================
+        // 🔥 TRANSFER SUDAH AKTIF NORMAL
+        // =====================================
+        IS_REFUND_TRANSFER: false,
 
-        LAST_ACTION: transfer?.LAST_ACTION || "TRANSFER",
+        // =====================================
+        // 🔥 FINAL LAST ACTION
+        // =====================================
+        // SETELAH TRANSFER
+        // STATUS HARUS MENJADI TRANSFER
+        // AGAR TIDAK TERBACA REFUND LAGI
+        // =====================================
+        LAST_ACTION: "TRANSFER",
 
         SYSTEM_PAYMENT: "SYSTEM",
+
         STATUS: "Approved",
 
         CREATED_AT: approvedAt,
-      });
-
-      // =====================================================
-      // 🔥 HISTORY PERPINDAHAN IMEI
-      // =====================================================
-      await push(ref(db, `imei_history/${imei}`), {
-        imei,
-        dari: tokoPengirim,
-        ke,
-        noSuratJalan,
-        tanggal,
-
-        approvedBy,
-        approvedRole,
-        approvedToko,
-
-        createdAt: approvedAt,
       });
     }
   } else {

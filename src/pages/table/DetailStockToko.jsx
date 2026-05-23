@@ -38,7 +38,16 @@ const normalizeText = (v) =>
     .toUpperCase()
     .replace(/\s+/g, " ");
 
-const isApproved = (t) => String(t.STATUS || "").toUpperCase() === "APPROVED";
+// ======================================
+// 🔥 FINAL STATUS VALIDATOR
+// ======================================
+const isApproved = (t) => {
+  const status = String(t.STATUS || t.status || "")
+    .trim()
+    .toUpperCase();
+
+  return ["APPROVED", "APPROVE", "REFUND"].includes(status);
+};
 
 export default function DetailStockToko(props) {
   const { state } = useLocation();
@@ -189,9 +198,30 @@ export default function DetailStockToko(props) {
         map[imei].toko = toko;
       }
 
+      // ======================================
+      // 🔥 TRANSFER MASUK FINAL
+      // ======================================
       if (metode === "TRANSFER_MASUK") {
-        map[imei].toko = toko;
-        map[imei].keterangan = `Transfer masuk ke Toko ${toko}`;
+        const finalOwner = String(t.ke || t.tokoTujuan || t.NAMA_TOKO || "-")
+          .trim()
+          .toUpperCase();
+
+        // ======================================
+        // 🔥 OWNER FINAL
+        // ======================================
+        map[imei].toko = finalOwner;
+
+        // ======================================
+        // 🔥 KETERANGAN FINAL
+        // ======================================
+        map[imei].keterangan = "TRANSFER BARANG";
+
+        // ======================================
+        // 🔥 RESET REFUND
+        // ======================================
+        map[imei].lastAction = "TRANSFER";
+
+        map[imei].isRefundTransfer = false;
       }
 
       // ======================================
@@ -231,7 +261,9 @@ export default function DetailStockToko(props) {
 
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
-      const status = String(t.STATUS || "").toUpperCase();
+      const status = String(t.STATUS || t.status || "")
+        .trim()
+        .toUpperCase();
 
       if (!["APPROVED", "REFUND"].includes(status)) return;
 
@@ -265,7 +297,9 @@ export default function DetailStockToko(props) {
     transaksi.forEach((t) => {
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
-      const status = String(t.STATUS || "").toUpperCase();
+      const status = String(t.STATUS || t.status || "")
+        .trim()
+        .toUpperCase();
 
       if (
         metode === "REFUND" &&
@@ -308,7 +342,9 @@ export default function DetailStockToko(props) {
 
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
-      const status = String(t.STATUS || "").toUpperCase();
+      const status = String(t.STATUS || t.status || "")
+        .trim()
+        .toUpperCase();
 
       if (!["APPROVED", "REFUND"].includes(status)) {
         return;
@@ -365,9 +401,14 @@ export default function DetailStockToko(props) {
 
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
-      const status = String(t.STATUS || "").toUpperCase();
+      const status = String(t.STATUS || t.status || "")
+        .trim()
+        .toUpperCase();
 
-      if (!["APPROVED", "REFUND"].includes(status)) {
+      // ======================================
+      // 🔥 FINAL STATUS FILTER
+      // ======================================
+      if (!["APPROVED", "APPROVE", "REFUND"].includes(status)) {
         return;
       }
 
@@ -462,14 +503,37 @@ export default function DetailStockToko(props) {
       if (t.IMEI) {
         const imei = String(t.IMEI).trim();
 
-        if (supplier && supplier !== "-" && supplier !== "undefined") {
-          map[imei] = supplier;
-        }
-
         const clean = normalizeImei(imei);
 
-        if (supplier && supplier !== "-" && supplier !== "undefined") {
-          map[clean] = supplier;
+        // ======================================
+        // 🔥 HANYA AMBIL DARI PEMBELIAN / REFUND
+        // ======================================
+        const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+        const validSupplierMethod = [
+          "PEMBELIAN",
+          "REFUND",
+          "TRANSFER_MASUK",
+        ].includes(metode);
+
+        // ======================================
+        // 🔥 SIMPAN SUPPLIER PERTAMA
+        // ======================================
+        if (
+          validSupplierMethod &&
+          supplier &&
+          supplier !== "-" &&
+          supplier !== "undefined"
+        ) {
+          // IMEI ASLI
+          if (!map[imei]) {
+            map[imei] = supplier;
+          }
+
+          // IMEI CLEAN
+          if (!map[clean]) {
+            map[clean] = supplier;
+          }
         }
       }
 
@@ -849,20 +913,29 @@ export default function DetailStockToko(props) {
       if (r.imei) {
         const cleanImei = normalizeImei(r.imei);
 
+        const ket = String(r.keterangan || "").toUpperCase();
+
+        // ======================================
+        // 🔥 TRANSFER BARANG SELALU AKTIF
+        // ======================================
+        if (ket.includes("TRANSFER BARANG")) {
+          return true;
+        }
+
         // ======================================
         // 🔥 REFUND SUDAH TERJUAL LAGI
         // ======================================
-        if (
-          String(r.keterangan || "")
-            .toUpperCase()
-            .includes("REFUND")
-        ) {
+        if (ket.includes("REFUND")) {
           const refundState = refundFinalTracker?.[cleanImei];
 
-          // ✅ refund sudah dijual lagi
+          // ======================================
+          // 🔥 REFUND SUDAH TERJUAL LAGI
+          // ======================================
           if (refundState && refundState.active === false) {
             return false;
           }
+
+          return true;
         }
 
         // ======================================

@@ -1,7 +1,6 @@
 // src/transfer/services/approveTransferService.js
 
 import { ref, push, update } from "firebase/database";
-
 import { db } from "../../firebase";
 
 export const approveTransferFINAL = async ({ transfer }) => {
@@ -22,14 +21,20 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
     for (const imei of imeis || []) {
       // =====================================
-      // TRANSFER KELUAR
+      // 🔻 TRANSFER KELUAR
       // =====================================
       await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
+
         NO_INVOICE: noDo,
         NO_SURAT_JALAN: noSuratJalan,
 
         NAMA_TOKO: tokoPengirim,
+
+        // 🔥 TRACK OWNER
+        tokoPengirim,
+        ke,
+        tokoTujuan: ke,
 
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
@@ -37,23 +42,34 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         IMEI: imei,
 
+        QTY: 1,
+
         PAYMENT_METODE: "TRANSFER_KELUAR",
 
         STATUS: "APPROVED",
+
+        SYSTEM_PAYMENT: "SYSTEM",
 
         CREATED_AT: approvedAt,
         UPDATED_AT: approvedAt,
       });
 
       // =====================================
-      // TRANSFER MASUK
+      // 🔺 TRANSFER MASUK
       // =====================================
       await push(ref(db, `toko/${ke}/transaksi`), {
         TANGGAL_TRANSAKSI: tanggal,
+
         NO_INVOICE: noSuratJalan,
         NO_SURAT_JALAN: noSuratJalan,
 
+        // 🔥 OWNER FINAL
         NAMA_TOKO: ke,
+
+        // 🔥 TRACK OWNER
+        tokoPengirim,
+        ke,
+        tokoTujuan: ke,
 
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
@@ -61,9 +77,34 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         IMEI: imei,
 
+        QTY: 1,
+
         PAYMENT_METODE: "TRANSFER_MASUK",
 
-        STATUS: "APPROVED",
+        // =====================================
+        // 🔥 FINAL TRANSFER STATE
+        // =====================================
+        // SETELAH TRANSFER
+        // BARANG MENJADI STOCK NORMAL
+        // =====================================
+        SUMBER_STOCK: "NORMAL",
+
+        // =====================================
+        // 🔥 BUKAN REFUND LAGI
+        // =====================================
+        IS_REFUND_TRANSFER: false,
+
+        // =====================================
+        // 🔥 LAST ACTION FINAL
+        // =====================================
+        LAST_ACTION: "TRANSFER",
+
+      // =====================================
+// 🔥 FINAL STATUS
+// =====================================
+STATUS: "Approved",
+
+        SYSTEM_PAYMENT: "SYSTEM",
 
         CREATED_AT: approvedAt,
         UPDATED_AT: approvedAt,
@@ -71,7 +112,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
     }
 
     // =====================================
-    // UPDATE STATUS TRANSFER
+    // 🔥 UPDATE STATUS
     // =====================================
     await update(ref(db, `transfer_barang/${transfer.id}`), {
       status: "APPROVED",

@@ -109,27 +109,65 @@ export const buildFinalStockRows = ({
   // ======================================
   // 🔥 GLOBAL SUPPLIER LOOKUP
   // ======================================
+  // ======================================
+  // 🔥 GLOBAL SUPPLIER LOOKUP
+  // ======================================
+  const imeiSupplierLookup = {};
+
   transaksi.forEach((trx) => {
-    const supplier = trx.NAMA_SUPPLIER || trx.namaSupplier || "-";
+    const supplier =
+      trx.NAMA_SUPPLIER ||
+      trx.namaSupplier ||
+      trx.supplier ||
+      trx.SUPPLIER ||
+      trx.nama_supplier ||
+      "-";
 
     // ======================================
-    // 🔥 IMEI
+    // 🔥 IMEI FINAL
     // ======================================
-    if (trx.IMEI && normalizeImei(trx.IMEI)) {
-      const imei = normalizeImei(trx.IMEI);
+    const rawImei = trx.IMEI || trx.imei || "";
 
-      supplierLookup[imei] = supplier;
+    const cleanImei = normalizeImei(rawImei);
+
+    const isNonImeiRow =
+      !cleanImei ||
+      cleanImei === "-" ||
+      cleanImei === "--" ||
+      cleanImei === "NONIMEI" ||
+      cleanImei === "NON IMEI" ||
+      cleanImei === "NON-IMEI";
+
+    if (!isNonImeiRow) {
+      // ======================================
+      // 🔥 SIMPAN SUPPLIER PERTAMA YANG VALID
+      // ======================================
+      if (
+        supplier &&
+        supplier !== "-" &&
+        supplier !== "" &&
+        !imeiSupplierLookup[cleanImei]
+      ) {
+        imeiSupplierLookup[cleanImei] = supplier;
+      }
+
+      // ======================================
+      // 🔥 FALLBACK GLOBAL
+      // ======================================
+      if (supplier && supplier !== "-") {
+        supplierLookup[cleanImei] = supplier;
+      }
     }
 
     // ======================================
     // 🔥 NON IMEI
     // ======================================
-    const skuKey = `${normalizeText(trx.NAMA_BRAND)}|${normalizeText(
-      trx.NAMA_BARANG
-    )}`;
+    const skuKey =
+      `${normalizeText(trx.NAMA_BRAND || trx.brand)}|` +
+      `${normalizeText(trx.NAMA_BARANG || trx.barang)}`;
 
     // ======================================
-    // 🔥 AMBIL DARI PEMBELIAN
+    // 🔥 PEMBELIAN
     // ======================================
     if (normalize(trx.PAYMENT_METODE) === "PEMBELIAN") {
       supplierLookup[skuKey] = supplier;
@@ -169,9 +207,32 @@ export const buildFinalStockRows = ({
     // ======================================
     // 🔥 FIX STATUS TRANSFER
     // ======================================
-    const status = normalize(t.STATUS || t.status || "APPROVED");
+    // ======================================
+    // 🔥 FINAL STATUS NORMALIZER
+    // ======================================
+    const status = String(t.STATUS || t.status || "Approved")
+      .trim()
+      .toUpperCase();
 
-    if (!["APPROVED", "REFUND"].includes(status)) {
+    // ======================================
+    // 🔥 DEBUG STATUS
+    // ======================================
+    console.log("🔥 FINAL STATUS CHECK", {
+      imei: t.IMEI,
+      rawStatus: t.STATUS,
+      finalStatus: status,
+      metode: t.PAYMENT_METODE,
+    });
+
+    // ======================================
+    // 🔥 FINAL STATUS VALIDATOR
+    // ======================================
+    if (!["APPROVED", "APPROVE", "REFUND"].includes(status)) {
+      console.log("❌ STATUS DITOLAK", {
+        imei: t.IMEI,
+        status,
+      });
+
       return;
     }
 
@@ -191,31 +252,100 @@ export const buildFinalStockRows = ({
     if (!isNonImei(t)) {
       const imei = normalizeImei(t.IMEI);
 
-      const owner = ownerTracker[imei];
+      console.log("🔥 IMEI LOLOS MASUK ENGINE", {
+        imei: t.IMEI,
+        metode: t.PAYMENT_METODE,
+        status: t.STATUS,
+        toko: t.NAMA_TOKO,
+      });
 
       // ======================================
-      // 🔥 OWNER TIDAK AKTIF
+      // 🔥 FINAL OWNER FALLBACK
       // ======================================
-      if (!owner?.active) {
-        delete map[imei];
+      const owner = ownerTracker[imei] || {
+        toko: t.ke || t.tokoTujuan || t.TOKO_TUJUAN || t.NAMA_TOKO || "-",
 
+        active: true,
+
+        metode,
+      };
+
+      // ======================================
+      // 🔥 FINAL OWNER TOKO
+      // ======================================
+      const finalOwner =
+        owner?.toko ||
+        t.ke ||
+        t.tokoTujuan ||
+        t.TOKO_TUJUAN ||
+        t.NAMA_TOKO ||
+        "-";
+
+      // ======================================
+      // 🔥 NORMALIZE OWNER
+      // ======================================
+      const ownerNormalized = normalize(
+        String(finalOwner || "")
+          .replace(/_/g, " ")
+          .trim()
+      );
+
+      const tokoNormalized = normalize(
+        String(namaToko || "")
+          .replace(/_/g, " ")
+          .trim()
+      );
+
+      // ======================================
+      // 🔥 DEBUG FINAL OWNER
+      // ======================================
+      console.log("🔥 FINAL OWNER CHECK", {
+        imei,
+        finalOwner,
+        namaToko,
+        ownerNormalized,
+        tokoNormalized,
+        metode,
+        owner,
+        transaksi: t,
+      });
+
+      // ======================================
+      // 🔥 OWNER FINAL VALIDATION
+      // ======================================
+      if (owner?.active === false) {
         return;
       }
 
       // ======================================
       // 🔥 BUKAN TOKO INI
       // ======================================
-      if (normalize(owner?.toko) !== normalize(namaToko)) {
-        delete map[imei];
-
+      if (
+        ownerNormalized &&
+        tokoNormalized &&
+        ownerNormalized !== tokoNormalized
+      ) {
         return;
       }
 
       // ======================================
-      // 🔥 STOCK KELUAR
+      // 🔥 FINAL STOCK KELUAR ENGINE
+      // ======================================
+      // HANYA HAPUS JIKA OWNER MASIH AKTIF
+      // DAN BELUM ADA TRANSFER / REFUND BARU
       // ======================================
       if (["PENJUALAN", "REJECT", "STOK OPNAME"].includes(metode)) {
-        delete map[imei];
+        const currentTime =
+          t.UPDATED_AT || t.updatedAt || t.CREATED_AT || t.createdAt || 0;
+
+        const existingTime = map[imei]?.updatedAt || map[imei]?.UPDATED_AT || 0;
+
+        // ======================================
+        // 🔥 JANGAN HAPUS DATA TERBARU
+        // ======================================
+        if (currentTime >= existingTime) {
+          delete map[imei];
+        }
 
         return;
       }
@@ -229,6 +359,13 @@ export const buildFinalStockRows = ({
 
       const harga = hargaMap[hargaKey] || {};
 
+      console.log("🔥 FINAL IMEI SUPPLIER", {
+        imei,
+        supplierLookup: supplierLookup?.[normalizeImei(imei)],
+        imeiSupplierLookup: imeiSupplierLookup?.[normalizeImei(imei)],
+        transaksiSupplier: t.NAMA_SUPPLIER,
+      });
+
       // ======================================
       // 🔥 FINAL ROW
       // ======================================
@@ -237,11 +374,22 @@ export const buildFinalStockRows = ({
 
         noDo: t.NO_INVOICE || "-",
 
-        supplier: supplierLookup[imei] || t.NAMA_SUPPLIER || "-",
+        // ======================================
+        // 🔥 FIX SUPPLIER IMEI
+        // ======================================
+        supplier:
+          imeiSupplierLookup?.[normalizeImei(imei)] ||
+          supplierLookup?.[normalizeImei(imei)] ||
+          supplierLookup?.[imei] ||
+          t.NAMA_SUPPLIER ||
+          t.namaSupplier ||
+          t.supplier ||
+          t.SUPPLIER ||
+          "-",
 
-        namaToko: getNamaToko(owner?.toko || t.NAMA_TOKO),
+        namaToko: getNamaToko(finalOwner),
 
-        toko: getNamaToko(owner?.toko || t.NAMA_TOKO),
+        toko: getNamaToko(finalOwner),
 
         brand: t.NAMA_BRAND || "-",
 
@@ -250,6 +398,16 @@ export const buildFinalStockRows = ({
         imei,
 
         qty: 1,
+
+        // ======================================
+        // 🔥 TRACK UPDATE TIME
+        // ======================================
+        updatedAt:
+          t.UPDATED_AT ||
+          t.updatedAt ||
+          t.CREATED_AT ||
+          t.createdAt ||
+          Date.now(),
 
         hargaSRP: harga.hargaSRP || 0,
 
@@ -443,6 +601,8 @@ export const buildFinalStockRows = ({
       delete map[key];
     }
   });
+
+  console.log("🔥 FINAL MAP RESULT", map);
 
   // ======================================
   // 🔥 FINAL FILTER

@@ -387,12 +387,11 @@ export default function TransferBarang() {
           });
         });
 
-        // ============================================
-        // 🔥 SORT TRANSAKSI BERDASARKAN WAKTU
-        // ============================================
-        // =========================================
-        // 🔥 SORT BERDASARKAN WAKTU TERBARU
-        // =========================================
+        // ======================================
+        // 🔥 FINAL SORT ENGINE
+        // ======================================
+        // WAJIB CREATED + UPDATED
+        // ======================================
         trxList.sort((a, b) => {
           const ta =
             a.UPDATED_AT || a.updatedAt || a.CREATED_AT || a.createdAt || 0;
@@ -462,12 +461,21 @@ export default function TransferBarang() {
               Date.now();
           }
 
+          // ======================================
+          // 🔥 TRANSFER KELUAR
+          // JANGAN MATIKAN STOCK
+          // ======================================
           if (metode === "TRANSFER_KELUAR") {
             if (map[imei].status !== "SOLD") {
-              map[imei].status = "OUT";
-              // 🔥 JANGAN UBAH OWNER
-              // owner tetap toko terakhir valid
+              // ======================================
+              // 🔥 TETAP AKTIF
+              // ======================================
+              map[imei].status = "AVAILABLE";
 
+              // ======================================
+              // 🔥 OWNER AKAN DIPINDAH
+              // OLEH TRANSFER_MASUK
+              // ======================================
               map[imei].UPDATED_AT =
                 v.UPDATED_AT ||
                 v.updatedAt ||
@@ -478,11 +486,46 @@ export default function TransferBarang() {
           }
 
           if (metode === "TRANSFER_MASUK") {
-            if (map[imei].status !== "SOLD") {
-              map[imei].status = "AVAILABLE";
-              map[imei].toko = String(v.NAMA_TOKO || "").trim();
+            // ======================================
+            // 🔥 OWNER FINAL PINDAH KE TOKO TUJUAN
+            // ======================================
+            const finalOwner = String(
+              v.ke || v.tokoTujuan || v.NAMA_TOKO || "-"
+            )
+              .trim()
+              .toUpperCase();
 
-              // 🔥 UPDATE OWNER TERBARU
+            if (map[imei].status !== "SOLD") {
+              // ======================================
+              // 🔥 STATUS AKTIF
+              // ======================================
+              map[imei].status = "AVAILABLE";
+
+              // ======================================
+              // 🔥 RESET SOLD STATUS
+              // ======================================
+              map[imei].isSold = false;
+
+              map[imei].lastAction = "TRANSFER";
+
+              map[imei].keterangan = "TRANSFER BARANG";
+
+              // ======================================
+              // 🔥 OWNER TERBARU
+              // ======================================
+              map[imei].toko = finalOwner;
+
+              // ======================================
+              // 🔥 PRESERVE REFUND DATA
+              // ======================================
+              map[imei].isRefundTransfer =
+                String(v.SUMBER_STOCK || "").toUpperCase() === "REFUND";
+
+              map[imei].lastAction = v.LAST_ACTION || "TRANSFER_MASUK";
+
+              // ======================================
+              // 🔥 UPDATE TIME
+              // ======================================
               map[imei].UPDATED_AT =
                 v.UPDATED_AT ||
                 v.updatedAt ||
@@ -692,16 +735,42 @@ export default function TransferBarang() {
             map[imei].status = "AVAILABLE";
             map[imei].toko = String(v.NAMA_TOKO || "").trim();
           } else if (metode === "PENJUALAN") {
-            map[imei].status = "SOLD";
+            const currentTime =
+              v.UPDATED_AT ||
+              v.updatedAt ||
+              v.CREATED_AT ||
+              v.createdAt ||
+              Date.now();
+
+            const lastUpdate =
+              map[imei]?.UPDATED_AT || map[imei]?.updatedAt || 0;
+
+            // ======================================
+            // 🔥 JANGAN TIMPA DATA TERBARU
+            // ======================================
+            if (currentTime >= lastUpdate) {
+              map[imei].status = "SOLD";
+
+              map[imei].UPDATED_AT = currentTime;
+            }
           }
 
           // 🔥 FIX UTAMA: JANGAN MATIKAN IMEI
           else if (metode === "TRANSFER_KELUAR") {
-            if (map[imei].status !== "SOLD") {
-              // 🔥 JANGAN UBAH OWNER
-              // owner tetap toko terakhir valid
+            // ======================================
+            // 🔥 JANGAN MATIKAN IMEI
+            // ======================================
 
-              map[imei].status = "OUT";
+            if (map[imei].status !== "SOLD") {
+              // ======================================
+              // 🔥 PERTAHANKAN AVAILABLE
+              // ======================================
+              map[imei].status = "AVAILABLE";
+
+              // ======================================
+              // 🔥 OWNER JANGAN DIUBAH
+              // owner akan diupdate TRANSFER_MASUK
+              // ======================================
 
               map[imei].UPDATED_AT =
                 v.UPDATED_AT ||
@@ -717,13 +786,32 @@ export default function TransferBarang() {
           // ============================================
           else if (metode === "TRANSFER_MASUK") {
             if (map[imei].status !== "SOLD") {
+              // ======================================
+              // 🔥 STOCK AKTIF
+              // ======================================
               map[imei].status = "AVAILABLE";
 
-              map[imei].toko = String(
-                v.NAMA_TOKO || v.toko || v.namaToko || ""
-              ).trim();
+              // ======================================
+              // 🔥 OWNER FINAL
+              // ======================================
+              const finalOwner = String(
+                v.ke || v.tokoTujuan || v.TOKO_TUJUAN || v.NAMA_TOKO || "-"
+              )
+                .trim()
+                .toUpperCase();
 
+              map[imei].toko = finalOwner;
+
+              // ======================================
+              // 🔥 RESET REFUND STATE
+              // ======================================
+              map[imei].isRefundTransfer = false;
+
+              map[imei].lastAction = "TRANSFER";
+
+              // ======================================
               // 🔥 PRESERVE DATA BARANG
+              // ======================================
               map[imei].namaBrand = v.NAMA_BRAND || map[imei].namaBrand || "";
 
               map[imei].namaBarang =
@@ -736,6 +824,9 @@ export default function TransferBarang() {
                 map[imei].kategori ||
                 "";
 
+              // ======================================
+              // 🔥 UPDATE TIME
+              // ======================================
               map[imei].UPDATED_AT =
                 v.UPDATED_AT ||
                 v.updatedAt ||
@@ -2008,9 +2099,13 @@ export default function TransferBarang() {
     ).toUpperCase();
 
     // 🔥 STATUS YANG BOLEH DITRANSFER
+    // ======================================
+    // 🔥 STATUS FINAL BOLEH TRANSFER
+    // ======================================
     const allowedTransferStatus = [
       "AVAILABLE",
       "TRANSFER_MASUK",
+      "TRANSFER_KELUAR",
       "REFUND",
       "PEMBELIAN",
       "READY",
