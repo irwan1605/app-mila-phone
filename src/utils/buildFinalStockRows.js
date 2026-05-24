@@ -129,7 +129,15 @@ export const buildFinalStockRows = ({
     // ======================================
     // 🔥 IMEI
     // ======================================
-    if (t.IMEI && normalizeImei(t.IMEI) !== "NON-IMEI") {
+    const cleanImei = normalizeImei(t.IMEI);
+
+    const isNonImei =
+      !cleanImei || cleanImei === "NONIMEI" || cleanImei === "NON-IMEI";
+
+    // ======================================
+    // 🔥 IMEI
+    // ======================================
+    if (!isNonImei) {
       const imei = normalizeImei(t.IMEI);
 
       // ======================================
@@ -233,10 +241,9 @@ export const buildFinalStockRows = ({
     // ======================================
     // 🔥 NON IMEI
     // ======================================
-    const skuKey =
-      `${normalize(t.NAMA_TOKO)}|` +
-      `${normalizeText(t.NAMA_BRAND)}|` +
-      `${normalizeText(t.NAMA_BARANG)}`;
+    const skuKey = `${normalize(t.NAMA_TOKO)}|${normalizeText(
+      t.NAMA_BRAND
+    )}|${normalizeText(t.NAMA_BARANG)}`;
 
     if (!map[skuKey]) {
       map[skuKey] = {
@@ -244,7 +251,18 @@ export const buildFinalStockRows = ({
 
         noDo: t.NO_SURAT_JALAN || t.NO_INVOICE || "-",
 
-        supplier: supplierLookup?.[skuKey] || t.NAMA_SUPPLIER || "-",
+        supplier:
+          supplierLookup?.[skuKey] ||
+          t.NAMA_SUPPLIER ||
+          t.SUPPLIER ||
+          t.namaSupplier ||
+          // ======================================
+          // 🔥 FALLBACK TRANSFER
+          // ======================================
+          supplierLookup?.[
+            `${normalizeText(t.NAMA_BRAND)}|${normalizeText(t.NAMA_BARANG)}`
+          ] ||
+          "-",
 
         namaToko: t.NAMA_TOKO || "-",
 
@@ -269,6 +287,61 @@ export const buildFinalStockRows = ({
 
         keterangan: metode === "TRANSFER_MASUK" ? "TRANSFER BARANG" : metode,
       };
+    }
+
+    // ======================================
+    // 🔥 UPDATE SUPPLIER TRANSFER
+    // ======================================
+    const latestSupplier =
+      // ======================================
+      // 🔥 PRIORITAS TRANSAKSI
+      // ======================================
+      t.NAMA_SUPPLIER ||
+      t.SUPPLIER ||
+      t.namaSupplier ||
+      // ======================================
+      // 🔥 EXACT TOKO KEY
+      // ======================================
+      supplierLookup?.[skuKey] ||
+      // ======================================
+      // 🔥 GLOBAL BRAND BARANG
+      // ======================================
+      supplierLookup?.[
+        `${normalizeText(t.NAMA_BRAND)}|${normalizeText(t.NAMA_BARANG)}`
+      ] ||
+      // ======================================
+      // 🔥 HISTORI PEMBELIAN
+      // ======================================
+      transaksi.find((trx) => {
+        const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
+
+        return (
+          metode === "PEMBELIAN" &&
+          normalizeText(trx.NAMA_BRAND) === normalizeText(t.NAMA_BRAND) &&
+          normalizeText(trx.NAMA_BARANG) === normalizeText(t.NAMA_BARANG) &&
+          (trx.NAMA_SUPPLIER || trx.SUPPLIER || trx.namaSupplier)
+        );
+      })?.NAMA_SUPPLIER ||
+      transaksi.find((trx) => {
+        const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
+
+        return (
+          metode === "PEMBELIAN" &&
+          normalizeText(trx.NAMA_BRAND) === normalizeText(t.NAMA_BRAND) &&
+          normalizeText(trx.NAMA_BARANG) === normalizeText(t.NAMA_BARANG)
+        );
+      })?.SUPPLIER ||
+      "ONLINE NON PKP";
+
+    // ======================================
+    // 🔥 JIKA ADA SUPPLIER BARU
+    // ======================================
+    if (
+      latestSupplier &&
+      latestSupplier !== "-" &&
+      latestSupplier !== "undefined"
+    ) {
+      map[skuKey].supplier = latestSupplier;
     }
 
     // ======================================

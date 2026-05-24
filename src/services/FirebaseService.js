@@ -2263,6 +2263,9 @@ export const approveTransferFINAL = async ({ transfer }) => {
     ke,
     brand,
     barang,
+    supplier,
+    namaSupplier,
+    NAMA_SUPPLIER,
     kategori,
     noDo,
     noSuratJalan,
@@ -2272,6 +2275,15 @@ export const approveTransferFINAL = async ({ transfer }) => {
   } = transfer;
 
   const approvedAt = Date.now();
+
+  // ======================================
+// 🔥 FINAL SUPPLIER
+// ======================================
+const finalSupplier =
+supplier ||
+namaSupplier ||
+NAMA_SUPPLIER ||
+"ONLINE NON PKP";
 
   // =====================================================
   // 🔥 SAFE QTY GLOBAL
@@ -2463,6 +2475,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
+    
         KATEGORI_BRAND: kategori,
 
         IMEI: imei,
@@ -2470,6 +2483,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
         QTY: 1,
 
         PAYMENT_METODE: "TRANSFER_KELUAR",
+        NAMA_SUPPLIER: finalSupplier,
 
         SYSTEM_PAYMENT: "SYSTEM",
         STATUS: "Approved",
@@ -2499,6 +2513,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
+     
         KATEGORI_BRAND: kategori,
 
         IMEI: imei,
@@ -2506,6 +2521,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
         QTY: 1,
 
         PAYMENT_METODE: "TRANSFER_MASUK",
+        NAMA_SUPPLIER: finalSupplier,
 
         // =====================================
         // 🔥 SETELAH TRANSFER
@@ -2553,6 +2569,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
       NAMA_BRAND: brand,
       NAMA_BARANG: barang,
+   
       KATEGORI_BRAND: kategori,
 
       IMEI: "",
@@ -2560,6 +2577,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
       QTY: safeQty,
 
       PAYMENT_METODE: "TRANSFER_KELUAR",
+      NAMA_SUPPLIER: finalSupplier,
 
       SYSTEM_PAYMENT: "SYSTEM",
       STATUS: "Approved",
@@ -2581,6 +2599,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
       NAMA_BRAND: brand,
       NAMA_BARANG: barang,
+     
       KATEGORI_BRAND: kategori,
 
       IMEI: "",
@@ -2588,6 +2607,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
       QTY: safeQty,
 
       PAYMENT_METODE: "TRANSFER_MASUK",
+      NAMA_SUPPLIER: finalSupplier,
 
       SYSTEM_PAYMENT: "SYSTEM",
       STATUS: "Approved",

@@ -333,7 +333,7 @@ export default function DashboardToko(props) {
         return;
       }
 
-      const supplier = t.NAMA_SUPPLIER || "-";
+      const supplier = t.NAMA_SUPPLIER || t.SUPPLIER || t.namaSupplier || "";
 
       // ======================================
       // 🔥 IMEI
@@ -350,15 +350,49 @@ export default function DashboardToko(props) {
       // ======================================
       // 🔥 NON IMEI
       // ======================================
-      if (!t.IMEI) {
-        const skuKey =
-          `${normalize(t.NAMA_TOKO)}|` +
-          `${normalizeText(t.NAMA_BRAND)}|` +
-          `${normalizeText(t.NAMA_BARANG)}`;
+      const cleanImei = normalizeImei(t.IMEI);
 
-        // SIMPAN SUPPLIER AWAL
-        if (!map[skuKey]) {
-          map[skuKey] = supplier;
+      const isNonImei =
+        !cleanImei || cleanImei === "NONIMEI" || cleanImei === "NON-IMEI";
+
+      if (isNonImei) {
+        const skuKey = `${normalize(t.NAMA_TOKO)}|${normalizeText(
+          t.NAMA_BRAND
+        )}|${normalizeText(t.NAMA_BARANG)}`;
+
+        // ======================================
+        // 🔥 GLOBAL FALLBACK
+        // ======================================
+        const globalSkuKey = `${normalizeText(t.NAMA_BRAND)}|${normalizeText(
+          t.NAMA_BARANG
+        )}`;
+
+        // ======================================
+        // 🔥 SEMUA TRANSAKSI STOCK
+        // ======================================
+        if (
+          [
+            "PEMBELIAN",
+            "TRANSFER_MASUK",
+            "TRANSFER_KELUAR",
+            "REFUND",
+            "RETUR",
+            "TRANSFER_REJECT",
+          ].includes(metode)
+        ) {
+          // ======================================
+          // 🔥 TOKO KEY
+          // ======================================
+          if (!map[skuKey]) {
+            map[skuKey] = supplier;
+          }
+
+          // ======================================
+          // 🔥 GLOBAL KEY
+          // ======================================
+          if (!map[globalSkuKey]) {
+            map[globalSkuKey] = supplier;
+          }
         }
       }
     });
@@ -1038,91 +1072,79 @@ export default function DashboardToko(props) {
   /* ======================
    BUILD ROWS UNIVERSAL (SYNC DETAIL STOCK)
 ====================== */
-/* ======================
+  /* ======================
    BUILD ROWS UNIVERSAL (SYNC DETAIL STOCK)
 ====================== */
-const rows = useMemo(() => {
-  return buildDashboardStockRows({
-    transaksi,
-    detailStock,
-    namaToko,
-    masterMap,
-    supplierLookup,
-  });
-}, [
-  transaksi,
-  detailStock,
-  namaToko,
-  masterMap,
-  supplierLookup,
-]);
-
- // ======================================
-// 🔥 FINAL TABLE ROWS
-// 100% SAMA DETAIL STOCK
-// ======================================
-const finalTableRows = useMemo(() => {
-  let cleanedRows = Array.isArray(rows) ? [...rows] : [];
-
-  // ======================================
-  // 🔥 FILTER TOKO
-  // ======================================
-  cleanedRows = cleanedRows.filter(
-    (r) =>
-      String(r.namaToko || "")
-        .trim()
-        .toUpperCase() ===
-      String(TOKO_AKTIF || "")
-        .trim()
-        .toUpperCase()
-  );
-
-  // ======================================
-  // 🔥 SEARCH
-  // ======================================
-  const keyword = String(dashboardSearch || "")
-    .trim()
-    .toLowerCase();
-
-  if (keyword) {
-    cleanedRows = cleanedRows.filter((item) => {
-      return (
-        String(item.imei || "")
-          .toLowerCase()
-          .includes(keyword) ||
-
-        String(item.barang || "")
-          .toLowerCase()
-          .includes(keyword) ||
-
-        String(item.brand || "")
-          .toLowerCase()
-          .includes(keyword) ||
-
-        String(item.noDo || "")
-          .toLowerCase()
-          .includes(keyword) ||
-
-        String(item.supplier || "")
-          .toLowerCase()
-          .includes(keyword) ||
-
-        String(item.keterangan || "")
-          .toLowerCase()
-          .includes(keyword)
-      );
+  const rows = useMemo(() => {
+    return buildDashboardStockRows({
+      transaksi,
+      detailStock,
+      namaToko,
+      masterMap,
+      supplierLookup,
     });
-  }
+  }, [transaksi, detailStock, namaToko, masterMap, supplierLookup]);
 
   // ======================================
-  // 🔥 SORT FINAL
+  // 🔥 FINAL TABLE ROWS
+  // 100% SAMA DETAIL STOCK
   // ======================================
-  return cleanedRows.sort(
-    (a, b) =>
-      new Date(b.tanggal || 0).getTime() -
-      new Date(a.tanggal || 0).getTime()
-  );
-}, [rows, dashboardSearch, TOKO_AKTIF]);
+  const finalTableRows = useMemo(() => {
+    let cleanedRows = Array.isArray(rows) ? [...rows] : [];
+
+    // ======================================
+    // 🔥 FILTER TOKO
+    // ======================================
+    cleanedRows = cleanedRows.filter(
+      (r) =>
+        String(r.namaToko || "")
+          .trim()
+          .toUpperCase() ===
+        String(TOKO_AKTIF || "")
+          .trim()
+          .toUpperCase()
+    );
+
+    // ======================================
+    // 🔥 SEARCH
+    // ======================================
+    const keyword = String(dashboardSearch || "")
+      .trim()
+      .toLowerCase();
+
+    if (keyword) {
+      cleanedRows = cleanedRows.filter((item) => {
+        return (
+          String(item.imei || "")
+            .toLowerCase()
+            .includes(keyword) ||
+          String(item.barang || "")
+            .toLowerCase()
+            .includes(keyword) ||
+          String(item.brand || "")
+            .toLowerCase()
+            .includes(keyword) ||
+          String(item.noDo || "")
+            .toLowerCase()
+            .includes(keyword) ||
+          String(item.supplier || "")
+            .toLowerCase()
+            .includes(keyword) ||
+          String(item.keterangan || "")
+            .toLowerCase()
+            .includes(keyword)
+        );
+      });
+    }
+
+    // ======================================
+    // 🔥 SORT FINAL
+    // ======================================
+    return cleanedRows.sort(
+      (a, b) =>
+        new Date(b.tanggal || 0).getTime() - new Date(a.tanggal || 0).getTime()
+    );
+  }, [rows, dashboardSearch, TOKO_AKTIF]);
 
   // ======================= DETAIL STOK TOKO =======================
 
@@ -1183,11 +1205,11 @@ const finalTableRows = useMemo(() => {
   console.log("🔥 FIREBASE TOKO ID:", firebaseTokoId);
 
   /// ======================================
-// 🔥 FILTER FINAL CLEAN
-// ======================================
-const filteredRows = useMemo(() => {
-  return finalTableRows;
-}, [finalTableRows]);
+  // 🔥 FILTER FINAL CLEAN
+  // ======================================
+  const filteredRows = useMemo(() => {
+    return finalTableRows;
+  }, [finalTableRows]);
 
   // ======================= HANDLE TIDAK ADA TOKO =======================
   if (!toko) {

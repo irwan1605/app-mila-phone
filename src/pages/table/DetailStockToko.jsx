@@ -438,54 +438,121 @@ export default function DetailStockToko(props) {
   //   return set;
   // }, [transaksi]);
 
-  // ===============================
-  // 🔥 SUPPLIER LOOKUP FROM PEMBELIAN
-  // ===============================
-  // ===============================
-  // 🔥 SUPPLIER LOOKUP UNIVERSAL
-  // ===============================
-  const supplierLookup = useMemo(() => {
-    const map = {};
+ const supplierLookup = useMemo(() => {
+  const map = {};
 
-    transaksi.forEach((t) => {
-      if (!t) return;
+  // ======================================
+  // 🔥 SORT HISTORI TERLAMA
+  // ======================================
+  const sorted = [...transaksi].sort(
+    (a, b) =>
+      new Date(
+        a.CREATED_AT ||
+        a.TANGGAL_TRANSAKSI ||
+        0
+      ).getTime() -
+      new Date(
+        b.CREATED_AT ||
+        b.TANGGAL_TRANSAKSI ||
+        0
+      ).getTime()
+  );
 
-      const supplier = t.NAMA_SUPPLIER || t.namaSupplier || t.SUPPLIER || "-";
+  sorted.forEach((t) => {
+    if (!t) return;
 
-      // =========================
-      // 🔥 IMEI
-      // =========================
-      if (t.IMEI) {
-        const imei = String(t.IMEI).trim();
+    const metode = String(
+      t.PAYMENT_METODE || ""
+    ).toUpperCase();
 
-        if (supplier && supplier !== "-" && supplier !== "undefined") {
-          map[imei] = supplier;
-        }
+    const supplier =
+      t.NAMA_SUPPLIER ||
+      t.namaSupplier ||
+      t.SUPPLIER ||
+      "";
 
-        const clean = normalizeImei(imei);
+    // ======================================
+    // 🔥 SKIP SUPPLIER KOSONG
+    // ======================================
+    if (!supplier.trim()) {
+      return;
+    }
 
-        if (supplier && supplier !== "-" && supplier !== "undefined") {
-          map[clean] = supplier;
-        }
+    // ======================================
+    // 🔥 IMEI
+    // ======================================
+    if (t.IMEI) {
+      const imeiKey = normalizeImei(
+        t.IMEI
+      );
+
+      // ======================================
+      // 🔥 PRIORITAS PEMBELIAN
+      // ======================================
+      if (
+        metode === "PEMBELIAN"
+      ) {
+        map[imeiKey] = supplier;
       }
 
-      // =========================
-      // 🔥 NON IMEI
-      // =========================
-      const skuKey =
-        `${normalize(t.NAMA_TOKO)}|` +
-        `${normalizeText(t.NAMA_BRAND)}|` +
-        `${normalizeText(t.NAMA_BARANG)}`;
       // ======================================
-      // 🔥 ALWAYS UPDATE SUPPLIER
+      // 🔥 FALLBACK TRANSFER
       // ======================================
-      if (supplier && supplier !== "-" && supplier !== "undefined") {
-        map[skuKey] = supplier;
+      if (
+        !map[imeiKey] &&
+        [
+          "TRANSFER_MASUK",
+          "TRANSFER_KELUAR",
+          "REFUND",
+          "RETUR",
+          "TRANSFER_REJECT",
+        ].includes(metode)
+      ) {
+        map[imeiKey] = supplier;
       }
-    });
+    }
 
-    return map;
-  }, [transaksi]);
+    // ======================================
+    // 🔥 NON IMEI
+    // ======================================
+    const skuKey =
+      `${normalize(t.NAMA_TOKO)}|` +
+      `${normalizeText(t.NAMA_BRAND)}|` +
+      `${normalizeText(t.NAMA_BARANG)}`;
+
+    // ======================================
+    // 🔥 PEMBELIAN
+    // ======================================
+    if (
+      metode === "PEMBELIAN"
+    ) {
+      map[skuKey] = supplier;
+    }
+
+    // ======================================
+    // 🔥 TRANSFER / REFUND
+    // ======================================
+    if (
+      !map[skuKey] &&
+      [
+        "TRANSFER_MASUK",
+        "TRANSFER_KELUAR",
+        "REFUND",
+        "RETUR",
+        "TRANSFER_REJECT",
+      ].includes(metode)
+    ) {
+      map[skuKey] = supplier;
+    }
+  });
+
+  console.log(
+    "🔥 SUPPLIER LOOKUP FINAL:",
+    map
+  );
+
+  return map;
+}, [transaksi]);
 
   const handleDelete = async (row) => {
     try {
