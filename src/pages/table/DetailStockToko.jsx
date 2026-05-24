@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   listenAllTransaksi,
   listenMasterBarang,
-  listenMasterToko,
   deleteTransaksi,
 } from "../../services/FirebaseService";
 import { ref, remove, get, onValue } from "firebase/database";
@@ -15,7 +14,8 @@ import {
   FaFileExcel,
   FaCashRegister,
 } from "react-icons/fa";
-import { buildFinalStockRows } from "../../transfer";
+import { buildFinalStockRows } from "../../utils/buildFinalStockRows";
+import { exportStockExcel } from "../../utils/stock/exportStockExcel";
 /* ======================
    HELPER RUPIAH
 ====================== */
@@ -38,16 +38,7 @@ const normalizeText = (v) =>
     .toUpperCase()
     .replace(/\s+/g, " ");
 
-// ======================================
-// 🔥 FINAL STATUS VALIDATOR
-// ======================================
-const isApproved = (t) => {
-  const status = String(t.STATUS || t.status || "")
-    .trim()
-    .toUpperCase();
-
-  return ["APPROVED", "APPROVE", "REFUND"].includes(status);
-};
+const isApproved = (t) => String(t.STATUS || "").toUpperCase() === "APPROVED";
 
 export default function DetailStockToko(props) {
   const { state } = useLocation();
@@ -62,7 +53,6 @@ export default function DetailStockToko(props) {
   const [transaksi, setTransaksi] = useState([]);
   const [masterBarang, setMasterBarang] = useState([]);
   const [search, setSearch] = useState(props?.searchTerm || "");
-  const [masterToko, setMasterToko] = useState([]);
 
   // ======================================
   // 🔥 SYNC SEARCH DASHBOARD
@@ -100,12 +90,9 @@ export default function DetailStockToko(props) {
 
     const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
 
-    const unsub3 = listenMasterToko((rows) => setMasterToko(rows || []));
-
     return () => {
       unsub1 && unsub1();
       unsub2 && unsub2();
-      unsub3 && unsub3();
     };
   }, [deletedIds]); // 🔥 WAJIB
 
@@ -198,30 +185,9 @@ export default function DetailStockToko(props) {
         map[imei].toko = toko;
       }
 
-      // ======================================
-      // 🔥 TRANSFER MASUK FINAL
-      // ======================================
       if (metode === "TRANSFER_MASUK") {
-        const finalOwner = String(t.ke || t.tokoTujuan || t.NAMA_TOKO || "-")
-          .trim()
-          .toUpperCase();
-
-        // ======================================
-        // 🔥 OWNER FINAL
-        // ======================================
-        map[imei].toko = finalOwner;
-
-        // ======================================
-        // 🔥 KETERANGAN FINAL
-        // ======================================
-        map[imei].keterangan = "TRANSFER BARANG";
-
-        // ======================================
-        // 🔥 RESET REFUND
-        // ======================================
-        map[imei].lastAction = "TRANSFER";
-
-        map[imei].isRefundTransfer = false;
+        map[imei].toko = toko;
+        map[imei].keterangan = `Transfer masuk ke Toko ${toko}`;
       }
 
       // ======================================
@@ -261,9 +227,7 @@ export default function DetailStockToko(props) {
 
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
-      const status = String(t.STATUS || t.status || "")
-        .trim()
-        .toUpperCase();
+      const status = String(t.STATUS || "").toUpperCase();
 
       if (!["APPROVED", "REFUND"].includes(status)) return;
 
@@ -297,9 +261,7 @@ export default function DetailStockToko(props) {
     transaksi.forEach((t) => {
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
-      const status = String(t.STATUS || t.status || "")
-        .trim()
-        .toUpperCase();
+      const status = String(t.STATUS || "").toUpperCase();
 
       if (
         metode === "REFUND" &&
@@ -342,9 +304,7 @@ export default function DetailStockToko(props) {
 
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
-      const status = String(t.STATUS || t.status || "")
-        .trim()
-        .toUpperCase();
+      const status = String(t.STATUS || "").toUpperCase();
 
       if (!["APPROVED", "REFUND"].includes(status)) {
         return;
@@ -401,14 +361,9 @@ export default function DetailStockToko(props) {
 
       const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
-      const status = String(t.STATUS || t.status || "")
-        .trim()
-        .toUpperCase();
+      const status = String(t.STATUS || "").toUpperCase();
 
-      // ======================================
-      // 🔥 FINAL STATUS FILTER
-      // ======================================
-      if (!["APPROVED", "APPROVE", "REFUND"].includes(status)) {
+      if (!["APPROVED", "REFUND"].includes(status)) {
         return;
       }
 
@@ -503,37 +458,14 @@ export default function DetailStockToko(props) {
       if (t.IMEI) {
         const imei = String(t.IMEI).trim();
 
+        if (supplier && supplier !== "-" && supplier !== "undefined") {
+          map[imei] = supplier;
+        }
+
         const clean = normalizeImei(imei);
 
-        // ======================================
-        // 🔥 HANYA AMBIL DARI PEMBELIAN / REFUND
-        // ======================================
-        const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-
-        const validSupplierMethod = [
-          "PEMBELIAN",
-          "REFUND",
-          "TRANSFER_MASUK",
-        ].includes(metode);
-
-        // ======================================
-        // 🔥 SIMPAN SUPPLIER PERTAMA
-        // ======================================
-        if (
-          validSupplierMethod &&
-          supplier &&
-          supplier !== "-" &&
-          supplier !== "undefined"
-        ) {
-          // IMEI ASLI
-          if (!map[imei]) {
-            map[imei] = supplier;
-          }
-
-          // IMEI CLEAN
-          if (!map[clean]) {
-            map[clean] = supplier;
-          }
+        if (supplier && supplier !== "-" && supplier !== "undefined") {
+          map[clean] = supplier;
         }
       }
 
@@ -765,17 +697,21 @@ export default function DetailStockToko(props) {
   /* ======================
    BUILD ROWS (FIX FINAL)
 ====================== */
-  const rows = useMemo(() => {
-    return buildFinalStockRows({
-      transaksi,
-      detailStock,
-      namaToko,
-      masterMap,
-      supplierLookup,
-      masterBarang,
-      masterToko,
-    });
-  }, [transaksi, detailStock, namaToko, masterMap, supplierLookup]);
+const rows = useMemo(() => {
+  return buildFinalStockRows({
+    transaksi,
+    detailStock,
+    namaToko,
+    masterMap,
+    supplierLookup,
+  });
+}, [
+  transaksi,
+  detailStock,
+  namaToko,
+  masterMap,
+  supplierLookup,
+]);
 
   // ======================================
   // 🔥 MERGED ROWS FINAL
@@ -785,14 +721,9 @@ export default function DetailStockToko(props) {
 
     rows.forEach((r) => {
       // ======================================
-      // 🔥 IMEI ASLI ONLY
+      // 🔥 IMEI
       // ======================================
-      if (
-        r.imei &&
-        !["NON IMEI", "NON-IMEI", "NONIMEI", "-"].includes(
-          String(r.imei).trim().toUpperCase()
-        )
-      ) {
+      if (r.imei) {
         const imeiKey = normalizeImei(r.imei);
 
         finalMap[`IMEI_${imeiKey}`] = {
@@ -814,11 +745,6 @@ export default function DetailStockToko(props) {
         `${normalizeText(r.brand)}|` +
         `${normalizeText(r.barang)}`;
 
-      // ======================================
-      // 🔥 FINAL STOCK SUDAH DIBUAT ENGINE
-      // ======================================
-      // JANGAN HITUNG ULANG QTY DI UI
-      // ======================================
       if (!finalMap[skuKey]) {
         finalMap[skuKey] = {
           ...r,
@@ -835,14 +761,8 @@ export default function DetailStockToko(props) {
 
           barang: r.barang || "-",
 
-          imei:
-            !r.imei || ["-", "--"].includes(String(r.imei).trim())
-              ? "NON IMEI"
-              : r.imei,
+          imei: r.imei || "",
 
-          // ======================================
-          // 🔥 QTY FINAL DARI ENGINE
-          // ======================================
           qty: Number(r.qty || 0),
 
           hargaSRP:
@@ -860,6 +780,35 @@ export default function DetailStockToko(props) {
 
           statusBarang: Number(r.qty || 0) > 0 ? "TERSEDIA" : "HABIS",
 
+          keterangan: String(r.keterangan || "")
+            .toUpperCase()
+            .includes("REFUND")
+            ? "REFUND"
+            : r.keterangan || "SYNC STOCK OPNAME",
+        };
+      } else {
+        // ======================================
+        // 🔥 AMBIL DATA TERBARU
+        // ======================================
+        finalMap[skuKey] = {
+          ...finalMap[skuKey],
+
+          tanggal: r.tanggal || finalMap[skuKey].tanggal,
+
+          noDo: r.noDo || finalMap[skuKey].noDo,
+
+          supplier: r.supplier || finalMap[skuKey].supplier,
+
+          qty: Math.max(Number(finalMap[skuKey].qty || 0), Number(r.qty || 0)),
+
+          hargaSRP: r.hargaSRP || finalMap[skuKey].hargaSRP || 0,
+
+          hargaGrosir: r.hargaGrosir || finalMap[skuKey].hargaGrosir || 0,
+
+          hargaReseller: r.hargaReseller || finalMap[skuKey].hargaReseller || 0,
+
+          statusBarang: Number(r.qty || 0) > 0 ? "TERSEDIA" : "HABIS",
+
           // ======================================
           // 🔥 REFUND PRIORITAS
           // ======================================
@@ -867,18 +816,8 @@ export default function DetailStockToko(props) {
             .toUpperCase()
             .includes("REFUND")
             ? "REFUND"
-            : r.keterangan || "PEMBELIAN",
+            : finalMap[skuKey].keterangan || "-",
         };
-      } else {
-        // ======================================
-        // 🔥 SKIP DUPLICATE NON IMEI
-        // ======================================
-        // buildFinalStockRows()
-        // SUDAH menghasilkan FINAL STOCK
-        // jadi UI tidak boleh merge qty lagi
-        // ======================================
-
-        return;
       }
     });
 
@@ -913,29 +852,20 @@ export default function DetailStockToko(props) {
       if (r.imei) {
         const cleanImei = normalizeImei(r.imei);
 
-        const ket = String(r.keterangan || "").toUpperCase();
-
-        // ======================================
-        // 🔥 TRANSFER BARANG SELALU AKTIF
-        // ======================================
-        if (ket.includes("TRANSFER BARANG")) {
-          return true;
-        }
-
         // ======================================
         // 🔥 REFUND SUDAH TERJUAL LAGI
         // ======================================
-        if (ket.includes("REFUND")) {
+        if (
+          String(r.keterangan || "")
+            .toUpperCase()
+            .includes("REFUND")
+        ) {
           const refundState = refundFinalTracker?.[cleanImei];
 
-          // ======================================
-          // 🔥 REFUND SUDAH TERJUAL LAGI
-          // ======================================
+          // ✅ refund sudah dijual lagi
           if (refundState && refundState.active === false) {
             return false;
           }
-
-          return true;
         }
 
         // ======================================
@@ -1021,76 +951,11 @@ export default function DetailStockToko(props) {
      EXPORT EXCEL
   ====================== */
   const exportExcel = () => {
-    // ===============================
-    // 🔥 DATA EXPORT SESUAI TABLE
-    // ===============================
-    const exportRows = filtered.map((r, i) => ({
-      NO: i + 1,
-
-      TANGGAL: r.tanggal || "-",
-
-      "NO DO": r.noDo || "-",
-
-      SUPPLIER: r.supplier || "-",
-
-      TOKO: r.namaToko || "-",
-
-      BRAND: r.brand || "-",
-
-      BARANG: r.barang || "-",
-
-      IMEI: r.imei || "NON IMEI",
-
-      QTY: Number(r.qty || 0),
-
-      "HARGA SRP": Number(r.hargaSRP || 0),
-
-      "HARGA GROSIR": Number(r.hargaGrosir || 0),
-
-      "HARGA RESELLER": Number(r.hargaReseller || 0),
-
-      STATUS: r.statusBarang || "-",
-
-      KETERANGAN: r.keterangan || "-",
-    }));
-
-    // ===============================
-    // 🔥 GENERATE SHEET
-    // ===============================
-    const ws = XLSX.utils.json_to_sheet(exportRows);
-
-    // 🔥 AUTO WIDTH
-    ws["!cols"] = [
-      { wch: 8 }, // NO
-      { wch: 18 }, // TANGGAL
-      { wch: 25 }, // NO DO
-      { wch: 35 }, // SUPPLIER
-      { wch: 25 }, // TOKO
-      { wch: 20 }, // BRAND
-      { wch: 40 }, // BARANG
-      { wch: 28 }, // IMEI
-      { wch: 10 }, // QTY
-      { wch: 18 }, // SRP
-      { wch: 18 }, // GROSIR
-      { wch: 18 }, // RESELLER
-      { wch: 15 }, // STATUS
-      { wch: 30 }, // KETERANGAN
-    ];
-
-    // ===============================
-    // 🔥 WORKBOOK
-    // ===============================
-    const wb = XLSX.utils.book_new();
-
-    XLSX.utils.book_append_sheet(wb, ws, "DETAIL_STOCK_TOKO");
-
-    // ===============================
-    // 🔥 EXPORT FILE
-    // ===============================
-    XLSX.writeFile(
-      wb,
-      `DETAIL_STOCK_${namaToko}_${new Date().toISOString().slice(0, 10)}.xlsx`
-    );
+    exportStockExcel({
+      rows: filtered,
+      namaToko,
+      fileName: "DETAIL_STOCK",
+    });
   };
 
   /* ======================
