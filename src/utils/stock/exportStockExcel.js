@@ -1,9 +1,6 @@
 import * as XLSX from "xlsx";
 
-import {
-  STOCK_EXPORT_COLUMNS,
-  STOCK_EXPORT_WIDTHS,
-} from "./stockExcelColumns";
+import { STOCK_EXPORT_COLUMNS, STOCK_EXPORT_WIDTHS } from "./stockExcelColumns";
 
 // ======================================
 // 🔥 UNIVERSAL EXPORT STOCK
@@ -27,7 +24,13 @@ export const exportStockExcel = ({
 
       SUPPLIER: r.supplier || "-",
 
-      TOKO: r.namaToko || "-",
+      TOKO:
+        r.toko ||
+        r.namaToko ||
+        r.NAMA_TOKO ||
+        r.tokoLogin ||
+        r.nama_toko ||
+        "-",
 
       BRAND: r.brand || "-",
 
@@ -72,9 +75,7 @@ export const exportStockExcel = ({
     // ======================================
     XLSX.writeFile(
       wb,
-      `${fileName}_${namaToko}_${
-        new Date().toISOString().slice(0, 10)
-      }.xlsx`
+      `${fileName}_${namaToko}_${new Date().toISOString().slice(0, 10)}.xlsx`
     );
 
     console.log("✅ EXPORT SUCCESS:", exportRows.length);

@@ -59,6 +59,8 @@ export default function TableStockOpname({
             // ======================================
             const status = isRefund
               ? `REFUND (${refundQty})`
+              : !r.imei
+              ? `NON IMEI (${Number(r.qty || 0)})`
               : r.qty > 0
               ? "TERSEDIA"
               : "TERJUAL";
@@ -85,12 +87,17 @@ export default function TableStockOpname({
                 <td className="p-2 border text-center font-bold">{status}</td>
 
                 <td className="p-2 border text-xs text-gray-600">
-                  {r.lastTransaksi === "TRANSFER_MASUK" ||
-                  r.lastTransaksi === "TRANSFER_KELUAR"
+                  {String(r.lastTransaksi || "")
+                    .toUpperCase()
+                    .includes("TRANSFER")
                     ? "TRANSFER BARANG"
-                    : r.lastTransaksi === "REFUND"
+                    : String(r.lastTransaksi || "")
+                        .toUpperCase()
+                        .includes("REFUND")
                     ? `REFUND BARANG (${refundQty})`
-                    : "-"}
+                    : !r.imei
+                    ? "PEMBELIAN"
+                    : r.lastTransaksi || "-"}
                 </td>
 
                 {/* ✅ stok dari engine */}
