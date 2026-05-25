@@ -16,6 +16,9 @@ import { ref, onValue, update, push, off } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
 import TableTransferBarang from "./table/TableTransferBarang";
 import PrintSuratJalan from "./Print/PrintSuratJalan";
+import { getAvailableNonImeiStock } from "../utils/FungsiTransferBarang/getAvailableNonImeiStock";
+import { buildFinalNonImeiStock } from "../utils/FungsiTransferBarang/buildFinalNonImeiStock";
+import { buildFinalImeiStock } from "../utils/FungsiTransferBarang/buildFinalImeiStock";
 
 const initialForm = {
   tanggal: new Date().toISOString().slice(0, 10),
@@ -109,6 +112,34 @@ export default function TransferBarang() {
   const [inventory, setInventory] = useState([]);
   const [stokAccessories, setStokAccessories] = useState([]);
   const [previewSJ, setPreviewSJ] = useState(null);
+  const [allTransaksi, setAllTransaksi] = useState([]);
+
+  useEffect(() => {
+    const tokoRef = ref(db, "toko");
+
+    return onValue(tokoRef, (snap) => {
+      const arr = [];
+
+      snap.forEach((tokoSnap) => {
+        const transaksiSnap = tokoSnap.child("transaksi");
+
+        transaksiSnap.forEach((trxSnap) => {
+          const trx = trxSnap.val();
+
+          if (!trx) return;
+
+          arr.push({
+            id: trxSnap.key,
+            ...trx,
+          });
+        });
+      });
+
+      console.log("🔥 ALL TRANSAKSI:", arr.length);
+
+      setAllTransaksi(arr);
+    });
+  }, []);
 
   /* ================= TOKO ================= */
   const TOKO_LOGIN = localStorage.getItem("TOKO_LOGIN") || "CILANGKAP PUSAT";
@@ -1488,51 +1519,32 @@ export default function TransferBarang() {
     // 🔥 IMEI
     // =====================
     if (isKategoriImeiFinal) {
-      return inventory.filter(
-        (i) =>
-          i.status === "AVAILABLE" &&
-          i.toko.toUpperCase() === toko &&
-          i.namaBarang.toUpperCase() === barang
-      ).length;
+      const result = buildFinalImeiStock({
+        transaksi: allTransaksi,
+
+        toko: form.tokoPengirim,
+
+        brand: form.brand,
+
+        barang: form.barang,
+      });
+
+      return result.qty;
     }
 
     // =====================
-    // 🔥 NON IMEI (FIX TOTAL)
+    // 🔥 NON IMEI FINAL REAL
     // =====================
+    if (!isKategoriImeiFinal) {
+      return buildFinalNonImeiStock({
+        transaksi: allTransaksi,
 
-    // 1. cek stok_toko
-    const stokDb =
-      stokAccessories?.[form.tokoPengirim]?.[form.brand]?.[form.barang];
+        toko: form.tokoPengirim,
 
-    if (stokDb && Number(stokDb) > 0) {
-      return Number(stokDb);
-    }
+        brand: form.brand,
 
-    // 2. cek inventoryAccessories
-    const found = inventoryAccessories.find(
-      (i) =>
-        i.toko?.toUpperCase().trim() === toko &&
-        i.namaBrand?.toUpperCase().trim() === brand &&
-        i.namaBarang?.toUpperCase().trim() === barang
-    );
-
-    if (found && Number(found.qty || 0) > 0) {
-      return Number(found.qty);
-    }
-
-    // 3. 🔥 fallback master barang (WAJIB)
-    const existInMaster = masterBarang.some(
-      (b) =>
-        String(b.brand || "")
-          .toUpperCase()
-          .trim() === brand &&
-        String(b.namaBarang || "")
-          .toUpperCase()
-          .trim() === barang
-    );
-
-    if (existInMaster) {
-      return 999; // 🔥 biar tidak 0
+        barang: form.barang,
+      });
     }
 
     return 0;
@@ -1542,6 +1554,67 @@ export default function TransferBarang() {
     stokAccessories,
     masterBarang,
     form,
+    isKategoriImeiFinal,
+  ]);
+
+  // ======================================
+  // 🔥 AUTO UPDATE QTY IMEI
+  // ======================================
+  useEffect(() => {
+    if (!isKategoriImeiFinal) return;
+
+    const result = buildFinalImeiStock({
+      transaksi: allTransaksi,
+
+      toko: form.tokoPengirim,
+
+      brand: form.brand,
+
+      barang: form.barang,
+    });
+
+    setForm((prev) => ({
+      ...prev,
+
+      qty: Number(prev.qty || 0) > result.qty ? result.qty : prev.qty || 0,
+    }));
+  }, [
+    allTransaksi,
+    form.tokoPengirim,
+    form.brand,
+    form.barang,
+    isKategoriImeiFinal,
+  ]);
+
+  // ======================================
+  // 🔥 AUTO UPDATE QTY NON IMEI
+  // ======================================
+  useEffect(() => {
+    if (isKategoriImeiFinal) return;
+
+    const stock = buildFinalNonImeiStock({
+      transaksi: allTransaksi,
+
+      toko: form.tokoPengirim,
+
+      brand: form.brand,
+
+      barang: form.barang,
+    });
+
+    // ======================================
+    // 🔥 AUTO LIMIT QTY
+    // ======================================
+    setForm((prev) => ({
+      ...prev,
+
+      qty: Number(prev.qty || 0) > stock ? stock : prev.qty || 0,
+    }));
+  }, [
+    history,
+    form.tokoPengirim,
+    form.brand,
+    form.barang,
     isKategoriImeiFinal,
   ]);
 
@@ -2306,11 +2379,10 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
       }
     }
 
-    if (!isKategoriImeiFinal) {
-      if (form.qty > stokTersedia) {
-        alert(`❌ Qty melebihi stok tersedia.\nStok tersedia: ${stokTersedia}`);
-        return;
-      }
+    if (Number(form.qty || 0) > Number(stokTersedia || 0)) {
+      alert(`❌ Qty melebihi stok tersedia (${stokTersedia})`);
+
+      return;
     }
 
     if (!isKategoriImeiFinal) {
@@ -2912,22 +2984,47 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
           </div>
 
           {/* QTY */}
-          <div>
-            <label className="text-xs font-semibold">QTY (Jumlah Barang)</label>
+          <div className="space-y-1">
+            <label className="font-semibold">Qty Transfer</label>
+
             <input
               type="number"
-              min="1"
-              className="input bg-gray-100"
+              min={1}
+              max={stokTersedia}
               value={form.qty}
-              readOnly={isKategoriImeiFinal}
-              onChange={(e) =>
+              onChange={(e) => {
+                let value = Number(e.target.value);
+
+                // ======================================
+                // 🔥 TIDAK BOLEH LEBIH DARI STOK
+                // ======================================
+                if (value > stokTersedia) {
+                  value = stokTersedia;
+
+                  alert(`❌ Qty melebihi stok tersedia (${stokTersedia})`);
+                }
+
+                // ======================================
+                // 🔥 TIDAK BOLEH NEGATIVE
+                // ======================================
+                if (value < 0) {
+                  value = 0;
+                }
+
                 setForm((f) => ({
                   ...f,
-                  qty: Number(e.target.value),
-                }))
-              }
-              placeholder="Jumlah Barang"
+                  qty: value,
+                }));
+              }}
+              className="border rounded px-3 py-2 w-full"
             />
+
+            {/* ====================================== */}
+            {/* 🔥 STOCK TERSEDIA */}
+            {/* ====================================== */}
+            <div className="text-sm font-bold text-blue-600">
+              Stok tersedia: {stokTersedia}
+            </div>
           </div>
         </div>
 

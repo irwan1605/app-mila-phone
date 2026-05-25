@@ -1,0 +1,392 @@
+// ======================================================
+// HANDLE REFUND PENJUALAN
+// REALTIME REFUND
+// ======================================================
+
+import {
+  updateTransaksiPenjualan,
+  addTransaksi,
+} from "../../../services/FirebaseService";
+
+import { ref, get, update, remove } from "firebase/database";
+
+import { db } from "../../../services/FirebaseInit";
+
+// ======================================================
+// NORMALIZE
+// ======================================================
+
+const normalize = (v) =>
+  String(v || "")
+    .trim()
+    .toUpperCase();
+
+const normalizeImei = (v) =>
+  String(v || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+
+// ======================================================
+// HANDLE REFUND
+// ======================================================
+
+export const handleRefundPenjualan = async ({
+  row,
+  rows,
+  userLogin,
+
+  setDeletedRows,
+  setInstantRefund,
+  setLocalHiddenRefund,
+  setRefundLoading,
+}) => {
+  try {
+    // =========================================
+    // VALIDASI
+    // =========================================
+    const trx = rows.find(
+      (x) => normalize(x.invoice) === normalize(row.invoice)
+    );
+
+    if (!trx) {
+      throw new Error("Transaksi tidak ditemukan");
+    }
+
+    // =========================================
+    // BLOCK DOUBLE REFUND
+    // =========================================
+    const alreadyRefund =
+      trx.refundProcessed === true ||
+      trx.IS_REFUND === true ||
+      trx.deleted === true ||
+      trx.deletedFromPenjualan === true ||
+      trx.refundLocked === true ||
+      normalize(trx.STATUS) === "REFUND" ||
+      normalize(trx.PAYMENT_METODE) === "REFUND" ||
+      normalize(trx.statusPembayaran) === "REFUND";
+
+    if (alreadyRefund) {
+      console.log("⛔ REFUND SUDAH DIPROSES");
+
+      return false;
+    }
+
+    // =========================================
+    // UI REALTIME HIDE
+    // =========================================
+    setInstantRefund((prev) => ({
+      ...prev,
+      [row.invoice]: true,
+    }));
+
+    setLocalHiddenRefund((prev) => ({
+      ...prev,
+      [row.invoice]: true,
+    }));
+
+    setRefundLoading(row.invoice);
+
+    // =========================================
+    // 🔥 SAVE BLACKLIST
+    // =========================================
+    try {
+      const oldBlacklist = JSON.parse(
+        localStorage.getItem("refundBlacklist") || "[]"
+      );
+
+      const newBlacklist = [
+        ...new Set([...oldBlacklist, normalize(row.invoice)]),
+      ];
+
+      localStorage.setItem("refundBlacklist", JSON.stringify(newBlacklist));
+    } catch (e) {
+      console.log("BLACKLIST ERROR");
+    }
+
+    // =========================================
+    // UPDATE PENJUALAN
+    // =========================================
+    await updateTransaksiPenjualan(
+      trx.trxKey || trx.id,
+      {
+        STATUS: "REFUND_DELETED",
+
+        statusPembayaran: "REFUND",
+
+        refundProcessed: true,
+
+        IS_REFUND: true,
+
+        refundLocked: true,
+
+        deleted: true,
+
+        deletedFromPenjualan: true,
+
+        refundAt: Date.now(),
+
+        refundBy: userLogin?.username || "SYSTEM",
+      },
+      userLogin
+    );
+
+    // =========================================
+    // 🔥 HAPUS DATA PENJUALAN ASLI
+    // =========================================
+
+    try {
+      // ===============================
+      // GLOBAL PENJUALAN
+      // ===============================
+      if (trx?.id) {
+        await remove(ref(db, `penjualan/${trx.id}`));
+
+        console.log("✅ REMOVE penjualan/id");
+      }
+
+      // ===============================
+      // trxKey
+      // ===============================
+      if (trx?.trxKey) {
+        await remove(ref(db, `penjualan/${trx.trxKey}`));
+
+        console.log("✅ REMOVE penjualan/trxKey");
+      }
+
+      // ===============================
+      // invoice
+      // ===============================
+      if (trx?.invoice) {
+        await remove(ref(db, `penjualanByInvoice/${trx.invoice}`));
+
+        console.log("✅ REMOVE invoice");
+      }
+    } catch (err) {
+      console.log("❌ REMOVE ERROR:", err.message);
+    }
+
+    // =========================================
+    // 🔥 HAPUS DATA PENJUALAN ASLI
+    // =========================================
+
+    try {
+      // path global penjualan
+      if (trx?.id) {
+        await remove(ref(db, `penjualan/${trx.id}`));
+      }
+
+      // alt key
+      if (trx?.trxKey) {
+        await remove(ref(db, `penjualan/${trx.trxKey}`));
+      }
+
+      // invoice key
+      if (trx?.invoice) {
+        await remove(ref(db, `penjualanByInvoice/${trx.invoice}`));
+      }
+
+      console.log("✅ DATA PENJUALAN DIHAPUS");
+    } catch (err) {
+      console.log("⚠️ REMOVE PENJUALAN:", err.message);
+    }
+
+    // =========================================
+    // 🔥 REMOVE FROM GLOBAL PENJUALAN
+    // =========================================
+    try {
+      if (trx?.id) {
+        await remove(ref(db, `penjualan/${trx.id}`));
+      }
+
+      if (trx?.trxKey) {
+        await remove(ref(db, `penjualan/${trx.trxKey}`));
+      }
+    } catch (e) {
+      console.log("⚠️ penjualan path sudah hilang");
+    }
+
+    // =========================================
+    // 🔥 HARD DELETE FROM TABLE PENJUALAN
+    // =========================================
+    try {
+      await remove(ref(db, `penjualan/${trx.trxKey || trx.id}`));
+    } catch (e) {
+      console.log("⚠️ penjualan path tidak ditemukan");
+    }
+
+    // =========================================
+    // RESTORE STOCK
+    // =========================================
+    const items = Array.isArray(trx.items) ? trx.items : [];
+
+    for (const item of items) {
+      // =====================================
+      // IMEI
+      // =====================================
+      if (Array.isArray(item.imeiList) && item.imeiList.length > 0) {
+        for (const imeiRaw of item.imeiList) {
+          const imei = normalizeImei(imeiRaw);
+
+          if (!imei) continue;
+
+          // ===============================
+          // DETAIL STOCK
+          // ===============================
+          await update(ref(db, `detail_stock/${imei}`), {
+            imei: imeiRaw,
+
+            namaBarang: item.namaBarang || "",
+
+            namaBrand: item.namaBrand || "",
+
+            toko: trx.toko || "",
+
+            status: "AVAILABLE",
+
+            sold: false,
+
+            PAYMENT_METODE: "REFUND",
+
+            STATUS: "APPROVED",
+
+            updatedAt: Date.now(),
+          });
+
+          // ===============================
+          // STOK TOKO
+          // ===============================
+          await update(ref(db, `stokToko/${trx.tokoId}/${imei}`), {
+            imei: imeiRaw,
+
+            namaBarang: item.namaBarang || "",
+
+            namaBrand: item.namaBrand || "",
+
+            toko: trx.toko || "",
+
+            status: "AVAILABLE",
+
+            sold: false,
+
+            updatedAt: Date.now(),
+          });
+
+          // ===============================
+          // TRANSAKSI REFUND
+          // ===============================
+          await addTransaksi(trx.tokoId, {
+            HIDE_FROM_PENJUALAN: true,
+
+            TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+
+            NO_INVOICE: `REF-${trx.invoice}`,
+
+            NAMA_TOKO: trx.toko,
+
+            NAMA_BARANG: item.namaBarang,
+
+            NAMA_BRAND: item.namaBrand,
+
+            IMEI: imeiRaw,
+
+            QTY: 1,
+
+            PAYMENT_METODE: "REFUND",
+
+            STATUS: "APPROVED",
+
+            CREATED_AT: Date.now(),
+
+            IS_REFUND: true,
+          });
+        }
+
+        continue;
+      }
+
+      // =====================================
+      // NON IMEI
+      // =====================================
+      const qty = Number(item.qty || item.QTY || 0);
+
+      const stockKey = `${normalize(item.namaBrand)}|${normalize(
+        item.namaBarang
+      )}`;
+
+      const stokRef = ref(db, `stokToko/${trx.tokoId}/NON_IMEI/${stockKey}`);
+
+      const snap = await get(stokRef);
+
+      const oldQty = Number(snap.val()?.qty || 0);
+
+      // ===============================
+      // RESTORE STOCK
+      // ===============================
+      await update(stokRef, {
+        namaBarang: item.namaBarang || "",
+
+        namaBrand: item.namaBrand || "",
+
+        toko: trx.toko || "",
+
+        qty: trx.refundProcessed === true ? oldQty : oldQty + qty,
+
+        status: "AVAILABLE",
+
+        sold: false,
+
+        updatedAt: Date.now(),
+
+        lastAction: "REFUND",
+      });
+
+      // ===============================
+      // TRANSAKSI REFUND
+      // ===============================
+      await addTransaksi(trx.tokoId, {
+        HIDE_FROM_PENJUALAN: true,
+
+        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+
+        NO_INVOICE: `REF-${trx.invoice}`,
+
+        NAMA_TOKO: trx.toko,
+
+        NAMA_BARANG: item.namaBarang,
+
+        NAMA_BRAND: item.namaBrand,
+
+        IMEI: "NON-IMEI",
+
+        QTY: qty,
+
+        PAYMENT_METODE: "REFUND",
+
+        STATUS: "APPROVED",
+
+        CREATED_AT: Date.now(),
+
+        IS_REFUND: true,
+      });
+    }
+
+    // =========================================
+    // HIDE FINAL
+    // =========================================
+    setDeletedRows((prev) => ({
+      ...prev,
+      [row.invoice]: true,
+    }));
+
+    return true;
+  } catch (err) {
+    console.error(err);
+
+    alert("❌ Refund gagal : " + err.message);
+
+    return false;
+  } finally {
+    setRefundLoading(null);
+  }
+};
