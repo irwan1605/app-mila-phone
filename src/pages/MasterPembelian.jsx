@@ -33,6 +33,10 @@ import {
 } from "react-icons/fa";
 import TabelPembelianDraft from "./table/TabelPembelianDraft";
 import CetakInvoicePembelian from "./Print/CetakInvoicePembelian";
+import ImportPembelianExcel from "../features/pembelian/import/ImportPembelianExcel";
+import { deletePembelian } from "../features/pembelian/editDelete/deletePembelian";
+
+import { saveEditPembelian } from "../features/pembelian/editDelete/editPembelian";
 
 const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
 // ===============================
@@ -1051,144 +1055,16 @@ export default function MasterPembelian() {
     return null;
   };
 
-  const deletePembelian = async (item) => {
-    const confirmDelete = window.confirm(
-      `Hapus semua transaksi pembelian?\n\n${item.brand} - ${item.barang}\nDO: ${item.noDo}`
-    );
+  const handleDeletePembelian = async (item) => {
+    await deletePembelian({
+      item,
 
-    if (!confirmDelete) return;
+      allTransaksi,
 
-    const keyGroup = makePembelianKey(item);
+      masterToko,
 
-    try {
-      // =====================================
-      // HIDE REALTIME UI
-      // =====================================
-      setDeletedKeys((prev) => {
-        const next = new Set(prev);
-        next.add(keyGroup);
-        return next;
-      });
-
-      // =====================================
-      // AMBIL SEMUA ROW FIREBASE
-      // =====================================
-      const rows = (allTransaksi || []).filter((t) => {
-        if (!t?.id) return false;
-
-        if (String(t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") {
-          return false;
-        }
-
-        return makePembelianKey(t) === keyGroup;
-      });
-
-      if (!rows.length) {
-        throw new Error("Data transaksi tidak ditemukan");
-      }
-
-      // =====================================
-      // DELETE SATU PERSATU (WAJIB SERIAL)
-      // =====================================
-      for (const r of rows) {
-        const finalTokoId = getValidTokoId(r);
-
-        if (!finalTokoId) {
-          console.error("TOKO ID INVALID:", r);
-          continue;
-        }
-
-        if (!r.id) {
-          console.error("ID TRANSAKSI INVALID:", r);
-          continue;
-        }
-
-        console.log("🔥 DELETE:", finalTokoId, r.id, r.NAMA_BARANG);
-
-        // 🔥 WAJIB AWAIT SERIAL
-        const res = await deleteTransaksi(null, r.id);
-
-        // =====================================
-        // DATA SUDAH HILANG = ANGAP SUCCESS
-        // =====================================
-        if (!res?.success && res?.message !== "Data sudah terhapus") {
-          throw new Error(res?.message || "Delete gagal");
-        }
-      }
-
-      // =====================================
-      // STOCK UPDATE
-      // =====================================
-      try {
-        const sku = makeSku(item.brand, item.barang);
-
-        const qtyDelete = rows.reduce((sum, r) => sum + Number(r.QTY || 0), 0);
-
-        await reduceStock(item.namaToko || "CILANGKAP PUSAT", sku, qtyDelete);
-      } catch (stockErr) {
-        console.warn("reduceStock gagal:", stockErr);
-      }
-
-      // =====================================
-      // CREATE VOID DELETE MARKER
-      // =====================================
-      const firstRow = rows[0];
-
-      if (firstRow) {
-        const finalTokoId = getValidTokoId(firstRow);
-
-        if (finalTokoId) {
-          await addTransaksi(finalTokoId, {
-            CREATED_AT: Date.now(),
-
-            PAYMENT_METODE: "VOID DELETE",
-
-            KETERANGAN: "DELETE MANUAL (FULL REVERSAL)",
-
-            STATUS: "APPROVED",
-
-            NAMA_USER: "SYSTEM",
-
-            TANGGAL_TRANSAKSI: firstRow.TANGGAL_TRANSAKSI,
-
-            NO_INVOICE: firstRow.NO_INVOICE,
-
-            NAMA_SUPPLIER: firstRow.NAMA_SUPPLIER,
-
-            NAMA_TOKO: firstRow.NAMA_TOKO,
-
-            NAMA_BRAND: firstRow.NAMA_BRAND,
-
-            NAMA_BARANG: firstRow.NAMA_BARANG,
-
-            KATEGORI_BRAND: firstRow.KATEGORI_BRAND,
-
-            QTY: -1,
-
-            TOTAL: 0,
-          });
-
-          console.log("✅ VOID DELETE CREATED:", firstRow.NO_INVOICE);
-        }
-      }
-
-      // =====================================
-      // JANGAN HAPUS deletedKeys CEPAT
-      // =====================================
-
-      alert("✅ Data berhasil dihapus permanen");
-    } catch (err) {
-      console.error("DELETE PEMBELIAN ERROR:", err);
-
-      // rollback hide
-      setDeletedKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(keyGroup);
-        return next;
-      });
-
-      alert(err?.message || "❌ Gagal menghapus pembelian");
-    }
+      setDeletedKeys,
+    });
   };
 
   const openEdit = (item) => {
@@ -1316,391 +1192,29 @@ export default function MasterPembelian() {
   };
 
   const saveEdit = async () => {
-    if (!editData) return;
+    const result = await saveEditPembelian({
+      editData,
 
-    const oldToko = editData.originalToko || "CILANGKAP PUSAT";
-    const newToko = editData.namaToko || "CILANGKAP PUSAT";
-    const sku = makeSku(editData.brand, editData.barang);
+      allTransaksi,
 
-    const isKategoriImei = KATEGORI_WAJIB_IMEI.includes(editData.kategoriBrand);
-    const isAccessories = editData.kategoriBrand === "ACCESSORIES";
+      stockSnapshot,
 
-    // ===============================
-    // AMBIL DATA TRANSAKSI LAMA
-    // ===============================
-    const rows = (allTransaksi || []).filter((t) => {
-      if ((t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") return false;
-      const k = makePembelianKey(t);
-      return k === editData.originalKey;
+      masterToko,
+
+      validateImeisEdit,
     });
 
-    // ===============================
-    // UPDATE MASTER HARGA REALTIME
-    // ===============================
-    if (editData.masterHargaId) {
-      const payloadHarga = {
-        hargaSRP: Number(editData.hargaSRP || 0),
-        hargaGrosir: Number(editData.hargaGrosir || 0),
-        hargaReseller: Number(editData.hargaReseller || 0),
+    if (result?.success) {
+      alert("✅ Edit pembelian berhasil");
 
-        harga: {
-          srp: Number(editData.hargaSRP || 0),
-          grosir: Number(editData.hargaGrosir || 0),
-          reseller: Number(editData.hargaReseller || 0),
-        },
-      };
+      setEditData(null);
 
-      await updateMasterBarangHarga(editData.masterHargaId, payloadHarga);
-
-      // realtime local update
-      setMasterBarang((prev) =>
-        prev.map((x) =>
-          x.id === editData.masterHargaId
-            ? {
-                ...x,
-                ...payloadHarga,
-              }
-            : x
-        )
-      );
-    }
-
-    if (!rows.length) {
-      alert("Data pembelian tidak ditemukan.");
-      return;
-    }
-
-    const originalQty = rows.reduce((sum, r) => sum + Number(r.QTY || 0), 0);
-
-    // ===============================
-    // HITUNG QTY BARU
-    // ===============================
-    let imeis = [];
-    let newQty = originalQty;
-
-    if (isKategoriImei) {
-      imeis = String(editData.imeiList || "")
-        .split("\n")
-        .map((x) => x.trim())
-        .filter(Boolean);
-
-      const err = validateImeisEdit(imeis, editData.originalKey, rows);
-      if (err.length) {
-        alert(err.join("\n"));
-        return;
-      }
-
-      newQty = imeis.length;
+      setShowEdit(false);
     } else {
-      // 🔥 SEMUA NON IMEI MASUK SINI
-      newQty = Number(editData.totalQty || originalQty);
+      alert(result?.message || "❌ Gagal edit pembelian");
     }
-
-    // ===============================
-    // UPDATE QTY (DELTA)
-    // ===============================
-    const diffQty = newQty - originalQty;
-
-    // ===============================
-    // PINDAH TOKO (JIKA BERUBAH)
-    // ===============================
-    if (oldToko !== newToko) {
-      await reduceStock(oldToko, sku, originalQty);
-      await addStock(newToko, sku, {
-        brand: editData.brand,
-        barang: editData.barang,
-        qty: diffQty,
-      });
-    }
-
-    // ===============================
-    // FIX: INCLUDE ORIGINAL QTY
-    // ===============================
-    const stockReal = stockSnapshot?.[newToko]?.[sku]?.qty || 0;
-
-    // 🔥 TAMBAHAN (PENTING)
-    const safeStock = stockReal + originalQty;
-
-    if (diffQty < 0 && safeStock < Math.abs(diffQty)) {
-      alert(
-        `❌ Stok ${newToko} tidak mencukupi.\n\n` +
-          `Stok tersedia: ${safeStock}\n` +
-          `Pengurangan diminta: ${Math.abs(diffQty)}`
-      );
-      return;
-    }
-
-    if (diffQty < 0) {
-      await reduceStock(newToko, sku, Math.abs(diffQty));
-    } else if (diffQty > 0) {
-      await addStock(newToko, sku, {
-        namaBrand: editData.brand,
-        namaBarang: editData.barang,
-        qty: diffQty,
-      });
-    }
-
-    // ===============================
-    // SMART EDIT IMEI (TAMBAH / HAPUS TANPA RESET)
-    // ===============================
-    if (isKategoriImei) {
-      const oldImeis = rows.map((r) => String(r.IMEI || "").trim());
-      const newImeis = imeis;
-
-      const toAdd = newImeis.filter((im) => !oldImeis.includes(im));
-      const toDelete = oldImeis.filter((im) => !newImeis.includes(im));
-      const toKeep = newImeis.filter((im) => oldImeis.includes(im));
-
-      // =========================
-      // DELETE IMEI YANG DIHAPUS
-      // =========================
-      for (const im of toDelete) {
-        const row = rows.find((r) => String(r.IMEI) === im);
-        if (row?.id) {
-          const finalTokoId = getValidTokoId(row);
-
-          if (!finalTokoId) continue;
-
-          await deleteTransaksi(finalTokoId, row.id);
-        }
-      }
-
-      // =========================
-      // TAMBAH IMEI BARU
-      // =========================
-      for (const im of toAdd) {
-        const alreadyExist = (allTransaksi || []).some((x) => {
-          if (String(x.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") {
-            return false;
-          }
-
-          const isCurrentRow = rows.some(
-            (r) => String(r.id || "") === String(x.id || "")
-          );
-
-          if (isCurrentRow) {
-            return false;
-          }
-
-          return String(x.IMEI || "").trim() === String(im || "").trim();
-        });
-
-        if (alreadyExist) {
-          console.warn("IMEI SUDAH ADA:", im);
-          continue;
-        }
-
-        const finalTokoId = getValidTokoId(rows[0]);
-
-        if (!finalTokoId) {
-          alert("❌ TOKO ID tidak ditemukan");
-          return;
-        }
-
-        // =====================================
-        // FIX DUPLIKAT ID FIREBASE
-        // =====================================
-        const cleanRow = { ...rows[0] };
-
-        delete cleanRow.id;
-
-        await addTransaksi(finalTokoId, {
-          ...cleanRow,
-
-          id: undefined,
-
-          TANGGAL_TRANSAKSI: editData.tanggal,
-          NO_INVOICE: editData.noDo,
-
-          NAMA_SUPPLIER: editData.supplier,
-          NAMA_TOKO: newToko,
-
-          NAMA_BRAND: editData.brand,
-          KATEGORI_BRAND: editData.kategoriBrand,
-          NAMA_BARANG: editData.barang,
-
-          IMEI: String(im || "").trim(),
-
-          QTY: 1,
-
-          HARGA_SUPLAYER: Number(editData.hargaSup || 0),
-
-          HARGA_SRP: Number(editData.hargaSRP || 0),
-          HARGA_GROSIR: Number(editData.hargaGrosir || 0),
-          HARGA_RESELLER: Number(editData.hargaReseller || 0),
-
-          HARGA_UNIT: Number(editData.hargaSup || 0),
-
-          TOTAL: Number(editData.hargaSup || 0),
-
-          NOMOR_UNIK: `PEMBELIAN|${editData.brand}|${editData.barang}|${String(
-            im || ""
-          ).trim()}`,
-
-          CREATED_AT: Date.now(),
-          UPDATED_AT: Date.now(),
-
-          LAST_EDIT: Date.now(),
-          EDIT_BY: "SYSTEM",
-
-          PAYMENT_METODE: "PEMBELIAN",
-          STATUS: "Approved",
-        });
-      }
-
-      // =========================
-      // UPDATE DATA EXISTING
-      // =========================
-      for (const r of rows) {
-        if (toKeep.includes(String(r.IMEI))) {
-          const finalTokoId = getValidTokoId(r);
-
-          if (!finalTokoId) {
-            console.error("TOKO ID INVALID:", r);
-            continue;
-          }
-
-          await updateTransaksi(finalTokoId, r.id, {
-            ...r,
-
-            LAST_EDIT: Date.now(),
-            EDIT_BY: "SYSTEM",
-
-            TANGGAL_TRANSAKSI: editData.tanggal,
-            NO_INVOICE: editData.noDo,
-
-            NAMA_SUPPLIER: editData.supplier,
-            NAMA_TOKO: newToko,
-
-            NAMA_BRAND: editData.brand,
-            KATEGORI_BRAND: editData.kategoriBrand,
-            NAMA_BARANG: editData.barang,
-
-            IMEI: String(r.IMEI || "").trim(),
-
-            // 🔥 IMEI WAJIB 1
-            QTY: 1,
-
-            HARGA_SUPLAYER: Number(editData.hargaSup || 0),
-
-            HARGA_SRP: Number(editData.hargaSRP || 0),
-            HARGA_GROSIR: Number(editData.hargaGrosir || 0),
-            HARGA_RESELLER: Number(editData.hargaReseller || 0),
-
-            HARGA_UNIT: Number(editData.hargaSup || 0),
-
-            TOTAL: Number(editData.hargaSup || 0),
-
-            UPDATED_AT: Date.now(),
-          });
-        }
-      }
-    }
-
-    // ===============================
-    // NON IMEI → UPDATE QTY LANGSUNG
-    // ===============================
-    if (!isKategoriImei) {
-      const r = rows[0];
-
-      const finalTokoId = getValidTokoId(r);
-
-      if (!finalTokoId) {
-        alert("❌ TOKO ID tidak ditemukan");
-        return;
-      }
-
-      await updateTransaksi(finalTokoId, r.id, {
-        ...r,
-
-        TANGGAL_TRANSAKSI: editData.tanggal,
-        NO_INVOICE: editData.noDo,
-
-        NAMA_SUPPLIER: editData.supplier,
-        NAMA_TOKO: newToko,
-
-        NAMA_BRAND: editData.brand,
-        KATEGORI_BRAND: editData.kategoriBrand,
-        NAMA_BARANG: editData.barang,
-
-        QTY: Number(editData.totalQty || 0),
-
-        HARGA_SUPLAYER: Number(editData.hargaSup || 0),
-
-        HARGA_SRP: Number(editData.hargaSRP || 0),
-        HARGA_GROSIR: Number(editData.hargaGrosir || 0),
-        HARGA_RESELLER: Number(editData.hargaReseller || 0),
-
-        HARGA_UNIT: Number(editData.hargaSup || 0),
-
-        TOTAL: Number(editData.hargaSup || 0) * Number(editData.totalQty || 0),
-
-        UPDATED_AT: Date.now(),
-      });
-    }
-
-    await addLogPembelian({
-      action: "EDIT_PEMBELIAN",
-      user: "SYSTEM", // nanti bisa diganti user login
-      oldToko,
-      newToko,
-      brand: editData.brand,
-      barang: editData.barang,
-      originalQty,
-      newQty,
-      diffQty,
-    });
-
-    setEditData(null);
-
-    await new Promise((r) => setTimeout(r, 1200));
-
-    // jangan auto close modal
-    setShowEdit(false);
   };
 
-  // ===============================
-  // OPEN EDIT HARGA
-  // ===============================
-  const openEditHarga = (item) => {
-    const key = `${item.brand}|${item.barang}`;
-
-    const masterRef = masterBarang.find(
-      (b) => `${b.brand || b.namaBrand}|${b.namaBarang}` === key
-    );
-
-    setEditHargaData({
-      id: masterRef?.id || "",
-
-      brand: item.brand || "",
-      barang: item.barang || "",
-      kategoriBrand: item.kategoriBrand || "",
-
-      hargaSRP: Number(
-        masterRef?.hargaSRP || masterRef?.harga?.srp || item.hargaSRP || 0
-      ),
-
-      hargaGrosir: Number(
-        masterRef?.hargaGrosir ||
-          masterRef?.harga?.grosir ||
-          item.hargaGrosir ||
-          0
-      ),
-
-      hargaReseller: Number(
-        masterRef?.hargaReseller ||
-          masterRef?.harga?.reseller ||
-          item.hargaReseller ||
-          0
-      ),
-    });
-
-    setShowEditHarga(true);
-  };
-
-  // ===============================
-  // SAVE EDIT HARGA
-  // ===============================
   const saveEditHarga = async () => {
     try {
       if (!editHargaData?.id) {
@@ -1710,12 +1224,16 @@ export default function MasterPembelian() {
 
       const payload = {
         hargaSRP: Number(editHargaData.hargaSRP || 0),
+
         hargaGrosir: Number(editHargaData.hargaGrosir || 0),
+
         hargaReseller: Number(editHargaData.hargaReseller || 0),
 
         harga: {
           srp: Number(editHargaData.hargaSRP || 0),
+
           grosir: Number(editHargaData.hargaGrosir || 0),
+
           reseller: Number(editHargaData.hargaReseller || 0),
         },
       };
@@ -1744,6 +1262,7 @@ export default function MasterPembelian() {
       setShowEditHarga(false);
     } catch (err) {
       console.error(err);
+
       alert("❌ Gagal update harga");
     }
   };
@@ -2211,6 +1730,11 @@ export default function MasterPembelian() {
               <FaPlus className="mr-2" /> Tambah Pembelian
             </button>
 
+            <ImportPembelianExcel
+              masterBarang={masterBarang}
+              masterToko={masterToko}
+            />
+
             <button
               onClick={exportExcel}
               className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center text-xs md:text-sm shadow-md transition transform hover:-translate-y-[1px]"
@@ -2339,7 +1863,7 @@ export default function MasterPembelian() {
 
                           <button
                             className="inline-flex items-center justify-center p-[6px] rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
-                            onClick={() => deletePembelian(item)}
+                            onClick={() => handleDeletePembelian(item)}
                           >
                             <FaTrash />
                           </button>
