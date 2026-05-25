@@ -24,6 +24,8 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import CetakInvoicePenjualan from "../Print/CetakInvoicePenjualan";
 import { handleRefundPenjualan } from "../../features/FiturPenjualan/refund/handleRefundPenjualan";
+import { showRefundSuccess }
+from "../../utils/FiturPenjualan/showRefundSuccess";
 
 /* ================= UTIL ================= */
 const rupiah = (n) =>
@@ -810,6 +812,21 @@ export default function TablePenjualan({ data = [] }) {
 
       setRefundLoading,
     });
+
+    // ======================================
+// 🔥 NOTIFIKASI REFUND BERHASIL
+// ======================================
+showRefundSuccess({
+  toko: row.toko,
+
+  brand: row.namaBrand,
+
+  barang: row.namaBarang,
+
+  qty: row.qty,
+
+  imei: row.imei,
+});
   };
 
   /* ================= EXPORT EXCEL ================= */

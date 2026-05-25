@@ -418,21 +418,24 @@ export default function CardPenjualanToko() {
                 break;
               }
             }
-          
+
             // ===============================
             // 🔥 TAMBAHKAN DI SINI
             // ===============================
             const statusStock = String(
               masihAda?.status || masihAda?.STATUS || ""
             ).toUpperCase();
-          
-            if (masihAda && !["AVAILABLE", "REFUND", "READY"].includes(statusStock)) {
+
+            if (
+              masihAda &&
+              !["AVAILABLE", "REFUND", "READY"].includes(statusStock)
+            ) {
               console.warn(
                 "⚠️ Status IMEI bukan AVAILABLE tapi tetap diloloskan:",
                 statusStock
               );
             }
-          
+
             // ===============================
             // 🔥 VALIDASI EXISTING (JANGAN DIUBAH)
             // ===============================
@@ -442,12 +445,11 @@ export default function CardPenjualanToko() {
                   String(trx.IMEI || "").trim() === imeiFix &&
                   String(trx.STATUS || "").toUpperCase() === "APPROVED"
               );
-          
+
               if (!adaDiTransaksi) {
                 throw new Error(`IMEI ${imei} tidak ditemukan di stok`);
               }
             }
-          
           } else {
             console.warn("⚠️ Skip validasi stok (belum ready)");
           }
@@ -465,7 +467,10 @@ export default function CardPenjualanToko() {
           if (!imei) throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
 
           const sold = await cekImeiSudahTerjual(imei);
-          if (sold) throw new Error(`IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`);
+          if (sold)
+            throw new Error(
+              `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`
+            );
 
           const sudahAdaDiTable = penjualanList.some(
             (trx) =>
@@ -480,7 +485,9 @@ export default function CardPenjualanToko() {
           );
 
           if (sudahAdaDiTable) {
-            throw new Error(`IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`);
+            throw new Error(
+              `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`
+            );
           }
 
           await lockImeiRealtime(

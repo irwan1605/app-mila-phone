@@ -15,6 +15,7 @@ import { ref, get } from "firebase/database";
 import { db } from "../../../firebase/FirebaseInit";
 import { useCallback } from "react";
 import { useLocation } from "react-router-dom";
+import { buildFinalNonImeiStock } from "../../../features/FiturPenjualan/nonImeiStock/buildFinalNonImeiStock";
 
 /* ================= KONSTANTA ================= */
 const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
@@ -1021,6 +1022,18 @@ export default function FormItemSection({
     }, 0);
   }, [items]);
 
+  // =====================================
+  // 🔥 FINAL NON IMEI STOCK
+  // REFUND + REJECT + TRANSFER SYNC
+  // =====================================
+  const finalNonImeiStock = useMemo(() => {
+    return buildFinalNonImeiStock({
+      transaksi: allTransaksi,
+
+      toko: tokoLogin,
+    });
+  }, [allTransaksi, tokoLogin]);
+
   const stockGabunganToko = useMemo(() => {
     if (!tokoLogin) return {};
 
@@ -1177,7 +1190,7 @@ export default function FormItemSection({
       // =====================================
       const tempMap = {};
 
-      Object.entries(stockGabunganToko || {}).forEach(([key, qty]) => {
+      Object.entries(finalNonImeiStock  || {}).forEach(([key, qty]) => {
         // =====================================
         // 🔥 STOCK HABIS
         // =====================================
@@ -1270,7 +1283,7 @@ export default function FormItemSection({
     });
 
     return map;
-  }, [stockGabunganToko, masterBarang, items]);
+  }, [finalNonImeiStock , masterBarang, items]);
 
   // 🔥 DEBUG DI SINI
   useEffect(() => {
@@ -1731,7 +1744,8 @@ export default function FormItemSection({
                     barangValid.namaBrand || barangValid.brand
                   )}|${normalize(barangValid.namaBarang)}`;
 
-                  const stokTersedia = stockGabunganToko[key] || 0;
+                  const stokTersedia =
+                    finalNonImeiStock[key] || stockGabunganToko[key] || 0;
 
                   updateItem(idx, {
                     namaBarang: barangValid.namaBarang,
@@ -1794,11 +1808,17 @@ export default function FormItemSection({
                   ) : (
                     <span className="text-green-600">
                       📦 Stok Barang Toko:{" "}
-                      {stockGabunganToko[
+                      {finalNonImeiStock[
                         `${normalize(item.namaBrand)}|${normalize(
                           item.namaBarang
                         )}`
-                      ] || 0}
+                      ] ||
+                        stockGabunganToko[
+                          `${normalize(item.namaBrand)}|${normalize(
+                            item.namaBarang
+                          )}`
+                        ] ||
+                        0}
                     </span>
                   )}
                 </div>
@@ -1815,7 +1835,11 @@ export default function FormItemSection({
                         b.namaBrand || b.brand
                       )}|${normalize(b.namaBarang)}`;
 
-                      return Number(stockGabunganToko[key] || 0) > 0;
+                      return Number(
+                        finalNonImeiStock[key] ||
+                        stockGabunganToko[key] ||
+                        0
+                      ) > 0;
                     })
                     .map((b) => [
                       `${normalize(b.namaBrand)}|${normalize(b.namaBarang)}`,
@@ -1827,7 +1851,8 @@ export default function FormItemSection({
                   b.namaBarang
                 )}`;
 
-                const stok = stockGabunganToko[key] || 0;
+                const stok =
+                  finalNonImeiStock[key] || stockGabunganToko[key] || 0;
 
                 return (
                   <option
@@ -1889,7 +1914,8 @@ export default function FormItemSection({
                     const key = `${normalize(item.namaBrand)}|${normalize(
                       item.namaBarang
                     )}`;
-                    const stok = stockGabunganToko[key] || 0;
+                    const stok =
+                      finalNonImeiStock[key] || stockGabunganToko[key] || 0;
                     if (qtyInput > stok) {
                       alert("❌ Qty melebihi stok tersedia");
                       return;
@@ -1902,8 +1928,11 @@ export default function FormItemSection({
                 {!item.isImei && item.namaBarang && (
                   <div className="text-xs text-gray-500">
                     Stok tersedia:{" "}
-                    {nonImeiStockMap[`${item.namaBrand}|${item.namaBarang}`] ||
-                      0}
+                    {finalNonImeiStock[
+                      `${normalize(item.namaBrand)}|${normalize(
+                        item.namaBarang
+                      )}`
+                    ] || 0}
                   </div>
                 )}
               </div>
