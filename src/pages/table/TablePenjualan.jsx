@@ -24,8 +24,7 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import CetakInvoicePenjualan from "../Print/CetakInvoicePenjualan";
 import { handleRefundPenjualan } from "../../features/FiturPenjualan/refund/handleRefundPenjualan";
-import { showRefundSuccess }
-from "../../utils/FiturPenjualan/showRefundSuccess";
+import { showRefundSuccess } from "../../utils/FiturPenjualan/showRefundSuccess";
 
 /* ================= UTIL ================= */
 const rupiah = (n) =>
@@ -70,6 +69,43 @@ export default function TablePenjualan({ data = [] }) {
     }
   });
 
+  // ======================================
+  // 🔥 REALTIME REFUND BLACKLIST
+  // ======================================
+  const refundRealtimeBlacklist = useMemo(() => {
+    return new Set(
+      (data || [])
+
+        .filter((trx) => {
+          const status = String(trx?.STATUS || "")
+            .trim()
+            .toUpperCase();
+
+          const metode = String(trx?.PAYMENT_METODE || "")
+            .trim()
+            .toUpperCase();
+
+          return (
+            trx?.deleted === true ||
+            trx?.deletedFromPenjualan === true ||
+            trx?.refundProcessed === true ||
+            trx?.refundLocked === true ||
+            trx?.IS_REFUND === true ||
+            trx?.HIDE_FROM_PENJUALAN === true ||
+            status === "REFUND_DELETED" ||
+            status === "REFUND" ||
+            metode === "REFUND"
+          );
+        })
+
+        .map((x) =>
+          String(x.invoice || x.NO_INVOICE || "")
+            .trim()
+            .toUpperCase()
+        )
+    );
+  }, [data]);
+
   const rows = useMemo(() => {
     return (data || []).filter((trx) => {
       // ======================================
@@ -91,6 +127,7 @@ export default function TablePenjualan({ data = [] }) {
       // 🔥 HARD BLOCK REFUND
       // ======================================
       const isRefund =
+        refundRealtimeBlacklist.has(invoice) ||
         refundBlacklist.includes(invoice) ||
         trx?.HIDE_FROM_PENJUALAN === true ||
         trx?.deleted === true ||
@@ -103,9 +140,8 @@ export default function TablePenjualan({ data = [] }) {
         status === "REFUND_DELETED" ||
         invoice.startsWith("REF-");
 
-         return !isRefund;
+      return !isRefund;
     });
-
   }, [data, refundBlacklist]);
 
   const [refundLoading, setRefundLoading] = useState(null);
@@ -120,7 +156,6 @@ export default function TablePenjualan({ data = [] }) {
   const [dateTo, setDateTo] = useState("");
   const [showRefund, setShowRefund] = useState(false);
   const [localHiddenRefund, setLocalHiddenRefund] = useState({});
-  
 
   const [masterSH, setMasterSH] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
@@ -814,19 +849,24 @@ export default function TablePenjualan({ data = [] }) {
     });
 
     // ======================================
-// 🔥 NOTIFIKASI REFUND BERHASIL
-// ======================================
-showRefundSuccess({
-  toko: row.toko,
+    // 🔥 FORCE REFRESH FIREBASE
+    // ======================================
+    window.dispatchEvent(new Event("storage"));
 
-  brand: row.namaBrand,
+    // ======================================
+    // 🔥 NOTIFIKASI REFUND BERHASIL
+    // ======================================
+    showRefundSuccess({
+      toko: row.toko,
 
-  barang: row.namaBarang,
+      brand: row.namaBrand,
 
-  qty: row.qty,
+      barang: row.namaBarang,
 
-  imei: row.imei,
-});
+      qty: row.qty,
+
+      imei: row.imei,
+    });
   };
 
   /* ================= EXPORT EXCEL ================= */

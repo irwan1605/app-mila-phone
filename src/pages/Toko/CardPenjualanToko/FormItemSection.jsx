@@ -588,7 +588,34 @@ export default function FormItemSection({
       .map((t) => String(t.IMEI).trim())
 
       // 🔥 HILANGKAN IMEI SUDAH TERJUAL
-      .filter((imei) => !stockRealtime?.soldImei?.[imei]);
+      .filter((imei) => {
+
+        const trxRefund = allTransaksi.find(
+          (t) =>
+            String(t.IMEI || "").trim() === String(imei).trim() &&
+            ["REFUND", "READY_RESALE"].includes(
+              String(
+                t.PAYMENT_METODE ||
+                t.statusRefund ||
+                ""
+              ).toUpperCase()
+            ) &&
+            String(t.STATUS || "").toUpperCase() === "APPROVED"
+        );
+      
+        // =====================================
+        // 🔥 JIKA HASIL REFUND
+        // MAKA BOLEH MUNCUL LAGI
+        // =====================================
+        if (trxRefund) {
+          return true;
+        }
+      
+        // =====================================
+        // 🔥 NORMAL VALIDATION
+        // =====================================
+        return !stockRealtime?.soldImei?.[imei];
+      });
 
     // =====================================
     // 🔥 IMEI HASIL TRANSFER BARANG
@@ -891,7 +918,25 @@ export default function FormItemSection({
           map[imei].available = true;
         }
 
-        if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+        const trxRefund = allTransaksi.find(
+          (x) =>
+            String(x.IMEI || "").trim() ===
+              String(imei).trim() &&
+            ["REFUND", "READY_RESALE"].includes(
+              String(
+                x.PAYMENT_METODE ||
+                x.statusRefund ||
+                ""
+              ).toUpperCase()
+            ) &&
+            String(x.STATUS || "").toUpperCase() ===
+              "APPROVED"
+        );
+        
+        if (
+          ["PENJUALAN", "TRANSFER_KELUAR"].includes(metode) &&
+          !trxRefund
+        ) {
           map[imei].available = false;
         }
       }
@@ -961,7 +1006,23 @@ export default function FormItemSection({
       // =====================================
       const imei = String(s.imei || "").trim();
 
-      if (stockRealtime?.soldImei?.[imei]) {
+      const trxRefund = allTransaksi.find(
+        (t) =>
+          String(t.IMEI || "").trim() === String(imei).trim() &&
+          ["REFUND", "READY_RESALE"].includes(
+            String(
+              t.PAYMENT_METODE ||
+              t.statusRefund ||
+              ""
+            ).toUpperCase()
+          ) &&
+          String(t.STATUS || "").toUpperCase() === "APPROVED"
+      );
+      
+      if (
+        stockRealtime?.soldImei?.[imei] &&
+        !trxRefund
+      ) {
         return;
       }
 
@@ -1190,7 +1251,17 @@ export default function FormItemSection({
       // =====================================
       const tempMap = {};
 
-      Object.entries(finalNonImeiStock  || {}).forEach(([key, qty]) => {
+    // =====================================
+// 🔥 GABUNGKAN:
+// 1. NON IMEI
+// 2. IMEI
+// =====================================
+const finalStockGabungan = {
+  ...(finalNonImeiStock || {}),
+  ...(stockGabunganToko || {}),
+};
+
+Object.entries(finalStockGabungan).forEach(([key, qty]) => {
         // =====================================
         // 🔥 STOCK HABIS
         // =====================================
@@ -1629,7 +1700,18 @@ export default function FormItemSection({
       {items.map((item, idx) => {
         const barangByKategori = barangByKategoriMap[idx] || [];
         const barangReady = (barangByKategori || [])
-          .filter((b) => Number(b.stok || 0) > 0)
+        .filter((b) => {
+          const key =
+            `${normalize(b.namaBrand)}|${normalize(b.namaBarang)}`;
+        
+          return (
+            Number(
+              stockGabunganToko[key] ||
+              finalNonImeiStock[key] ||
+              0
+            ) > 0
+          );
+        })
           .filter((b) => normalize(b.namaBrand) === normalize(item.namaBrand))
           .filter(
             (b, i, arr) =>
@@ -1745,7 +1827,9 @@ export default function FormItemSection({
                   )}|${normalize(barangValid.namaBarang)}`;
 
                   const stokTersedia =
-                    finalNonImeiStock[key] || stockGabunganToko[key] || 0;
+                  stockGabunganToko[key] ||
+                  finalNonImeiStock[key] ||
+                  0;
 
                   updateItem(idx, {
                     namaBarang: barangValid.namaBarang,

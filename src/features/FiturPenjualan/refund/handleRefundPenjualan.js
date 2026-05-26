@@ -124,12 +124,44 @@ export const handleRefundPenjualan = async ({
 
         deletedFromPenjualan: true,
 
-        refundAt: Date.now(),
+        HIDE_FROM_PENJUALAN: true,
 
-        refundBy: userLogin?.username || "SYSTEM",
+        PAYMENT_METODE: "REFUND",
+
+        refundedAt: Date.now(),
+
+        refundedBy: userLogin?.username || userLogin?.nama || "SYSTEM",
       },
       userLogin
     );
+
+    // =========================================
+    // 🔥 GLOBAL REFUND LOCK
+    // FIREBASE REALTIME
+    // =========================================
+    await update(ref(db, `toko/${row.tokoId}/transaksi/${row.id}`), {
+      refundProcessed: true,
+
+      refundLocked: true,
+
+      deleted: true,
+
+      deletedFromPenjualan: true,
+
+      HIDE_FROM_PENJUALAN: true,
+
+      IS_REFUND: true,
+
+      STATUS: "REFUND_DELETED",
+
+      statusPembayaran: "REFUND",
+
+      PAYMENT_METODE: "REFUND",
+
+      refundedAt: Date.now(),
+
+      refundedBy: userLogin?.username || userLogin?.nama || "SYSTEM",
+    });
 
     // =========================================
     // 🔥 HAPUS DATA PENJUALAN ASLI
@@ -267,25 +299,24 @@ export const handleRefundPenjualan = async ({
           // STOK TOKO
           // ===============================
           await update(ref(db, `stokToko/${trx.tokoId}/${imei}`), {
-
             imei: imeiRaw,
-          
+
             namaBarang: item.namaBarang || "",
-          
+
             namaBrand: item.namaBrand || "",
-          
+
             toko: trx.toko || "",
-          
+
             status: "AVAILABLE",
-          
+
             sold: false,
-          
+
             READY_RESALE: true,
-          
+
             IS_REFUND: true,
-          
+
             LAST_ACTION: "REFUND",
-          
+
             updatedAt: Date.now(),
           });
 
