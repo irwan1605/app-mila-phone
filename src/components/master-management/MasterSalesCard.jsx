@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import MasterCrudCard from "./MasterCrudCard";
 import { exportToExcel } from "../../utils/exportToExcel";
 import { listenMasterToko } from "../../services/FirebaseService";
+import ImportMasterSalesExcel from "../../features/masterSales/importExcel/ImportMasterSalesExcel";
 
 export default function MasterSalesCard() {
   const [rows, setRows] = useState([]);
@@ -67,6 +68,8 @@ export default function MasterSalesCard() {
           <p className="text-sm text-slate-500">Data sales per toko</p>
         </div>
 
+        <ImportMasterSalesExcel rows={rows} masterToko={masterToko} />
+
         <button
           onClick={handleExport}
           className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow"
@@ -102,7 +105,7 @@ export default function MasterSalesCard() {
         updateFnName="updateMasterSales"
         deleteFnName="deleteMasterSales"
         onDataChange={setRows}
-        externalRows={filteredRows}   // ⬅️ kirim data hasil filter
+        externalRows={filteredRows} // ⬅️ kirim data hasil filter
       />
     </div>
   );
