@@ -7,6 +7,7 @@ import {
 } from "../../services/FirebaseService";
 import { db } from "../../firebase/FirebaseInit";
 import { exportToExcel } from "../../utils/exportToExcel";
+import ImportMasterMotorExcel from "../../features/masterBarang/importMotor/ImportMasterMotorExcel";
 
 export default function MasterBarangKategoriCard({ kategori }) {
   // ===============================
@@ -54,24 +55,53 @@ export default function MasterBarangKategoriCard({ kategori }) {
   // EXPORT EXCEL (SESUAI TABLE)
   // ===============================
   const handleExport = () => {
-    if (!listBarang || listBarang.length === 0) {
-      alert("❌ Data kosong, tidak bisa export");
+    // ======================================
+    // EXPORT SESUAI FILTER TABLE
+    // ======================================
+    const exportRows = filteredBarang.map((b, i) => ({
+      NO: i + 1,
+
+      KATEGORI: b.kategoriBarang || "",
+
+      BRAND: b.brand || "",
+
+      NAMA_BARANG: b.namaBarang || "",
+
+      HARGA_SRP: Number(b.harga?.srp || b.hargaSRP || 0),
+
+      HARGA_GROSIR: Number(b.harga?.grosir || b.hargaGrosir || 0),
+
+      HARGA_RESELLER: Number(b.harga?.reseller || b.hargaReseller || 0),
+    }));
+
+    // ======================================
+    // VALIDASI
+    // ======================================
+    if (!exportRows.length) {
+      alert(`❌ DATA ${kategori} KOSONG`);
       return;
     }
 
-    const formattedData = listBarang.map((b) => ({
-      Brand: b.brand || "",
-      "Nama Barang": b.namaBarang || "",
-      "Harga SRP": Number(b.harga?.srp || 0),
-      "Harga Grosir": Number(b.harga?.grosir || 0),
-      "Harga Reseller": Number(b.harga?.reseller || 0),
-    }));
+    // ======================================
+    // FILE NAME
+    // ======================================
+    const safeKategori = String(kategori || "")
+      .trim()
+      .replace(/\s+/g, "_")
+      .toUpperCase();
 
+    // ======================================
+    // EXPORT
+    // ======================================
     exportToExcel({
-      data: formattedData,
-      fileName: `MASTER_BARANG_${kategori.replace(/\s+/g, "_")}`,
-      sheetName: kategori,
+      data: exportRows,
+
+      fileName: `MASTER_BARANG_${safeKategori}`,
+
+      sheetName: safeKategori,
     });
+
+    alert(`✅ EXPORT EXCEL ${kategori} BERHASIL`);
   };
 
   // ===============================
@@ -201,7 +231,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
           </p>
         </div>
 
-      
+        <ImportMasterMotorExcel listBarang={listBarang} kategori={kategori} />
 
         <button
           onClick={handleExport}
@@ -290,10 +320,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
       </form>
 
       <div className="flex flex-wrap gap-2 mt-2 text-lg font-bold text-slate-800 ">
-        <h2 className="">
-            FILTER PENCARIAN DATA 
-          </h2>
-      
+        <h2 className="">FILTER PENCARIAN DATA</h2>
 
         <input
           type="text"
@@ -305,7 +332,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
             setCurrentPage(1);
           }}
         />
-          </div>
+      </div>
 
       {/* TABLE */}
       <div className="overflow-x-auto">
