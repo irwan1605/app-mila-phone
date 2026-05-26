@@ -427,6 +427,7 @@ export const saveEditPembelian = async ({
           await updateTransaksi(tokoId, r.id, {
             ...r,
 
+            UPDATED_AT: Date.now(),
             LAST_EDIT: Date.now(),
 
             EDIT_BY: "SYSTEM",
@@ -464,8 +465,6 @@ export const saveEditPembelian = async ({
             HARGA_GROSIR: Number(editData.hargaGrosir || 0),
 
             HARGA_RESELLER: Number(editData.hargaReseller || 0),
-
-            UPDATED_AT: Date.now(),
           });
         }
       }
@@ -485,6 +484,8 @@ export const saveEditPembelian = async ({
 
       await updateTransaksi(tokoId, r.id, {
         ...r,
+        UPDATED_AT: Date.now(),
+        LAST_EDIT: Date.now(),
 
         TANGGAL_TRANSAKSI: editData.tanggal,
 
@@ -513,10 +514,6 @@ export const saveEditPembelian = async ({
         HARGA_GROSIR: Number(editData.hargaGrosir || 0),
 
         HARGA_RESELLER: Number(editData.hargaReseller || 0),
-
-        UPDATED_AT: Date.now(),
-
-        LAST_EDIT: Date.now(),
 
         EDIT_BY: "SYSTEM",
       });

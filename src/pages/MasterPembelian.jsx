@@ -730,11 +730,38 @@ export default function MasterPembelian() {
     // ======================================
     // BUILD REALTIME PEMBELIAN
     // ======================================
+    // ======================================
+    // BUILD REALTIME PEMBELIAN
+    // ======================================
     const realtimeRows = buildPembelianRealtime(allTransaksi || []);
+
+    // ======================================
+    // AMBIL SEMUA PEMBELIAN ASLI
+    // ======================================
+    const allPembelianRows = (allTransaksi || []).filter(
+      (x) => String(x.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN"
+    );
+
+    // ======================================
+    // GABUNGKAN DATA
+    // ======================================
+    const mergedRows = [
+      ...allPembelianRows.map((x) => ({
+        ...x,
+
+        __ALL_DATA: true,
+      })),
+
+      ...realtimeRows.map((x) => ({
+        ...x,
+
+        __REALTIME: true,
+      })),
+    ];
 
     const map = {};
 
-    realtimeRows.forEach((t) => {
+    mergedRows.forEach((t) => {
       // ======================================
       // FILTER INVALID
       // ======================================
@@ -746,16 +773,19 @@ export default function MasterPembelian() {
 
       const keyGroup = makePembelianKey({
         ...t,
+
+        TANGGAL_TRANSAKSI: t.TANGGAL_TRANSAKSI,
+
+        NO_INVOICE: t.NO_INVOICE,
+
+        NAMA_SUPPLIER: t.NAMA_SUPPLIER,
+
+        NAMA_TOKO: t.NAMA_TOKO,
+
         NAMA_BRAND: brand,
+
         NAMA_BARANG: barang,
       });
-
-      // ======================================
-      // HIDE DELETE REALTIME
-      // ======================================
-      if (deletedKeys.has(keyGroup)) {
-        return;
-      }
 
       // ======================================
       // MASTER BARANG
@@ -800,31 +830,57 @@ export default function MasterPembelian() {
       }
 
       // ======================================
-      // TOTAL QTY
+      // REALTIME ROW
       // ======================================
-      const qty = Number(t.QTY || 0);
+      if (t.__REALTIME) {
+        const qty = Number(t.QTY || 0);
 
-      map[keyGroup].totalQty += qty;
-
-      map[keyGroup].totalHargaSup += qty * Number(t.HARGA_SUPLAYER || 0);
+        map[keyGroup].totalQty += qty;
+      }
 
       // ======================================
-      // IMEI
+      // SEMUA DATA IMEI PEMBELIAN
       // ======================================
-      if (t.IMEI) {
+      if (t.IMEI && t.__ALL_DATA) {
         const cleanImei = String(t.IMEI).trim();
 
-        if (!map[keyGroup].imeis.includes(cleanImei)) {
+        // ======================================
+        // JANGAN DUPLIKAT
+        // ======================================
+        if (cleanImei && !map[keyGroup].imeis.includes(cleanImei)) {
           map[keyGroup].imeis.push(cleanImei);
         }
+      }
+
+      // ======================================
+      // SEMUA DATA PEMBELIAN
+      // ======================================
+      if (t.__ALL_DATA) {
+        const qtyAll = Number(t.QTY || 0);
+
+        map[keyGroup].totalHargaSup += qtyAll * Number(t.HARGA_SUPLAYER || 0);
       }
     });
 
     // ======================================
     // SORT TERBARU
     // ======================================
-    return Object.values(map).sort(
-      (a, b) => new Date(b.tanggal) - new Date(a.tanggal)
+    return (
+      Object.values(map)
+
+        // ======================================
+        // FILTER INVALID
+        // ======================================
+        .filter(
+          (x) =>
+            x &&
+            (Number(x.totalQty || 0) > 0 || Number(x.totalHargaSup || 0) > 0)
+        )
+
+        // ======================================
+        // SORT TERBARU
+        // ======================================
+        .sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal))
     );
   }, [allTransaksi, masterBarangMap, deletedKeys]);
 
@@ -1181,6 +1237,16 @@ export default function MasterPembelian() {
     });
 
     if (result?.success) {
+      // ======================================
+      // HAPUS CACHE DELETE
+      // ======================================
+      setDeletedKeys(new Set());
+
+      // ======================================
+      // FORCE REALTIME REFRESH
+      // ======================================
+      setAllTransaksi((prev) => [...prev]);
+
       alert("✅ Edit pembelian berhasil");
 
       setEditData(null);
