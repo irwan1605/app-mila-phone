@@ -1,3 +1,5 @@
+//src/features/pembelian/utils/pembelianRealtime.js//
+
 // ======================================
 // NORMALIZE TEXT
 // ======================================
@@ -12,143 +14,218 @@ const normalizeText = (txt) =>
 const KATEGORI_IMEI = ["HANDPHONE", "SEPEDA LISTRIK", "MOTOR LISTRIK"];
 
 // ======================================
-// CEK APAKAH PEMBELIAN SUDAH TERJUAL
+// BUILD KEY NON IMEI
 // ======================================
-export const isPembelianSold = (pembelian, allTransaksi = []) => {
-  // ======================================
-  // VALIDASI PEMBELIAN
-  // ======================================
-  if (normalizeText(pembelian?.PAYMENT_METODE) !== "PEMBELIAN") {
-    return false;
-  }
-
-  const kategori = normalizeText(pembelian?.KATEGORI_BRAND);
-
-  const isImei = KATEGORI_IMEI.includes(kategori);
-
-  // ======================================
-  // ======================================
-  // IMEI
-  // ======================================
-  // ======================================
-  if (isImei) {
-    const imei = String(pembelian?.IMEI || "").trim();
-
-    if (!imei) return false;
-
-    // ======================================
-    // CEK ADA PENJUALAN
-    // ======================================
-    const soldRows = allTransaksi.filter(
-      (trx) =>
-        normalizeText(trx?.PAYMENT_METODE) === "PENJUALAN" &&
-        String(trx?.IMEI || "").trim() === imei
-    );
-
-    // ======================================
-    // BELUM ADA PENJUALAN
-    // ======================================
-    if (!soldRows.length) {
-      return false;
-    }
-
-    // ======================================
-    // CEK ADA REFUND
-    // ======================================
-    const refundRows = allTransaksi.filter(
-      (trx) =>
-        normalizeText(trx?.PAYMENT_METODE) === "REFUND" &&
-        String(trx?.IMEI || "").trim() === imei
-    );
-
-    // ======================================
-    // ADA REFUND
-    // ======================================
-    if (refundRows.length > 0) {
-      return false;
-    }
-
-    // ======================================
-    // FIX TERJUAL
-    // ======================================
-    return true;
-  }
-
-  // ======================================
-  // ======================================
-  // NON IMEI
-  // ======================================
-  // ======================================
-  const namaBarang = normalizeText(pembelian?.NAMA_BARANG);
-
-  const namaToko = normalizeText(pembelian?.NAMA_TOKO);
-
-  const brand = normalizeText(pembelian?.NAMA_BRAND);
-
-  const qtyPembelian = Number(pembelian?.QTY || 0);
-
-  // ======================================
-  // TOTAL PENJUALAN
-  // ======================================
-  const totalJual = allTransaksi
-    .filter(
-      (trx) =>
-        normalizeText(trx?.PAYMENT_METODE) === "PENJUALAN" &&
-        normalizeText(trx?.NAMA_BARANG) === namaBarang &&
-        normalizeText(trx?.NAMA_TOKO) === namaToko &&
-        normalizeText(trx?.NAMA_BRAND) === brand
-    )
-    .reduce((sum, trx) => sum + Number(trx?.QTY || 0), 0);
-
-  // ======================================
-  // TOTAL REFUND
-  // ======================================
-  const totalRefund = allTransaksi
-    .filter(
-      (trx) =>
-        normalizeText(trx?.PAYMENT_METODE) === "REFUND" &&
-        normalizeText(trx?.NAMA_BARANG) === namaBarang &&
-        normalizeText(trx?.NAMA_TOKO) === namaToko &&
-        normalizeText(trx?.NAMA_BRAND) === brand
-    )
-    .reduce((sum, trx) => sum + Number(trx?.QTY || 0), 0);
-
-  // ======================================
-  // SISA QTY
-  // ======================================
-  const qtySisa = qtyPembelian - totalJual + totalRefund;
-
-  // ======================================
-  // HABIS TERJUAL
-  // ======================================
-  return qtySisa <= 0;
+const buildNonImeiKey = (trx) => {
+  return [
+    normalizeText(trx?.NAMA_TOKO),
+    normalizeText(trx?.NAMA_BRAND),
+    normalizeText(trx?.NAMA_BARANG),
+  ].join("|");
 };
 
 // ======================================
-// BUILD PEMBELIAN REALTIME
+// BUILD PEMBELIAN REALTIME FINAL
 // ======================================
 export const buildPembelianRealtime = (allTransaksi = []) => {
   // ======================================
-  // FILTER KHUSUS PEMBELIAN
+  // FILTER VALID
   // ======================================
-  const pembelianRows = allTransaksi.filter(
+  const validRows = (allTransaksi || []).filter(
+    (t) => t && t.id && normalizeText(t.STATUS) !== "VOID"
+  );
+
+  // ======================================
+  // STOCK IMEI AKTIF
+  // ======================================
+  const activeImeiMap = new Set();
+
+  // ======================================
+  // STOCK NON IMEI
+  // ======================================
+  const nonImeiStockMap = {};
+
+  // ======================================
+  // SORT BERDASARKAN WAKTU
+  // ======================================
+  const sortedRows = [...validRows].sort(
+    (a, b) => Number(a.CREATED_AT || 0) - Number(b.CREATED_AT || 0)
+  );
+
+  // ======================================
+  // BUILD STOCK REALTIME
+  // ======================================
+  sortedRows.forEach((trx) => {
+    const metode = normalizeText(trx?.PAYMENT_METODE);
+
+    const kategori = normalizeText(trx?.KATEGORI_BRAND);
+
+    const isImei = KATEGORI_IMEI.includes(kategori);
+
+    // ======================================
+    // ======================================
+    // IMEI
+    // ======================================
+    // ======================================
+    if (isImei) {
+      const imei = String(trx?.IMEI || "").trim();
+
+      if (!imei) return;
+
+      // ======================================
+      // PEMBELIAN
+      // ======================================
+      if (metode === "PEMBELIAN") {
+        activeImeiMap.add(imei);
+      }
+
+      // ======================================
+      // PENJUALAN
+      // ======================================
+      if (metode === "PENJUALAN") {
+        activeImeiMap.delete(imei);
+      }
+
+      // ======================================
+      // REFUND
+      // ======================================
+      if (metode === "REFUND") {
+        activeImeiMap.add(imei);
+      }
+
+      return;
+    }
+
+    // ======================================
+    // ======================================
+    // NON IMEI
+    // ======================================
+    // ======================================
+    const key = buildNonImeiKey(trx);
+
+    if (!nonImeiStockMap[key]) {
+      nonImeiStockMap[key] = 0;
+    }
+
+    const qty = Number(trx?.QTY || 0);
+
+    // ======================================
+    // PEMBELIAN
+    // ======================================
+    if (metode === "PEMBELIAN") {
+      nonImeiStockMap[key] += qty;
+    }
+
+    // ======================================
+    // PENJUALAN
+    // ======================================
+    if (metode === "PENJUALAN") {
+      nonImeiStockMap[key] -= qty;
+    }
+
+    // ======================================
+    // REFUND
+    // ======================================
+    if (metode === "REFUND") {
+      nonImeiStockMap[key] += qty;
+    }
+  });
+
+  // ======================================
+  // FILTER PEMBELIAN YANG MASIH AKTIF
+  // ======================================
+  const pembelianRows = sortedRows.filter(
     (trx) => normalizeText(trx?.PAYMENT_METODE) === "PEMBELIAN"
   );
 
   // ======================================
-  // AUTO HIDE SUDAH TERJUAL
+  // FINAL VISIBLE ROWS
   // ======================================
-  const visibleRows = pembelianRows.filter(
-    (row) => !isPembelianSold(row, allTransaksi)
-  );
+  const visibleRows = [];
+
+  pembelianRows.forEach((trx) => {
+    const kategori = normalizeText(trx?.KATEGORI_BRAND);
+
+    const isImei = KATEGORI_IMEI.includes(kategori);
+
+    // ======================================
+    // IMEI
+    // ======================================
+    if (isImei) {
+      const imei = String(trx?.IMEI || "").trim();
+
+      if (!imei) {
+        return;
+      }
+
+      // ======================================
+      // MASIH AKTIF
+      // ======================================
+      if (activeImeiMap.has(imei)) {
+        visibleRows.push({
+          ...trx,
+
+          // ======================================
+          // REAL QTY
+          // ======================================
+          REAL_QTY: 1,
+        });
+      }
+
+      return;
+    }
+
+    // ======================================
+    // NON IMEI
+    // ======================================
+    const key = buildNonImeiKey(trx);
+
+    const sisaStock = Number(nonImeiStockMap[key] || 0);
+
+    // ======================================
+    // STOCK HABIS
+    // ======================================
+    if (sisaStock <= 0) {
+      return;
+    }
+
+    // ======================================
+    // AMBIL QTY ASLI PEMBELIAN
+    // ======================================
+    const originalQty = Number(trx?.QTY || 0);
+
+    // ======================================
+    // JIKA STOCK TERSISA
+    // ======================================
+    const finalQty = Math.min(originalQty, sisaStock);
+
+    visibleRows.push({
+      ...trx,
+
+      // ======================================
+      // REAL QTY
+      // ======================================
+      REAL_QTY: finalQty,
+
+      // ======================================
+      // OVERRIDE QTY TABLE
+      // ======================================
+      QTY: finalQty,
+    });
+
+    // ======================================
+    // KURANGI SISA STOCK
+    // ======================================
+    nonImeiStockMap[key] -= finalQty;
+  });
 
   // ======================================
   // SORT TERBARU
   // ======================================
   visibleRows.sort(
     (a, b) =>
-      Number(b?.UPDATED_AT || b?.CREATED_AT || 0) -
-      Number(a?.UPDATED_AT || a?.CREATED_AT || 0)
+      Number(b.UPDATED_AT || b.CREATED_AT || 0) -
+      Number(a.UPDATED_AT || a.CREATED_AT || 0)
   );
 
   return visibleRows;
