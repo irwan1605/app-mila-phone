@@ -246,7 +246,8 @@ export const handleRefundPenjualan = async ({
 
             sold: false,
 
-            PAYMENT_METODE: "REFUND",
+            PAYMENT_METODE: "READY_RESALE",
+            statusRefund: "READY_RESALE",
 
             STATUS: "APPROVED",
 
@@ -292,7 +293,8 @@ export const handleRefundPenjualan = async ({
 
             QTY: 1,
 
-            PAYMENT_METODE: "REFUND",
+            PAYMENT_METODE: "READY_RESALE",
+            statusRefund: "READY_RESALE",
 
             STATUS: "APPROVED",
 

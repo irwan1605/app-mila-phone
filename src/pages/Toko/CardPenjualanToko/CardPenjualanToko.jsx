@@ -56,6 +56,23 @@ const normalizeImei = (v) =>
     .trim()
     .toUpperCase();
 
+// =====================================
+// 🔥 CEK REFUND READY
+// =====================================
+const isRefundReady = (imei, transaksi = []) => {
+  return transaksi.some((t) => {
+    const metode = String(
+      t.PAYMENT_METODE || t.statusRefund || ""
+    ).toUpperCase();
+
+    return (
+      String(t.IMEI || "").trim() === String(imei || "").trim() &&
+      ["REFUND", "READY_RESALE", "BISA_DIJUAL_LAGI"].includes(metode) &&
+      String(t.STATUS || "").toUpperCase() === "APPROVED"
+    );
+  });
+};
+
 // ================= COMPONENT =================
 export default function CardPenjualanToko() {
   const navigate = useNavigate();
@@ -465,23 +482,44 @@ export default function CardPenjualanToko() {
 
         if (item.isImei) {
           if (!imei) throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
-
           const sold = await cekImeiSudahTerjual(imei);
-          if (sold)
+
+          const refundReady = isRefundReady(
+            imei,
+            penjualanList
+          );
+          
+          if (sold && !refundReady) {
             throw new Error(
-              `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`
+              `IMEI ${imei} sudah pernah terjual`
             );
+          }
 
           const sudahAdaDiTable = penjualanList.some(
-            (trx) =>
-              Array.isArray(trx.items) &&
-              trx.items.some(
-                (it) =>
-                  Array.isArray(it.imeiList) &&
-                  it.imeiList.some(
-                    (im) => String(im).trim() === String(imei).trim()
-                  )
-              )
+            (trx) => {
+              const isRefund =
+                String(
+                  trx.statusPembayaran ||
+                  trx.PAYMENT_METODE ||
+                  trx.STATUS ||
+                  ""
+                ).toUpperCase() === "REFUND";
+          
+              if (isRefund) return false;
+          
+              return (
+                Array.isArray(trx.items) &&
+                trx.items.some(
+                  (it) =>
+                    Array.isArray(it.imeiList) &&
+                    it.imeiList.some(
+                      (im) =>
+                        String(im).trim() ===
+                        String(imei).trim()
+                    )
+                )
+              );
+            }
           );
 
           if (sudahAdaDiTable) {

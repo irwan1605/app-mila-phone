@@ -63,35 +63,45 @@ export const buildPembelianRealtime = (allTransaksi = []) => {
     const isImei = KATEGORI_IMEI.includes(kategori);
 
     // ======================================
-    // ======================================
     // IMEI
-    // ======================================
     // ======================================
     if (isImei) {
       const imei = String(trx?.IMEI || "").trim();
 
-      if (!imei) return;
-
       // ======================================
-      // PEMBELIAN
+      // IMEI KOSONG
       // ======================================
-      if (metode === "PEMBELIAN") {
-        activeImeiMap.add(imei);
+      if (!imei) {
+        return;
       }
 
       // ======================================
-      // PENJUALAN
+      // SUDAH TERJUAL
       // ======================================
-      if (metode === "PENJUALAN") {
-        activeImeiMap.delete(imei);
+      const isActive = activeImeiMap.has(imei);
+
+      // ======================================
+      // HILANGKAN DARI TABLE
+      // ======================================
+      if (!isActive) {
+        return;
       }
 
       // ======================================
-      // REFUND
+      // TAMPILKAN YANG MASIH READY
       // ======================================
-      if (metode === "REFUND") {
-        activeImeiMap.add(imei);
-      }
+      visibleRows.push({
+        ...trx,
+
+        // ======================================
+        // FIX REALTIME QTY
+        // ======================================
+        REAL_QTY: 1,
+
+        QTY: 1,
+
+        STOCK_READY: true,
+      });
 
       return;
     }
