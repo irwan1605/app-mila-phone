@@ -6,6 +6,13 @@ import {
   reduceStock,
   updateMasterBarangHarga,
   addLogPembelian,
+
+  // ✅ TAMBAHAN
+  listenMasterSupplier,
+  listenMasterBarangHarga,
+  addMasterSupplier,
+  addMasterBarangHarga,
+  updateMasterBarang,
 } from "../../../services/FirebaseService";
 
 const removeUndefined = (obj) => {
@@ -24,6 +31,14 @@ const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
 // ======================================
 const makeSku = (brand, barang) =>
   `${(brand || "").trim()}_${(barang || "").trim()}`.replace(/\s+/g, "_");
+
+// ======================================
+// NORMALIZE TEXT
+// ======================================
+const normalizeText = (txt) =>
+  String(txt || "")
+    .trim()
+    .toUpperCase();
 
 // ======================================
 // PEMBELIAN KEY
@@ -117,11 +132,30 @@ export const saveEditPembelian = async ({
       throw new Error("Data pembelian tidak ditemukan");
     }
 
+    const oldSku = makeSku(rows?.[0]?.NAMA_BRAND, rows?.[0]?.NAMA_BARANG);
+
     // ======================================
-    // UPDATE MASTER HARGA
+    // VALIDASI TOKO
+    // ======================================
+    const tokoExist = masterToko.some(
+      (t) => normalizeText(t.nama) === normalizeText(newToko)
+    );
+
+    if (!tokoExist) {
+      throw new Error(`❌ MASTER TOKO "${newToko}" tidak ditemukan`);
+    }
+
+    // ======================================
+    // UPDATE MASTER BARANG & HARGA
     // ======================================
     if (editData.masterHargaId) {
       const payloadHarga = {
+        namaMasterBrand: editData.brand || "",
+
+        namaKategoriBrand: editData.kategoriBrand || "",
+
+        tipeNamaBarang: editData.barang || "",
+
         hargaSRP: Number(editData.hargaSRP || 0),
 
         hargaGrosir: Number(editData.hargaGrosir || 0),
@@ -135,9 +169,34 @@ export const saveEditPembelian = async ({
 
           reseller: Number(editData.hargaReseller || 0),
         },
+
+        updatedAt: Date.now(),
       };
 
       await updateMasterBarangHarga(editData.masterHargaId, payloadHarga);
+
+      // ======================================
+      // UPDATE MASTER BARANG
+      // ======================================
+      if (editData.masterBarangId) {
+        await updateMasterBarang(editData.masterBarangId, {
+          brand: editData.brand || "",
+
+          namaBarang: editData.barang || "",
+
+          kategoriBarang: String(editData.kategoriBrand || "").toUpperCase(),
+
+          harga: {
+            srp: Number(editData.hargaSRP || 0),
+
+            grosir: Number(editData.hargaGrosir || 0),
+
+            reseller: Number(editData.hargaReseller || 0),
+          },
+
+          updatedAt: Date.now(),
+        });
+      }
     }
 
     // ======================================
@@ -220,6 +279,27 @@ export const saveEditPembelian = async ({
           qty: diffQty,
         });
       }
+    }
+
+    // ======================================
+    // AUTO MASTER SUPPLIER
+    // ======================================
+    try {
+      const supplierExist = allTransaksi.some(
+        (x) =>
+          normalizeText(x.NAMA_SUPPLIER) === normalizeText(editData.supplier)
+      );
+
+      if (!supplierExist && editData.supplier) {
+        await addMasterSupplier({
+          namaSupplier: editData.supplier,
+          noTelpon: "",
+          alamat: "",
+          createdAt: Date.now(),
+        });
+      }
+    } catch (err) {
+      console.warn("AUTO MASTER SUPPLIER ERROR:", err);
     }
 
     // ======================================
@@ -333,56 +413,60 @@ export const saveEditPembelian = async ({
             EDIT_BY: "SYSTEM",
           })
         );
+      }
 
-        // ======================================
-        // UPDATE EXISTING IMEI
-        // ======================================
-        for (const r of rows) {
-          if (toKeep.includes(String(r.IMEI || "").trim())) {
-            const tokoId = getValidTokoId(r, masterToko);
+      // ======================================
+      // UPDATE EXISTING IMEI
+      // ======================================
+      for (const r of rows) {
+        if (toKeep.includes(String(r.IMEI || "").trim())) {
+          const tokoId = getValidTokoId(r, masterToko);
 
-            if (!tokoId) continue;
+          if (!tokoId) continue;
 
-            await updateTransaksi(tokoId, r.id, {
-              ...r,
+          await updateTransaksi(tokoId, r.id, {
+            ...r,
 
-              LAST_EDIT: Date.now(),
+            LAST_EDIT: Date.now(),
 
-              EDIT_BY: "SYSTEM",
+            EDIT_BY: "SYSTEM",
 
-              TANGGAL_TRANSAKSI: editData.tanggal,
+            TANGGAL_TRANSAKSI: editData.tanggal,
 
-              NO_INVOICE: editData.noDo,
+            NO_INVOICE: editData.noDo,
 
-              NAMA_SUPPLIER: editData.supplier,
+            NAMA_SUPPLIER: editData.supplier,
 
-              NAMA_TOKO: newToko,
+            NAMA_TOKO: newToko,
 
-              NAMA_BRAND: editData.brand,
+            NAMA_BRAND: editData.brand,
 
-              KATEGORI_BRAND: editData.kategoriBrand,
+            KATEGORI_BRAND: editData.kategoriBrand,
 
-              NAMA_BARANG: editData.barang,
+            NAMA_BARANG: editData.barang,
 
-              QTY: 1,
+            QTY: 1,
 
-              IMEI: String(r.IMEI || "").trim(),
+            IMEI: String(r.IMEI || "").trim(),
 
-              HARGA_SUPLAYER: Number(editData.hargaSup || 0),
+            NOMOR_UNIK: `PEMBELIAN|${editData.brand}|${
+              editData.barang
+            }|${String(r.IMEI || "").trim()}`,
 
-              HARGA_UNIT: Number(editData.hargaSup || 0),
+            HARGA_SUPLAYER: Number(editData.hargaSup || 0),
 
-              TOTAL: Number(editData.hargaSup || 0),
+            HARGA_UNIT: Number(editData.hargaSup || 0),
 
-              HARGA_SRP: Number(editData.hargaSRP || 0),
+            TOTAL: Number(editData.hargaSup || 0),
 
-              HARGA_GROSIR: Number(editData.hargaGrosir || 0),
+            HARGA_SRP: Number(editData.hargaSRP || 0),
 
-              HARGA_RESELLER: Number(editData.hargaReseller || 0),
+            HARGA_GROSIR: Number(editData.hargaGrosir || 0),
 
-              UPDATED_AT: Date.now(),
-            });
-          }
+            HARGA_RESELLER: Number(editData.hargaReseller || 0),
+
+            UPDATED_AT: Date.now(),
+          });
         }
       }
     }
