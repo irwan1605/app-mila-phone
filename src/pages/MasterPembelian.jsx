@@ -35,7 +35,7 @@ import TabelPembelianDraft from "./table/TabelPembelianDraft";
 import CetakInvoicePembelian from "./Print/CetakInvoicePembelian";
 import ImportPembelianExcel from "../features/pembelian/import/ImportPembelianExcel";
 import { deletePembelian } from "../features/pembelian/editDelete/deletePembelian";
-
+import { buildPembelianRealtime } from "../features/pembelian/utils/pembelianRealtime";
 import { saveEditPembelian } from "../features/pembelian/editDelete/editPembelian";
 
 const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
@@ -727,48 +727,21 @@ export default function MasterPembelian() {
   };
 
   const groupedPembelian = useMemo(() => {
+    // ======================================
+    // BUILD REALTIME PEMBELIAN
+    // ======================================
+    const realtimeRows = buildPembelianRealtime(allTransaksi || []);
+
     const map = {};
 
-    (allTransaksi || []).forEach((t) => {
+    realtimeRows.forEach((t) => {
       // ======================================
-      // SKIP VOID DELETE
+      // FILTER INVALID
       // ======================================
-      if (String(t.PAYMENT_METODE || "").toUpperCase() === "VOID DELETE") {
-        return;
-      }
-
-      // ===============================
-      // FILTER DATA LIAR / INVALID
-      // ===============================
       if (!t?.id) return;
 
-      if (String(t.PAYMENT_METODE || "").toUpperCase() !== "PEMBELIAN") {
-        return;
-      }
-
-      if (
-        String(t.NAMA_BARANG || "").trim() === "" ||
-        String(t.NAMA_BRAND || "").trim() === ""
-      ) {
-        return;
-      }
-
-      if (
-        String(t.NAMA_TOKO || "")
-          .toUpperCase()
-          .includes("OHWC")
-      ) {
-        return;
-      }
-
-      const groupKeyRealtime = makePembelianKey(t);
-
-      // 🔥 HIDE REALTIME SETELAH DELETE
-      if (deletedKeys.has(groupKeyRealtime)) {
-        return;
-      }
-
       const brand = t.NAMA_BRAND || "";
+
       const barang = t.NAMA_BARANG || "";
 
       const keyGroup = makePembelianKey({
@@ -777,68 +750,67 @@ export default function MasterPembelian() {
         NAMA_BARANG: barang,
       });
 
-      // 🔗 JOIN KE MASTER BARANG (REALTIME)
-      const masterKey = `${brand}|${barang}`;
-      const masterRef = masterBarangMap[masterKey] || {};
-
       // ======================================
-      // CEK APAKAH SUDAH DI VOID
+      // HIDE DELETE REALTIME
       // ======================================
-      const isVoided = (allTransaksi || []).some((x) => {
-        const isVoid =
-          String(x.PAYMENT_METODE || "").toUpperCase() === "VOID DELETE";
-
-        if (!isVoid) return false;
-
-        const sameKey =
-          String(x.NO_INVOICE || "") === String(t.NO_INVOICE || "") &&
-          String(x.NAMA_BARANG || "")
-            .trim()
-            .toUpperCase() ===
-            String(t.NAMA_BARANG || "")
-              .trim()
-              .toUpperCase() &&
-          String(x.NAMA_BRAND || "")
-            .trim()
-            .toUpperCase() ===
-            String(t.NAMA_BRAND || "")
-              .trim()
-              .toUpperCase();
-
-        return sameKey;
-      });
-
-      if (isVoided) {
+      if (deletedKeys.has(keyGroup)) {
         return;
       }
 
+      // ======================================
+      // MASTER BARANG
+      // ======================================
+      const masterKey = `${brand}|${barang}`;
+
+      const masterRef = masterBarangMap[masterKey] || {};
+
+      // ======================================
+      // INIT GROUP
+      // ======================================
       if (!map[keyGroup]) {
         map[keyGroup] = {
           tanggal: t.TANGGAL_TRANSAKSI,
+
           noDo: t.NO_INVOICE,
+
           supplier: t.NAMA_SUPPLIER,
+
           namaToko: t.NAMA_TOKO,
+
           brand,
+
           barang,
+
           kategoriBrand: t.KATEGORI_BRAND,
 
-          // 🔥 MASTER BARANG (FIX)
           hargaSRP: masterRef.hargaSRP || 0,
+
           hargaGrosir: masterRef.hargaGrosir || 0,
+
           hargaReseller: masterRef.hargaReseller || 0,
 
-          // 🔥 PEMBELIAN
           hargaSup: Number(t.HARGA_SUPLAYER || 0),
+
           imeis: [],
+
           totalQty: 0,
+
           totalHargaSup: 0,
         };
       }
 
+      // ======================================
+      // TOTAL QTY
+      // ======================================
       const qty = Number(t.QTY || 0);
+
       map[keyGroup].totalQty += qty;
+
       map[keyGroup].totalHargaSup += qty * Number(t.HARGA_SUPLAYER || 0);
 
+      // ======================================
+      // IMEI
+      // ======================================
       if (t.IMEI) {
         const cleanImei = String(t.IMEI).trim();
 
@@ -848,6 +820,9 @@ export default function MasterPembelian() {
       }
     });
 
+    // ======================================
+    // SORT TERBARU
+    // ======================================
     return Object.values(map).sort(
       (a, b) => new Date(b.tanggal) - new Date(a.tanggal)
     );
@@ -894,6 +869,7 @@ export default function MasterPembelian() {
       return matchSearch && matchToko;
     });
   }, [groupedPembelian, search, filterToko]);
+
   const totalPages =
     Math.ceil((filteredPurchases.length || 1) / itemsPerPage) || 1;
 
