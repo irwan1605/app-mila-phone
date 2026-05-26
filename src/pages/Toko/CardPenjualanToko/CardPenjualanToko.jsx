@@ -67,7 +67,12 @@ const isRefundReady = (imei, transaksi = []) => {
 
     return (
       String(t.IMEI || "").trim() === String(imei || "").trim() &&
-      ["REFUND", "READY_RESALE", "BISA_DIJUAL_LAGI"].includes(metode) &&
+      [
+        "REFUND",
+        "READY_RESALE",
+        "BISA_DIJUAL_LAGI",
+        "AVAILABLE",
+      ].includes(metode) &&
       String(t.STATUS || "").toUpperCase() === "APPROVED"
     );
   });
@@ -489,7 +494,11 @@ export default function CardPenjualanToko() {
             penjualanList
           );
           
-          if (sold && !refundReady) {
+          if (
+            sold &&
+            !refundReady &&
+            !detailStockLookup?.[imei]?.READY_RESALE
+          ) {
             throw new Error(
               `IMEI ${imei} sudah pernah terjual`
             );

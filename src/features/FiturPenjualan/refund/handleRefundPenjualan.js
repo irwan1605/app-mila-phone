@@ -246,8 +246,17 @@ export const handleRefundPenjualan = async ({
 
             sold: false,
 
-            PAYMENT_METODE: "READY_RESALE",
+            READY_RESALE: true,
+
+            IS_REFUND: true,
+
+            LAST_ACTION: "REFUND",
+
+            PAYMENT_METODE: "REFUND",
+
             statusRefund: "READY_RESALE",
+
+            STATUS_STOK: "AVAILABLE",
 
             STATUS: "APPROVED",
 
@@ -258,18 +267,25 @@ export const handleRefundPenjualan = async ({
           // STOK TOKO
           // ===============================
           await update(ref(db, `stokToko/${trx.tokoId}/${imei}`), {
+
             imei: imeiRaw,
-
+          
             namaBarang: item.namaBarang || "",
-
+          
             namaBrand: item.namaBrand || "",
-
+          
             toko: trx.toko || "",
-
+          
             status: "AVAILABLE",
-
+          
             sold: false,
-
+          
+            READY_RESALE: true,
+          
+            IS_REFUND: true,
+          
+            LAST_ACTION: "REFUND",
+          
             updatedAt: Date.now(),
           });
 
@@ -293,8 +309,13 @@ export const handleRefundPenjualan = async ({
 
             QTY: 1,
 
-            PAYMENT_METODE: "READY_RESALE",
+            PAYMENT_METODE: "REFUND",
+
             statusRefund: "READY_RESALE",
+
+            STATUS_STOK: "AVAILABLE",
+
+            READY_RESALE: true,
 
             STATUS: "APPROVED",
 
