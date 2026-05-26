@@ -18,8 +18,12 @@ const makeSku = (brand, barang) =>
 // ======================================
 export const processImportPembelian = async ({
   file,
+
   masterBarang = [],
+
   masterToko = [],
+
+  allTransaksi = [],
 }) => {
   try {
     // ======================================
@@ -40,6 +44,27 @@ export const processImportPembelian = async ({
     if (!rows.length) {
       throw new Error("File excel kosong");
     }
+
+    // ======================================
+    // TRACKER IMEI EXISTING PEMBELIAN
+    // ======================================
+    const existingImeis = new Set(
+      allTransaksi
+        .filter(
+          (x) => String(x.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN"
+        )
+        .map((x) =>
+          String(x.IMEI || "")
+            .trim()
+            .toUpperCase()
+        )
+        .filter(Boolean)
+    );
+
+    // ======================================
+    // TRACKER IMEI IMPORT EXCEL
+    // ======================================
+    const importImeis = new Set();
 
     // ======================================
     // LOOP IMPORT
@@ -145,39 +170,91 @@ export const processImportPembelian = async ({
           throw new Error(`IMEI wajib diisi untuk ${barang}`);
         }
 
-        await addTransaksi(tokoId, {
-          TANGGAL_TRANSAKSI: tanggal,
+        // ======================================
+        // IMEI
+        // ======================================
+        if (isKategoriImei) {
+          // ======================================
+          // VALIDASI IMEI KOSONG
+          // ======================================
+          if (!imei) {
+            throw new Error(`IMEI wajib diisi untuk ${barang}`);
+          }
 
-          NO_INVOICE: noDo,
+          // ======================================
+          // CLEAN IMEI
+          // ======================================
+          const cleanImei = String(imei).trim().toUpperCase();
 
-          NAMA_SUPPLIER: supplier,
+          // ======================================
+          // CEK IMEI SUDAH ADA
+          // ======================================
+          if (existingImeis.has(cleanImei)) {
+            throw new Error(
+              `❌ IMEI SUDAH ADA DI DATA PEMBELIAN\n\nIMEI: ${cleanImei}`
+            );
+          }
 
-          NAMA_USER: "IMPORT EXCEL",
+          // ======================================
+          // CEK DUPLIKAT DI EXCEL
+          // ======================================
+          if (importImeis.has(cleanImei)) {
+            throw new Error(
+              `❌ DUPLIKAT IMEI DI FILE EXCEL\n\nIMEI: ${cleanImei}`
+            );
+          }
 
-          NAMA_TOKO: namaToko,
+          // ======================================
+          // SIMPAN TRACKER
+          // ======================================
+          importImeis.add(cleanImei);
 
-          NAMA_BRAND: brand,
+          // ======================================
+          // INSERT PEMBELIAN
+          // ======================================
+          await addTransaksi(tokoId, {
+            TANGGAL_TRANSAKSI: tanggal,
 
-          KATEGORI_BRAND: kategoriBrand,
+            NO_INVOICE: noDo,
 
-          NAMA_BARANG: barang,
+            NAMA_SUPPLIER: supplier,
 
-          IMEI: imei,
+            NAMA_USER: "IMPORT EXCEL",
 
-          QTY: 1,
+            NAMA_TOKO: namaToko,
 
-          HARGA_SUPLAYER: hargaSup,
+            NAMA_BRAND: brand,
 
-          HARGA_UNIT: hargaSup,
+            KATEGORI_BRAND: kategoriBrand,
 
-          TOTAL: hargaSup,
+            NAMA_BARANG: barang,
 
-          PAYMENT_METODE: "PEMBELIAN",
+            IMEI: cleanImei,
 
-          STATUS: "Approved",
+            QTY: 1,
 
-          CREATED_AT: Date.now(),
-        });
+            HARGA_SUPLAYER: hargaSup,
+
+            HARGA_UNIT: hargaSup,
+
+            TOTAL: hargaSup,
+
+            PAYMENT_METODE: "PEMBELIAN",
+
+            STATUS: "Approved",
+
+            CREATED_AT: Date.now(),
+          });
+
+          // ======================================
+          // AUTO STOCK
+          // ======================================
+          await addStock(namaToko, sku, {
+            brand,
+            barang,
+            qty: 1,
+          });
+        }
 
         // ======================================
         // AUTO STOCK

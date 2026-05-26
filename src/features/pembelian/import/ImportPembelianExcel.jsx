@@ -7,6 +7,7 @@ import { processImportPembelian } from "./processImportPembelian";
 export default function ImportPembelianExcel({
   masterBarang = [],
   masterToko = [],
+  allTransaksi = [],
 }) {
   const [loading, setLoading] = useState(false);
 
@@ -20,8 +21,12 @@ export default function ImportPembelianExcel({
     try {
       const result = await processImportPembelian({
         file,
+
         masterBarang,
+
         masterToko,
+
+        allTransaksi,
       });
 
       if (result.success) {

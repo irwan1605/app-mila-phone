@@ -1733,6 +1733,7 @@ export default function MasterPembelian() {
             <ImportPembelianExcel
               masterBarang={masterBarang}
               masterToko={masterToko}
+              allTransaksi={allTransaksi}
             />
 
             <button
