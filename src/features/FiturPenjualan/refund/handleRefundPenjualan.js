@@ -11,6 +11,7 @@ import {
 import { ref, get, update, remove } from "firebase/database";
 
 import { db } from "../../../services/FirebaseInit";
+import { validateRefund } from "./validateRefund";
 
 // ======================================================
 // NORMALIZE
@@ -45,9 +46,14 @@ export const handleRefundPenjualan = async ({
     // =========================================
     // VALIDASI
     // =========================================
-    const trx = rows.find(
-      (x) => normalize(x.invoice) === normalize(row.invoice)
-    );
+    const validateResult =
+    await validateRefund({
+      row,
+      rows,
+      userLogin,
+    });
+  
+  const trx = validateResult?.trx;
 
     if (!trx) {
       throw new Error("Transaksi tidak ditemukan");
