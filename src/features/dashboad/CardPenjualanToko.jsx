@@ -50,6 +50,16 @@ const TOKO_LIST = [
 ];
 
 // =======================================================
+// FORMAT URL TOKO
+// =======================================================
+const tokoToUrl = (toko) => {
+  return String(toko || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+};
+
+// =======================================================
 // COMPONENT
 // =======================================================
 export default function CardPenjualanToko() {
@@ -330,9 +340,15 @@ export default function CardPenjualanToko() {
           <div
             key={index}
             onClick={() => {
-              navigate(`/toko/${item.toko.toLowerCase()}/penjualan`, {
+              navigate(`/toko/${tokoToUrl(item.toko)}/penjualan`, {
                 state: {
                   filterToko: item.toko,
+
+                  paymentMetode: "PENJUALAN",
+
+                  status: "Approved",
+
+                  excludeRefund: true,
                 },
               });
             }}

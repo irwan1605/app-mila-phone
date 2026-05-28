@@ -4,7 +4,7 @@
 // =======================================================
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
-
+import { useLocation } from "react-router-dom";
 import {
   listenPenjualan,
   refundRestorePenjualan,
@@ -59,6 +59,7 @@ const TOKO_MAP = {
 };
 
 export default function TablePenjualan({ data = [] }) {
+  const location = useLocation();
   const [deletedRows, setDeletedRows] = useState({});
   const [instantRefund, setInstantRefund] = useState({});
   const [refundBlacklist, setRefundBlacklist] = useState(() => {
@@ -156,6 +157,17 @@ export default function TablePenjualan({ data = [] }) {
   const [dateTo, setDateTo] = useState("");
   const [showRefund, setShowRefund] = useState(false);
   const [localHiddenRefund, setLocalHiddenRefund] = useState({});
+
+  // ======================================================
+  // FILTER DARI DASHBOARD TOKO
+  // ======================================================
+  const filterTokoAuto = location.state?.filterToko || "";
+
+  const filterMetodeAuto = location.state?.paymentMetode || "";
+
+  const filterStatusAuto = location.state?.status || "";
+
+  const excludeRefund = location.state?.excludeRefund || false;
 
   const [masterSH, setMasterSH] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
@@ -302,16 +314,16 @@ export default function TablePenjualan({ data = [] }) {
       // 🔥 BLOCK SEMUA DATA REFUND
       // ======================================
       const isRefundFinal =
-      trx?.deleted === true ||
-      trx?.deletedFromPenjualan === true ||
-      trx?.refundProcessed === true ||
-      trx?.IS_REFUND === true ||
-      trx?.refundLocked === true ||
-      trx?.HIDE_FROM_TABLE === true ||
-      normalize(trx?.STATUS) === "REFUND_DELETED" ||
-      normalize(trx?.STATUS) === "REFUND" ||
-      normalize(trx?.PAYMENT_METODE) === "REFUND" ||
-      normalize(trx?.statusPembayaran) === "REFUND";
+        trx?.deleted === true ||
+        trx?.deletedFromPenjualan === true ||
+        trx?.refundProcessed === true ||
+        trx?.IS_REFUND === true ||
+        trx?.refundLocked === true ||
+        trx?.HIDE_FROM_TABLE === true ||
+        normalize(trx?.STATUS) === "REFUND_DELETED" ||
+        normalize(trx?.STATUS) === "REFUND" ||
+        normalize(trx?.PAYMENT_METODE) === "REFUND" ||
+        normalize(trx?.statusPembayaran) === "REFUND";
 
       if (isRefundFinal) {
         console.log("⛔ BLOCK REFUND:", trx.invoice);
@@ -600,6 +612,61 @@ export default function TablePenjualan({ data = [] }) {
   /* ================= FILTER ================= */
   const filteredRows = useMemo(() => {
     return tableRows.filter((r) => {
+      // ======================================================
+      // FILTER TOKO DARI DASHBOARD
+      // ======================================================
+      if (filterTokoAuto) {
+        const tokoRow = String(r.toko || r.NAMA_TOKO || r.namaToko || "")
+          .trim()
+          .toUpperCase();
+
+        const tokoFilter = String(filterTokoAuto).trim().toUpperCase();
+
+        if (tokoRow !== tokoFilter) {
+          return false;
+        }
+      }
+
+      // ======================================================
+      // FILTER PAYMENT METODE
+      // ======================================================
+      if (filterMetodeAuto) {
+        const metode = String(
+          r.PAYMENT_METODE || r.paymentMetode || r.paymentMetodeUser || ""
+        ).toUpperCase();
+
+        if (metode !== String(filterMetodeAuto).toUpperCase()) {
+          return false;
+        }
+      }
+
+      // ======================================================
+      // FILTER STATUS
+      // ======================================================
+      if (filterStatusAuto) {
+        const status = String(r.STATUS || r.status || "").toUpperCase();
+
+        if (status !== String(filterStatusAuto).toUpperCase()) {
+          return false;
+        }
+      }
+
+      // ======================================================
+      // FILTER REFUND
+      // ======================================================
+      if (excludeRefund) {
+        const isRefund =
+          r?.deleted === true ||
+          r?.deletedFromPenjualan === true ||
+          r?.refundProcessed === true ||
+          r?.IS_REFUND === true ||
+          r?.refundLocked === true ||
+          String(r?.statusPembayaran || "").toUpperCase() === "REFUND";
+
+        if (isRefund) {
+          return false;
+        }
+      }
       // ======================================
       // 🔥 HARD BLOCK GLOBAL REFUND
       // REALTIME LOCALHOST + VERCEL
