@@ -599,6 +599,32 @@ export default function TablePenjualan({ data = [] }) {
   /* ================= FILTER ================= */
   const filteredRows = useMemo(() => {
     return tableRows.filter((r) => {
+      // ======================================
+      // 🔥 HARD BLOCK GLOBAL REFUND
+      // REALTIME LOCALHOST + VERCEL
+      // ======================================
+
+      const invoiceKey = String(r.invoice || r.NO_INVOICE || "")
+        .trim()
+        .toUpperCase();
+
+      const isDeletedRealtime =
+        deletedRows?.[invoiceKey] === true ||
+        deletedRows?.[r.invoice] === true ||
+        instantRefund?.[invoiceKey] === true ||
+        instantRefund?.[r.invoice] === true ||
+        localHiddenRefund?.[invoiceKey] === true ||
+        localHiddenRefund?.[r.invoice] === true ||
+        refundRealtimeBlacklist?.has(invoiceKey) ||
+        refundBlacklist?.includes(invoiceKey);
+
+      // ======================================
+      // 🔥 FORCE HIDE REALTIME
+      // ======================================
+
+      if (isDeletedRealtime) {
+        return false;
+      }
       const status = String(r.status || "")
         .trim()
         .toUpperCase();
@@ -623,20 +649,6 @@ export default function TablePenjualan({ data = [] }) {
       }
 
       // 🔥 INSTANT HIDE SAAT CLICK REFUND
-      if (instantRefund[r.invoice]) {
-        return false;
-      }
-
-      // 🔥 HILANGKAN LANGSUNG SAAT KLIK REFUND
-      // 🔥 HIDE INSTANT
-      if (deletedRows[r.invoice]) {
-        return false;
-      }
-
-      // 🔥 fallback lama
-      if (localHiddenRefund[r.id]) {
-        return false;
-      }
 
       // ✅ REFUND HILANG OTOMATIS
       if (!showRefund && status === "REFUND") {
@@ -817,6 +829,19 @@ export default function TablePenjualan({ data = [] }) {
   };
 
   const handleRefund = async (row) => {
+    const invoiceKey = String(row.invoice || "")
+      .trim()
+      .toUpperCase();
+
+    // ======================================
+    // 🔥 GLOBAL MULTI DEVICE LOCK
+    // ======================================
+
+    if (refundProcessRef.current.has(invoiceKey)) {
+      return;
+    }
+
+    refundProcessRef.current.add(invoiceKey);
     // ======================================
     // 🔥 HARD LOCK CLICK
     // ======================================
@@ -867,6 +892,10 @@ export default function TablePenjualan({ data = [] }) {
 
       imei: row.imei,
     });
+    // ======================================
+    // 🔥 RELEASE LOCK
+    // ======================================
+    refundProcessRef.current.delete(invoiceKey);
   };
 
   /* ================= EXPORT EXCEL ================= */
