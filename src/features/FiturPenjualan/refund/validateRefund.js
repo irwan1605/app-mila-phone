@@ -1,9 +1,9 @@
 // ======================================================
 // VALIDATE REFUND
-// GLOBAL REALTIME REFUND VALIDATOR
+// GLOBAL REALTIME REFUND ENGINE
 // ======================================================
 
-import { ref, get, update } from "firebase/database";
+import { ref, get, update, set, serverTimestamp } from "firebase/database";
 
 import { db } from "../../../services/FirebaseInit";
 
@@ -16,13 +16,19 @@ const normalize = (v) =>
     .trim()
     .toUpperCase();
 
+const normalizeImei = (v) =>
+  String(v || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+
 // ======================================================
 // VALIDATE REFUND
 // ======================================================
 
 export const validateRefund = async ({ row, rows = [], userLogin }) => {
   // ====================================================
-  // VALIDASI DATA
+  // VALIDASI AWAL
   // ====================================================
 
   if (!row) {
@@ -30,7 +36,7 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
   }
 
   // ====================================================
-  // CARI TRANSAKSI ASLI
+  // CARI TRANSAKSI
   // ====================================================
 
   const trx = rows.find((x) => normalize(x.invoice) === normalize(row.invoice));
@@ -40,7 +46,7 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
   }
 
   // ====================================================
-  // CEK REFUND GLOBAL
+  // GLOBAL REFUND CHECK
   // ====================================================
 
   const alreadyRefund =
@@ -56,11 +62,11 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
     normalize(trx?.statusPembayaran) === "REFUND";
 
   if (alreadyRefund) {
-    throw new Error("Refund sudah diproses sebelumnya");
+    throw new Error("Refund sudah pernah diproses");
   }
 
   // ====================================================
-  // VALIDASI FIREBASE REALTIME
+  // VALIDASI FIREBASE GLOBAL
   // ====================================================
 
   if (trx?.id && trx?.tokoId) {
@@ -114,7 +120,202 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
   }
 
   // ====================================================
-  // SAVE GLOBAL BLACKLIST
+  // 🔥 GLOBAL REFUND HISTORY
+  // MULTI DEVICE LOCK
+  // ====================================================
+
+  const refundKey = normalize(trx.invoice);
+
+  const refundHistoryRef = ref(db, `refund_history/${refundKey}`);
+
+  const refundHistorySnap = await get(refundHistoryRef);
+
+  // ====================================================
+  // BLOCK DUPLIKAT REFUND
+  // ====================================================
+
+  if (refundHistorySnap.exists()) {
+    throw new Error("Refund invoice sudah pernah diproses");
+  }
+
+  // ====================================================
+  // SAVE REFUND HISTORY
+  // ====================================================
+
+  await update(refundHistoryRef, {
+    invoice: trx.invoice || "",
+
+    toko: trx.toko || "",
+
+    tokoId: trx.tokoId || "",
+
+    refundAt: Date.now(),
+
+    refundAtServer: serverTimestamp(),
+
+    refundBy: userLogin?.username || userLogin?.nama || "SYSTEM",
+
+    STATUS: "REFUND_LOCKED",
+
+    PAYMENT_METODE: "REFUND",
+
+    refundProcessed: true,
+
+    refundLocked: true,
+
+    deleted: true,
+
+    deletedFromPenjualan: true,
+
+    HIDE_FROM_PENJUALAN: true,
+
+    IS_REFUND: true,
+
+    GLOBAL_REALTIME_LOCK: true,
+
+    MULTI_DEVICE_LOCK: true,
+
+    LOCALHOST_SYNC: true,
+
+    VERCEL_SYNC: true,
+  });
+
+  // ====================================================
+  // 🔥 HARD LOCK TABLE PENJUALAN
+  // ====================================================
+
+  if (trx?.id && trx?.tokoId) {
+    const penjualanRef = ref(db, `toko/${trx.tokoId}/transaksi/${trx.id}`);
+
+    await update(penjualanRef, {
+      refundProcessed: true,
+
+      refundLocked: true,
+
+      deleted: true,
+
+      deletedFromPenjualan: true,
+
+      HIDE_FROM_PENJUALAN: true,
+
+      IS_REFUND: true,
+
+      STATUS: "REFUND_DELETED",
+
+      PAYMENT_METODE: "REFUND",
+
+      statusPembayaran: "REFUND",
+
+      GLOBAL_REALTIME_LOCK: true,
+
+      MULTI_DEVICE_LOCK: true,
+
+      LOCALHOST_SYNC: true,
+
+      VERCEL_SYNC: true,
+
+      updatedAt: Date.now(),
+
+      updatedAtServer: serverTimestamp(),
+    });
+  }
+
+  // ====================================================
+  // 🔥 LOCK IMEI REALTIME
+  // AGAR TIDAK DOUBLE REFUND
+  // ====================================================
+
+  const items = Array.isArray(trx.items) ? trx.items : [];
+
+  for (const item of items) {
+    // ================================================
+    // IMEI
+    // ================================================
+
+    if (Array.isArray(item.imeiList) && item.imeiList.length > 0) {
+      for (const imeiRaw of item.imeiList) {
+        const imei = normalizeImei(imeiRaw);
+
+        if (!imei) continue;
+
+        const imeiRefundRef = ref(db, `imei_refund_lock/${imei}`);
+
+        const imeiSnap = await get(imeiRefundRef);
+
+        // ============================================
+        // BLOCK DOUBLE REFUND IMEI
+        // ============================================
+
+        if (imeiSnap.exists()) {
+          throw new Error(`IMEI ${imei} sudah pernah direfund`);
+        }
+
+        // ============================================
+        // SAVE IMEI LOCK
+        // ============================================
+
+        await set(imeiRefundRef, {
+          imei,
+
+          invoice: trx.invoice || "",
+
+          refundAt: Date.now(),
+
+          refundBy: userLogin?.username || userLogin?.nama || "SYSTEM",
+
+          STATUS: "REFUND_LOCKED",
+        });
+      }
+    }
+
+    // ================================================
+    // NON IMEI LOCK
+    // ================================================
+    else {
+      const brand = normalize(item.namaBrand);
+
+      const barang = normalize(item.namaBarang);
+
+      const qty = Number(item.qty || item.QTY || 0);
+
+      const nonImeiKey = `${refundKey}_${brand}_${barang}`;
+
+      const nonImeiRef = ref(db, `non_imei_refund_lock/${nonImeiKey}`);
+
+      const nonImeiSnap = await get(nonImeiRef);
+
+      // ============================================
+      // BLOCK DOUBLE NON IMEI
+      // ============================================
+
+      if (nonImeiSnap.exists()) {
+        throw new Error(`${barang} sudah pernah direfund`);
+      }
+
+      // ============================================
+      // SAVE NON IMEI LOCK
+      // ============================================
+
+      await set(nonImeiRef, {
+        invoice: trx.invoice || "",
+
+        namaBrand: item.namaBrand || "",
+
+        namaBarang: item.namaBarang || "",
+
+        qty,
+
+        refundAt: Date.now(),
+
+        refundBy: userLogin?.username || userLogin?.nama || "SYSTEM",
+
+        STATUS: "REFUND_LOCKED",
+      });
+    }
+  }
+
+  // ====================================================
+  // 🔥 LOCAL STORAGE BLACKLIST
   // ====================================================
 
   try {
@@ -132,11 +333,44 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
   }
 
   // ====================================================
+  // 🔥 GLOBAL DELETE CACHE
+  // ====================================================
+
+  try {
+    if (trx?.id) {
+      await update(ref(db, `penjualan/${trx.id}`), {
+        deleted: true,
+
+        refundProcessed: true,
+
+        HIDE_FROM_PENJUALAN: true,
+
+        STATUS: "REFUND_DELETED",
+      });
+    }
+
+    if (trx?.trxKey) {
+      await update(ref(db, `penjualan/${trx.trxKey}`), {
+        deleted: true,
+
+        refundProcessed: true,
+
+        HIDE_FROM_PENJUALAN: true,
+
+        STATUS: "REFUND_DELETED",
+      });
+    }
+  } catch (err) {
+    console.log("GLOBAL DELETE CACHE:", err.message);
+  }
+
+  // ====================================================
   // SUCCESS
   // ====================================================
 
   return {
     success: true,
+
     trx,
   };
 };

@@ -46,14 +46,17 @@ export const handleRefundPenjualan = async ({
     // =========================================
     // VALIDASI
     // =========================================
-    const validateResult =
-    await validateRefund({
+    const validateResult = await validateRefund({
       row,
       rows,
       userLogin,
     });
-  
-  const trx = validateResult?.trx;
+
+    const trx = validateResult?.trx;
+
+    if (!trx) {
+      throw new Error("Transaksi tidak ditemukan");
+    }
 
     if (!trx) {
       throw new Error("Transaksi tidak ditemukan");
