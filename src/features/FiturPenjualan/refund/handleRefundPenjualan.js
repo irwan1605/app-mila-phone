@@ -333,7 +333,17 @@ export const handleRefundPenjualan = async ({
           // TRANSAKSI REFUND
           // ===============================
           await addTransaksi(trx.tokoId, {
+            deleted: true,
+
+            deletedFromPenjualan: true,
+
+            refundProcessed: true,
+
+            refundLocked: true,
+
             HIDE_FROM_PENJUALAN: true,
+
+            HIDE_FROM_TABLE: true,
 
             TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
 
@@ -357,7 +367,7 @@ export const handleRefundPenjualan = async ({
 
             READY_RESALE: true,
 
-            STATUS: "APPROVED",
+            STATUS: "REFUND",
 
             CREATED_AT: Date.now(),
 
@@ -393,7 +403,7 @@ export const handleRefundPenjualan = async ({
 
         toko: trx.toko || "",
 
-        qty: trx.refundProcessed === true ? oldQty : oldQty + qty,
+        qty: oldQty + qty,
 
         status: "AVAILABLE",
 
@@ -408,28 +418,39 @@ export const handleRefundPenjualan = async ({
       // TRANSAKSI REFUND
       // ===============================
       await addTransaksi(trx.tokoId, {
+        deleted: true,
+      
+        deletedFromPenjualan: true,
+      
+        refundProcessed: true,
+      
+        refundLocked: true,
+      
         HIDE_FROM_PENJUALAN: true,
-
-        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
-
+      
+        HIDE_FROM_TABLE: true,
+      
+        TANGGAL_TRANSAKSI:
+          new Date().toISOString().slice(0, 10),
+      
         NO_INVOICE: `REF-${trx.invoice}`,
-
+      
         NAMA_TOKO: trx.toko,
-
+      
         NAMA_BARANG: item.namaBarang,
-
+      
         NAMA_BRAND: item.namaBrand,
-
+      
         IMEI: "NON-IMEI",
-
+      
         QTY: qty,
-
+      
         PAYMENT_METODE: "REFUND",
-
-        STATUS: "APPROVED",
-
+      
+        STATUS: "REFUND",
+      
         CREATED_AT: Date.now(),
-
+      
         IS_REFUND: true,
       });
     }

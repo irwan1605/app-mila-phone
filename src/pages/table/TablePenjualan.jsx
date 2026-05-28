@@ -302,15 +302,16 @@ export default function TablePenjualan({ data = [] }) {
       // 🔥 BLOCK SEMUA DATA REFUND
       // ======================================
       const isRefundFinal =
-        trx?.deleted === true ||
-        trx?.deletedFromPenjualan === true ||
-        trx?.refundProcessed === true ||
-        trx?.IS_REFUND === true ||
-        trx?.refundLocked === true ||
-        normalize(trx?.STATUS) === "REFUND_DELETED" ||
-        normalize(trx?.STATUS) === "REFUND" ||
-        normalize(trx?.PAYMENT_METODE) === "REFUND" ||
-        normalize(trx?.statusPembayaran) === "REFUND";
+      trx?.deleted === true ||
+      trx?.deletedFromPenjualan === true ||
+      trx?.refundProcessed === true ||
+      trx?.IS_REFUND === true ||
+      trx?.refundLocked === true ||
+      trx?.HIDE_FROM_TABLE === true ||
+      normalize(trx?.STATUS) === "REFUND_DELETED" ||
+      normalize(trx?.STATUS) === "REFUND" ||
+      normalize(trx?.PAYMENT_METODE) === "REFUND" ||
+      normalize(trx?.statusPembayaran) === "REFUND";
 
       if (isRefundFinal) {
         console.log("⛔ BLOCK REFUND:", trx.invoice);

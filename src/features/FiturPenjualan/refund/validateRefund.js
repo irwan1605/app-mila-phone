@@ -89,34 +89,6 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
     if (firebaseLocked) {
       throw new Error("Refund sudah terkunci realtime");
     }
-
-    // ==================================================
-    // 🔥 GLOBAL LOCK
-    // ==================================================
-
-    await update(trxRef, {
-      refundProcessed: true,
-
-      refundLocked: true,
-
-      deleted: true,
-
-      deletedFromPenjualan: true,
-
-      HIDE_FROM_PENJUALAN: true,
-
-      IS_REFUND: true,
-
-      STATUS: "REFUND_DELETED",
-
-      statusPembayaran: "REFUND",
-
-      PAYMENT_METODE: "REFUND",
-
-      refundedAt: Date.now(),
-
-      refundedBy: userLogin?.username || userLogin?.nama || "SYSTEM",
-    });
   }
 
   // ====================================================
