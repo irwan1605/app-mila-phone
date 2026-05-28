@@ -2241,19 +2241,49 @@ IMEI + NON IMEI
                   value={item.qty || 1}
                   onChange={(e) => {
                     const qtyInput = Number(e.target.value || 1);
-                    const key = `${normalize(item.namaBrand)}|${normalize(
-                      item.namaBarang
-                    )}`;
-                    const stok =
-                      Number(universalStockMap[key] || 0) +
-                      Number(stockGabunganToko[key] || 0) +
-                      Number(finalNonImeiStock[key] || 0);
-                    if (qtyInput > stok) {
-                      alert("❌ Qty melebihi stok tersedia");
+
+                    const key =
+                      `${normalize(item.namaBrand)}|` +
+                      `${normalize(item.namaBarang)}`;
+
+                    // =====================================
+                    // 🔥 FINAL STOCK TOKO
+                    // SINGLE SOURCE OF TRUTH
+                    // =====================================
+                    const stokTersedia = Number(universalStockMap?.[key] || 0);
+
+                    // =====================================
+                    // 🔥 MINIMAL QTY
+                    // =====================================
+                    if (qtyInput <= 0) {
+                      updateItem(idx, {
+                        qty: 1,
+                      });
+
                       return;
                     }
 
-                    updateItem(idx, { qty: qtyInput });
+                    // =====================================
+                    // 🔥 BLOCK MELEBIHI STOK
+                    // =====================================
+                    if (qtyInput > stokTersedia) {
+                      alert(
+                        `❌ Qty melebihi stok toko\n\nStok tersedia: ${stokTersedia}`
+                      );
+
+                      updateItem(idx, {
+                        qty: stokTersedia,
+                      });
+
+                      return;
+                    }
+
+                    // =====================================
+                    // 🔥 SUCCESS
+                    // =====================================
+                    updateItem(idx, {
+                      qty: qtyInput,
+                    });
                   }}
                 />
 

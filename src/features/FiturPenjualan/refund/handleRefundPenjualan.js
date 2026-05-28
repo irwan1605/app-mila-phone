@@ -7,6 +7,7 @@ import {
   updateTransaksiPenjualan,
   addTransaksi,
 } from "../../../services/FirebaseService";
+import { set } from "firebase/database";
 
 import { ref, get, update, remove } from "firebase/database";
 
@@ -112,6 +113,25 @@ export const handleRefundPenjualan = async ({
     } catch (e) {
       console.log("BLACKLIST ERROR");
     }
+
+    // =========================================
+// 🔥 GLOBAL REALTIME REFUND SYNC
+// =========================================
+
+await set(
+  ref(db, `refundRealtime/${normalize(row.invoice)}`),
+  {
+    invoice: normalize(row.invoice),
+
+    deleted: true,
+
+    refundedAt: Date.now(),
+
+    toko: row.toko || "",
+
+    by: userLogin?.username || "SYSTEM",
+  }
+);
 
     // =========================================
     // UPDATE PENJUALAN

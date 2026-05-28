@@ -25,6 +25,7 @@ import "jspdf-autotable";
 import CetakInvoicePenjualan from "../Print/CetakInvoicePenjualan";
 import { handleRefundPenjualan } from "../../features/FiturPenjualan/refund/handleRefundPenjualan";
 import { showRefundSuccess } from "../../utils/FiturPenjualan/showRefundSuccess";
+import { listenRefundRealtime } from "../../features/FiturPenjualan/refund/refundRealtimeSync";
 
 /* ================= UTIL ================= */
 const rupiah = (n) =>
@@ -157,6 +158,13 @@ export default function TablePenjualan({ data = [] }) {
   const [dateTo, setDateTo] = useState("");
   const [showRefund, setShowRefund] = useState(false);
   const [localHiddenRefund, setLocalHiddenRefund] = useState({});
+  const [globalRefundRealtime, setGlobalRefundRealtime] = useState({});
+
+  useEffect(() => {
+    const unsub = listenRefundRealtime(setGlobalRefundRealtime);
+  
+    return () => unsub && unsub();
+  }, []);
 
   // ======================================================
   // FILTER DARI DASHBOARD TOKO
@@ -727,15 +735,16 @@ export default function TablePenjualan({ data = [] }) {
         .trim()
         .toUpperCase();
 
-      const isDeletedRealtime =
+        const isDeletedRealtime =
         deletedRows?.[invoiceKey] === true ||
         deletedRows?.[r.invoice] === true ||
         instantRefund?.[invoiceKey] === true ||
         instantRefund?.[r.invoice] === true ||
         localHiddenRefund?.[invoiceKey] === true ||
         localHiddenRefund?.[r.invoice] === true ||
+        globalRefundRealtime?.[invoiceKey] === true ||
         refundRealtimeBlacklist?.has(invoiceKey) ||
-        refundBlacklist?.includes(invoiceKey);
+        refundBlacklist?.includes(invoiceKey);;
 
       // ======================================
       // 🔥 FORCE HIDE REALTIME
