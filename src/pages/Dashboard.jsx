@@ -30,6 +30,7 @@ import {
   Line,
   CartesianGrid,
 } from "recharts";
+import CardPenjualanToko from "../features/dashboad/CardPenjualanToko";
 
 import {
   listenAllTransaksi,
@@ -74,7 +75,6 @@ export default function Dashboard() {
   const [penjualan, setPenjualan] = useState([]);
 
   const [penjualanList, setPenjualanList] = useState([]);
-  
 
   useEffect(() => {
     const unsub = listenPenjualan((data) => {
@@ -479,26 +479,25 @@ export default function Dashboard() {
 
   const totalNominalPenjualan = useMemo(() => {
     if (!Array.isArray(penjualanList)) return 0;
-  
+
     const mapInvoice = {};
-  
+
     penjualanList.forEach((trx) => {
       if (!trx?.invoice) return;
-  
+
       const total =
         Number(trx.payment?.grandTotal || 0) > 0
           ? Number(trx.payment.grandTotal)
           : (trx.items || []).reduce(
-              (s, it) =>
-                s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+              (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
               0
             ) + Number(trx.payment?.nominalMdr || 0);
-  
+
       if (!mapInvoice[trx.invoice]) {
         mapInvoice[trx.invoice] = total;
       }
     });
-  
+
     return Object.values(mapInvoice).reduce((s, v) => s + v, 0);
   }, [penjualanList]);
 
@@ -879,69 +878,173 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* CHARTS (TETAP, TANPA TABLE) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-        {/* CHART TOKO */}
-        <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="text-center font-semibold mb-2">Omzet Per Toko</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={omzetPerToko}>
-              <XAxis dataKey="toko" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="omzet" fill="#2563EB" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      {/* ======================================================= */}
+      {/* MODERN DASHBOARD CHART */}
+      {/* ======================================================= */}
 
-        {/* CHART SALES */}
-        <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="text-center font-semibold mb-2">Omzet Per Sales</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie
-                data={omzetPerSales}
-                dataKey="omzet"
-                nameKey="sales"
-                cx="50%"
-                cy="50%"
-                outerRadius={90}
-                label
+      <div className="space-y-6 mt-6">
+        {/* =================================================== */}
+        {/* ROW 1 */}
+        {/* =================================================== */}
+        <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+          <div
+            className="
+    bg-white
+    border
+    border-slate-200
+    rounded-3xl
+    shadow-sm
+    p-5
+  "
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">
+                  Penjualan Per Toko
+                </h3>
+
+                <p className="text-sm text-slate-500">
+                  Klik toko untuk membuka table penjualan
+                </p>
+              </div>
+
+              <div
+                className="
+        px-3 py-1
+        rounded-full
+        bg-emerald-100
+        text-emerald-700
+        text-xs
+        font-semibold
+      "
               >
-                {omzetPerSales.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+                Realtime
+              </div>
+            </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-        <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="text-center font-semibold mb-2">Omzet Harian</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={omzetPerHari}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="tanggal" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="omzet" stroke="#3B82F6" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+            <div className="max-h-[650px] overflow-auto pr-2">
+              <CardPenjualanToko />
+            </div>
+          </div>
 
-        <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="text-center font-semibold mb-2">Omzet Bulanan</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={omzetPerBulan}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="bulan" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="omzet" stroke="#10B981" />
-            </LineChart>
-          </ResponsiveContainer>
+          {/* =============================================== */}
+          {/* OMZET HARIAN & BULANAN */}
+          {/* =============================================== */}
+          <div className="space-y-6">
+            {/* HARIAN */}
+            <div
+              className="
+        bg-white
+        border
+        border-slate-200
+        rounded-3xl
+        shadow-sm
+        p-5
+      "
+            >
+              <div className="mb-4">
+                <h3 className="text-xl font-bold text-slate-800">
+                  Omzet Harian
+                </h3>
+
+                <p className="text-sm text-slate-500">
+                  Grafik transaksi harian realtime
+                </p>
+              </div>
+
+              <div className="h-[280px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={omzetPerHari}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+
+                    <XAxis
+                      dataKey="tanggal"
+                      tick={{
+                        fontSize: 10,
+                      }}
+                    />
+
+                    <YAxis
+                      tick={{
+                        fontSize: 10,
+                      }}
+                    />
+
+                    <Tooltip
+                      formatter={(v) =>
+                        `Rp ${Number(v).toLocaleString("id-ID")}`
+                      }
+                    />
+
+                    <Line
+                      type="monotone"
+                      dataKey="omzet"
+                      stroke="#3B82F6"
+                      strokeWidth={3}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* BULANAN */}
+            <div
+              className="
+        bg-white
+        border
+        border-slate-200
+        rounded-3xl
+        shadow-sm
+        p-5
+      "
+            >
+              <div className="mb-4">
+                <h3 className="text-xl font-bold text-slate-800">
+                  Omzet Bulanan
+                </h3>
+
+                <p className="text-sm text-slate-500">
+                  Statistik omzet bulanan seluruh toko
+                </p>
+              </div>
+
+              <div className="h-[280px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={omzetPerBulan}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+
+                    <XAxis
+                      dataKey="bulan"
+                      tick={{
+                        fontSize: 10,
+                      }}
+                    />
+
+                    <YAxis
+                      tick={{
+                        fontSize: 10,
+                      }}
+                    />
+
+                    <Tooltip
+                      formatter={(v) =>
+                        `Rp ${Number(v).toLocaleString("id-ID")}`
+                      }
+                    />
+
+                    <Line
+                      type="monotone"
+                      dataKey="omzet"
+                      stroke="#10B981"
+                      strokeWidth={3}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
