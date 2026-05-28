@@ -334,89 +334,223 @@ export default function MasterBarangKategoriCard({ kategori }) {
         />
       </div>
 
-      {/* TABLE */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full border text-sm">
-          <thead className="bg-slate-100">
-            <tr>
-              <th className="border px-3 py-2">Brand</th>
-              <th className="border px-3 py-2">Nama Barang</th>
-              <th className="border px-3 py-2">SRP</th>
-              <th className="border px-3 py-2">Grosir</th>
-              <th className="border px-3 py-2">Reseller</th>
-              <th className="border px-3 py-2">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentRows.map((b) => (
-              <tr key={b.id}>
-                <td className="border px-3 py-2">{b.brand}</td>
-                <td className="border px-3 py-2">{b.namaBarang}</td>
-                <td className="border px-3 py-2">
-                  {Number(b.harga?.srp || 0).toLocaleString("id-ID")}
-                </td>
-                <td className="border px-3 py-2">
-                  {Number(b.harga?.grosir || 0).toLocaleString("id-ID")}
-                </td>
-                <td className="border px-3 py-2">
-                  {Number(b.harga?.reseller || 0).toLocaleString("id-ID")}
-                </td>
-                <td className="border px-3 py-2 space-x-2">
-                  <button
-                    onClick={() => handleEdit(b)}
-                    className="px-2 py-1 bg-amber-500 text-white rounded"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(b.id)}
-                    className="px-2 py-1 bg-red-600 text-white rounded"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
+      {/* TABLE MODERN */}
+      <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+        {/* INFO HEADER */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-4 py-4 bg-gradient-to-r from-indigo-50 to-slate-50 border-b">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">
+              Data Master Barang
+            </h2>
 
-            {filteredBarang.length === 0 && (
-              <tr>
-                <td colSpan={6} className="text-center py-4 text-slate-400">
-                  Belum ada data
-                </td>
-              </tr>
-            )}
-          </tbody>
-          <div className="flex justify-center items-center gap-2 mt-4">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-              className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs font-semibold"
-            >
-              ◀ Prev
-            </button>
-
-            {Array.from({ length: totalPages }, (_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`px-3 py-1 rounded text-xs font-semibold
-        ${
-          currentPage === i + 1
-            ? "bg-indigo-600 text-white"
-            : "bg-gray-200 hover:bg-gray-300"
-        }`}
-              >
-                {i + 1}
-              </button>
-            ))}
-
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-              className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 text-xs font-semibold"
-            >
-              Next ▶
-            </button>
+            <p className="text-sm text-slate-500">
+              Total Data :{" "}
+              <span className="font-bold text-indigo-600">
+                {filteredBarang.length}
+              </span>
+            </p>
           </div>
-        </table>
+
+          <div className="text-xs text-slate-400">
+            Realtime Firebase Database
+          </div>
+        </div>
+
+        {/* TABLE */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-100 sticky top-0 z-10">
+              <tr>
+                <th className="px-4 py-3 text-left font-bold text-slate-700 whitespace-nowrap">
+                  Brand
+                </th>
+
+                <th className="px-4 py-3 text-left font-bold text-slate-700 whitespace-nowrap">
+                  Nama Barang
+                </th>
+
+                <th className="px-4 py-3 text-center font-bold text-slate-700 whitespace-nowrap">
+                  SRP
+                </th>
+
+                <th className="px-4 py-3 text-center font-bold text-slate-700 whitespace-nowrap">
+                  Grosir
+                </th>
+
+                <th className="px-4 py-3 text-center font-bold text-slate-700 whitespace-nowrap">
+                  Reseller
+                </th>
+
+                <th className="px-4 py-3 text-center font-bold text-slate-700 whitespace-nowrap">
+                  Aksi
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {currentRows.map((b, index) => (
+                <tr
+                  key={b.id}
+                  className={`
+              border-b transition-all duration-200 hover:bg-indigo-50
+              ${index % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
+            `}
+                >
+                  {/* BRAND */}
+                  <td className="px-4 py-3">
+                    <div
+                      className="
+                  max-w-[120px]
+                  md:max-w-[180px]
+                  truncate
+                  font-semibold
+                  text-slate-800
+                "
+                      title={b.brand}
+                    >
+                      {b.brand}
+                    </div>
+                  </td>
+
+                  {/* NAMA BARANG */}
+                  <td className="px-4 py-3">
+                    <div
+                      className="
+                  max-w-[180px]
+                  md:max-w-[280px]
+                  truncate
+                  text-slate-700
+                  font-medium
+                "
+                      title={b.namaBarang}
+                    >
+                      {b.namaBarang}
+                    </div>
+                  </td>
+
+                  {/* HARGA */}
+                  <td className="px-4 py-3 text-center">
+                    <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs">
+                      Rp {Number(b.harga?.srp || 0).toLocaleString("id-ID")}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3 text-center">
+                    <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-bold text-xs">
+                      Rp {Number(b.harga?.grosir || 0).toLocaleString("id-ID")}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3 text-center">
+                    <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-700 font-bold text-xs">
+                      Rp{" "}
+                      {Number(b.harga?.reseller || 0).toLocaleString("id-ID")}
+                    </span>
+                  </td>
+
+                  {/* AKSI */}
+                  <td className="px-4 py-3">
+                    <div className="flex justify-center gap-2">
+                      <button
+                        onClick={() => handleEdit(b)}
+                        className="
+                    px-3 py-1.5
+                    rounded-lg
+                    bg-amber-500
+                    hover:bg-amber-600
+                    text-white
+                    text-xs
+                    font-bold
+                    shadow-sm
+                    transition-all
+                  "
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        onClick={() => handleDelete(b.id)}
+                        className="
+                    px-3 py-1.5
+                    rounded-lg
+                    bg-red-500
+                    hover:bg-red-600
+                    text-white
+                    text-xs
+                    font-bold
+                    shadow-sm
+                    transition-all
+                  "
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+
+              {/* EMPTY */}
+              {filteredBarang.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center py-10 text-slate-400">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="text-5xl">📦</div>
+
+                      <p className="font-semibold">Belum ada data barang</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* PAGINATION */}
+        <div className="flex flex-wrap justify-center items-center gap-2 p-4 bg-slate-50 border-t">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+            className="
+        px-4 py-2 rounded-xl
+        bg-white border
+        hover:bg-slate-100
+        text-xs font-bold
+        shadow-sm
+      "
+          >
+            ◀ Prev
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentPage(i + 1)}
+              className={`
+          w-9 h-9 rounded-xl text-xs font-bold
+          transition-all shadow-sm
+          ${
+            currentPage === i + 1
+              ? "bg-indigo-600 text-white scale-105"
+              : "bg-white border hover:bg-slate-100"
+          }
+        `}
+            >
+              {i + 1}
+            </button>
+          ))}
+
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+            className="
+        px-4 py-2 rounded-xl
+        bg-white border
+        hover:bg-slate-100
+        text-xs font-bold
+        shadow-sm
+      "
+          >
+            Next ▶
+          </button>
+        </div>
       </div>
     </div>
   );

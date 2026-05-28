@@ -821,10 +821,17 @@ export default function MasterPembelian() {
 
           hargaSup: Number(t.HARGA_SUPLAYER || 0),
 
-          imeis: [],
+          qty: 0,
 
+          // ======================================
+          // FIX REALTIME QTY
+          // ======================================
           totalQty: 0,
-
+          
+          imeis: [],
+          
+          total: 0,
+          
           totalHargaSup: 0,
         };
       }
@@ -835,19 +842,30 @@ export default function MasterPembelian() {
       if (t.__REALTIME) {
         const qty = Number(t.QTY || 0);
 
-        map[keyGroup].totalQty += qty;
+        map[keyGroup].totalQty =
+        Number(map[keyGroup].totalQty || 0) +
+        Number(qty || 0);
       }
 
       // ======================================
-      // SEMUA DATA IMEI PEMBELIAN
+      // SIMPAN IMEI HANDPHONE
       // ======================================
-      if (t.IMEI && t.__ALL_DATA) {
-        const cleanImei = String(t.IMEI).trim();
+      const kategori = String(t.KATEGORI_BRAND || "")
+        .trim()
+        .toUpperCase();
 
+      const cleanImei = String(t.IMEI || "")
+        .trim()
+        .toUpperCase();
+
+      // ======================================
+      // KHUSUS HANDPHONE / IMEI
+      // ======================================
+      if (KATEGORI_WAJIB_IMEI.includes(kategori) && cleanImei && t.__ALL_DATA) {
         // ======================================
-        // JANGAN DUPLIKAT
+        // ANTI DUPLIKAT
         // ======================================
-        if (cleanImei && !map[keyGroup].imeis.includes(cleanImei)) {
+        if (!map[keyGroup].imeis.includes(cleanImei)) {
           map[keyGroup].imeis.push(cleanImei);
         }
       }
@@ -1868,8 +1886,18 @@ export default function MasterPembelian() {
                           {item.barang}
                         </td>
 
-                        <td className="border p-2 whitespace-pre-wrap font-mono text-[11px]">
-                          {shownImeis.length ? shownImeis.join("\n") : "-"}
+                        <td
+                          className="
+    border p-2
+    whitespace-pre-wrap
+    font-mono
+    text-[11px]
+    max-w-[240px]
+  "
+                        >
+                          {Array.isArray(shownImeis) && shownImeis.length > 0
+                            ? shownImeis.join("\n")
+                            : "-"}
                         </td>
 
                         {/* === MASTER BARANG === */}

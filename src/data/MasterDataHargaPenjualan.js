@@ -366,7 +366,7 @@ const masterProduk = [
     "HARGA": 180000
   },
   {
-    "UPDATE PER 1 SEPT 2025": "TYPE UNIT HANPHONE",
+    "UPDATE PER 1 SEPT 2025": "TYPE UNIT HANDPHONE",
     "Unnamed: 1": NaN,
     "PO PENJUALAN": NaN,
     "Unnamed: 3": 0,
@@ -618,7 +618,7 @@ const masterProduk = [
     "HARGA": 150000
   },
   {
-    "UPDATE PER 1 SEPT 2025": "TYPE UNIT HANPHONE",
+    "UPDATE PER 1 SEPT 2025": "TYPE UNIT HANDPHONE",
     "Unnamed: 1": NaN,
     "PO PENJUALAN": NaN,
     "Unnamed: 3": 0,

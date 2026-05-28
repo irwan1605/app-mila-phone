@@ -1,6 +1,12 @@
+//processImportPembelian.js//
+
 import * as XLSX from "xlsx";
 
-import { addTransaksi, addStock } from "../../../services/FirebaseService";
+import {
+  addTransaksi,
+  addStock,
+  updateMasterBarang,
+} from "../../../services/FirebaseService";
 
 // ======================================
 // KATEGORI WAJIB IMEI
@@ -80,7 +86,11 @@ export const processImportPembelian = async ({
 
       const brand = String(row["Nama Brand"] || "").trim();
 
-      const kategoriBrand = String(row["Kategori Brand"] || "").trim();
+      const kategoriBrand = String(
+        row["Kategori Brand"] || ""
+      )
+        .trim()
+        .toUpperCase();
 
       const barang = String(row["Nama Barang"] || "").trim();
 
@@ -136,7 +146,7 @@ export const processImportPembelian = async ({
       // ======================================
       // VALIDASI MASTER BARANG
       // ======================================
-      const barangExist = masterBarang.some(
+      const barangExist = masterBarang.find(
         (b) =>
           String(b.brand || "")
             .trim()
@@ -184,7 +194,9 @@ export const processImportPembelian = async ({
           // ======================================
           // CLEAN IMEI
           // ======================================
-          const cleanImei = String(imei).trim().toUpperCase();
+          const cleanImei = String(imei || "")
+            .trim()
+            .toUpperCase();
 
           // ======================================
           // CEK IMEI SUDAH ADA
@@ -208,6 +220,32 @@ export const processImportPembelian = async ({
           // SIMPAN TRACKER
           // ======================================
           importImeis.add(cleanImei);
+
+          // ======================================
+          // SIMPAN IMEI KE MASTER BARANG HANDPHONE
+          // ======================================
+          if (String(kategoriBrand).trim().toUpperCase() === "HANDPHONE") {
+            const currentImeis = Array.isArray(barangExist?.imeiList)
+              ? barangExist.imeiList
+              : [];
+
+            const cleanList = currentImeis.map((x) =>
+              String(x || "")
+                .trim()
+                .toUpperCase()
+            );
+
+            // ======================================
+            // JANGAN DUPLIKAT
+            // ======================================
+            if (!cleanList.includes(cleanImei)) {
+              await updateMasterBarang(barangExist.id, {
+                imeiList: [...currentImeis, cleanImei],
+
+                UPDATED_AT: Date.now(),
+              });
+            }
+          }
 
           // ======================================
           // INSERT PEMBELIAN
