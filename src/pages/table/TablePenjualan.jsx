@@ -169,6 +169,14 @@ export default function TablePenjualan({ data = [] }) {
 
   const excludeRefund = location.state?.excludeRefund || false;
 
+  const onlyPenjualan = location.state?.onlyPenjualan || false;
+
+  const excludeTransfer = location.state?.excludeTransfer || false;
+
+  const excludePembelian = location.state?.excludePembelian || false;
+
+  const excludeReject = location.state?.excludeReject || false;
+
   const [masterSH, setMasterSH] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
 
@@ -612,6 +620,49 @@ export default function TablePenjualan({ data = [] }) {
   /* ================= FILTER ================= */
   const filteredRows = useMemo(() => {
     return tableRows.filter((r) => {
+      // ======================================================
+      // HANYA TRANSAKSI PENJUALAN
+      // ======================================================
+      if (onlyPenjualan) {
+        const metode = String(
+          r.PAYMENT_METODE || r.paymentMetode || r.paymentMetodeUser || ""
+        )
+          .trim()
+          .toUpperCase();
+
+        const status = String(r.STATUS || r.status || r.statusPembayaran || "")
+          .trim()
+          .toUpperCase();
+
+        // ❌ PEMBELIAN
+        if (metode === "PEMBELIAN" || status === "PEMBELIAN") {
+          return false;
+        }
+
+        // ❌ REFUND
+        if (
+          metode === "REFUND" ||
+          status === "REFUND" ||
+          status === "REFUND_DELETED"
+        ) {
+          return false;
+        }
+
+        // ❌ TRANSFER
+        if (metode === "TRANSFER" || status === "TRANSFER") {
+          return false;
+        }
+
+        // ❌ REJEK
+        if (status === "REJEK" || status === "REJECT" || status === "DITOLAK") {
+          return false;
+        }
+
+        // ❌ VOID
+        if (status === "VOID") {
+          return false;
+        }
+      }
       // ======================================================
       // FILTER TOKO DARI DASHBOARD
       // ======================================================

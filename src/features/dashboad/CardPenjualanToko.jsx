@@ -50,16 +50,6 @@ const TOKO_LIST = [
 ];
 
 // =======================================================
-// FORMAT URL TOKO
-// =======================================================
-const tokoToUrl = (toko) => {
-  return String(toko || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-");
-};
-
-// =======================================================
 // COMPONENT
 // =======================================================
 export default function CardPenjualanToko() {
@@ -100,31 +90,61 @@ export default function CardPenjualanToko() {
     const currentYear = new Date().getFullYear();
 
     penjualanList.forEach((trx) => {
-      // ======================================================
-      // HANYA HITUNG BARANG TERJUAL
-      // ======================================================
+      // =================================================
+      // HANYA HITUNG PENJUALAN VALID
+      // =================================================
+      // =================================================
+      // NORMALIZE
+      // =================================================
       const metode = String(
-        trx.PAYMENT_METODE || trx.paymentMetode || ""
-      ).toUpperCase();
+        trx?.PAYMENT_METODE ||
+          trx?.paymentMetode ||
+          trx?.paymentMetodeUser ||
+          ""
+      )
+        .trim()
+        .toUpperCase();
 
-      const status = String(trx.STATUS || trx.status || "").toUpperCase();
+      const status = String(
+        trx?.STATUS || trx?.status || trx?.statusPembayaran || ""
+      )
+        .trim()
+        .toUpperCase();
 
-      const statusPembayaran = String(trx.statusPembayaran || "").toUpperCase();
+      // =================================================
+      // FILTER HANYA PENJUALAN VALID
+      // =================================================
 
-      // ======================================================
-      // FILTER PENJUALAN VALID
-      // ======================================================
-      if (metode !== "PENJUALAN") return;
+      // =================================================
+      // FILTER TRANSAKSI TIDAK VALID
+      // =================================================
 
-      if (status !== "APPROVED") return;
-
-      if (statusPembayaran === "REFUND") return;
-
-      if (metode !== "PENJUALAN") {
+      // ❌ PEMBELIAN
+      if (metode === "PEMBELIAN") {
         return;
       }
 
-      if (status !== "APPROVED") {
+      // ❌ REFUND
+      if (
+        metode === "REFUND" ||
+        status === "REFUND" ||
+        status === "REFUND_DELETED"
+      ) {
+        return;
+      }
+
+      // ❌ TRANSFER
+      if (metode === "TRANSFER" || status === "TRANSFER") {
+        return;
+      }
+
+      // ❌ REJEK
+      if (status === "REJEK" || status === "REJECT" || status === "DITOLAK") {
+        return;
+      }
+
+      // ❌ VOID
+      if (status === "VOID") {
         return;
       }
       // =================================================
@@ -170,27 +190,17 @@ export default function CardPenjualanToko() {
       );
 
       // =================================================
-      // HITUNG TOTAL PER INVOICE SEKALI SAJA
+      // TOTAL
       // =================================================
       let total = 0;
 
-      const invoiceKeyTotal = `${toko}|${invoice}`;
-
-      if (!map.__invoiceTotalTracker) {
-        map.__invoiceTotalTracker = new Map();
-      }
-
-      if (!map.__invoiceTotalTracker.has(invoiceKeyTotal)) {
-        if (Number(trx?.payment?.grandTotal || 0) > 0) {
-          total = Number(trx.payment.grandTotal);
-        } else if (Array.isArray(trx?.items)) {
-          total =
-            trx.items.reduce((s, it) => {
-              return s + Number(it.qty || 0) * Number(it.hargaAktif || 0);
-            }, 0) + Number(trx?.payment?.nominalMdr || 0);
-        }
-
-        map.__invoiceTotalTracker.set(invoiceKeyTotal, total);
+      if (Number(trx?.payment?.grandTotal || 0) > 0) {
+        total = Number(trx.payment.grandTotal);
+      } else if (Array.isArray(trx?.items)) {
+        total =
+          trx.items.reduce((s, it) => {
+            return s + Number(it.qty || 0) * Number(it.hargaAktif || 0);
+          }, 0) + Number(trx?.payment?.nominalMdr || 0);
       }
 
       // =================================================
@@ -210,11 +220,19 @@ export default function CardPenjualanToko() {
       // HARI INI
       // =================================================
       if (tanggal === today) {
-        if (!invoiceTrackerHari.has(`TOTAL_${invoiceKeyHari}`)) {
-          map[toko].omzetHariIni += total;
-
-          invoiceTrackerHari.set(`TOTAL_${invoiceKeyHari}`, true);
-        }
+        if (
+            !invoiceTrackerHari.has(
+              `TOTAL_${invoiceKeyHari}`
+            )
+          ) {
+          
+            map[toko].omzetHariIni += total;
+          
+            invoiceTrackerHari.set(
+              `TOTAL_${invoiceKeyHari}`,
+              true
+            );
+          }
 
         // =================================================
         // HITUNG QTY BARANG TERJUAL
@@ -251,11 +269,19 @@ export default function CardPenjualanToko() {
       );
 
       if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-        if (!invoiceTrackerBulan.has(`TOTAL_${invoiceKeyBulan}`)) {
-          map[toko].omzetBulanIni += total;
-
-          invoiceTrackerBulan.set(`TOTAL_${invoiceKeyBulan}`, true);
-        }
+        if (
+            !invoiceTrackerBulan.has(
+              `TOTAL_${invoiceKeyBulan}`
+            )
+          ) {
+          
+            map[toko].omzetBulanIni += total;
+          
+            invoiceTrackerBulan.set(
+              `TOTAL_${invoiceKeyBulan}`,
+              true
+            );
+          }
 
         // =================================================
         // HITUNG QTY BARANG TERJUAL
@@ -278,7 +304,10 @@ export default function CardPenjualanToko() {
             qtyBulan = Number(trx?.QTY || trx?.qty || 1);
           }
 
-          invoiceTrackerBulan.set(invoiceKeyBulan, true);
+          invoiceTrackerBulan.set(
+            invoiceKeyBulan,
+            true
+          );
 
           map[toko].transaksiBulanIni += qtyBulan;
         }
@@ -320,37 +349,42 @@ export default function CardPenjualanToko() {
   // RENDER
   // =====================================================
   return (
-    <div className="mt-1">
-      <div className="flex items-center justify-between mb-2">
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-slate-800">
+          Omzet Penjualan Per Toko
+        </h2>
+
         <div className="text-sm text-gray-500">
           Total Toko : {dataToko.length}
         </div>
       </div>
 
-      <div
-        className="
-    grid
-    grid-cols-1
-    sm:grid-cols-2
-    lg:grid-cols-5
-    gap-4
-  "
-      >
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {dataToko.map((item, index) => (
           <div
             key={index}
             onClick={() => {
-              navigate(`/toko/${tokoToUrl(item.toko)}/penjualan`, {
-                state: {
-                  filterToko: item.toko,
+              navigate(
+                `/toko/${item.toko
+                  .toLowerCase()
+                  .replace(/\s+/g, "-")}/penjualan`,
+                {
+                  state: {
+                    filterToko: item.toko,
 
-                  paymentMetode: "PENJUALAN",
+                    onlyPenjualan: true,
 
-                  status: "Approved",
+                    excludeRefund: true,
 
-                  excludeRefund: true,
-                },
-              });
+                    excludeTransfer: true,
+
+                    excludePembelian: true,
+
+                    excludeReject: true,
+                  },
+                }
+              );
             }}
             className="
          bg-white
@@ -358,7 +392,7 @@ export default function CardPenjualanToko() {
          border
          border-gray-200
          shadow-sm
-         p-2
+         p-4
          hover:shadow-lg
          hover:scale-[1.02]
          transition-all
@@ -366,7 +400,7 @@ export default function CardPenjualanToko() {
        "
           >
             {/* HEADER */}
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="font-bold text-slate-800 text-sm">
                   {item.toko}
@@ -405,15 +439,11 @@ export default function CardPenjualanToko() {
               "
             >
               <div className="text-xs font-semibold text-green-700">
-                OMZET HARI INI
+                PENJUALAN HARI INI
               </div>
 
               <div className="text-lg font-bold text-green-600 mt-1">
                 {rupiah(item.omzetHariIni)}
-              </div>
-
-              <div className="text-xs text-gray-500 mt-1">
-                {item.transaksiHariIni} Barang Terjual
               </div>
             </div>
 
@@ -428,15 +458,11 @@ export default function CardPenjualanToko() {
               "
             >
               <div className="text-xs font-semibold text-blue-700">
-                OMZET BULAN INI
+                PENJUALAN BULAN INI
               </div>
 
               <div className="text-lg font-bold text-blue-600 mt-1">
                 {rupiah(item.omzetBulanIni)}
-              </div>
-
-              <div className="text-xs text-gray-500 mt-1">
-                {item.transaksiBulanIni} Barang Terjual
               </div>
             </div>
           </div>
