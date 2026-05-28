@@ -310,12 +310,8 @@ export default function CardPenjualanToko() {
   // RENDER
   // =====================================================
   return (
-    <div className="mt-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-slate-800">
-          Omzet Penjualan Per Toko
-        </h2>
-
+    <div className="mt-1">
+      <div className="flex items-center justify-between mb-2">
         <div className="text-sm text-gray-500">
           Total Toko : {dataToko.length}
         </div>
@@ -346,7 +342,7 @@ export default function CardPenjualanToko() {
          border
          border-gray-200
          shadow-sm
-         p-4
+         p-2
          hover:shadow-lg
          hover:scale-[1.02]
          transition-all
@@ -354,7 +350,7 @@ export default function CardPenjualanToko() {
        "
           >
             {/* HEADER */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-2">
               <div>
                 <h3 className="font-bold text-slate-800 text-sm">
                   {item.toko}
