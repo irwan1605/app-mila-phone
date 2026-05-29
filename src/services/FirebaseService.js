@@ -46,6 +46,13 @@ import {
   off,
   serverTimestamp,
 } from "firebase/database";
+import {
+  getRejectStatus,
+  hasTransferRejectHistory,
+} from "../features/Reject/BarangReject";
+import {
+  getFinalIMEIStatus,
+} from "../utils/imeiStatusEngine";
 
 export const listenTransaksi = (callback) => {
   const dbRef = ref(db, "transaksi");
@@ -2277,13 +2284,10 @@ export const approveTransferFINAL = async ({ transfer }) => {
   const approvedAt = Date.now();
 
   // ======================================
-// 🔥 FINAL SUPPLIER
-// ======================================
-const finalSupplier =
-supplier ||
-namaSupplier ||
-NAMA_SUPPLIER ||
-"ONLINE NON PKP";
+  // 🔥 FINAL SUPPLIER
+  // ======================================
+  const finalSupplier =
+    supplier || namaSupplier || NAMA_SUPPLIER || "ONLINE NON PKP";
 
   // =====================================================
   // 🔥 SAFE QTY GLOBAL
@@ -2322,11 +2326,23 @@ NAMA_SUPPLIER ||
       // ======================================
       let refundActive = false;
 
+      // ======================================
+      // 🔥 REJECT ACTIVE TRACKER
+      // ======================================
+      let rejectActive = false;
+
+      // ======================================
+      // 🔥 HISTORI IMEI
+      // ======================================
+      const imeiHistory = [];
+      let finalTransaction = null;
+
       Object.values(allTokoData).forEach((toko) => {
         const transaksi = toko.transaksi || {};
 
         Object.values(transaksi).forEach((trx) => {
           if (String(trx.IMEI).trim() !== imei) return;
+          imeiHistory.push(trx);
           // ======================================
           // 🔥 FINAL STATUS VALIDATOR
           // ======================================
@@ -2384,6 +2400,21 @@ NAMA_SUPPLIER ||
           }
 
           // ======================================
+          // 🔥 TRANSFER REJECT
+          // ======================================
+          if (metode === "TRANSFER_REJECT") {
+            saldo += 1;
+
+            rejectActive = true;
+
+            // aktif lagi
+            sudahTerjual = false;
+
+            lokasiTerakhir =
+              trx.NAMA_TOKO || trx.tokoPengirim || lokasiTerakhir;
+          }
+
+          // ======================================
           // 🔥 PENJUALAN
           // ======================================
           if (metode === "PENJUALAN") {
@@ -2404,6 +2435,51 @@ NAMA_SUPPLIER ||
         });
       });
 
+      // ======================================
+// 🔥 SORT HISTORI FINAL
+// ======================================
+imeiHistory.sort(
+  (a, b) =>
+    (a.CREATED_AT || a.createdAt || 0) -
+    (b.CREATED_AT || b.createdAt || 0)
+);
+
+// ======================================
+// 🔥 TRANSAKSI TERAKHIR
+// ======================================
+finalTransaction =
+  imeiHistory.length > 0
+    ? imeiHistory[imeiHistory.length - 1]
+    : null;
+
+const finalMetode = String(
+  finalTransaction?.PAYMENT_METODE || ""
+).toUpperCase();
+
+// ======================================
+// 🔥 FINAL STATUS BERDASARKAN TRANSAKSI TERAKHIR
+// ======================================
+const finalAvailableMethods = [
+  "PEMBELIAN",
+  "REFUND",
+  "TRANSFER_MASUK",
+  "TRANSFER_REJECT",
+];
+
+const finalSoldMethods = [
+  "PENJUALAN",
+];
+
+const finalStatusAvailable =
+  finalAvailableMethods.includes(
+    finalMetode
+  );
+
+const finalStatusSold =
+  finalSoldMethods.includes(
+    finalMetode
+  );
+
       // ===============================
       // 🔥 VALIDASI TOTAL (WAJIB)
       // ===============================
@@ -2415,17 +2491,167 @@ NAMA_SUPPLIER ||
       }
 
       // ❌ BLOK JIKA SUDAH TERJUAL
-      if (sudahTerjual) {
-        throw new Error(`IMEI ${imei} sudah TERJUAL`);
+      const masihAktif = saldo > 0 || refundActive || rejectActive;
+
+      // ======================================
+      // 🔥 REJECT ENGINE
+      // ======================================
+      const rejectEngine = getRejectStatus(imeiHistory);
+
+      // ======================================
+// FINAL STATUS ENGINE
+// ======================================
+
+const finalStatus =
+getFinalIMEIStatus(
+  imeiHistory
+);
+
+// ======================================
+// FINAL STATUS VALIDATOR
+// ======================================
+
+if (
+  finalStatus ===
+  "NOT_FOUND"
+) {
+  throw new Error(
+    `IMEI ${imei} tidak ditemukan`
+  );
+}
+
+if (
+  finalStatus ===
+  "UNKNOWN"
+) {
+  throw new Error(
+    `IMEI ${imei} memiliki status tidak dikenal`
+  );
+}
+
+if (
+  finalStatus ===
+  "SOLD"
+) {
+  throw new Error(
+    `IMEI ${imei} sudah TERJUAL`
+  );
+}
+
+console.log(
+"🔥 FINAL IMEI STATUS",
+{
+  imei,
+  finalStatus,
+}
+);
+
+      // ======================================
+      // 🔥 FINAL STATUS DARI REJECT ENGINE
+      // ======================================
+      const finalRejectStatus = String(rejectEngine?.status || "")
+        .trim()
+        .toUpperCase();
+
+      if (finalRejectStatus === "AVAILABLE") {
+        // ======================================
+        // 🔥 OVERRIDE STATUS TERJUAL
+        // ======================================
+        sudahTerjual = false;
+
+        rejectActive = true;
       }
 
-      // ❌ BLOK JIKA SALDO HABIS
       // ======================================
-      // 🔥 REFUND ACTIVE MASIH VALID
+      // 🔥 PERNAH REJECT
       // ======================================
-      if (saldo <= 0 && !refundActive) {
-        throw new Error(`IMEI ${imei} tidak tersedia`);
+      const hasRejectHistory = hasTransferRejectHistory(imeiHistory);
+
+      // ======================================
+      // 🔥 FINAL AVAILABLE FROM REJECT ENGINE
+      // ======================================
+      if (rejectEngine?.status === "AVAILABLE") {
+        rejectActive = true;
       }
+
+      const rejectCanTransfer = rejectEngine?.canTransfer === true;
+
+      // ======================================
+// 🔥 FINAL OVERRIDE ENGINE
+// ======================================
+if (finalStatusAvailable) {
+  sudahTerjual = false;
+  rejectActive = true;
+}
+
+if (finalStatusSold) {
+  sudahTerjual = true;
+}
+
+      // ======================================
+      // 🔥 REJECT OVERRIDE
+      // ======================================
+      const rejectAvailable = rejectCanTransfer === true;
+
+      // ======================================
+// 🔥 JIKA STATUS FINAL AVAILABLE
+// MAKA JANGAN BLOK TRANSFER
+// ======================================
+if (
+  finalStatusSold &&
+  !finalStatusAvailable &&
+  !refundActive &&
+  !rejectActive &&
+  !rejectCanTransfer &&
+  !hasRejectHistory &&
+   finalStatus === "SOLD"
+) {
+  if (
+    finalRejectStatus ===
+    "AVAILABLE"
+  ) {
+    console.log(
+      "✅ REJECT OVERRIDE AKTIF",
+      imei
+    );
+
+    return;
+  }
+
+  throw new Error(
+    `IMEI ${imei} sudah TERJUAL`
+  );
+}
+
+console.log(
+  "🔥 FINAL IMEI CHECK",
+  {
+    imei,
+    saldo,
+    sudahTerjual,
+    refundActive,
+    rejectActive,
+    rejectCanTransfer,
+    hasRejectHistory,
+    finalMetode,
+    finalStatusAvailable,
+    finalStatusSold,
+    historyCount:
+      imeiHistory.length,
+  }
+);
+
+      
+      console.log("🔥 REJECT FINAL", {
+        imei,
+        saldo,
+        sudahTerjual,
+        refundActive,
+        rejectActive,
+        rejectCanTransfer,
+        hasRejectHistory,
+        rejectEngine,
+      });
     }
   }
 
@@ -2475,7 +2701,7 @@ NAMA_SUPPLIER ||
 
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
-    
+
         KATEGORI_BRAND: kategori,
 
         IMEI: imei,
@@ -2513,7 +2739,7 @@ NAMA_SUPPLIER ||
 
         NAMA_BRAND: brand,
         NAMA_BARANG: barang,
-     
+
         KATEGORI_BRAND: kategori,
 
         IMEI: imei,
@@ -2569,7 +2795,7 @@ NAMA_SUPPLIER ||
 
       NAMA_BRAND: brand,
       NAMA_BARANG: barang,
-   
+
       KATEGORI_BRAND: kategori,
 
       IMEI: "",
@@ -2599,7 +2825,7 @@ NAMA_SUPPLIER ||
 
       NAMA_BRAND: brand,
       NAMA_BARANG: barang,
-     
+
       KATEGORI_BRAND: kategori,
 
       IMEI: "",

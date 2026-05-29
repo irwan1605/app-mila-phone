@@ -81,6 +81,7 @@ const isImeiAllowedForTransfer = (status) => {
     "READY",
     "REFUND",
     "PEMBELIAN",
+    "TRANSFER_REJECT",
   ].includes(finalStatus);
 };
 
@@ -508,6 +509,12 @@ export default function TransferBarang() {
                 v.createdAt ||
                 Date.now();
             }
+          }
+
+          if (metode === "TRANSFER_REJECT") {
+            map[imei].status = "AVAILABLE";
+
+            map[imei].toko = String(v.NAMA_TOKO || "").trim();
           }
 
           if (metode === "PENJUALAN") {
