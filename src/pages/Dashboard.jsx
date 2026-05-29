@@ -897,7 +897,7 @@ export default function Dashboard() {
     p-5
   "
           >
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-2">
               <div>
                 <h3 className="text-xl font-bold text-slate-800">
                   Penjualan Per Toko
