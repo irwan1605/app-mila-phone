@@ -8,6 +8,7 @@ import {
 import { db } from "../../firebase/FirebaseInit";
 import { exportToExcel } from "../../utils/exportToExcel";
 import ImportMasterMotorExcel from "../../features/masterBarang/importMotor/ImportMasterMotorExcel";
+import SelectDeleteMasterBarang from "../../features/Select/SelectDeleteMasterBarang";
 
 export default function MasterBarangKategoriCard({ kategori }) {
   // ===============================
@@ -26,6 +27,7 @@ export default function MasterBarangKategoriCard({ kategori }) {
   const [listBarang, setListBarang] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [selectedItems, setSelectedItems] = useState([]);
   // ===============================
   // PAGINATION TABLE
   // ===============================
@@ -50,6 +52,30 @@ export default function MasterBarangKategoriCard({ kategori }) {
 
     return () => off(barangRef);
   }, [kategori]);
+
+  const handleDeleteSelected = async () => {
+    if (!selectedItems.length) return;
+
+    const confirmDelete = window.confirm(
+      `Yakin ingin menghapus ${selectedItems.length} data ?`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      await Promise.all(
+        selectedItems.map((id) => deleteMasterBarangMasing(id))
+      );
+
+      setSelectedItems([]);
+
+      alert("✅ Data berhasil dihapus");
+    } catch (err) {
+      console.error(err);
+
+      alert("❌ Gagal menghapus data");
+    }
+  };
 
   // ===============================
   // EXPORT EXCEL (SESUAI TABLE)
@@ -356,11 +382,19 @@ export default function MasterBarangKategoriCard({ kategori }) {
           </div>
         </div>
 
+        <SelectDeleteMasterBarang
+          currentRows={currentRows}
+          selectedItems={selectedItems}
+          setSelectedItems={setSelectedItems}
+          onDeleteSelected={handleDeleteSelected}
+        />
+
         {/* TABLE */}
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-100 sticky top-0 z-10">
               <tr>
+                <th className="px-3 py-2 text-center">✓</th>
                 <th className="px-4 py-3 text-left font-bold text-slate-700 whitespace-nowrap">
                   Brand
                 </th>
@@ -396,6 +430,23 @@ export default function MasterBarangKategoriCard({ kategori }) {
               ${index % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
             `}
                 >
+                  <td className="text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedItems.includes(b.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedItems((prev) => [...prev, b.id]);
+                        } else {
+                          setSelectedItems((prev) =>
+                            prev.filter((id) => id !== b.id)
+                          );
+                        }
+                      }}
+                      className="w-4 h-4"
+                    />
+                  </td>
+
                   {/* BRAND */}
                   <td className="px-4 py-3">
                     <div

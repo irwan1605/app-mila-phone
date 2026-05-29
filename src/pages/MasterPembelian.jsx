@@ -37,6 +37,7 @@ import ImportPembelianExcel from "../features/pembelian/import/ImportPembelianEx
 import { deletePembelian } from "../features/pembelian/editDelete/deletePembelian";
 import { buildPembelianRealtime } from "../features/pembelian/utils/pembelianRealtime";
 import { saveEditPembelian } from "../features/pembelian/editDelete/editPembelian";
+import SelectDeleteMasterPembelian from "../features/Select/SelectDeleteMasterPembelian";
 
 const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
 // ===============================
@@ -138,6 +139,7 @@ export default function MasterPembelian() {
   const [showInvoice, setShowInvoice] = useState(false);
   const [filterToko, setFilterToko] = useState("");
   const [deletedKeys, setDeletedKeys] = useState(new Set());
+  const [selectedPembelian, setSelectedPembelian] = useState([]);
 
   const masterBarangMap = useMemo(() => {
     const map = {};
@@ -799,6 +801,8 @@ export default function MasterPembelian() {
       // ======================================
       if (!map[keyGroup]) {
         map[keyGroup] = {
+          __KEY__: keyGroup,
+
           tanggal: t.TANGGAL_TRANSAKSI,
 
           noDo: t.NO_INVOICE,
@@ -827,11 +831,11 @@ export default function MasterPembelian() {
           // FIX REALTIME QTY
           // ======================================
           totalQty: 0,
-          
+
           imeis: [],
-          
+
           total: 0,
-          
+
           totalHargaSup: 0,
         };
       }
@@ -843,8 +847,7 @@ export default function MasterPembelian() {
         const qty = Number(t.QTY || 0);
 
         map[keyGroup].totalQty =
-        Number(map[keyGroup].totalQty || 0) +
-        Number(qty || 0);
+          Number(map[keyGroup].totalQty || 0) + Number(qty || 0);
       }
 
       // ======================================
@@ -1115,6 +1118,58 @@ export default function MasterPembelian() {
 
       setDeletedKeys,
     });
+  };
+
+  const handleDeleteSelectedPembelian = async () => {
+    try {
+      if (selectedPembelian.length === 0) {
+        alert("Pilih data terlebih dahulu");
+        return;
+      }
+
+      const selectedRows = paginatedPurchases.filter((item) =>
+        selectedPembelian.includes(item.__KEY__)
+      );
+
+      if (!selectedRows.length) {
+        alert("Data tidak ditemukan");
+        return;
+      }
+
+      // ==========================
+      // HANYA 1X KONFIRMASI
+      // ==========================
+      const confirmDelete = window.confirm(
+        selectedRows.length === 1
+          ? `Yakin menghapus 1 data?\n\n${selectedRows[0].brand} - ${selectedRows[0].barang}`
+          : `Yakin menghapus ${selectedRows.length} data yang dipilih?`
+      );
+
+      if (!confirmDelete) return;
+
+      // ==========================
+      // DELETE TANPA KONFIRMASI LAGI
+      // ==========================
+      await Promise.all(
+        selectedRows.map((item) =>
+          deletePembelian({
+            item,
+            allTransaksi,
+            masterToko,
+            setDeletedKeys,
+            skipConfirm: true,
+          })
+        )
+      );
+
+      setSelectedPembelian([]);
+
+      alert(`✅ ${selectedRows.length} data berhasil dihapus`);
+    } catch (err) {
+      console.error(err);
+
+      alert("❌ Gagal menghapus data");
+    }
   };
 
   const openEdit = (item) => {
@@ -1724,9 +1779,35 @@ export default function MasterPembelian() {
   // ======================= RENDER JSX =======================
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-4">
+      <div
+        className="
+    w-full
+    rounded-3xl
+    shadow-2xl
+    mt-6
+    overflow-hidden
+    border
+    border-slate-200
+    bg-white
+  "
+      >
         {/* HEADER */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          className="
+    flex flex-col md:flex-row
+    md:items-center
+    md:justify-between
+    gap-4
+    px-8
+    py-6
+    border-b
+    border-slate-200
+    bg-gradient-to-r
+    from-indigo-600
+    via-blue-600
+    to-cyan-600
+  "
+        >
           <div>
             <h2 className="text-2xl md:text-3xl font-bold text-white tracking-wide">
               MASTER PEMBELIAN
@@ -1815,6 +1896,13 @@ export default function MasterPembelian() {
             </div>
           </div>
 
+          <SelectDeleteMasterPembelian
+            currentRows={paginatedPurchases}
+            selectedItems={selectedPembelian}
+            setSelectedItems={setSelectedPembelian}
+            onDeleteSelected={handleDeleteSelectedPembelian}
+          />
+
           {/* TABEL */}
           <div
             ref={tableRef}
@@ -1823,26 +1911,199 @@ export default function MasterPembelian() {
             <table className="w-full text-xs md:text-sm border-collapse">
               <thead className="bg-slate-50 sticky top-0 z-10">
                 <tr>
-                  <th className="border p-2">No</th>
-                  <th className="border p-2">Tanggal</th>
-                  <th className="border p-2">No DO</th>
-                  <th className="border p-2">Supplier</th>
-                  <th className="border p-2">Toko</th>
-                  <th className="border p-2">Brand</th>
-                  <th className="border p-2">Kategori</th>
-                  <th className="border p-2">Nama Barang</th>
-                  <th className="border p-2">IMEI / No Mesin</th>
+                  <th
+                    className="
+    border
+    p-4
+    bg-slate-800
+    text-white
+    text-center
+  "
+                  >
+                    ✓
+                  </th>
+                  <th
+                    className="
+    border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap
+  "
+                  >
+                    No
+                  </th>
+                  <th
+                    className="
+    border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap
+  "
+                  >
+                    Tanggal
+                  </th>
+                  <th
+                    className="
+    border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap
+  "
+                  >
+                    No DO
+                  </th>
+                  <th
+                    className="
+    border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap
+  "
+                  >
+                    Supplier
+                  </th>
+                  <th
+                    className="
+    border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap
+  "
+                  >
+                    Toko
+                  </th>
+                  <th
+                    className="
+    border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap
+  "
+                  >
+                    Brand
+                  </th>
+                  <th
+                    className="
+    border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap
+  "
+                  >
+                    Kategori
+                  </th>
+                  <th
+                    className="
+    border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap
+  "
+                  >
+                    Nama Barang
+                  </th>
+                  <th
+                    className="
+    border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap
+  "
+                  >
+                    IMEI / No Mesin
+                  </th>
 
                   {/* === MASTER BARANG === */}
-                  <th className="border p-2 text-right">Harga SRP</th>
-                  <th className="border p-2 text-right">Harga Grosir</th>
-                  <th className="border p-2 text-right">Harga Reseller</th>
+                  <th
+                    className=" border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap text-right"
+                  >
+                    Harga SRP
+                  </th>
+                  <th
+                    className=" border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap text-right"
+                  >
+                    Harga Grosir
+                  </th>
+                  <th
+                    className=" border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap text-right"
+                  >
+                    Harga Reseller
+                  </th>
 
                   {/* === PEMBELIAN === */}
-                  <th className="border p-2 text-right">Harga Supplier</th>
-                  <th className="border p-2 text-center">Qty</th>
-                  <th className="border p-2 text-right">Total Harga</th>
-                  <th className="border p-2 text-center">Aksi</th>
+                  <th
+                    className=" border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap text-right"
+                  >
+                    Harga Supplier
+                  </th>
+                  <th
+                    className=" border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap text-center"
+                  >
+                    Qty
+                  </th>
+                  <th
+                    className=" border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap text-right"
+                  >
+                    Total Harga
+                  </th>
+                  <th
+                    className=" border
+    p-4
+    bg-slate-800
+    text-white
+    font-bold
+    whitespace-nowrap text-center"
+                  >
+                    Aksi
+                  </th>
                 </tr>
               </thead>
 
@@ -1871,6 +2132,25 @@ export default function MasterPembelian() {
                         className="hover:bg-slate-50/80 transition"
                       >
                         <td className="border p-2 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedPembelian.includes(item.__KEY__)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedPembelian((prev) => [
+                                  ...prev,
+                                  item.__KEY__,
+                                ]);
+                              } else {
+                                setSelectedPembelian((prev) =>
+                                  prev.filter((x) => x !== item.__KEY__)
+                                );
+                              }
+                            }}
+                            className="w-4 h-4"
+                          />
+                        </td>
+                        <td className="border p-2 text-center">
                           {(currentPage - 1) * itemsPerPage + idx + 1}
                         </td>
 
@@ -1892,7 +2172,7 @@ export default function MasterPembelian() {
     whitespace-pre-wrap
     font-mono
     text-[11px]
-    max-w-[240px]
+ max-w-[240px]
   "
                         >
                           {Array.isArray(shownImeis) && shownImeis.length > 0

@@ -66,13 +66,16 @@ export const deletePembelian = async ({
   allTransaksi = [],
   masterToko = [],
   setDeletedKeys,
+  skipConfirm = false,
 }) => {
   try {
-    const confirmDelete = window.confirm(
-      `Hapus pembelian?\n\n${item.brand} - ${item.barang}`
-    );
-
-    if (!confirmDelete) return;
+    if (!skipConfirm) {
+      const confirmDelete = window.confirm(
+        `Hapus pembelian?\n\n${item.brand} - ${item.barang}`
+      );
+    
+      if (!confirmDelete) return;
+    }
 
     const keyGroup = makePembelianKey(item);
 
