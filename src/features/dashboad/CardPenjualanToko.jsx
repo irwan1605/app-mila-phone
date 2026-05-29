@@ -220,19 +220,11 @@ export default function CardPenjualanToko() {
       // HARI INI
       // =================================================
       if (tanggal === today) {
-        if (
-            !invoiceTrackerHari.has(
-              `TOTAL_${invoiceKeyHari}`
-            )
-          ) {
-          
-            map[toko].omzetHariIni += total;
-          
-            invoiceTrackerHari.set(
-              `TOTAL_${invoiceKeyHari}`,
-              true
-            );
-          }
+        if (!invoiceTrackerHari.has(`TOTAL_${invoiceKeyHari}`)) {
+          map[toko].omzetHariIni += total;
+
+          invoiceTrackerHari.set(`TOTAL_${invoiceKeyHari}`, true);
+        }
 
         // =================================================
         // HITUNG QTY BARANG TERJUAL
@@ -269,19 +261,11 @@ export default function CardPenjualanToko() {
       );
 
       if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-        if (
-            !invoiceTrackerBulan.has(
-              `TOTAL_${invoiceKeyBulan}`
-            )
-          ) {
-          
-            map[toko].omzetBulanIni += total;
-          
-            invoiceTrackerBulan.set(
-              `TOTAL_${invoiceKeyBulan}`,
-              true
-            );
-          }
+        if (!invoiceTrackerBulan.has(`TOTAL_${invoiceKeyBulan}`)) {
+          map[toko].omzetBulanIni += total;
+
+          invoiceTrackerBulan.set(`TOTAL_${invoiceKeyBulan}`, true);
+        }
 
         // =================================================
         // HITUNG QTY BARANG TERJUAL
@@ -304,10 +288,7 @@ export default function CardPenjualanToko() {
             qtyBulan = Number(trx?.QTY || trx?.qty || 1);
           }
 
-          invoiceTrackerBulan.set(
-            invoiceKeyBulan,
-            true
-          );
+          invoiceTrackerBulan.set(invoiceKeyBulan, true);
 
           map[toko].transaksiBulanIni += qtyBulan;
         }
@@ -360,7 +341,15 @@ export default function CardPenjualanToko() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div
+        className="
+    grid
+    grid-cols-1
+    sm:grid-cols-2
+    lg:grid-cols-5
+    gap-4
+  "
+      >
         {dataToko.map((item, index) => (
           <div
             key={index}
