@@ -2196,8 +2196,14 @@ export default function MasterPembelian() {
                           Rp {fmt(item.hargaSup)}
                         </td>
 
-                        <td className="border p-2 text-center">
-                          {item.totalQty}
+                        <td className="border p-2 text-center font-semibold">
+                          {KATEGORI_WAJIB_IMEI.includes(
+                            String(item.kategoriBrand || "")
+                              .trim()
+                              .toUpperCase()
+                          )
+                            ? item.totalImei || item.imeis?.length || 0
+                            : item.totalQty || 0}
                         </td>
 
                         <td className="border p-2 text-right">
