@@ -6,6 +6,7 @@ import {
   updateMasterBarang,
   deleteMasterBarangMasing,
 } from "../services/FirebaseService";
+import DataMasterBarang from "../features/masterBarang/DataMasterBarang";
 
 import {
   FaEdit,
@@ -46,6 +47,7 @@ export default function MasterBarang() {
     hargaGrosir: "",
     hargaReseller: "",
   });
+  const [selectedBarang, setSelectedBarang] = useState([]);
 
   const [kategoriList, setKategoriList] = useState([]);
 
@@ -65,6 +67,33 @@ export default function MasterBarang() {
     });
     return () => unsub && unsub();
   }, []);
+
+  const handleDeleteSelectedBarang = async () => {
+    if (!selectedBarang.length) {
+      alert("Pilih data terlebih dahulu");
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      `Yakin hapus ${selectedBarang.length} data ?`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      await Promise.all(
+        selectedBarang.map((id) => deleteMasterBarangMasing(id))
+      );
+
+      setSelectedBarang([]);
+
+      showNotif(`✅ ${selectedBarang.length} data berhasil dihapus`);
+    } catch (err) {
+      console.error(err);
+
+      alert("Gagal delete data");
+    }
+  };
 
   // useEffect(() => {
   //   if (
@@ -89,8 +118,9 @@ export default function MasterBarang() {
   // ================== REKAP MASTER BARANG ==================
   // ================== REKAP MASTER BARANG ==================
   const rekapMasterBarang = useMemo(() => {
-    return masterBarang
-      .filter((b) => b.CREATED_AT) // hanya master barang asli
+    return [...masterBarang]
+      .filter((b) => b.CREATED_AT)
+      .sort((a, b) => Number(b.CREATED_AT || 0) - Number(a.CREATED_AT || 0))
       .map((b) => {
         const harga = b.harga || {};
 
@@ -98,7 +128,17 @@ export default function MasterBarang() {
           id: b.id,
           key: b.id,
 
-          tanggal: b.tanggal || "-",
+          tanggal:
+            b.tanggal ||
+            (b.CREATED_AT
+              ? new Date(b.CREATED_AT).toLocaleString("id-ID", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "-"),
           kategori: b.kategoriBarang || "-",
           brand: b.brand || "-",
           barang: b.namaBarang || "-",
@@ -143,14 +183,11 @@ export default function MasterBarang() {
 
   const namaBarangByBrand = useMemo(() => {
     if (!form.brand || !form.kategori) return [];
-  
+
     return masterBarang.filter(
-      (x) =>
-        x.kategoriBarang === form.kategori &&
-        x.brand === form.brand
+      (x) => x.kategoriBarang === form.kategori && x.brand === form.brand
     );
   }, [masterBarang, form.brand, form.kategori]);
-  
 
   const namaBarangAccessories = useMemo(() => {
     return masterBarang.filter((x) => x.kategoriBarang === "ACCESSORIES");
@@ -293,6 +330,21 @@ export default function MasterBarang() {
     }
   };
 
+  const getVisiblePages = () => {
+    const delta = 2; // jumlah kiri kanan
+    const pages = [];
+
+    for (
+      let i = Math.max(1, currentPage - delta);
+      i <= Math.min(totalPages, currentPage + delta);
+      i++
+    ) {
+      pages.push(i);
+    }
+
+    return pages;
+  };
+
   const submitEdit = async () => {
     if (!editData?.id) {
       alert("ID Master Barang tidak ditemukan");
@@ -325,10 +377,39 @@ export default function MasterBarang() {
 
   // ================== UI ==================
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-600 via-blue-700 to-purple-700 p-6 text-white">
-      <div className="max-w-7xl mx-auto bg-white/95 text-slate-800 rounded-2xl shadow-2xl p-6">
-        <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
-          <h2 className="text-2xl font-bold">MASTER BARANG</h2>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 md:p-6">
+      <div
+        className="
+  w-full
+  rounded-3xl
+  shadow-2xl
+  mt-6
+  overflow-hidden
+  border
+  border-slate-200
+  bg-white
+"
+      >
+        {/* HEADER */}
+        <div
+          className="
+  flex flex-col md:flex-row
+  md:items-center
+  md:justify-between
+  gap-4
+  px-8
+  py-6
+  border-b
+  border-slate-200
+  bg-gradient-to-r
+  from-indigo-600
+  via-blue-600
+  to-cyan-600
+"
+        >
+          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-wide">
+            MASTER BARANG
+          </h2>
 
           <div className="flex gap-2">
             <div className="flex items-center bg-slate-100 px-3 py-2 rounded-full">
@@ -360,11 +441,29 @@ export default function MasterBarang() {
           </div>
         </div>
 
+        <DataMasterBarang
+          currentRows={paginatedData}
+          selectedItems={selectedBarang}
+          setSelectedItems={setSelectedBarang}
+          onDeleteSelected={handleDeleteSelectedBarang}
+          lastUpdate={paginatedData?.[0]?.tanggal}
+        />
+
         {/* TABLE */}
-        <div className="overflow-x-auto rounded-xl border">
+        <div
+          className="
+  bg-white
+  rounded-3xl
+  shadow-2xl
+  overflow-hidden
+  border
+  border-slate-200
+"
+        >
           <table className="w-full text-sm">
             <thead className="bg-slate-100">
               <tr>
+                <th className="p-3 border w-14">✓</th>
                 <th className="p-2 border">No</th>
                 <th className="p-2 border">Tanggal</th>
                 <th className="p-2 border">Kategori Brand</th>
@@ -381,9 +480,39 @@ export default function MasterBarang() {
               {paginatedData.map((x, i) => (
                 <tr key={x.key} className="hover:bg-slate-50">
                   <td className="border p-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedBarang.includes(x.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedBarang((prev) => [...prev, x.id]);
+                        } else {
+                          setSelectedBarang((prev) =>
+                            prev.filter((id) => id !== x.id)
+                          );
+                        }
+                      }}
+                      className="w-4 h-4"
+                    />
+                  </td>
+                  <td className="border p-2 text-center">
                     {(currentPage - 1) * itemsPerPage + i + 1}
                   </td>
-                  <td className="border p-2">{x.tanggal}</td>
+                  <td className="border p-2">
+                    <span
+                      className="
+      px-3 py-1
+      rounded-full
+      bg-blue-50
+      text-blue-700
+      text-xs
+      font-semibold
+      whitespace-nowrap
+    "
+                    >
+                      {x.tanggal}
+                    </span>
+                  </td>
                   <td className="border p-2">{x.kategori}</td>
                   <td className="border p-2">{x.brand}</td>
                   <td className="border p-2">{x.barang}</td>
@@ -418,37 +547,67 @@ export default function MasterBarang() {
         </div>
 
         {/* ✅ PAGINATION */}
-        <div className="flex justify-between items-center mt-3 text-xs text-slate-600">
+        <div className="flex justify-between items-center mt-3 text-xs md:text-sm text-slate-600 flex-wrap gap-2">
           <div>
             Halaman {currentPage} dari {totalPages}
           </div>
-          <div className="flex gap-1">
+
+          <div className="flex items-center gap-1 overflow-x-auto max-w-full">
+            {/* PREV */}
             <button
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="px-3 py-1 border rounded"
+              className="px-3 py-1 rounded-full border text-xs bg-white hover:bg-slate-50 disabled:bg-slate-200 disabled:text-slate-400"
             >
               Prev
             </button>
 
-            {Array.from({ length: totalPages }, (_, i) => (
+            {/* FIRST */}
+            {currentPage > 3 && (
+              <>
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  className="px-3 py-1 rounded-full border text-xs bg-white"
+                >
+                  1
+                </button>
+                <span className="px-1">...</span>
+              </>
+            )}
+
+            {/* MIDDLE */}
+            {getVisiblePages().map((i) => (
               <button
                 key={i}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`px-3 py-1 border rounded ${
-                  currentPage === i + 1
-                    ? "bg-indigo-600 text-white"
-                    : "bg-white"
+                onClick={() => setCurrentPage(i)}
+                className={`px-3 py-1 rounded-full border text-xs ${
+                  currentPage === i
+                    ? "bg-indigo-600 text-white border-indigo-600"
+                    : "bg-white hover:bg-slate-50"
                 }`}
               >
-                {i + 1}
+                {i}
               </button>
             ))}
 
+            {/* LAST */}
+            {currentPage < totalPages - 2 && (
+              <>
+                <span className="px-1">...</span>
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  className="px-3 py-1 rounded-full border text-xs bg-white"
+                >
+                  {totalPages}
+                </button>
+              </>
+            )}
+
+            {/* NEXT */}
             <button
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              className="px-3 py-1 border rounded"
+              className="px-3 py-1 rounded-full border text-xs bg-white hover:bg-slate-50 disabled:bg-slate-200 disabled:text-slate-400"
             >
               Next
             </button>
