@@ -27,12 +27,11 @@ import {
   isRefundOrRejectItem,
 } from "../../../features/FiturPenjualan/constants/stockStatus";
 
+import { canResellIMEI } from "../../../features/FiturPenjualan/constants/transaksiType";
+import { canSellRefundIMEI } from "../../../features/FiturPenjualan/constants/refundResaleEngine";
 import {
-  canResellIMEI,
-} from "../../../features/FiturPenjualan/constants/transaksiType";
-import {
-  canSellRefundIMEI,
-} from "../../../features/FiturPenjualan/constants/refundResaleEngine";
+  buildStockInputBarang,
+} from "../../../utils/FiturPenjualan/stockInputEngine";
 
 import {
   listenPenjualan,
@@ -78,12 +77,9 @@ const isRefundReady = (imei, transaksi = []) => {
 
     return (
       String(t.IMEI || "").trim() === String(imei || "").trim() &&
-      [
-        "REFUND",
-        "READY_RESALE",
-        "BISA_DIJUAL_LAGI",
-        "AVAILABLE",
-      ].includes(metode) &&
+      ["REFUND", "READY_RESALE", "BISA_DIJUAL_LAGI", "AVAILABLE"].includes(
+        metode
+      ) &&
       String(t.STATUS || "").toUpperCase() === "APPROVED"
     );
   });
@@ -133,6 +129,21 @@ export default function CardPenjualanToko() {
   const [listBarang, setListBarang] = useState([]);
   const [detailStockLookup, setDetailStockLookup] = useState({});
   const [isStockReady, setIsStockReady] = useState(false);
+
+  // =====================================
+  // 🔥 FINAL STOCK INPUT ENGINE
+  // SINGLE SOURCE OF TRUTH
+  // =====================================
+  const barangInputFinal = useMemo(() => {
+    return buildStockInputBarang({
+      masterBarang: listBarang,
+      detailStockLookup,
+    });
+  }, [listBarang, detailStockLookup]);
+
+  useEffect(() => {
+    console.log("🔥 BARANG INPUT FINAL:", barangInputFinal);
+  }, [barangInputFinal]);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "detail_stock"), (snap) => {
@@ -504,19 +515,14 @@ export default function CardPenjualanToko() {
           console.log("HASIL cekImeiSudahTerjual:", sold);
           console.log("DETAIL STOCK:", detailStockLookup?.[imei]);
 
-          const refundReady = isRefundReady(
-            imei,
-            penjualanList
-          );
-          
+          const refundReady = isRefundReady(imei, penjualanList);
+
           if (
             sold &&
             !refundReady &&
             !detailStockLookup?.[imei]?.READY_RESALE
           ) {
-            throw new Error(
-              `IMEI ${imei} sudah pernah terjual`
-            );
+            throw new Error(`IMEI ${imei} sudah pernah terjual`);
           }
           const imeiHistory = penjualanList.filter((trx) => {
             const imeiMatch =
@@ -526,7 +532,7 @@ export default function CardPenjualanToko() {
               String(imei || "")
                 .trim()
                 .toUpperCase();
-          
+
             const imeiDiItems =
               Array.isArray(trx.items) &&
               trx.items.some(
@@ -534,18 +540,14 @@ export default function CardPenjualanToko() {
                   Array.isArray(it.imeiList) &&
                   it.imeiList.some(
                     (im) =>
-                      String(im)
-                        .trim()
-                        .toUpperCase() ===
-                      String(imei)
-                        .trim()
-                        .toUpperCase()
+                      String(im).trim().toUpperCase() ===
+                      String(imei).trim().toUpperCase()
                   )
               );
-          
+
             return imeiMatch || imeiDiItems;
           });
-          
+
           console.log(
             "FINAL IMEI HISTORY",
             imei,
@@ -554,115 +556,96 @@ export default function CardPenjualanToko() {
               status: x.STATUS,
             }))
           );
-          
+
           // ===========================
           // AMBIL TRANSAKSI TERAKHIR
           // ===========================
           const lastTrx =
-            imeiHistory.length > 0
-              ? imeiHistory[imeiHistory.length - 1]
-              : null;
-          
-          const finalMetode = String(
-            lastTrx?.PAYMENT_METODE || ""
-          )
+            imeiHistory.length > 0 ? imeiHistory[imeiHistory.length - 1] : null;
+
+          const finalMetode = String(lastTrx?.PAYMENT_METODE || "")
             .trim()
             .toUpperCase();
-          
+
           // ===========================
           // STATUS YANG BOLEH DIJUAL
           // ===========================
           const resaleAllowed = [
             "PEMBELIAN",
-          
+
             "REFUND",
-          
+
             "REJECT",
-          
+
             "TRANSFER_REJECT",
-          
+
             "TRANSFER_MASUK",
-          
+
             // 🔥 TAMBAHAN
             "TRANSFER_KELUAR",
-          
+
             "TRANSFER BARANG",
           ];
-          
+
           const detailStock = detailStockLookup?.[imei];
 
-          const readyResale =
-            detailStock?.READY_RESALE === true;
-          
+          const readyResale = detailStock?.READY_RESALE === true;
+
           const isRefund =
             String(
-              detailStock?.LAST_ACTION ||
-              detailStock?.PAYMENT_METODE ||
-              ""
+              detailStock?.LAST_ACTION || detailStock?.PAYMENT_METODE || ""
             ).toUpperCase() === "REFUND";
-          
-            const sudahAdaDiTable = penjualanList.some((trx) => {
-              const bolehResale = canResellIMEI(trx);
-            
-              if (bolehResale) {
-                return false;
-              }
-            
-              const imeiMatch =
-                String(trx.IMEI || "").trim() ===
-                String(imei).trim();
-            
-              const imeiDiItems =
-                Array.isArray(trx.items) &&
-                trx.items.some(
-                  (it) =>
-                    Array.isArray(it.imeiList) &&
-                    it.imeiList.some(
-                      (im) =>
-                        String(im).trim() ===
-                        String(imei).trim()
-                    )
-                );
-            
-              return imeiMatch || imeiDiItems;
-            });
 
-            console.log("FINAL METODE:", finalMetode);
-console.log("SUDAH ADA DI TABLE:", sudahAdaDiTable);
+          const sudahAdaDiTable = penjualanList.some((trx) => {
+            const bolehResale = canResellIMEI(trx);
 
-          console.log("IMEI CEK:", imei);
+            if (bolehResale) {
+              return false;
+            }
 
-          const historyIMEI = penjualanList.filter((trx) => {
             const imeiMatch =
-              String(trx.IMEI || "").trim() ===
-              String(imei).trim();
-          
+              String(trx.IMEI || "").trim() === String(imei).trim();
+
             const imeiDiItems =
               Array.isArray(trx.items) &&
               trx.items.some(
                 (it) =>
                   Array.isArray(it.imeiList) &&
-                  it.imeiList.includes(imei)
+                  it.imeiList.some(
+                    (im) => String(im).trim() === String(imei).trim()
+                  )
               );
-          
+
             return imeiMatch || imeiDiItems;
           });
-          
+
+          console.log("FINAL METODE:", finalMetode);
+          console.log("SUDAH ADA DI TABLE:", sudahAdaDiTable);
+
+          console.log("IMEI CEK:", imei);
+
+          const historyIMEI = penjualanList.filter((trx) => {
+            const imeiMatch =
+              String(trx.IMEI || "").trim() === String(imei).trim();
+
+            const imeiDiItems =
+              Array.isArray(trx.items) &&
+              trx.items.some(
+                (it) => Array.isArray(it.imeiList) && it.imeiList.includes(imei)
+              );
+
+            return imeiMatch || imeiDiItems;
+          });
+
           console.log("HISTORY IMEI:", historyIMEI);
 
-          const refundAllowed =
-          canSellRefundIMEI(
-            detailStockLookup?.[imei]
-          );
-        
-        if (
-          sudahAdaDiTable &&
-          !refundAllowed
-        ) {
-          throw new Error(
-            `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`
-          );
-        }
+          const refundAllowed = canSellRefundIMEI(detailStockLookup?.[imei]);
+
+          if (sudahAdaDiTable && !refundAllowed) {
+            throw new Error(
+              `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`
+            );
+          }
 
           await lockImeiRealtime(
             imei,
@@ -829,13 +812,14 @@ console.log("SUDAH ADA DI TABLE:", sudahAdaDiTable);
         <div className="bg-white rounded-2xl shadow-lg p-5">
           <h2 className="font-bold mb-2">TAHAP 2 - 📦 INPUT BARANG</h2>
           <FormItemSection
-            value={items}
-            onChange={setItems}
-            tokoLogin={formUser.namaToko}
-            allowManual={true}
-            tahap1Valid={isTahap1Valid} // ⬅️ WAJIB
-            stockRealtime={stockRealtime}
-          />
+  value={items}
+  onChange={setItems}
+  tokoLogin={formUser.namaToko}
+  allowManual={true}
+  tahap1Valid={isTahap1Valid}
+  stockRealtime={stockRealtime}
+  barangInputFinal={barangInputFinal}
+/>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-5">

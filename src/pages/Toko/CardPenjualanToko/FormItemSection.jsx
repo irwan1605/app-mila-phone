@@ -33,9 +33,23 @@ export default function FormItemSection({
   tokoLogin,
   allowManual = false,
   stockRealtime = {},
-  tahap1Valid = false, // ✅ VALIDATOR TAHAP 1
+  tahap1Valid = false,
+  barangInputFinal = [],
 }) {
   const items = useMemo(() => (Array.isArray(value) ? value : []), [value]);
+
+  const getFinalDisplayStock = (brand, barang) => {
+    const key = `${normalize(brand)}|${normalize(barang)}`;
+
+    const nonImei = Number(finalNonImeiStock?.[key] || 0);
+
+    if (nonImei > 0) {
+      return nonImei;
+    }
+
+    return Number(stockGabunganToko?.[key] || universalStockMap?.[key] || 0);
+  };
+
   const safeOnChange = useCallback(
     (v) => typeof onChange === "function" && onChange(v),
     [onChange]
@@ -521,6 +535,18 @@ export default function FormItemSection({
   };
 
   const barangList = (kategori, brand) => {
+    if (Array.isArray(barangInputFinal) && barangInputFinal.length > 0) {
+      return barangInputFinal
+        .filter(
+          (b) =>
+            normalize(b.kategoriBarang) === normalize(kategori) &&
+            normalize(b.namaBrand) === normalize(brand) &&
+            Number(b.stok || 0) > 0
+        )
+        .sort((a, b) =>
+          String(a.namaBarang).localeCompare(String(b.namaBarang))
+        );
+    }
     const finalMap = {};
 
     // =====================================
@@ -1255,9 +1281,9 @@ export default function FormItemSection({
         return;
       }
 
-      const key =
-        `${normalize(tf.namaBrand || tf.brand || tf.NAMA_BRAND)}|` +
-        `${normalize(tf.namaBarang || tf.barang || tf.NAMA_BARANG)}`;
+      const key = `${normalize(
+        tf.namaBrand || tf.brand || tf.NAMA_BRAND
+      )}|${normalize(tf.namaBarang || tf.barang || tf.NAMA_BARANG)}`;
 
       if (!map[key]) map[key] = 0;
 
@@ -1926,25 +1952,36 @@ IMEI + NON IMEI
       )}
 
       {items.map((item, idx) => {
-        const barangByKategori = barangByKategoriMap[idx] || [];
+        // =====================================
+        // 🔥 DEBUG ENGINE BARU
+        // =====================================
+        const barangListResult = barangList(
+          item.kategoriBarang,
+          item.namaBrand
+        );
+
+        console.log("BARANG LIST RESULT", barangListResult);
+
+        // =====================================
+        // 🔥 DEFAULT LOGIC LAMA
+        // =====================================
+        let barangByKategori = barangByKategoriMap[idx] || [];
+
+        // =====================================
+        // 🔥 OVERRIDE ENGINE BARU
+        // TANPA MERUBAH LOGIC LAMA
+        // =====================================
+        if (Array.isArray(barangListResult) && barangListResult.length > 0) {
+          barangByKategori = barangListResult;
+        }
+
         const barangReady = (barangByKategori || [])
           .filter((b) => {
             const key = `${normalize(b.namaBrand)}|${normalize(b.namaBarang)}`;
 
-            return (
-              Number(
-                universalStockMap[key] ||
-                  stockGabunganToko[key] ||
-                  finalNonImeiStock[key] ||
-                  0
-              ) > 0
-            );
+            return getFinalDisplayStock(item.namaBrand, item.namaBarang) > 0;
           })
           .filter((b) => {
-            // =====================================
-            // 🔥 JIKA BRAND KOSONG
-            // MAKA TAMPILKAN SEMUA
-            // =====================================
             if (!item.namaBrand) {
               return true;
             }
@@ -1959,6 +1996,7 @@ IMEI + NON IMEI
                   normalize(x.namaBarang) === normalize(b.namaBarang)
               ) === i
           );
+
         // 🔥 jika sedang edit → tampilkan item yang diedit
         if (editIndex !== null) {
           if (editIndex !== idx) return null;
@@ -1986,6 +2024,21 @@ IMEI + NON IMEI
         const totalItem = isItemComplete
           ? Number(item.qty || 0) * hargaAktif
           : 0;
+
+        // =====================================
+        // DEBUG STOCK
+        // =====================================
+        const stockKey = `${normalize(item.namaBrand)}|${normalize(
+          item.namaBarang
+        )}`;
+
+        console.log("KEY:", stockKey);
+
+        console.log("universalStockMap:", universalStockMap?.[stockKey]);
+
+        console.log("stockGabunganToko:", stockGabunganToko?.[stockKey]);
+
+        console.log("finalNonImeiStock:", finalNonImeiStock?.[stockKey]);
 
         return (
           <div
@@ -2123,34 +2176,12 @@ IMEI + NON IMEI
                 <div className="text-xs font-semibold">
                   {item.isImei ? (
                     <span className="text-blue-600">
-                      📱 Stok IMEI Toko: Stok tersedia:{" "}
-                      {stockGabunganToko[
-                        `${normalize(item.namaBrand)}|${normalize(
-                          item.namaBarang
-                        )}`
-                      ] || 0}
+                      📱 Stok IMEI Toko: {stockGabunganToko[stockKey] || 0}
                     </span>
                   ) : (
                     <span className="text-green-600">
                       📦 Stok Barang Toko:{" "}
-                      {Number(
-                        universalStockMap[
-                          `${normalize(item.namaBrand)}|${normalize(
-                            item.namaBarang
-                          )}`
-                        ] ||
-                          stockGabunganToko[
-                            `${normalize(item.namaBrand)}|${normalize(
-                              item.namaBarang
-                            )}`
-                          ] ||
-                          finalNonImeiStock[
-                            `${normalize(item.namaBrand)}|${normalize(
-                              item.namaBarang
-                            )}`
-                          ] ||
-                          0
-                      )}
+                      {getFinalDisplayStock(item.namaBrand, item.namaBarang)}
                     </span>
                   )}
                 </div>
@@ -2242,15 +2273,31 @@ IMEI + NON IMEI
                   onChange={(e) => {
                     const qtyInput = Number(e.target.value || 1);
 
-                    const key =
-                      `${normalize(item.namaBrand)}|` +
-                      `${normalize(item.namaBarang)}`;
-
+                    const key = `${normalize(item.namaBrand)}|${normalize(
+                      item.namaBarang
+                    )}`;
                     // =====================================
                     // 🔥 FINAL STOCK TOKO
                     // SINGLE SOURCE OF TRUTH
                     // =====================================
-                    const stokTersedia = Number(universalStockMap?.[key] || 0);
+
+                    console.log("KEY:", key);
+
+                    console.log("universalStockMap:", universalStockMap?.[key]);
+
+                    console.log("stockGabunganToko:", stockGabunganToko?.[key]);
+
+                    console.log("finalNonImeiStock:", finalNonImeiStock?.[key]);
+
+                    console.log(
+                      "getFinalDisplayStock:",
+                      getFinalDisplayStock(item.namaBrand, item.namaBarang)
+                    );
+                    const stokTersedia = Math.max(
+                      Number(finalNonImeiStock?.[key] || 0),
+                      Number(stockGabunganToko?.[key] || 0),
+                      Number(universalStockMap?.[key] || 0)
+                    );
 
                     // =====================================
                     // 🔥 MINIMAL QTY
