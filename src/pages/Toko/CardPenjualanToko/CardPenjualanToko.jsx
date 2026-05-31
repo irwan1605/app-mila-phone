@@ -30,6 +30,9 @@ import {
 import {
   canResellIMEI,
 } from "../../../features/FiturPenjualan/constants/transaksiType";
+import {
+  canSellRefundIMEI,
+} from "../../../features/FiturPenjualan/constants/refundResaleEngine";
 
 import {
   listenPenjualan,
@@ -598,11 +601,31 @@ export default function CardPenjualanToko() {
               ""
             ).toUpperCase() === "REFUND";
           
-          const sudahAdaDiTable =
-            imeiHistory.length > 0 &&
-            !resaleAllowed.includes(finalMetode) &&
-            !readyResale &&
-            !isRefund;
+            const sudahAdaDiTable = penjualanList.some((trx) => {
+              const bolehResale = canResellIMEI(trx);
+            
+              if (bolehResale) {
+                return false;
+              }
+            
+              const imeiMatch =
+                String(trx.IMEI || "").trim() ===
+                String(imei).trim();
+            
+              const imeiDiItems =
+                Array.isArray(trx.items) &&
+                trx.items.some(
+                  (it) =>
+                    Array.isArray(it.imeiList) &&
+                    it.imeiList.some(
+                      (im) =>
+                        String(im).trim() ===
+                        String(imei).trim()
+                    )
+                );
+            
+              return imeiMatch || imeiDiItems;
+            });
 
             console.log("FINAL METODE:", finalMetode);
 console.log("SUDAH ADA DI TABLE:", sudahAdaDiTable);
@@ -627,14 +650,19 @@ console.log("SUDAH ADA DI TABLE:", sudahAdaDiTable);
           
           console.log("HISTORY IMEI:", historyIMEI);
 
-          if (
-            sudahAdaDiTable &&
-            !detailStockLookup?.[imei]?.READY_RESALE
-          ) {
-            throw new Error(
-              `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`
-            );
-          }
+          const refundAllowed =
+          canSellRefundIMEI(
+            detailStockLookup?.[imei]
+          );
+        
+        if (
+          sudahAdaDiTable &&
+          !refundAllowed
+        ) {
+          throw new Error(
+            `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`
+          );
+        }
 
           await lockImeiRealtime(
             imei,

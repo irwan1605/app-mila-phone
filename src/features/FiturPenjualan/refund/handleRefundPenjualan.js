@@ -12,7 +12,9 @@ import { set } from "firebase/database";
 import { ref, get, update, remove } from "firebase/database";
 
 import { db } from "../../../services/FirebaseInit";
-import { validateRefund } from "./validateRefund";
+import {
+  validateRefund,
+} from "./validateRefund";
 
 // ======================================================
 // NORMALIZE
@@ -28,6 +30,9 @@ const normalizeImei = (v) =>
     .trim()
     .toUpperCase()
     .replace(/\s+/g, "");
+
+    console.log("VALIDATE REFUND =", validateRefund);
+console.log("TYPE =", typeof validateRefund);
 
 // ======================================================
 // HANDLE REFUND
@@ -47,13 +52,43 @@ export const handleRefundPenjualan = async ({
     // =========================================
     // VALIDASI
     // =========================================
-    const validateResult = await validateRefund({
-      row,
-      rows,
-      userLogin,
-    });
+    let validateResult;
+
+    try {
+      validateResult = await validateRefund({
+        row,
+        rows,
+        userLogin,
+      });
+    } catch (err) {
+      console.error(
+        "VALIDATE REFUND ERROR:",
+        err?.message,
+        err
+      );
+    
+      throw err;
+    }
 
     const trx = validateResult?.trx;
+
+    // =========================================
+    // 🔥 REFUND READY OVERRIDE
+    // TANPA MERUBAH LOGIC LAMA
+    // =========================================
+    const refundReady =
+      trx?.READY_RESALE === true ||
+      trx?.statusRefund === "READY_RESALE" ||
+      trx?.IS_REFUND === true ||
+      normalize(trx?.LAST_ACTION) === "REFUND" ||
+      normalize(trx?.PAYMENT_METODE) === "REFUND";
+
+    if (refundReady) {
+      console.log("♻️ REFUND READY OVERRIDE", trx?.invoice);
+
+      trx.refundLocked = false;
+      trx.refundProcessed = false;
+    }
 
     if (!trx) {
       throw new Error("Transaksi tidak ditemukan");
@@ -76,7 +111,19 @@ export const handleRefundPenjualan = async ({
       normalize(trx.PAYMENT_METODE) === "REFUND" ||
       normalize(trx.statusPembayaran) === "REFUND";
 
-    if (alreadyRefund) {
+    // =========================================
+    // 🔥 REFUND READY BYPASS
+    // TANPA MENGUBAH LOGIC LAMA
+    // =========================================
+    let finalAlreadyRefund = alreadyRefund;
+
+    if (trx?.READY_RESALE === true || trx?.statusRefund === "READY_RESALE") {
+      console.log("♻️ BYPASS REFUND LOCK", trx?.invoice);
+
+      finalAlreadyRefund = false;
+    }
+
+    if (finalAlreadyRefund) {
       console.log("⛔ REFUND SUDAH DIPROSES");
 
       return false;
@@ -115,23 +162,20 @@ export const handleRefundPenjualan = async ({
     }
 
     // =========================================
-// 🔥 GLOBAL REALTIME REFUND SYNC
-// =========================================
+    // 🔥 GLOBAL REALTIME REFUND SYNC
+    // =========================================
 
-await set(
-  ref(db, `refundRealtime/${normalize(row.invoice)}`),
-  {
-    invoice: normalize(row.invoice),
+    await set(ref(db, `refundRealtime/${normalize(row.invoice)}`), {
+      invoice: normalize(row.invoice),
 
-    deleted: true,
+      deleted: true,
 
-    refundedAt: Date.now(),
+      refundedAt: Date.now(),
 
-    toko: row.toko || "",
+      toko: row.toko || "",
 
-    by: userLogin?.username || "SYSTEM",
-  }
-);
+      by: userLogin?.username || "SYSTEM",
+    });
 
     // =========================================
     // UPDATE PENJUALAN
@@ -324,6 +368,27 @@ await set(
             updatedAt: Date.now(),
           });
 
+          // =========================================
+          // 🔥 AUTO UNLOCK REFUND
+          // =========================================
+          try {
+            await remove(ref(db, `imei_lock/${imei}`));
+          } catch {}
+
+          try {
+            await remove(ref(db, `imeiLocks/${imei}`));
+          } catch {}
+
+          try {
+            await remove(ref(db, `stokLock/${imei}`));
+          } catch {}
+
+          try {
+            await remove(ref(db, `refundLock/${imei}`));
+          } catch {}
+
+          console.log("🔓 REFUND LOCK RELEASED", imei);
+
           // ===============================
           // STOK TOKO
           // ===============================
@@ -439,38 +504,37 @@ await set(
       // ===============================
       await addTransaksi(trx.tokoId, {
         deleted: true,
-      
+
         deletedFromPenjualan: true,
-      
+
         refundProcessed: true,
-      
+
         refundLocked: true,
-      
+
         HIDE_FROM_PENJUALAN: true,
-      
+
         HIDE_FROM_TABLE: true,
-      
-        TANGGAL_TRANSAKSI:
-          new Date().toISOString().slice(0, 10),
-      
+
+        TANGGAL_TRANSAKSI: new Date().toISOString().slice(0, 10),
+
         NO_INVOICE: `REF-${trx.invoice}`,
-      
+
         NAMA_TOKO: trx.toko,
-      
+
         NAMA_BARANG: item.namaBarang,
-      
+
         NAMA_BRAND: item.namaBrand,
-      
+
         IMEI: "NON-IMEI",
-      
+
         QTY: qty,
-      
+
         PAYMENT_METODE: "REFUND",
-      
+
         STATUS: "REFUND",
-      
+
         CREATED_AT: Date.now(),
-      
+
         IS_REFUND: true,
       });
     }
@@ -482,6 +546,39 @@ await set(
       ...prev,
       [row.invoice]: true,
     }));
+
+    // =========================================
+// 🔥 FINAL REFUND OVERRIDE
+// =========================================
+try {
+  const itemsRefund =
+    Array.isArray(trx.items)
+      ? trx.items
+      : [];
+
+  for (const item of itemsRefund) {
+    for (const imeiRaw of item.imeiList || []) {
+      const imei =
+        normalizeImei(imeiRaw);
+
+      await update(
+        ref(db, `detail_stock/${imei}`),
+        {
+          READY_RESALE: true,
+          IS_REFUND: true,
+          LAST_ACTION: "REFUND",
+          PAYMENT_METODE: "REFUND",
+          refundLocked: false,
+        }
+      );
+    }
+  }
+} catch (e) {
+  console.log(
+    "⚠️ FINAL REFUND OVERRIDE",
+    e.message
+  );
+}
 
     return true;
   } catch (err) {

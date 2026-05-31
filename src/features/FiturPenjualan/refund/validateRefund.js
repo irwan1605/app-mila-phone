@@ -65,6 +65,8 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
     throw new Error("Refund sudah pernah diproses");
   }
 
+  let fbData = {};
+
   // ====================================================
   // VALIDASI FIREBASE GLOBAL
   // ====================================================
@@ -74,7 +76,7 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
 
     const snap = await get(trxRef);
 
-    const fbData = snap.val() || {};
+    fbData = snap.val() || {};
 
     const firebaseLocked =
       fbData?.refundProcessed === true ||
@@ -86,7 +88,33 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
       normalize(fbData?.STATUS) === "REFUND_DELETED" ||
       normalize(fbData?.PAYMENT_METODE) === "REFUND";
 
-    if (firebaseLocked) {
+    // ============================================
+    // 🔥 REFUND READY OVERRIDE
+    // ============================================
+    const refundReadyRealtime =
+      fbData?.READY_RESALE === true ||
+      fbData?.IS_REFUND === true ||
+      fbData?.statusRefund === "READY_RESALE" ||
+      String(fbData?.LAST_ACTION || fbData?.PAYMENT_METODE || "")
+        .trim()
+        .toUpperCase() === "REFUND";
+
+    if (refundReadyRealtime) {
+      console.log("♻️ REFUND READY REALTIME BYPASS", trx.invoice);
+
+      fbData.refundLocked = false;
+      fbData.refundProcessed = false;
+    }
+
+    console.log("FB DATA:", fbData);
+    console.log("firebaseLocked:", firebaseLocked);
+    console.log("refundReadyRealtime:", refundReadyRealtime);
+    console.log("READY_RESALE =", fbData?.READY_RESALE);
+    console.log("IS_REFUND =", fbData?.IS_REFUND);
+    console.log("LAST_ACTION =", fbData?.LAST_ACTION);
+    console.log("PAYMENT_METODE =", fbData?.PAYMENT_METODE);
+
+    if (firebaseLocked && !refundReadyRealtime && fbData?.IS_REFUND !== true) {
       throw new Error("Refund sudah terkunci realtime");
     }
   }
@@ -106,9 +134,27 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
   // BLOCK DUPLIKAT REFUND
   // ====================================================
 
-  if (refundHistorySnap.exists()) {
-    throw new Error("Refund invoice sudah pernah diproses");
-  }
+ 
+
+const allowRepeatRefund =
+  fbData?.READY_RESALE === true ||
+  fbData?.IS_REFUND === true ||
+  String(
+    fbData?.LAST_ACTION ||
+    fbData?.PAYMENT_METODE ||
+    ""
+  )
+    .trim()
+    .toUpperCase() === "REFUND";
+
+if (
+  refundHistorySnap.exists() &&
+  !allowRepeatRefund
+) {
+  throw new Error(
+    "Refund invoice sudah pernah diproses"
+  );
+}
 
   // ====================================================
   // SAVE REFUND HISTORY
@@ -214,12 +260,39 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
 
         const imeiSnap = await get(imeiRefundRef);
 
+        const stockSnapRefund = await get(ref(db, `detail_stock/${imei}`));
+
+        const stockData = stockSnapRefund.val() || {};
+
+        const refundReadyIMEI =
+          stockData?.READY_RESALE === true ||
+          stockData?.IS_REFUND === true ||
+          stockData?.LAST_ACTION === "REFUND";
+
+        if (imeiSnap.exists() && refundReadyIMEI) {
+          console.log("🔓 AUTO RELEASE REFUND LOCK", imei);
+
+          await set(imeiRefundRef, null);
+        }
+
         // ============================================
         // BLOCK DOUBLE REFUND IMEI
         // ============================================
+        const stockSnapCheck = await get(ref(db, `detail_stock/${imei}`));
 
-        if (imeiSnap.exists()) {
+        const stockDataCheck = stockSnapCheck.val() || {};
+
+        const canReuse =
+          stockDataCheck?.READY_RESALE === true ||
+          stockDataCheck?.IS_REFUND === true ||
+          normalize(stockDataCheck?.LAST_ACTION) === "REFUND";
+
+        if (imeiSnap.exists() && !canReuse) {
           throw new Error(`IMEI ${imei} sudah pernah direfund`);
+        }
+
+        if (imeiSnap.exists() && canReuse) {
+          await set(imeiRefundRef, null);
         }
 
         // ============================================
@@ -250,7 +323,8 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
 
       const qty = Number(item.qty || item.QTY || 0);
 
-      const nonImeiKey = `${refundKey}_${brand}_${barang}`;
+      const nonImeiKey =
+      `${refundKey}_${brand}_${barang}_${qty}`;
 
       const nonImeiRef = ref(db, `non_imei_refund_lock/${nonImeiKey}`);
 
@@ -260,9 +334,37 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
       // BLOCK DOUBLE NON IMEI
       // ============================================
 
-      if (nonImeiSnap.exists()) {
-        throw new Error(`${barang} sudah pernah direfund`);
-      }
+      const nonImeiData =
+      nonImeiSnap.val() || {};
+    
+    const allowRepeatRefund =
+      fbData?.READY_RESALE === true ||
+      fbData?.IS_REFUND === true ||
+      normalize(
+        fbData?.LAST_ACTION ||
+        fbData?.PAYMENT_METODE
+      ) === "REFUND";
+    
+    if (
+      nonImeiSnap.exists() &&
+      !allowRepeatRefund
+    ) {
+      throw new Error(
+        `${barang} sudah pernah direfund`
+      );
+    }
+
+    if (
+      nonImeiSnap.exists() &&
+      allowRepeatRefund
+    ) {
+      console.log(
+        "♻️ RELEASE NON IMEI LOCK",
+        barang
+      );
+    
+      await set(nonImeiRef, null);
+    }
 
       // ============================================
       // SAVE NON IMEI LOCK
@@ -345,4 +447,16 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
 
     trx,
   };
+};
+
+export const canReuseRefundItem = (stock = {}) => {
+  const readyResale = stock?.READY_RESALE === true;
+
+  const isRefund = stock?.IS_REFUND === true;
+
+  const lastAction = String(stock?.LAST_ACTION || stock?.PAYMENT_METODE || "")
+    .trim()
+    .toUpperCase();
+
+  return readyResale || isRefund || lastAction === "REFUND";
 };

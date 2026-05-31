@@ -809,10 +809,19 @@ export const listenTransaksiByToko = (tokoId, callback) => {
     r,
     (snap) => {
       const raw = snap.val() || {};
-      const list = Object.entries(raw).map(([id, item]) =>
+      const list = Object.entries(raw)
+      .map(([id, item]) =>
         normalizeTransaksi(id, item, tokoId)
+      )
+      .filter(
+        (x) =>
+          x.deleted !== true &&
+          x.deletedFromPenjualan !== true &&
+          x.HIDE_FROM_PENJUALAN !== true &&
+          x.STATUS !== "REFUND_DELETED"
       );
-      callback(list);
+    
+    callback(list);
     },
     (err) => {
       console.error("listenTransaksiByToko error:", err);
@@ -2483,8 +2492,6 @@ export const approveTransferFINAL = async ({ transfer }) => {
         finalTransaction?.PAYMENT_METODE || ""
       ).toUpperCase();
 
-
-
       // ======================================
       // 🔥 FINAL STATUS BERDASARKAN TRANSAKSI TERAKHIR
       // ======================================
@@ -2536,24 +2543,18 @@ export const approveTransferFINAL = async ({ transfer }) => {
       // FINAL STATUS ENGINE
       // ======================================
 
-      let finalStatus =
-  getFinalIMEIStatus(
-    imeiHistory
-  );
+      let finalStatus = getFinalIMEIStatus(imeiHistory);
 
-        // ======================================
-// 🔥 FINAL TRANSACTION OVERRIDE
-// ======================================
-if (
-  [
-    "TRANSFER_MASUK",
-    "TRANSFER_REJECT",
-    "REFUND",
-    "PEMBELIAN",
-  ].includes(finalMetode)
-) {
-  finalStatus = "AVAILABLE";
-}
+      // ======================================
+      // 🔥 FINAL TRANSACTION OVERRIDE
+      // ======================================
+      if (
+        ["TRANSFER_MASUK", "TRANSFER_REJECT", "REFUND", "PEMBELIAN"].includes(
+          finalMetode
+        )
+      ) {
+        finalStatus = "AVAILABLE";
+      }
 
       // ======================================
       // 🔥 TRANSFER FALLBACK ENGINE
@@ -2572,15 +2573,26 @@ if (
         methods: imeiHistory.map((x) => x.PAYMENT_METODE),
       });
 
-      console.log(
-        "🔥 FINAL TRANSACTION",
-        {
-          imei,
-          finalMetode,
-          historyCount:
-            imeiHistory.length,
-        }
+      console.log("🔥 FINAL TRANSACTION", {
+        imei,
+        finalMetode,
+        historyCount: imeiHistory.length,
+      });
+
+      const detailStockSnap = await get(
+        ref(db, `detail_stock/${imei}`)
       );
+      
+      const stockInfo =
+        detailStockSnap.val() || {};
+
+      if (
+        stockInfo?.READY_RESALE === true ||
+        stockInfo?.IS_REFUND === true ||
+        stockInfo?.LAST_ACTION === "REFUND"
+      ) {
+        finalStatus = "AVAILABLE";
+      }
 
       // ======================================
       // FINAL STATUS VALIDATOR
@@ -2588,19 +2600,14 @@ if (
 
       if (finalStatus === "NOT_FOUND") {
         if (hasTransferHistory) {
-          console.warn(
-            "⚠️ TRANSFER FALLBACK",
-            imei
-          );
-      
+          console.warn("⚠️ TRANSFER FALLBACK", imei);
+
           // ======================================
           // 🔥 OVERRIDE STATUS
           // ======================================
           finalStatus = "AVAILABLE";
         } else {
-          throw new Error(
-            `IMEI ${imei} tidak ditemukan`
-          );
+          throw new Error(`IMEI ${imei} tidak ditemukan`);
         }
       }
 
@@ -3089,6 +3096,7 @@ export const listenMasterToko = (cb) => {
       alamat: v.alamat || "",
     }));
     cb(rows);
+    
   });
 };
 

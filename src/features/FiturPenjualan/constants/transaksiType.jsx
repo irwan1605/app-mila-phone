@@ -4,53 +4,28 @@
 
 export const TRANSACTION_TYPE = {
     PEMBELIAN: "PEMBELIAN",
-  
-    PENJUALAN: "PENJUALAN",
-  
-    REFUND: "REFUND",
-  
-    REJECT: "REJECT",
-  
     TRANSFER_BARANG: "TRANSFER BARANG",
-  
-    TRANSFER_MASUK: "TRANSFER_MASUK",
-  
-    TRANSFER_KELUAR: "TRANSFER_KELUAR",
-  
-    TRANSFER_REJECT: "TRANSFER_REJECT",
+    PENJUALAN: "PENJUALAN",
+    REFUND: "REFUND",
+    REJECT: "REJECT",
   };
   
   // ======================================================
-  // STATUS YANG MEMBUAT IMEI AKTIF KEMBALI
+  // STATUS YANG MEMBUAT IMEI BISA DIJUAL LAGI
   // ======================================================
   
   export const RESALE_ALLOWED_TYPES = [
     TRANSACTION_TYPE.PEMBELIAN,
-  
-    TRANSACTION_TYPE.REFUND,
-  
-    TRANSACTION_TYPE.REJECT,
-  
     TRANSACTION_TYPE.TRANSFER_BARANG,
-  
-    TRANSACTION_TYPE.TRANSFER_MASUK,
-  
-    TRANSACTION_TYPE.TRANSFER_REJECT,
-  ];
-  
-  // ======================================================
-  // STATUS YANG TIDAK BOLEH DIJUAL
-  // ======================================================
-  
-  export const SOLD_TYPES = [
-    TRANSACTION_TYPE.PENJUALAN,
+    TRANSACTION_TYPE.REFUND,
+    TRANSACTION_TYPE.REJECT,
   ];
   
   // ======================================================
   // CEK BOLEH DIJUAL KEMBALI
   // ======================================================
   
-  export const canResellIMEI = (transaksi = {}) => {
+  export const canResellIMEI = (transaksi) => {
     const metode = String(
       transaksi?.PAYMENT_METODE ||
         transaksi?.jenisTransaksi ||
@@ -62,39 +37,31 @@ export const TRANSACTION_TYPE = {
   
     return RESALE_ALLOWED_TYPES.includes(metode);
   };
+
+  export const getFinalIMEIStatus = (history = []) => {
+    if (!history.length) return "NOT_FOUND";
   
-  // ======================================================
-  // CEK SUDAH TERJUAL
-  // ======================================================
+    const last = history[history.length - 1];
   
-  export const isSoldIMEI = (transaksi = {}) => {
     const metode = String(
-      transaksi?.PAYMENT_METODE || ""
+      last.PAYMENT_METODE || ""
     )
       .trim()
       .toUpperCase();
   
-    return SOLD_TYPES.includes(metode);
-  };
+    switch (metode) {
+      case "PEMBELIAN":
+      case "TRANSFER BARANG":
+      case "TRANSFER_MASUK":
+      case "TRANSFER_REJECT":
+      case "REFUND":
+      case "REJECT":
+        return "AVAILABLE";
   
-  // ======================================================
-  // FINAL STATUS ENGINE
-  // ======================================================
+      case "PENJUALAN":
+        return "SOLD";
   
-  export const getTransactionFinalStatus = (transaksi = {}) => {
-    const metode = String(
-      transaksi?.PAYMENT_METODE || ""
-    )
-      .trim()
-      .toUpperCase();
-  
-    if (RESALE_ALLOWED_TYPES.includes(metode)) {
-      return "AVAILABLE";
+      default:
+        return "UNKNOWN";
     }
-  
-    if (SOLD_TYPES.includes(metode)) {
-      return "SOLD";
-    }
-  
-    return "UNKNOWN";
   };
