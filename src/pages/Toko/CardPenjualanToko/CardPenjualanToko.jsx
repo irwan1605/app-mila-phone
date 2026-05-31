@@ -22,6 +22,14 @@ import CetakInvoicePenjualan from "../../Print/CetakInvoicePenjualan";
 import { useLocation } from "react-router-dom";
 import { ref, onValue } from "firebase/database";
 import { db } from "../../../firebase/FirebaseInit";
+import {
+  canSellIMEI,
+  isRefundOrRejectItem,
+} from "../../../features/FiturPenjualan/constants/stockStatus";
+
+import {
+  canResellIMEI,
+} from "../../../features/FiturPenjualan/constants/transaksiType";
 
 import {
   listenPenjualan,
@@ -489,6 +497,10 @@ export default function CardPenjualanToko() {
           if (!imei) throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
           const sold = await cekImeiSudahTerjual(imei);
 
+          console.log("IMEI:", imei);
+          console.log("HASIL cekImeiSudahTerjual:", sold);
+          console.log("DETAIL STOCK:", detailStockLookup?.[imei]);
+
           const refundReady = isRefundReady(
             imei,
             penjualanList
@@ -503,35 +515,122 @@ export default function CardPenjualanToko() {
               `IMEI ${imei} sudah pernah terjual`
             );
           }
-
-          const sudahAdaDiTable = penjualanList.some(
-            (trx) => {
-              const isRefund =
-                String(
-                  trx.statusPembayaran ||
-                  trx.PAYMENT_METODE ||
-                  trx.STATUS ||
-                  ""
-                ).toUpperCase() === "REFUND";
+          const imeiHistory = penjualanList.filter((trx) => {
+            const imeiMatch =
+              String(trx.IMEI || "")
+                .trim()
+                .toUpperCase() ===
+              String(imei || "")
+                .trim()
+                .toUpperCase();
           
-              if (isRefund) return false;
-          
-              return (
-                Array.isArray(trx.items) &&
-                trx.items.some(
-                  (it) =>
-                    Array.isArray(it.imeiList) &&
-                    it.imeiList.some(
-                      (im) =>
-                        String(im).trim() ===
-                        String(imei).trim()
-                    )
-                )
+            const imeiDiItems =
+              Array.isArray(trx.items) &&
+              trx.items.some(
+                (it) =>
+                  Array.isArray(it.imeiList) &&
+                  it.imeiList.some(
+                    (im) =>
+                      String(im)
+                        .trim()
+                        .toUpperCase() ===
+                      String(imei)
+                        .trim()
+                        .toUpperCase()
+                  )
               );
-            }
+          
+            return imeiMatch || imeiDiItems;
+          });
+          
+          console.log(
+            "FINAL IMEI HISTORY",
+            imei,
+            imeiHistory.map((x) => ({
+              metode: x.PAYMENT_METODE,
+              status: x.STATUS,
+            }))
           );
+          
+          // ===========================
+          // AMBIL TRANSAKSI TERAKHIR
+          // ===========================
+          const lastTrx =
+            imeiHistory.length > 0
+              ? imeiHistory[imeiHistory.length - 1]
+              : null;
+          
+          const finalMetode = String(
+            lastTrx?.PAYMENT_METODE || ""
+          )
+            .trim()
+            .toUpperCase();
+          
+          // ===========================
+          // STATUS YANG BOLEH DIJUAL
+          // ===========================
+          const resaleAllowed = [
+            "PEMBELIAN",
+          
+            "REFUND",
+          
+            "REJECT",
+          
+            "TRANSFER_REJECT",
+          
+            "TRANSFER_MASUK",
+          
+            // 🔥 TAMBAHAN
+            "TRANSFER_KELUAR",
+          
+            "TRANSFER BARANG",
+          ];
+          
+          const detailStock = detailStockLookup?.[imei];
 
-          if (sudahAdaDiTable) {
+          const readyResale =
+            detailStock?.READY_RESALE === true;
+          
+          const isRefund =
+            String(
+              detailStock?.LAST_ACTION ||
+              detailStock?.PAYMENT_METODE ||
+              ""
+            ).toUpperCase() === "REFUND";
+          
+          const sudahAdaDiTable =
+            imeiHistory.length > 0 &&
+            !resaleAllowed.includes(finalMetode) &&
+            !readyResale &&
+            !isRefund;
+
+            console.log("FINAL METODE:", finalMetode);
+console.log("SUDAH ADA DI TABLE:", sudahAdaDiTable);
+
+          console.log("IMEI CEK:", imei);
+
+          const historyIMEI = penjualanList.filter((trx) => {
+            const imeiMatch =
+              String(trx.IMEI || "").trim() ===
+              String(imei).trim();
+          
+            const imeiDiItems =
+              Array.isArray(trx.items) &&
+              trx.items.some(
+                (it) =>
+                  Array.isArray(it.imeiList) &&
+                  it.imeiList.includes(imei)
+              );
+          
+            return imeiMatch || imeiDiItems;
+          });
+          
+          console.log("HISTORY IMEI:", historyIMEI);
+
+          if (
+            sudahAdaDiTable &&
+            !detailStockLookup?.[imei]?.READY_RESALE
+          ) {
             throw new Error(
               `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`
             );

@@ -51,3 +51,4 @@ export const getFinalIMEIStatus = ({
     .trim()
     .toUpperCase();
 };
+
