@@ -1,3 +1,5 @@
+import { canResellIMEI } from "./canResellIMEI";
+
 export const getFinalIMEIStatus = ({
   imei,
   detailStock = {},
@@ -8,7 +10,9 @@ export const getFinalIMEIStatus = ({
 
   let stock = null;
 
-  // Cari berdasarkan KEY Firebase
+  // =====================================
+  // CARI BERDASARKAN KEY FIREBASE
+  // =====================================
   const foundKey = Object.keys(detailStock || {}).find(
     (key) =>
       String(key || "")
@@ -20,20 +24,25 @@ export const getFinalIMEIStatus = ({
     stock = detailStock[foundKey];
   }
 
-  // Cari berdasarkan field imei
+  // =====================================
+  // CARI BERDASARKAN FIELD IMEI
+  // =====================================
   if (!stock) {
     stock = Object.values(detailStock || {}).find(
       (item) =>
         String(
           item?.imei ||
-          item?.IMEI ||
-          ""
+            item?.IMEI ||
+            ""
         )
           .trim()
           .toUpperCase() === target
     );
   }
 
+  // =====================================
+  // IMEI TIDAK DITEMUKAN
+  // =====================================
   if (!stock) {
     console.warn(
       "IMEI TIDAK DITEMUKAN:",
@@ -43,12 +52,47 @@ export const getFinalIMEIStatus = ({
     return "NOT_FOUND";
   }
 
-  return String(
-    stock.status ||
-    stock.STATUS ||
-    "AVAILABLE"
+  // =====================================
+  // REFUND / REJECT / TRANSFER
+  // BOLEH DIJUAL LAGI
+  // =====================================
+  if (canResellIMEI(stock)) {
+    console.log(
+      "♻️ READY RE-SALE:",
+      imei
+    );
+
+    return "AVAILABLE";
+  }
+
+  // =====================================
+  // SOLD
+  // =====================================
+  if (
+    stock?.sold === true ||
+    String(stock?.status || "")
+      .toUpperCase()
+      .trim() === "SOLD"
+  ) {
+    return "SOLD";
+  }
+
+  // =====================================
+  // STATUS DARI FIREBASE
+  // =====================================
+  const finalStatus = String(
+    stock?.status ||
+      stock?.STATUS ||
+      "AVAILABLE"
   )
     .trim()
     .toUpperCase();
-};
 
+  console.log(
+    "FINAL STATUS:",
+    imei,
+    finalStatus
+  );
+
+  return finalStatus;
+};

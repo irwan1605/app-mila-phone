@@ -340,31 +340,31 @@ export const handleRefundPenjualan = async ({
           // ===============================
           await update(ref(db, `detail_stock/${imei}`), {
             imei: imeiRaw,
-
+          
             namaBarang: item.namaBarang || "",
-
+          
             namaBrand: item.namaBrand || "",
-
+          
             toko: trx.toko || "",
-
+          
             status: "AVAILABLE",
-
+          
             sold: false,
-
+          
             READY_RESALE: true,
-
+          
             IS_REFUND: true,
-
+          
             LAST_ACTION: "REFUND",
-
+          
             PAYMENT_METODE: "REFUND",
-
+          
             statusRefund: "READY_RESALE",
-
+          
             STATUS_STOK: "AVAILABLE",
-
+          
             STATUS: "APPROVED",
-
+          
             updatedAt: Date.now(),
           });
 
