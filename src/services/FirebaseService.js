@@ -50,9 +50,7 @@ import {
   getRejectStatus,
   hasTransferRejectHistory,
 } from "../features/Reject/BarangReject";
-import {
-  getFinalIMEIStatus,
-} from "../utils/imeiStatusEngine";
+import { getFinalIMEIStatus } from "../utils/imeiStatusEngine";
 
 export const listenTransaksi = (callback) => {
   const dbRef = ref(db, "transaksi");
@@ -2341,7 +2339,29 @@ export const approveTransferFINAL = async ({ transfer }) => {
         const transaksi = toko.transaksi || {};
 
         Object.values(transaksi).forEach((trx) => {
-          if (String(trx.IMEI).trim() !== imei) return;
+          const trxImei = String(trx.IMEI || "")
+            .trim()
+            .replace(/\s+/g, "")
+            .toUpperCase();
+
+          const currentImei = String(imei || "")
+            .trim()
+            .replace(/\s+/g, "")
+            .toUpperCase();
+
+          if (trxImei !== currentImei) {
+            return;
+          }
+
+          if (trxImei === currentImei) {
+            console.log("✅ MATCH IMEI", {
+              imei,
+              trxImei,
+              toko: trx.NAMA_TOKO,
+              metode: trx.PAYMENT_METODE,
+            });
+          }
+
           imeiHistory.push(trx);
           // ======================================
           // 🔥 FINAL STATUS VALIDATOR
@@ -2436,49 +2456,50 @@ export const approveTransferFINAL = async ({ transfer }) => {
       });
 
       // ======================================
-// 🔥 SORT HISTORI FINAL
-// ======================================
-imeiHistory.sort(
-  (a, b) =>
-    (a.CREATED_AT || a.createdAt || 0) -
-    (b.CREATED_AT || b.createdAt || 0)
-);
+      // 🔥 SORT HISTORI FINAL
+      // ======================================
+      imeiHistory.sort(
+        (a, b) =>
+          (a.CREATED_AT || a.createdAt || 0) -
+          (b.CREATED_AT || b.createdAt || 0)
+      );
 
-// ======================================
-// 🔥 TRANSAKSI TERAKHIR
-// ======================================
-finalTransaction =
-  imeiHistory.length > 0
-    ? imeiHistory[imeiHistory.length - 1]
-    : null;
+      // ======================================
+      // 🔥 FALLBACK HISTORI KOSONG
+      // ======================================
+      if (imeiHistory.length === 0) {
+        console.warn("⚠️ IMEI HISTORY EMPTY", imei);
 
-const finalMetode = String(
-  finalTransaction?.PAYMENT_METODE || ""
-).toUpperCase();
+        continue;
+      }
 
-// ======================================
-// 🔥 FINAL STATUS BERDASARKAN TRANSAKSI TERAKHIR
-// ======================================
-const finalAvailableMethods = [
-  "PEMBELIAN",
-  "REFUND",
-  "TRANSFER_MASUK",
-  "TRANSFER_REJECT",
-];
+      // ======================================
+      // 🔥 TRANSAKSI TERAKHIR
+      // ======================================
+      finalTransaction =
+        imeiHistory.length > 0 ? imeiHistory[imeiHistory.length - 1] : null;
 
-const finalSoldMethods = [
-  "PENJUALAN",
-];
+      const finalMetode = String(
+        finalTransaction?.PAYMENT_METODE || ""
+      ).toUpperCase();
 
-const finalStatusAvailable =
-  finalAvailableMethods.includes(
-    finalMetode
-  );
 
-const finalStatusSold =
-  finalSoldMethods.includes(
-    finalMetode
-  );
+
+      // ======================================
+      // 🔥 FINAL STATUS BERDASARKAN TRANSAKSI TERAKHIR
+      // ======================================
+      const finalAvailableMethods = [
+        "PEMBELIAN",
+        "REFUND",
+        "TRANSFER_MASUK",
+        "TRANSFER_REJECT",
+      ];
+
+      const finalSoldMethods = ["PENJUALAN"];
+
+      const finalStatusAvailable = finalAvailableMethods.includes(finalMetode);
+
+      const finalStatusSold = finalSoldMethods.includes(finalMetode);
 
       // ===============================
       // 🔥 VALIDASI TOTAL (WAJIB)
@@ -2498,53 +2519,103 @@ const finalStatusSold =
       // ======================================
       const rejectEngine = getRejectStatus(imeiHistory);
 
+      console.log("🔥 IMEI HISTORY CHECK", {
+        imei,
+        historyCount: imeiHistory.length,
+
+        history: imeiHistory.map((x) => ({
+          metode: x.PAYMENT_METODE,
+
+          toko: x.NAMA_TOKO,
+
+          status: x.STATUS,
+        })),
+      });
+
       // ======================================
-// FINAL STATUS ENGINE
-// ======================================
+      // FINAL STATUS ENGINE
+      // ======================================
 
-const finalStatus =
-getFinalIMEIStatus(
-  imeiHistory
-);
-
-// ======================================
-// FINAL STATUS VALIDATOR
-// ======================================
-
-if (
-  finalStatus ===
-  "NOT_FOUND"
-) {
-  throw new Error(
-    `IMEI ${imei} tidak ditemukan`
+      let finalStatus =
+  getFinalIMEIStatus(
+    imeiHistory
   );
-}
 
+        // ======================================
+// 🔥 FINAL TRANSACTION OVERRIDE
+// ======================================
 if (
-  finalStatus ===
-  "UNKNOWN"
+  [
+    "TRANSFER_MASUK",
+    "TRANSFER_REJECT",
+    "REFUND",
+    "PEMBELIAN",
+  ].includes(finalMetode)
 ) {
-  throw new Error(
-    `IMEI ${imei} memiliki status tidak dikenal`
-  );
+  finalStatus = "AVAILABLE";
 }
 
-if (
-  finalStatus ===
-  "SOLD"
-) {
-  throw new Error(
-    `IMEI ${imei} sudah TERJUAL`
-  );
-}
+      // ======================================
+      // 🔥 TRANSFER FALLBACK ENGINE
+      // ======================================
+      const hasTransferHistory = imeiHistory.some((trx) =>
+        ["TRANSFER_MASUK", "TRANSFER_KELUAR", "TRANSFER_REJECT"].includes(
+          String(trx.PAYMENT_METODE || "").toUpperCase()
+        )
+      );
 
-console.log(
-"🔥 FINAL IMEI STATUS",
-{
-  imei,
-  finalStatus,
-}
-);
+      console.log("🔥 TRANSFER CHECK", {
+        imei,
+        finalStatus,
+        historyCount: imeiHistory.length,
+
+        methods: imeiHistory.map((x) => x.PAYMENT_METODE),
+      });
+
+      console.log(
+        "🔥 FINAL TRANSACTION",
+        {
+          imei,
+          finalMetode,
+          historyCount:
+            imeiHistory.length,
+        }
+      );
+
+      // ======================================
+      // FINAL STATUS VALIDATOR
+      // ======================================
+
+      if (finalStatus === "NOT_FOUND") {
+        if (hasTransferHistory) {
+          console.warn(
+            "⚠️ TRANSFER FALLBACK",
+            imei
+          );
+      
+          // ======================================
+          // 🔥 OVERRIDE STATUS
+          // ======================================
+          finalStatus = "AVAILABLE";
+        } else {
+          throw new Error(
+            `IMEI ${imei} tidak ditemukan`
+          );
+        }
+      }
+
+      if (finalStatus === "UNKNOWN") {
+        throw new Error(`IMEI ${imei} memiliki status tidak dikenal`);
+      }
+
+      if (finalStatus === "SOLD") {
+        throw new Error(`IMEI ${imei} sudah TERJUAL`);
+      }
+
+      console.log("🔥 FINAL IMEI STATUS", {
+        imei,
+        finalStatus,
+      });
 
       // ======================================
       // 🔥 FINAL STATUS DARI REJECT ENGINE
@@ -2577,16 +2648,16 @@ console.log(
       const rejectCanTransfer = rejectEngine?.canTransfer === true;
 
       // ======================================
-// 🔥 FINAL OVERRIDE ENGINE
-// ======================================
-if (finalStatusAvailable) {
-  sudahTerjual = false;
-  rejectActive = true;
-}
+      // 🔥 FINAL OVERRIDE ENGINE
+      // ======================================
+      if (finalStatusAvailable) {
+        sudahTerjual = false;
+        rejectActive = true;
+      }
 
-if (finalStatusSold) {
-  sudahTerjual = true;
-}
+      if (finalStatusSold) {
+        sudahTerjual = true;
+      }
 
       // ======================================
       // 🔥 REJECT OVERRIDE
@@ -2594,54 +2665,41 @@ if (finalStatusSold) {
       const rejectAvailable = rejectCanTransfer === true;
 
       // ======================================
-// 🔥 JIKA STATUS FINAL AVAILABLE
-// MAKA JANGAN BLOK TRANSFER
-// ======================================
-if (
-  finalStatusSold &&
-  !finalStatusAvailable &&
-  !refundActive &&
-  !rejectActive &&
-  !rejectCanTransfer &&
-  !hasRejectHistory &&
-   finalStatus === "SOLD"
-) {
-  if (
-    finalRejectStatus ===
-    "AVAILABLE"
-  ) {
-    console.log(
-      "✅ REJECT OVERRIDE AKTIF",
-      imei
-    );
+      // 🔥 JIKA STATUS FINAL AVAILABLE
+      // MAKA JANGAN BLOK TRANSFER
+      // ======================================
+      if (
+        finalStatusSold &&
+        !finalStatusAvailable &&
+        !refundActive &&
+        !rejectActive &&
+        !rejectCanTransfer &&
+        !hasRejectHistory &&
+        finalStatus === "SOLD"
+      ) {
+        if (finalRejectStatus === "AVAILABLE") {
+          console.log("✅ REJECT OVERRIDE AKTIF", imei);
 
-    return;
-  }
+          return;
+        }
 
-  throw new Error(
-    `IMEI ${imei} sudah TERJUAL`
-  );
-}
+        throw new Error(`IMEI ${imei} sudah TERJUAL`);
+      }
 
-console.log(
-  "🔥 FINAL IMEI CHECK",
-  {
-    imei,
-    saldo,
-    sudahTerjual,
-    refundActive,
-    rejectActive,
-    rejectCanTransfer,
-    hasRejectHistory,
-    finalMetode,
-    finalStatusAvailable,
-    finalStatusSold,
-    historyCount:
-      imeiHistory.length,
-  }
-);
+      console.log("🔥 FINAL IMEI CHECK", {
+        imei,
+        saldo,
+        sudahTerjual,
+        refundActive,
+        rejectActive,
+        rejectCanTransfer,
+        hasRejectHistory,
+        finalMetode,
+        finalStatusAvailable,
+        finalStatusSold,
+        historyCount: imeiHistory.length,
+      });
 
-      
       console.log("🔥 REJECT FINAL", {
         imei,
         saldo,
