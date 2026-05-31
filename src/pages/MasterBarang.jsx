@@ -142,6 +142,7 @@ export default function MasterBarang() {
           kategori: b.kategoriBarang || "-",
           brand: b.brand || "-",
           barang: b.namaBarang || "-",
+          imeiList: Array.isArray(b.imeiList) ? b.imeiList : [],
 
           // 🔥 SEMUA HARGA (PASTI ADA)
           hargaSRP: Number(harga.srp ?? b.hargaSRP ?? 0),
@@ -469,6 +470,7 @@ export default function MasterBarang() {
                 <th className="p-2 border">Kategori Brand</th>
                 <th className="p-2 border">Nama Brand</th>
                 <th className="p-2 border">Nama Barang</th>
+                <th className="p-2 border min-w-[300px]">IMEI HANDPHONE</th>
                 <th className="p-2 border text-right">Harga SRP</th>
                 <th className="p-2 border text-right">Harga Grosir</th>
                 <th className="p-2 border text-right">Harga Reseller</th>
@@ -516,6 +518,22 @@ export default function MasterBarang() {
                   <td className="border p-2">{x.kategori}</td>
                   <td className="border p-2">{x.brand}</td>
                   <td className="border p-2">{x.barang}</td>
+                  <td
+                    className="
+    border
+    p-2
+    text-xs
+    font-mono
+    whitespace-pre-wrap
+    min-w-[320px]
+  "
+                  >
+                    {String(x.kategori || "").toUpperCase() === "HANDPHONE"
+                      ? Array.isArray(x.imeiList) && x.imeiList.length > 0
+                        ? x.imeiList.join("\n")
+                        : "-"
+                      : "-"}
+                  </td>
                   <td className="border p-2 text-right">
                     Rp {fmt(x.hargaSRP)}
                   </td>

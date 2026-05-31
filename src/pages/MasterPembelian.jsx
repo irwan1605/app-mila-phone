@@ -796,6 +796,8 @@ export default function MasterPembelian() {
 
       const masterRef = masterBarangMap[masterKey] || {};
 
+      
+
       // ======================================
       // INIT GROUP
       // ======================================
@@ -833,6 +835,8 @@ export default function MasterPembelian() {
           totalQty: 0,
 
           imeis: [],
+
+          masterImeis: [],
 
           total: 0,
 

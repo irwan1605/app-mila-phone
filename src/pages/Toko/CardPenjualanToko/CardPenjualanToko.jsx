@@ -23,7 +23,6 @@ import { useLocation } from "react-router-dom";
 import { ref, onValue } from "firebase/database";
 import { db } from "../../../firebase/FirebaseInit";
 
-
 import {
   listenPenjualan,
   addPenjualan,
@@ -39,14 +38,6 @@ import {
   lockImeiRealtime,
   addTransaksi,
 } from "../../../services/FirebaseService";
-import {
-  canSellIMEI,
-  isRefundOrRejectItem,
-} from "../../../features/FiturPenjualan/constants/stockStatus";
-
-import {
-  getFinalIMEIStatus,
-} from "../../../utils/imeiStatusEngine";
 
 // ================= UTIL =================
 const genInvoice = () =>
@@ -513,128 +504,38 @@ export default function CardPenjualanToko() {
             );
           }
 
-       // ======================================
-// 🔥 BUILD HISTORI IMEI
-// ======================================
-const imeiHistory = [];
+          const sudahAdaDiTable = penjualanList.some(
+            (trx) => {
+              const isRefund =
+                String(
+                  trx.statusPembayaran ||
+                  trx.PAYMENT_METODE ||
+                  trx.STATUS ||
+                  ""
+                ).toUpperCase() === "REFUND";
+          
+              if (isRefund) return false;
+          
+              return (
+                Array.isArray(trx.items) &&
+                trx.items.some(
+                  (it) =>
+                    Array.isArray(it.imeiList) &&
+                    it.imeiList.some(
+                      (im) =>
+                        String(im).trim() ===
+                        String(imei).trim()
+                    )
+                )
+              );
+            }
+          );
 
-console.log(
-  "🔥 DETAIL STOCK",
-  imei,
-  detailStockLookup?.[imei]
-);
-
-console.log(
-  "🔥 PENJUALAN LIST",
-  penjualanList
-);
-
-console.log(
-  "🔥 STOCK STATUS",
-  imei,
-  detailStockLookup?.[imei]
-);
-
-// transaksi penjualan
-penjualanList.forEach((trx) => {
-  if (!Array.isArray(trx.items)) return;
-
-  trx.items.forEach((it) => {
-    if (!Array.isArray(it.imeiList)) return;
-
-    if (
-      it.imeiList.some(
-        (im) =>
-          String(im).trim() ===
-          String(imei).trim()
-      )
-    ) {
-      imeiHistory.push({
-        PAYMENT_METODE: "PENJUALAN",
-        CREATED_AT:
-          trx.createdAt ||
-          trx.CREATED_AT ||
-          0,
-      });
-    }
-  });
-});
-
-// ======================================
-// 🔥 REFUND / REJECT DARI DETAIL STOCK
-// ======================================
-const stockInfo =
-  detailStockLookup?.[imei];
-
-if (stockInfo) {
-  const stockStatus = String(
-    stockInfo.status ||
-    stockInfo.STATUS ||
-    ""
-  ).toUpperCase();
-
-  if (stockStatus === "REFUND") {
-    imeiHistory.push({
-      PAYMENT_METODE: "REFUND",
-      CREATED_AT: Date.now(),
-    });
-  }
-
-  if (
-    stockStatus ===
-    "TRANSFER_REJECT"
-  ) {
-    imeiHistory.push({
-      PAYMENT_METODE:
-        "TRANSFER_REJECT",
-      CREATED_AT: Date.now(),
-    });
-  }
-}
-
-// ======================================
-// 🔥 FINAL VALIDATOR
-// ======================================
-const stockStatus = String(
-  detailStockLookup?.[imei]?.status ||
-  detailStockLookup?.[imei]?.STATUS ||
-  ""
-).toUpperCase();
-
-const canSell =
-  [
-    "AVAILABLE",
-    "REFUND",
-    "TRANSFER_REJECT",
-    "READY_RESALE",
-    "BISA_DIJUAL_LAGI"
-  ].includes(stockStatus);
-
-  console.log(
-    "🔥 FINAL STOCK CHECK",
-    {
-      imei,
-      stockStatus,
-      canSell,
-      stockData:
-        detailStockLookup?.[imei],
-    }
-  );
-
-console.log("🔥 DEBUG CAN SELL", {
-  imei,
-  imeiHistory,
-  canSell,
-  stockStatus:
-    detailStockLookup?.[imei]?.status ||
-    detailStockLookup?.[imei]?.STATUS,
-});
-
-if (!canSell) {
-  throw new Error(
-    `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`
-  );
-}
+          if (sudahAdaDiTable) {
+            throw new Error(
+              `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`
+            );
+          }
 
           await lockImeiRealtime(
             imei,

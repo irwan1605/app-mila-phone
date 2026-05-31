@@ -1,66 +1,53 @@
-// src/utils/imeiStatusEngine.js
+export const getFinalIMEIStatus = ({
+  imei,
+  detailStock = {},
+}) => {
+  const target = String(imei || "")
+    .trim()
+    .toUpperCase();
 
-export const getFinalIMEIStatus = (imeiHistory = []) => {
-    if (!Array.isArray(imeiHistory) || imeiHistory.length === 0) {
-      return "NOT_FOUND";
-    }
-  
-    const sortedHistory = [...imeiHistory].sort(
-      (a, b) =>
-        (a.CREATED_AT || a.createdAt || 0) -
-        (b.CREATED_AT || b.createdAt || 0)
+  let stock = null;
+
+  // Cari berdasarkan KEY Firebase
+  const foundKey = Object.keys(detailStock || {}).find(
+    (key) =>
+      String(key || "")
+        .trim()
+        .toUpperCase() === target
+  );
+
+  if (foundKey) {
+    stock = detailStock[foundKey];
+  }
+
+  // Cari berdasarkan field imei
+  if (!stock) {
+    stock = Object.values(detailStock || {}).find(
+      (item) =>
+        String(
+          item?.imei ||
+          item?.IMEI ||
+          ""
+        )
+          .trim()
+          .toUpperCase() === target
     );
-  
-    const lastTransaction =
-      sortedHistory[sortedHistory.length - 1];
-  
-    const metode = String(
-      lastTransaction?.PAYMENT_METODE || ""
-    )
-      .trim()
-      .toUpperCase();
-  
-    switch (metode) {
-      case "PEMBELIAN":
-      case "REFUND":
-      case "TRANSFER_MASUK":
-      case "TRANSFER_REJECT":
-        return "AVAILABLE";
-  
-      case "PENJUALAN":
-        return "SOLD";
-  
-      case "TRANSFER_KELUAR":
-        return "TRANSFERING";
-  
-      default:
-        return "UNKNOWN";
-    }
-  };
-  
-  export const isIMEIAvailable = (
-    imeiHistory = []
-  ) => {
-    return (
-      getFinalIMEIStatus(imeiHistory) ===
-      "AVAILABLE"
+  }
+
+  if (!stock) {
+    console.warn(
+      "IMEI TIDAK DITEMUKAN:",
+      imei
     );
-  };
-  
-  export const isIMEISold = (
-    imeiHistory = []
-  ) => {
-    return (
-      getFinalIMEIStatus(imeiHistory) ===
-      "SOLD"
-    );
-  };
-  
-  export const isIMEITransfering = (
-    imeiHistory = []
-  ) => {
-    return (
-      getFinalIMEIStatus(imeiHistory) ===
-      "TRANSFERING"
-    );
-  };
+
+    return "NOT_FOUND";
+  }
+
+  return String(
+    stock.status ||
+    stock.STATUS ||
+    "AVAILABLE"
+  )
+    .trim()
+    .toUpperCase();
+};
