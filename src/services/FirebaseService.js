@@ -1134,11 +1134,20 @@ export const cekImeiSudahTerjual = async (imei) => {
   return false;
 };
 
-export const addPenjualan = async (tokoId, transaksi) => {
+export const addPenjualan = async (
+  tokoId,
+  transaksi
+) => {
   try {
-    if (!tokoId) throw new Error("TOKO ID TIDAK ADA");
+    console.log("TOKO ID:", tokoId);
 
-    const r = ref(db, `toko/${tokoId}/transaksi`);
+    const r = ref(
+      db,
+      `toko/${tokoId}/transaksi`
+    );
+
+    console.log("REF PATH:", r.toString());
+
     const newRef = push(r);
 
     const payload = {
@@ -1148,14 +1157,22 @@ export const addPenjualan = async (tokoId, transaksi) => {
       createdAt: Date.now(),
     };
 
+    console.log("PAYLOAD:", payload);
+
     await set(newRef, payload);
 
-    console.log("✅ PENJUALAN TERSIMPAN:", payload);
+    console.log(
+      "✅ PENJUALAN TERSIMPAN"
+    );
 
     return newRef.key;
   } catch (e) {
-    console.error("❌ ADD PENJUALAN ERROR:", e);
-    return null;
+    console.error(
+      "❌ ADD PENJUALAN ERROR FULL:",
+      e
+    );
+
+    throw e; // 🔥 GANTI
   }
 };
 
