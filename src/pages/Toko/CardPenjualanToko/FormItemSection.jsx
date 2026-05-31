@@ -969,10 +969,9 @@ export default function FormItemSection({
         const trxRefund = allTransaksi.find(
           (x) =>
             String(x.IMEI || "").trim() === String(imei).trim() &&
-            ["REFUND", "READY_RESALE"].includes(
-              String(x.PAYMENT_METODE || x.statusRefund || "").toUpperCase()
-            ) &&
-            String(x.STATUS || "").toUpperCase() === "APPROVED"
+            (x.READY_RESALE === true ||
+              String(x.statusRefund || x.PAYMENT_METODE || "").toUpperCase() ===
+                "READY_RESALE")
         );
 
         if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode) && !trxRefund) {
@@ -2060,27 +2059,52 @@ IMEI + NON IMEI
                     return;
                   }
 
-                  const key = `${normalize(
-                    barangValid.namaBrand || barangValid.brand
-                  )}|${normalize(barangValid.namaBarang)}`;
+                  const key =
+                  `${normalize(barangValid.namaBrand)}|${normalize(barangValid.namaBarang)}`;
+                
+                const imeiBarang = imeiByBarang.filter((im) => {
+                  const barang = findBarangUniversal(im);
+                
+                  return (
+                    barang &&
+                    normalize(barang.namaBarang) ===
+                      normalize(barangValid.namaBarang)
+                  );
+                });
 
-                  const stokTersedia =
-                    Number(universalStockMap[key] || 0) +
-                    Number(stockGabunganToko[key] || 0) +
-                    Number(finalNonImeiStock[key] || 0);
+                const stokTersedia = isImeiKategori(
+                  barangValid.kategoriBarang
+                )
+                  ? Number(
+                      universalStockMap[key] || 0
+                    )
+                  : Number(
+                      universalStockMap[key] || 0
+                    ) +
+                    Number(
+                      stockGabunganToko[key] || 0
+                    ) +
+                    Number(
+                      finalNonImeiStock[key] || 0
+                    );
 
+                    const isImeiBarang =
+                    isImeiKategori(barangValid.kategoriBarang);
+                  
                   updateItem(idx, {
                     namaBarang: barangValid.namaBarang,
                     kategoriBarang: barangValid.kategoriBarang,
-                    isImei: isImeiKategori(barangValid.kategoriBarang),
+                    isImei: isImeiBarang,
+                  
+                    // 🔥 RESET IMEI
+                    imei: "",
+                    imeiList: [],
+                  
                     hargaMap: barangValid.harga || {},
                     skemaHarga: "srp",
                     hargaAktif: Number(barangValid.harga?.srp || 0),
-                    qty: isImeiKategori(barangValid.kategoriBarang)
-                      ? 1
-                      : stokTersedia > 0
-                      ? 1
-                      : 0,
+                  
+                    qty: isImeiBarang ? 1 : stokTersedia > 0 ? 1 : 0,
                   });
                 }}
                 onBlur={() => {
@@ -2099,10 +2123,21 @@ IMEI + NON IMEI
                     barangValid.namaBarang
                   )}`;
 
-                  const stokTersedia =
-                    Number(universalStockMap[key] || 0) +
-                    Number(stockGabunganToko[key] || 0) +
-                    Number(finalNonImeiStock[key] || 0);
+                  const stokTersedia = isImeiKategori(
+                    barangValid.kategoriBarang
+                  )
+                    ? Number(
+                        universalStockMap[key] || 0
+                      )
+                    : Number(
+                        universalStockMap[key] || 0
+                      ) +
+                      Number(
+                        stockGabunganToko[key] || 0
+                      ) +
+                      Number(
+                        finalNonImeiStock[key] || 0
+                      );
                   console.log("🔥 FINAL STOCK:", stockGabunganToko);
 
                   if (
@@ -2121,16 +2156,19 @@ IMEI + NON IMEI
               {/* 🔥 TAMPILKAN INFO STOK REALTIME */}
               {item.namaBarang && (
                 <div className="text-xs font-semibold">
-                  {item.isImei ? (
-                    <span className="text-blue-600">
-                      📱 Stok IMEI Toko: Stok tersedia:{" "}
-                      {stockGabunganToko[
-                        `${normalize(item.namaBrand)}|${normalize(
-                          item.namaBarang
-                        )}`
-                      ] || 0}
-                    </span>
-                  ) : (
+                {item.isImei ? (
+  <span className="text-blue-600">
+    📱 Stok IMEI Toko: Stok tersedia:{" "}
+    {Math.min(
+      1,
+      Number(
+        universalStockMap[
+          `${normalize(item.namaBrand)}|${normalize(item.namaBarang)}`
+        ] || 0
+      )
+    )}
+  </span>
+) : (
                     <span className="text-green-600">
                       📦 Stok Barang Toko:{" "}
                       {Number(
@@ -2376,9 +2414,18 @@ IMEI + NON IMEI
                     // =====================================
                     // 🔥 FINAL VALIDASI
                     // =====================================
+                    const soldLocked = stockRealtime?.soldImei?.[imei];
+
+                    const detailStock = stockRealtime?.detailStock?.[imei];
+
+                    const refundReady =
+                      detailStock?.READY_RESALE === true ||
+                      detailStock?.statusRefund === "READY_RESALE" ||
+                      detailStock?.IS_REFUND === true;
+
                     if (
-                      (!existsInGlobal && !existsInTransfer) ||
-                      stockRealtime?.soldImei?.[imei]
+                      (!existsInGlobal && !existsInTransfer && !refundReady) ||
+                      (soldLocked && !refundReady)
                     ) {
                       alert("❌ IMEI tidak tersedia di toko ini");
 

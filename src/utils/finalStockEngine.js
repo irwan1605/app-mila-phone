@@ -168,6 +168,7 @@ export const buildFinalStock = (transaksi = []) => {
             "TRANSFER_MASUK",
             "TRANSFER_REJECT",
             "REFUND",
+            "REJECT",
             "RETUR",
             "VOID OPNAME",
           ].includes(metode) ||
@@ -552,9 +553,13 @@ export const buildFinalStock = (transaksi = []) => {
     // 🔥 STOCK MASUK FINAL NON IMEI
     // ==========================================
     if (
-      ["PEMBELIAN", "TRANSFER_MASUK", "TRANSFER BARANG", "REFUND"].includes(
-        metode
-      ) ||
+      [
+        "PEMBELIAN",
+        "TRANSFER_MASUK", // 🔥 TAMBAHAN BARU
+        "REJECT",
+        "TRANSFER BARANG",
+        "REFUND",
+      ].includes(metode) ||
       isApprovedTransfer
     ) {
       skuMap[skuKey] = {

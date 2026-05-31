@@ -185,6 +185,8 @@ export function buildUniversalStock({
         "TRANSFER_MASUK",
         "TRANSFER_REJECT",
         "REFUND",
+         // 🔥 TAMBAHAN BARU
+    "REJECT",
         "RETUR",
         "VOID OPNAME",
       ].includes(metode)

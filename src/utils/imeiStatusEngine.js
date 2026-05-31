@@ -48,8 +48,13 @@ export const getFinalIMEIStatus = ({
       "IMEI TIDAK DITEMUKAN:",
       imei
     );
-
-    return "NOT_FOUND";
+  
+    // =====================================
+    // FALLBACK AGAR TIDAK MEMBLOKIR
+    // REFUND / TRANSFER / REJECT
+    // =====================================
+  
+    return "AVAILABLE";
   }
 
   // =====================================

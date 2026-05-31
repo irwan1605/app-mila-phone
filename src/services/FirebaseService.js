@@ -90,10 +90,19 @@ export const tambahStokSetelahRefund = async ({ toko, items }) => {
 
           await update(ref(db, `detail_stock/${imei}`), {
             imei,
-            toko: toko, // 🔥 WAJIB BENAR
-            status: "AVAILABLE", // 🔥 WAJIB
+            toko,
+            status: "AVAILABLE",
+
+            READY_RESALE: true,
+
+            sold: false,
+
+            PAYMENT_METODE: "REFUND",
+
             LOCK_TRANSFER: false,
+
             LAST_ACTION: "REFUND",
+
             updatedAt: Date.now(),
           });
         }
@@ -810,18 +819,16 @@ export const listenTransaksiByToko = (tokoId, callback) => {
     (snap) => {
       const raw = snap.val() || {};
       const list = Object.entries(raw)
-      .map(([id, item]) =>
-        normalizeTransaksi(id, item, tokoId)
-      )
-      .filter(
-        (x) =>
-          x.deleted !== true &&
-          x.deletedFromPenjualan !== true &&
-          x.HIDE_FROM_PENJUALAN !== true &&
-          x.STATUS !== "REFUND_DELETED"
-      );
-    
-    callback(list);
+        .map(([id, item]) => normalizeTransaksi(id, item, tokoId))
+        .filter(
+          (x) =>
+            x.deleted !== true &&
+            x.deletedFromPenjualan !== true &&
+            x.HIDE_FROM_PENJUALAN !== true &&
+            x.STATUS !== "REFUND_DELETED"
+        );
+
+      callback(list);
     },
     (err) => {
       console.error("listenTransaksiByToko error:", err);
@@ -1116,35 +1123,52 @@ export const getAllUsersOnce = async () => {
    PENJUALAN (DataManagement)
 ============================================================ */
 export const cekImeiSudahTerjual = async (imei) => {
-  const snap = await get(ref(db, "penjualan"));
-  if (!snap.exists()) return false;
+  try {
+    const stockSnap = await get(ref(db, `detail_stock/${imei}`));
 
-  const data = snap.val();
-  for (const tokoId in data) {
-    const trx = data[tokoId];
-    for (const id in trx) {
-      const items = trx[id].items || [];
-      for (const it of items) {
-        if (it.imeiList?.includes(imei)) {
-          return true;
-        }
-      }
+    if (!stockSnap.exists()) {
+      return false;
     }
+
+    const stock = stockSnap.val();
+
+    const status = String(
+      stock.LAST_ACTION || stock.PAYMENT_METODE || stock.status || ""
+    ).toUpperCase();
+
+    // =====================================
+    // BOLEH DIJUAL LAGI
+    // =====================================
+    if (
+      [
+        "REFUND",
+        "REJECT",
+        "TRANSFER_MASUK",
+        "TRANSFER_REJECT",
+        "AVAILABLE",
+        "READY_RESALE",
+        "PEMBELIAN",
+      ].includes(status)
+    ) {
+      return false;
+    }
+
+    // =====================================
+    // SUDAH TERJUAL
+    // =====================================
+    return ["PENJUALAN", "SOLD"].includes(status);
+  } catch (err) {
+    console.error("cekImeiSudahTerjual ERROR", err);
+
+    return false;
   }
-  return false;
 };
 
-export const addPenjualan = async (
-  tokoId,
-  transaksi
-) => {
+export const addPenjualan = async (tokoId, transaksi) => {
   try {
     console.log("TOKO ID:", tokoId);
 
-    const r = ref(
-      db,
-      `toko/${tokoId}/transaksi`
-    );
+    const r = ref(db, `toko/${tokoId}/transaksi`);
 
     console.log("REF PATH:", r.toString());
 
@@ -1161,16 +1185,11 @@ export const addPenjualan = async (
 
     await set(newRef, payload);
 
-    console.log(
-      "✅ PENJUALAN TERSIMPAN"
-    );
+    console.log("✅ PENJUALAN TERSIMPAN");
 
     return newRef.key;
   } catch (e) {
-    console.error(
-      "❌ ADD PENJUALAN ERROR FULL:",
-      e
-    );
+    console.error("❌ ADD PENJUALAN ERROR FULL:", e);
 
     throw e; // 🔥 GANTI
   }
@@ -2596,12 +2615,9 @@ export const approveTransferFINAL = async ({ transfer }) => {
         historyCount: imeiHistory.length,
       });
 
-      const detailStockSnap = await get(
-        ref(db, `detail_stock/${imei}`)
-      );
-      
-      const stockInfo =
-        detailStockSnap.val() || {};
+      const detailStockSnap = await get(ref(db, `detail_stock/${imei}`));
+
+      const stockInfo = detailStockSnap.val() || {};
 
       if (
         stockInfo?.READY_RESALE === true ||
@@ -3113,7 +3129,6 @@ export const listenMasterToko = (cb) => {
       alamat: v.alamat || "",
     }));
     cb(rows);
-    
   });
 };
 

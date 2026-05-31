@@ -22,6 +22,7 @@ import CetakInvoicePenjualan from "../../Print/CetakInvoicePenjualan";
 import { useLocation } from "react-router-dom";
 import { ref, onValue } from "firebase/database";
 import { db } from "../../../firebase/FirebaseInit";
+import { getFinalIMEIStatus } from "../../../utils/imeiStatusEngine";
 
 import {
   listenPenjualan,
@@ -55,6 +56,7 @@ const normalizeImei = (v) =>
   String(v || "")
     .trim()
     .toUpperCase();
+    
 
 // =====================================
 // 🔥 CEK REFUND READY
@@ -76,6 +78,46 @@ const isRefundReady = (imei, transaksi = []) => {
       String(t.STATUS || "").toUpperCase() === "APPROVED"
     );
   });
+};
+
+// =====================================
+// 🔥 IMEI BOLEH DIJUAL KEMBALI
+// =====================================
+const isResellAllowed = (
+  imei,
+  detailStockLookup = {}
+) => {
+  const stock =
+    detailStockLookup?.[imei] ||
+    Object.values(detailStockLookup || {}).find(
+      (x) =>
+        String(x?.imei || "")
+          .trim()
+          .toUpperCase() ===
+        String(imei)
+          .trim()
+          .toUpperCase()
+    );
+
+  if (!stock) return false;
+
+  const lastAction = String(
+    stock.LAST_ACTION ||
+      stock.PAYMENT_METODE ||
+      stock.status ||
+      stock.STATUS ||
+      ""
+  ).toUpperCase();
+
+  return [
+    "PEMBELIAN",
+    "AVAILABLE",
+    "REFUND",
+    "REJECT",
+    "TRANSFER_MASUK",
+    "TRANSFER_REJECT",
+    "READY_RESALE",
+  ].includes(lastAction);
 };
 
 // ================= COMPONENT =================
@@ -487,20 +529,34 @@ export default function CardPenjualanToko() {
 
         if (item.isImei) {
           if (!imei) throw new Error(`IMEI belum dipilih (${item.namaBarang})`);
-          const sold = await cekImeiSudahTerjual(imei);
-
-          const refundReady = isRefundReady(
+          const finalStatus = getFinalIMEIStatus({
             imei,
-            penjualanList
+            detailStock: detailStockLookup,
+          });
+          
+          console.log(
+            "🔥 FINAL STATUS:",
+            imei,
+            finalStatus
           );
           
-          if (
-            sold &&
-            !refundReady &&
-            !detailStockLookup?.[imei]?.READY_RESALE
-          ) {
+          const canSell = [
+            "AVAILABLE",
+            "REFUND",
+            "REJECT",
+            "TRANSFER_REJECT",
+            "TRANSFER_MASUK",
+            "READY_RESALE",
+            "PEMBELIAN",
+          ].includes(
+            String(finalStatus || "")
+              .trim()
+              .toUpperCase()
+          );
+          
+          if (!canSell) {
             throw new Error(
-              `IMEI ${imei} sudah pernah terjual`
+              `IMEI ${imei} tidak dapat dijual. Status terakhir = ${finalStatus}`
             );
           }
 
@@ -531,7 +587,15 @@ export default function CardPenjualanToko() {
             }
           );
 
-          if (sudahAdaDiTable) {
+          const sold = await cekImeiSudahTerjual(imei);
+
+          const resellAllowed =
+            isResellAllowed(
+              imei,
+              detailStockLookup
+            );
+          
+          if (sold && !resellAllowed) {
             throw new Error(
               `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`
             );
