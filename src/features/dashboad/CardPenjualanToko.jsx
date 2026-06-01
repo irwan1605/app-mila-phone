@@ -47,6 +47,7 @@ const TOKO_LIST = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
+  "BENGKEL",
 ];
 
 // =======================================================

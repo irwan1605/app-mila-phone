@@ -426,7 +426,9 @@ export default function Sperpart() {
         "METLAND 2",
         "PITARA",
         "KOTA WISATA",
-        "SAWANGAN",].forEach((t) =>
+        "SAWANGAN",
+        "BENGKEL",
+      ].forEach((t) =>
         s.add(t)
       );
     }

@@ -25,6 +25,7 @@ const TOKO_TUJUAN = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
+  "BENGKEL",
 ];
 
 const KATEGORI_OPTIONS = [

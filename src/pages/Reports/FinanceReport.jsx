@@ -45,6 +45,7 @@ const fallbackTokoNames = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
+  "BENGKEL",
 ];
 
 const ALL_TOKO = fallbackTokoNames;

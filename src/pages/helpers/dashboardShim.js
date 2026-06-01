@@ -12,6 +12,7 @@ export const TOKO_LABELS = {
   "PITARA": "PITARA",
   "KOTA WISATA": "KOTA WISATA",
   "SAWANGAN": "SAWANGAN",
+  "BENGKEL": "BENGKEL",
   
 };
 

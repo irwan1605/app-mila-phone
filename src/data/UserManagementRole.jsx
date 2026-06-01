@@ -82,6 +82,14 @@ const userRoles = [
       toko: "KOTA WISATA",
       nama: "SEVRI NANDA",
     },
+    {
+      id: 11,
+      username: "GILANG",
+      password: "123",
+      role: "pic_tokoKotaWisata",
+      toko: "BENGKEL",
+      nama: "SEVRI NANDA",
+    },
   ];
   
   export default userRoles;

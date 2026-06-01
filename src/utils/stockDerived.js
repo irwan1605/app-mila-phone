@@ -12,6 +12,7 @@ const TOKO_ID_MAP = {
   8: "PITARA",
   9: "KOTA WISATA",
   10: "SAWANGAN",
+  11: "BENGKEL",
 };
 
 // ======================================

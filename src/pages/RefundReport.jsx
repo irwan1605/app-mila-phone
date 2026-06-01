@@ -11,21 +11,15 @@ export default function RefundReport() {
   /* ================= LISTENER ================= */
   useEffect(() => {
     const unsub = listenAllTransaksi((data = []) => {
-  
       // 1️⃣ ambil semua transaksi refund
       const refundRowsRaw = [];
 
       data.forEach((t) => {
-      
         // =========================
         // 1️⃣ REFUND DARI PENJUALAN (ADA ITEMS)
         // =========================
-        if (
-          t.statusPembayaran === "REFUND" &&
-          Array.isArray(t.items)
-        ) {
+        if (t.statusPembayaran === "REFUND" && Array.isArray(t.items)) {
           t.items.forEach((it, idx) => {
-      
             // IMEI
             if (Array.isArray(it.imeiList) && it.imeiList.length) {
               it.imeiList.forEach((imei) => {
@@ -57,7 +51,7 @@ export default function RefundReport() {
             }
           });
         }
-      
+
         // =========================
         // 2️⃣ REFUND DARI STOCK ENGINE
         // =========================
@@ -78,61 +72,75 @@ export default function RefundReport() {
             KETERANGAN: t.KETERANGAN || "REFUND",
           });
         }
+
+        if (
+          String(t?.PAYMENT_METODE || "").toUpperCase() === "REFUND" ||
+          String(t?.STATUS || "").toUpperCase() === "REFUND" ||
+          t?.IS_REFUND === true
+        ) {
+          refundRowsRaw.push({
+            id: t.id || `${t.NO_INVOICE}-${t.IMEI}`,
+
+            TANGGAL_TRANSAKSI: t.TANGGAL_TRANSAKSI || t.tanggal || "-",
+
+            NAMA_TOKO: t.NAMA_TOKO || t.toko || "-",
+
+            NAMA_BRAND: t.NAMA_BRAND || "-",
+
+            NAMA_BARANG: t.NAMA_BARANG || "-",
+
+            IMEI: t.IMEI || "NON IMEI",
+
+            QTY: Number(t.QTY || 1),
+
+            NO_INVOICE: t.NO_INVOICE || t.invoice || "-",
+
+            KETERANGAN: "REFUND PENJUALAN",
+          });
+        }
       });
-      
-      
-  
-   // 2️⃣ hilangkan duplicate berdasarkan ITEM (IMEI / SKU)
-const uniqueMap = new Map();
 
-refundRowsRaw.forEach((r) => {
+      // 2️⃣ hilangkan duplicate berdasarkan ITEM (IMEI / SKU)
+      const uniqueMap = new Map();
 
-  // ✅ KEY UNIK PER ITEM
-  const key = r.IMEI
-    ? `${r.NAMA_TOKO}|${r.IMEI}` // IMEI unik
-    : `${r.NAMA_TOKO}|${r.NAMA_BRAND}|${r.NAMA_BARANG}|${r.NO_INVOICE}`; 
-    // NON IMEI tetap unik per item
+      refundRowsRaw.forEach((r) => {
+        // ✅ KEY UNIK PER ITEM
+        const key = `${r.NO_INVOICE}|${r.IMEI}|${r.NAMA_BARANG}`;
+        // NON IMEI tetap unik per item
 
-  if (!uniqueMap.has(key)) {
-    uniqueMap.set(key, {
-      id: r.id,
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, {
+            id: r.id,
 
-      TANGGAL_TRANSAKSI:
-        r.TANGGAL_TRANSAKSI ||
-        r.TANGGAL ||
-        "-",
+            TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || r.TANGGAL || "-",
 
-      NAMA_TOKO: r.NAMA_TOKO || "-",
-      NAMA_BRAND: r.NAMA_BRAND || "-",
-      NAMA_BARANG: r.NAMA_BARANG || "-",
+            NAMA_TOKO: r.NAMA_TOKO || "-",
+            NAMA_BRAND: r.NAMA_BRAND || "-",
+            NAMA_BARANG: r.NAMA_BARANG || "-",
 
-      IMEI: r.IMEI || "NON IMEI",
-      QTY: Number(r.QTY || 1),
+            IMEI: r.IMEI || "NON IMEI",
+            QTY: Number(r.QTY || 1),
 
-      NO_INVOICE: r.NO_INVOICE || "-",
+            NO_INVOICE: r.NO_INVOICE || "-",
 
-      KETERANGAN:
-        r.KETERANGAN ||
-        r.ALASAN_REFUND ||
-        "RETUR / REFUND",
-    });
-  }
-});
+            KETERANGAN: r.KETERANGAN || r.ALASAN_REFUND || "RETUR / REFUND",
+          });
+        }
+      });
 
-  
       // 3️⃣ urutkan terbaru di atas
-      const sorted = Array.from(uniqueMap.values()).sort(
-        (a, b) =>
-          new Date(b.TANGGAL_TRANSAKSI) -
-          new Date(a.TANGGAL_TRANSAKSI)
-      );
-  
+      const sorted = Array.from(uniqueMap.values()).sort((a, b) => {
+        const da = new Date(a.TANGGAL_TRANSAKSI || 0);
+        const db = new Date(b.TANGGAL_TRANSAKSI || 0);
+
+        return db - da;
+      });
+
       setRows(sorted);
     });
-  
+
     return () => unsub && unsub();
   }, []);
-  
 
   /* ================= FILTER ================= */
   const filtered = useMemo(() => {
@@ -148,8 +156,7 @@ refundRowsRaw.forEach((r) => {
       )
         return false;
 
-      if (filterToko !== "ALL" && r.NAMA_TOKO !== filterToko)
-        return false;
+      if (filterToko !== "ALL" && r.NAMA_TOKO !== filterToko) return false;
 
       return true;
     });
@@ -175,17 +182,12 @@ refundRowsRaw.forEach((r) => {
 
     XLSX.writeFile(
       wb,
-      `Laporan_Retur_${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx`
+      `Laporan_Retur_${new Date().toISOString().slice(0, 10)}.xlsx`
     );
   };
 
   const tokoList = useMemo(() => {
-    return [
-      "ALL",
-      ...new Set(rows.map((r) => r.NAMA_TOKO).filter(Boolean)),
-    ];
+    return ["ALL", ...new Set(rows.map((r) => r.NAMA_TOKO).filter(Boolean))];
   }, [rows]);
 
   return (
@@ -250,17 +252,13 @@ refundRowsRaw.forEach((r) => {
                 <td className="border p-2 font-semibold text-indigo-600">
                   {r.NAMA_BRAND}
                 </td>
-                <td className="border p-2 font-medium">
-                  {r.NAMA_BARANG}
-                </td>
+                <td className="border p-2 font-medium">{r.NAMA_BARANG}</td>
                 <td className="border p-2 font-mono text-xs">
                   {r.IMEI || "NON-IMEI"}
                 </td>
                 <td className="border p-2 text-center">{r.QTY}</td>
                 <td className="border p-2">{r.NO_INVOICE}</td>
-                <td className="border p-2 text-xs">
-                  {r.KETERANGAN}
-                </td>
+                <td className="border p-2 text-xs">{r.KETERANGAN}</td>
               </tr>
             ))}
           </tbody>

@@ -109,7 +109,7 @@ export default function MasterTokoCard() {
       </div>
 
       {/* ➕ FORM TAMBAH */}
-      {/* <div className="mb-4 p-4 border rounded-xl bg-slate-50">
+      <div className="mb-4 p-4 border rounded-xl bg-slate-50">
         <h3 className="font-semibold text-slate-700 mb-2 flex items-center gap-2">
           <FaPlus /> Tambah Toko
         </h3>
@@ -137,7 +137,7 @@ export default function MasterTokoCard() {
             <FaPlus /> Simpan
           </button>
         </div>
-      </div> */}
+      </div>
 
       {/* TABLE */}
       <div className="overflow-x-auto">

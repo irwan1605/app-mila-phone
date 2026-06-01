@@ -59,6 +59,13 @@
         "name": "SAWANGAN"
       },
       "transaksi": {}
+    },
+    "11": {
+      "info": {
+        "name": "BENGKEL"
+      },
+      "transaksi": {}
     }
+    
   }
 }

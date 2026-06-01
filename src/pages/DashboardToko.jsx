@@ -44,6 +44,7 @@ const TOKO_LIST = [
   { id: "8", tokoName: "PITARA", code: "pitara" },
   { id: "9", tokoName: "KOTA WISATA", code: "kota-wisata" },
   { id: "10", tokoName: "SAWANGAN", code: "sawangan" },
+  { id: "11", tokoName: "BENGKEL", code: "bengkel" },
 ];
 
 const fmt = (n) => {
@@ -89,6 +90,7 @@ export default function DashboardToko(props) {
     8: "-OhxxxxPITARA",
     9: "-OhxxxxKOTAWISATA",
     10: "-OhxxxxSAWANGAN",
+    11: "-OhxxxxBENGKEL",
   };
 
   const firebaseTokoId = MAP_TOKO[userLogin.toko] || MAP_TOKO[tokoId];

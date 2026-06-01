@@ -38,6 +38,7 @@ const TOKO_LABELS = {
   8: "PITARA",
   9: "KOTA WISATA",
   10: "SAWANGAN",
+  11: "BENGKEL",
 };
 
 const ALL_TOKO_IDS = Object.keys(TOKO_LABELS).map(Number);

@@ -31,6 +31,7 @@ const TOKO_OPTIONS = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
+  "BENGKEL",
 ];
 
 const JABATAN_OPTIONS = [

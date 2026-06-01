@@ -75,12 +75,13 @@ const initialData = [
     "CIBINONG",
     "GAS ALAM",
     "CITEUREUP",
-    "CIRACAS",
+    "MARKETPLACE",
     "METLAND 1",
     "METLAND 2",
     "PITARA",
     "KOTA WISATA",
-    "PERMATA",
+    "SAWANGAN",
+    "BENGKEL",
   ];
   
   // =====================================================

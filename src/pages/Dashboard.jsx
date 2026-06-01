@@ -51,6 +51,7 @@ const TOKO_LIST = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
+  "BENGKEL",
 ];
 
 export default function Dashboard() {
@@ -390,28 +391,6 @@ export default function Dashboard() {
 
     return true;
   };
-
-  useEffect(() => {
-    penjualanList.forEach((trx) => {
-      if (!isValidPenjualan(trx)) {
-        console.log(
-          "⛔ DASHBOARD BLOCK:",
-          trx.invoice,
-          trx.STATUS,
-          trx.PAYMENT_METODE
-        );
-  
-        return;
-      }
-  
-      console.log(
-        "✅ DASHBOARD HITUNG:",
-        trx.invoice,
-        trx.STATUS,
-        trx.PAYMENT_METODE
-      );
-    });
-  }, [penjualanList]);
 
   const totalHariIni = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);

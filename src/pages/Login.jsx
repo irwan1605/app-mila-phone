@@ -113,6 +113,7 @@ export default function Login({ onLogin, users: usersProp }) {
         8: "PITARA",
         9: "KOTA WISATA",
         10: "SAWANGAN",
+        11: "BENGKEL",
       };
 
       const namaToko = TOKO_MAP[String(tokoId)];

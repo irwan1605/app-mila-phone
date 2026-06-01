@@ -10,6 +10,9 @@ import {
 import { FaStore } from "react-icons/fa";
 import { useNavigate, useLocation } from "react-router-dom";
 import { hitungSemuaStok } from "../../utils/stockUtils";
+import CardPersediaanBarang
+from "../../features/dashboad/CardPersediaanBarang";
+
 
 // =======================
 // CONST
@@ -25,6 +28,7 @@ const TOKO_LIST = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
+  "BENGKEL",
 ];
 
 const CARD_COLORS = [
@@ -354,6 +358,14 @@ export default function InventoryReport() {
     });
   }, [transaksi]);
 
+  const stockRealSuperAdmin =
+  CardPersediaanBarang({
+    detailStock: stokMap,
+  });
+
+  
+  
+
   const filteredStockPerToko = useMemo(() => {
     if (!searchGlobal) return cardStockPerToko;
 
@@ -375,47 +387,50 @@ export default function InventoryReport() {
       .filter((t) => Object.keys(t.kategori).length > 0);
   }, [cardStockPerToko, searchGlobal]);
 
+  
+
+  
+
   const tokoHasilPencarian = useMemo(() => {
     if (!searchGlobal) return [];
-  
+
     const keyword = searchGlobal.toLowerCase();
-  
+
     const mapToko = {};
-  
+
     transaksi.forEach((t) => {
       if (t.STATUS !== "Approved") return;
-  
+
       const brand = String(t.NAMA_BRAND || "").toLowerCase();
       const barang = String(t.NAMA_BARANG || "").toLowerCase();
       const imei = String(t.IMEI || "").toLowerCase();
-  
+
       const isMatch =
         brand.includes(keyword) ||
         barang.includes(keyword) ||
         imei.includes(keyword);
-  
+
       if (!isMatch) return;
-  
+
       // ❗ skip IMEI yang sudah terjual
       if (t.IMEI && imeiTerjual.has(String(t.IMEI))) {
         return;
       }
-  
-      const toko =
-        t.NAMA_TOKO || t.ke || t.tokoPengirim || "UNKNOWN";
-  
+
+      const toko = t.NAMA_TOKO || t.ke || t.tokoPengirim || "UNKNOWN";
+
       const qty = t.IMEI ? 1 : Number(t.QTY || 0);
-  
+
       if (!mapToko[toko]) {
         mapToko[toko] = 0;
       }
-  
+
       mapToko[toko] += qty;
     });
-  
+
     return Object.entries(mapToko)
-    .map(([namaToko, total]) => ({ namaToko, total }))
-    .sort((a, b) => b.total - a.total);
+      .map(([namaToko, total]) => ({ namaToko, total }))
+      .sort((a, b) => b.total - a.total);
   }, [transaksi, searchGlobal, imeiTerjual]);
 
   // ==========================
@@ -434,45 +449,44 @@ export default function InventoryReport() {
 
   useEffect(() => {
     if (!searchGlobal) return;
-  
+
     clearTimeout(searchTimeout.current);
-  
+
     searchTimeout.current = setTimeout(() => {
       const keyword = searchGlobal.toLowerCase();
-  
+
       const found = transaksi.find((t) => {
         if (t.STATUS !== "Approved") return false;
-  
+
         const brand = String(t.NAMA_BRAND || "").toLowerCase();
         const barang = String(t.NAMA_BARANG || "").toLowerCase();
         const imei = String(t.IMEI || "").toLowerCase();
-  
+
         const match =
           brand.includes(keyword) ||
           barang.includes(keyword) ||
           imei.includes(keyword);
-  
+
         if (!match) return false;
-  
+
         // ❗ skip IMEI terjual
         if (t.IMEI && imeiTerjual.has(String(t.IMEI))) {
           return false;
         }
-  
+
         return true;
       });
-  
+
       if (!found) return;
-  
+
       // 🔥 CEK: hanya redirect kalau ini IMEI
       if (!found.IMEI) {
         return; // ⛔ STOP → biar tampil list toko dulu
       }
-  
+
       // ✅ kalau IMEI → langsung redirect
-      const targetToko =
-        found.NAMA_TOKO || found.ke || found.tokoPengirim;
-  
+      const targetToko = found.NAMA_TOKO || found.ke || found.tokoPengirim;
+
       if (targetToko) {
         navigate("/table/detail-stock-toko", {
           state: {

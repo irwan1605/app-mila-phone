@@ -57,6 +57,7 @@ const TOKO_MAP = {
   8: "PITARA",
   9: "KOTA WISATA",
   10: "SAWANGAN",
+  11: "BENGKEL",
 };
 
 export default function TablePenjualan({ data = [] }) {
@@ -954,6 +955,7 @@ export default function TablePenjualan({ data = [] }) {
     PITARA: "8",
     "KOTA WISATA": "9",
     SAWANGAN: "10",
+    BENGKEL: "11",
   };
 
   const handleRefund = async (row) => {

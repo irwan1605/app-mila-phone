@@ -53,6 +53,7 @@ const fallbackTokoNames = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
+  "BENGKEL",
 ];
 
 const rowsPerPageDefault = 10;

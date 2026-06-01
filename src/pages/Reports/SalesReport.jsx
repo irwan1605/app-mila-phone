@@ -38,6 +38,7 @@ const fallbackTokoNames = [
   "PITARA",
   "KOTA WISATA",
   "SAWANGAN",
+  "BENGKEL",
 ];
 
 const safe = (v) => Number(v || 0);
