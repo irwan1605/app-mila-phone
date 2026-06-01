@@ -154,28 +154,40 @@ export default function Dashboard() {
   const dashboardPenjualan = useMemo(() => {
     const mapInvoice = {};
 
+    const todayLocal = new Date().toLocaleDateString("en-CA");
+
     const formatDate = (d) => {
       if (!d) return "";
       return new Date(d).toLocaleDateString("en-CA");
     };
 
-    const todayLocal = new Date().toLocaleDateString("en-CA");
-
     penjualanList.forEach((trx) => {
-      if (!Array.isArray(trx.items)) return;
-      if (trx.statusPembayaran === "REFUND") return;
+      // =====================================
+      // SKIP REFUND
+      // =====================================
+      const isRefund =
+        trx?.deleted === true ||
+        trx?.deletedFromPenjualan === true ||
+        trx?.refundProcessed === true ||
+        trx?.refundLocked === true ||
+        trx?.IS_REFUND === true ||
+        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
+        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
+        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
+
+      if (isRefund) return;
 
       const invoice = String(
-        trx.invoice || trx.NO_INVOICE || trx.noInvoice || ""
+        trx?.invoice || trx?.NO_INVOICE || trx?.noInvoice || ""
       ).trim();
+
       if (!invoice) return;
 
       if (!mapInvoice[invoice]) {
-        const rawDate = trx.tanggal || trx.createdAt || trx.TANGGAL_TRANSAKSI;
         const total =
-          Number(trx.payment?.grandTotal || 0) ||
-          Number(trx.GRAND_TOTAL || 0) ||
-          (Array.isArray(trx.items)
+          Number(trx?.payment?.grandTotal || 0) ||
+          Number(trx?.GRAND_TOTAL || 0) ||
+          (Array.isArray(trx?.items)
             ? trx.items.reduce(
                 (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
                 0
@@ -187,9 +199,9 @@ export default function Dashboard() {
           0
         );
 
-        const tanggal = formatDate(trx.tanggal || trx.createdAt);
-
-        console.log("DEBUG DASHBOARD:", penjualanList);
+        const tanggal = formatDate(
+          trx?.tanggal || trx?.createdAt || trx?.TANGGAL_TRANSAKSI
+        );
 
         mapInvoice[invoice] = {
           total,
@@ -203,7 +215,9 @@ export default function Dashboard() {
 
     return {
       totalTransaksi: list.length,
+
       totalQty: list.reduce((s, x) => s + x.qty, 0),
+
       totalOmzet: list.reduce((s, x) => s + x.total, 0),
 
       totalHariIni: list
@@ -465,6 +479,51 @@ export default function Dashboard() {
     }));
   }, [filteredData, registeredTokoSet]);
 
+  const totalPiutangAktif = useMemo(() => {
+    const invoiceSet = new Set();
+
+    penjualanList.forEach((trx) => {
+      // =====================================
+      // SKIP REFUND
+      // =====================================
+      const isRefund =
+        trx?.deleted === true ||
+        trx?.deletedFromPenjualan === true ||
+        trx?.refundProcessed === true ||
+        trx?.refundLocked === true ||
+        trx?.IS_REFUND === true ||
+        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
+        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
+        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
+
+      if (isRefund) return;
+
+      // =====================================
+      // HANYA PENJUALAN KREDIT / PIUTANG
+      // =====================================
+      const isPiutang =
+        String(trx?.SYSTEM_PAYMENT || "").toUpperCase() === "PIUTANG" ||
+        String(trx?.systemPayment || "").toUpperCase() === "PIUTANG" ||
+        String(trx?.paymentMethod || "").toUpperCase() === "KREDIT" ||
+        String(trx?.PAYMENT_METODE || "").toUpperCase() === "KREDIT";
+
+      if (!isPiutang) return;
+
+      // =====================================
+      // INVOICE
+      // =====================================
+      const invoice = String(
+        trx?.invoice || trx?.NO_INVOICE || trx?.noInvoice || ""
+      ).trim();
+
+      if (!invoice) return;
+
+      invoiceSet.add(invoice);
+    });
+
+    return invoiceSet.size;
+  }, [penjualanList]);
+
   const omzetPerSales = useMemo(() => {
     const map = {};
     filteredData.forEach((x) => {
@@ -483,22 +542,189 @@ export default function Dashboard() {
     const mapInvoice = {};
 
     penjualanList.forEach((trx) => {
-      if (!trx?.invoice) return;
+      // =====================================
+      // SKIP REFUND
+      // =====================================
+      const isRefund =
+        trx?.deleted === true ||
+        trx?.deletedFromPenjualan === true ||
+        trx?.refundProcessed === true ||
+        trx?.refundLocked === true ||
+        trx?.IS_REFUND === true ||
+        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
+        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
+        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
 
-      const total =
-        Number(trx.payment?.grandTotal || 0) > 0
-          ? Number(trx.payment.grandTotal)
-          : (trx.items || []).reduce(
-              (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-              0
-            ) + Number(trx.payment?.nominalMdr || 0);
+      if (isRefund) return;
 
-      if (!mapInvoice[trx.invoice]) {
-        mapInvoice[trx.invoice] = total;
+      const invoice = String(trx?.invoice || trx?.NO_INVOICE || "").trim();
+
+      if (!invoice) return;
+
+      let total = 0;
+
+      if (Number(trx?.payment?.grandTotal || 0) > 0) {
+        total = Number(trx.payment.grandTotal);
+      } else if (Array.isArray(trx?.items)) {
+        total =
+          trx.items.reduce(
+            (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+            0
+          ) + Number(trx?.payment?.nominalMdr || 0);
+      }
+
+      if (!mapInvoice[invoice]) {
+        mapInvoice[invoice] = total;
       }
     });
 
     return Object.values(mapInvoice).reduce((s, v) => s + v, 0);
+  }, [penjualanList]);
+
+  const totalPenjualanBarangPerBulan = useMemo(() => {
+    if (!Array.isArray(penjualanList)) return 0;
+
+    const now = new Date();
+
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const invoiceMap = {};
+
+    penjualanList.forEach((trx) => {
+      // =====================================
+      // SKIP REFUND
+      // =====================================
+      const isRefund =
+        trx?.deleted === true ||
+        trx?.deletedFromPenjualan === true ||
+        trx?.refundProcessed === true ||
+        trx?.refundLocked === true ||
+        trx?.IS_REFUND === true ||
+        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
+        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
+        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
+
+      if (isRefund) return;
+
+      // =====================================
+      // TANGGAL TRANSAKSI
+      // =====================================
+      const rawDate = trx?.tanggal || trx?.createdAt || trx?.TANGGAL_TRANSAKSI;
+
+      if (!rawDate) return;
+
+      const trxDate = new Date(rawDate);
+
+      if (
+        trxDate.getMonth() !== currentMonth ||
+        trxDate.getFullYear() !== currentYear
+      ) {
+        return;
+      }
+
+      // =====================================
+      // INVOICE
+      // =====================================
+      const invoice = String(
+        trx?.invoice || trx?.NO_INVOICE || trx?.noInvoice || ""
+      ).trim();
+
+      if (!invoice) return;
+
+      // =====================================
+      // TOTAL QTY
+      // =====================================
+      const qty = Array.isArray(trx?.items)
+        ? trx.items.reduce((sum, item) => sum + Number(item.qty || 0), 0)
+        : Number(trx?.qty || trx?.QTY || 0);
+
+      // =====================================
+      // ANTI DOUBLE INVOICE
+      // =====================================
+      if (!invoiceMap[invoice]) {
+        invoiceMap[invoice] = qty;
+      }
+    });
+
+    return Object.values(invoiceMap).reduce((sum, qty) => sum + qty, 0);
+  }, [penjualanList]);
+
+  const totalNominalPenjualanPerBulan = useMemo(() => {
+    if (!Array.isArray(penjualanList)) return 0;
+
+    const now = new Date();
+
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const mapInvoice = {};
+
+    penjualanList.forEach((trx) => {
+      // =====================================
+      // SKIP REFUND
+      // =====================================
+      const isRefund =
+        trx?.deleted === true ||
+        trx?.deletedFromPenjualan === true ||
+        trx?.refundProcessed === true ||
+        trx?.refundLocked === true ||
+        trx?.IS_REFUND === true ||
+        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
+        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
+        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
+
+      if (isRefund) return;
+
+      // =====================================
+      // TANGGAL TRANSAKSI
+      // =====================================
+      const rawDate = trx?.tanggal || trx?.createdAt || trx?.TANGGAL_TRANSAKSI;
+
+      if (!rawDate) return;
+
+      const trxDate = new Date(rawDate);
+
+      if (
+        trxDate.getMonth() !== currentMonth ||
+        trxDate.getFullYear() !== currentYear
+      ) {
+        return;
+      }
+
+      // =====================================
+      // INVOICE
+      // =====================================
+      const invoice = String(
+        trx?.invoice || trx?.NO_INVOICE || trx?.noInvoice || ""
+      ).trim();
+
+      if (!invoice) return;
+
+      // =====================================
+      // TOTAL
+      // =====================================
+      let total = 0;
+
+      if (Number(trx?.payment?.grandTotal || 0) > 0) {
+        total = Number(trx.payment.grandTotal);
+      } else if (Array.isArray(trx?.items)) {
+        total =
+          trx.items.reduce(
+            (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+            0
+          ) + Number(trx?.payment?.nominalMdr || 0);
+      }
+
+      // =====================================
+      // ANTI DOUBLE INVOICE
+      // =====================================
+      if (!mapInvoice[invoice]) {
+        mapInvoice[invoice] = total;
+      }
+    });
+
+    return Object.values(mapInvoice).reduce((sum, value) => sum + value, 0);
   }, [penjualanList]);
 
   const omzetPerHari = useMemo(() => {
@@ -614,25 +840,6 @@ export default function Dashboard() {
         Dashboard Pusat - CILANGKAP PUSAT
       </h2>
 
-      {/* ================= FAST SALE IMEI ================= */}
-      {/* <div className="bg-white p-4 rounded-xl shadow mb-6 flex gap-2"> */}
-      {/* <FaSearch className="text-gray-400" /> */}
-      {/* <input
-          type="text"
-          value={searchImei}
-          onChange={(e) => setSearchImei(e.target.value)}
-          className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none"
-          placeholder="Cari IMEI..."
-        /> */}
-      {/* <button
-          onClick={handleSearchImei}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded"
-        >
-          Proses Penjualan
-        </button> */}
-      {/* </div> */}
-
-      {/* 3 CARD MENU UTAMA (PENJUALAN, STOCK OPNAME, TRANSFER GUDANG) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div
           onClick={() => navigate("/toko/cilangkap-pusat/penjualan")}
@@ -722,7 +929,7 @@ export default function Dashboard() {
           <p className="text-[11px] text-gray-500">Total Transaksi Hari Ini</p>
         </div>
 
-        {/* 3. TOTAL NOMINAL PENJUALAN */}
+        {/* 3. TOTAL NOMINAL PENJUALAN PERBULAN */}
         <div
           onClick={() =>
             navigate("/toko/:tokoId/penjualan", {
@@ -734,17 +941,24 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <FaMoneyBillWave className="text-green-600" />
             <span className="text-xs text-gray-500">
-              Total Nominal Penjualan
+              Total Nominal Penjualan perBulan
             </span>
           </div>
 
           <div className="mt-2 text-lg font-bold text-green-700">
-            {totalNominalPenjualan.toLocaleString("id-ID", {
+            {totalNominalPenjualanPerBulan.toLocaleString("id-ID", {
               style: "currency",
               currency: "IDR",
               maximumFractionDigits: 0,
             })}
           </div>
+          <p className="text-[11px] text-gray-500 mt-1">
+            Bulan{" "}
+            {new Date().toLocaleDateString("id-ID", {
+              month: "long",
+              year: "numeric",
+            })}
+          </p>
         </div>
 
         {/* 4. PENJUALAN HARI INI */}
@@ -843,13 +1057,12 @@ export default function Dashboard() {
             <FaHandHoldingUsd className="text-red-600" />
             <span className="text-xs text-gray-500">Informasi Piutang</span>
           </div>
+          <p className="text-[11px] text-gray-500">
+            Total transaksi kredit yang masih tercatat
+          </p>
 
           <div className="text-xl font-bold text-red-600">
-            {
-              dataTransaksi.filter(
-                (x) => x.SYSTEM_PAYMENT === "PIUTANG" && x.STATUS === "Approved"
-              ).length
-            }{" "}
+            {totalPiutangAktif}
             Transaksi
           </div>
 
@@ -869,11 +1082,11 @@ export default function Dashboard() {
           </div>
 
           <div className="text-xl font-bold text-sky-600">
-            {dashboardPenjualan.totalQty} Unit
+            {totalPenjualanBarangPerBulan.toLocaleString("id-ID")} Unit
           </div>
 
           <p className="text-[11px] text-gray-500">
-            Semua status transaksi Barang
+            Total unit barang terjual bulan ini
           </p>
         </div>
       </div>
