@@ -1432,6 +1432,22 @@ IMEI + NON IMEI
   }, [allTransaksi, tokoLogin, stokToko, stockRealtime]);
   // 🔥 taruh DI SINI (di dalam component, sebelum return)
 
+  const getFinalStockBarang = ({ barang, brand, kategoriBarang }) => {
+    const key = `${normalize(brand)}|${normalize(barang)}`;
+
+    // =====================
+    // IMEI
+    // =====================
+    if (isImeiKategori(kategoriBarang)) {
+      return Math.min(Number(universalStockMap[key] || 0), 1);
+    }
+
+    // =====================
+    // NON IMEI
+    // =====================
+    return Number(finalNonImeiStock?.[key] || universalStockMap?.[key] || 0);
+  };
+
   useEffect(() => {
     console.log("🔥 FINAL STOCK:", stockGabunganToko);
   }, [stockGabunganToko]);
@@ -2059,51 +2075,43 @@ IMEI + NON IMEI
                     return;
                   }
 
-                  const key =
-                  `${normalize(barangValid.namaBrand)}|${normalize(barangValid.namaBarang)}`;
-                
-                const imeiBarang = imeiByBarang.filter((im) => {
-                  const barang = findBarangUniversal(im);
-                
-                  return (
-                    barang &&
-                    normalize(barang.namaBarang) ===
-                      normalize(barangValid.namaBarang)
-                  );
-                });
+                  const key = `${normalize(barangValid.namaBrand)}|${normalize(
+                    barangValid.namaBarang
+                  )}`;
 
-                const stokTersedia = isImeiKategori(
-                  barangValid.kategoriBarang
-                )
-                  ? Number(
-                      universalStockMap[key] || 0
-                    )
-                  : Number(
-                      universalStockMap[key] || 0
-                    ) +
-                    Number(
-                      stockGabunganToko[key] || 0
-                    ) +
-                    Number(
-                      finalNonImeiStock[key] || 0
+                  const imeiBarang = imeiByBarang.filter((im) => {
+                    const barang = findBarangUniversal(im);
+
+                    return (
+                      barang &&
+                      normalize(barang.namaBarang) ===
+                        normalize(barangValid.namaBarang)
                     );
+                  });
 
-                    const isImeiBarang =
-                    isImeiKategori(barangValid.kategoriBarang);
-                  
+                  const stokTersedia = getFinalStockBarang({
+                    barang: barangValid.namaBarang,
+                    brand: barangValid.namaBrand,
+                    kategoriBarang: barangValid.kategoriBarang,
+                  });
+
+                  const isImeiBarang = isImeiKategori(
+                    barangValid.kategoriBarang
+                  );
+
                   updateItem(idx, {
                     namaBarang: barangValid.namaBarang,
                     kategoriBarang: barangValid.kategoriBarang,
                     isImei: isImeiBarang,
-                  
+
                     // 🔥 RESET IMEI
                     imei: "",
                     imeiList: [],
-                  
+
                     hargaMap: barangValid.harga || {},
                     skemaHarga: "srp",
                     hargaAktif: Number(barangValid.harga?.srp || 0),
-                  
+
                     qty: isImeiBarang ? 1 : stokTersedia > 0 ? 1 : 0,
                   });
                 }}
@@ -2126,19 +2134,10 @@ IMEI + NON IMEI
                   const stokTersedia = isImeiKategori(
                     barangValid.kategoriBarang
                   )
-                    ? Number(
-                        universalStockMap[key] || 0
-                      )
+                    ? Number(universalStockMap[key] || 0)
                     : Number(
-                        universalStockMap[key] || 0
-                      ) +
-                      Number(
-                        stockGabunganToko[key] || 0
-                      ) +
-                      Number(
-                        finalNonImeiStock[key] || 0
+                        finalNonImeiStock[key] || universalStockMap[key] || 0
                       );
-                  console.log("🔥 FINAL STOCK:", stockGabunganToko);
 
                   if (
                     !isImeiKategori(barangValid.kategoriBarang) &&
@@ -2156,33 +2155,30 @@ IMEI + NON IMEI
               {/* 🔥 TAMPILKAN INFO STOK REALTIME */}
               {item.namaBarang && (
                 <div className="text-xs font-semibold">
-                {item.isImei ? (
-  <span className="text-blue-600">
-    📱 Stok IMEI Toko: Stok tersedia:{" "}
-    {Math.min(
-      1,
-      Number(
-        universalStockMap[
-          `${normalize(item.namaBrand)}|${normalize(item.namaBarang)}`
-        ] || 0
-      )
-    )}
-  </span>
-) : (
+                  {item.isImei ? (
+                    <span className="text-blue-600">
+                      📱 Stok IMEI Toko: Stok tersedia:{" "}
+                      {Math.min(
+                        1,
+                        Number(
+                          universalStockMap[
+                            `${normalize(item.namaBrand)}|${normalize(
+                              item.namaBarang
+                            )}`
+                          ] || 0
+                        )
+                      )}
+                    </span>
+                  ) : (
                     <span className="text-green-600">
                       📦 Stok Barang Toko:{" "}
                       {Number(
-                        universalStockMap[
+                        finalNonImeiStock?.[
                           `${normalize(item.namaBrand)}|${normalize(
                             item.namaBarang
                           )}`
                         ] ||
-                          stockGabunganToko[
-                            `${normalize(item.namaBrand)}|${normalize(
-                              item.namaBarang
-                            )}`
-                          ] ||
-                          finalNonImeiStock[
+                          universalStockMap?.[
                             `${normalize(item.namaBrand)}|${normalize(
                               item.namaBarang
                             )}`
@@ -2220,7 +2216,24 @@ IMEI + NON IMEI
                 // =====================================
                 // 🔥 FINAL STOCK UNIVERSAL
                 // =====================================
-                const stokFinal = Number(universalStockMap?.[key] || 0);
+                const [brand, barang] = key.split("|");
+
+                const barangMaster = masterBarang.find(
+                  (b) => normalize(b.namaBarang) === normalize(barang)
+                );
+
+                console.log(
+                  "STOK DROPDOWN",
+                  barang,
+                  finalNonImeiStock?.[key],
+                  universalStockMap?.[key]
+                );
+
+                const stokFinal = getFinalStockBarang({
+                  barang,
+                  brand,
+                  kategoriBarang: barangMaster?.kategoriBarang,
+                });
 
                 return (
                   <option
@@ -2288,7 +2301,13 @@ IMEI + NON IMEI
                     // 🔥 FINAL STOCK TOKO
                     // SINGLE SOURCE OF TRUTH
                     // =====================================
-                    const stokTersedia = Number(universalStockMap?.[key] || 0);
+                    const stokTersedia = isImeiKategori(item.kategoriBarang)
+                      ? Number(universalStockMap?.[key] || 0)
+                      : Number(
+                          finalNonImeiStock?.[key] ||
+                            universalStockMap?.[key] ||
+                            0
+                        );
 
                     // =====================================
                     // 🔥 MINIMAL QTY
