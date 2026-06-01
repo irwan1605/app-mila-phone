@@ -76,6 +76,30 @@ export default function Dashboard() {
 
   const [penjualanList, setPenjualanList] = useState([]);
 
+  // =====================================
+  // GLOBAL REFUND CHECK
+  // =====================================
+  const isRefundTransaction = (trx = {}) => {
+    const invoice = String(trx?.invoice || trx?.NO_INVOICE || "")
+      .trim()
+      .toUpperCase();
+
+    return (
+      trx?.deleted === true ||
+      trx?.deletedFromPenjualan === true ||
+      trx?.refundProcessed === true ||
+      trx?.refundLocked === true ||
+      trx?.IS_REFUND === true ||
+      trx?.HIDE_FROM_PENJUALAN === true ||
+      trx?.HIDE_FROM_TABLE === true ||
+      String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
+      String(trx?.STATUS || "").toUpperCase() === "REFUND_DELETED" ||
+      String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
+      String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND" ||
+      invoice.startsWith("REF-")
+    );
+  };
+
   useEffect(() => {
     const unsub = listenPenjualan((data) => {
       console.log("🔥 DATA PENJUALAN DARI listenPenjualan:", data);
@@ -320,6 +344,75 @@ export default function Dashboard() {
     return () => unsub && unsub();
   }, []);
 
+  const isValidPenjualan = (trx = {}) => {
+    const invoice = String(trx?.invoice || trx?.NO_INVOICE || "")
+      .trim()
+      .toUpperCase();
+
+    const status = String(
+      trx?.STATUS || trx?.status || trx?.statusPembayaran || ""
+    )
+      .trim()
+      .toUpperCase();
+
+    const metode = String(
+      trx?.PAYMENT_METODE || trx?.paymentMetode || trx?.paymentMetodeUser || ""
+    )
+      .trim()
+      .toUpperCase();
+
+    const toko = String(trx?.NAMA_TOKO || trx?.TOKO || trx?.toko || "")
+      .trim()
+      .toUpperCase();
+
+    const isRefund =
+      trx?.deleted === true ||
+      trx?.deletedFromPenjualan === true ||
+      trx?.refundProcessed === true ||
+      trx?.refundLocked === true ||
+      trx?.IS_REFUND === true ||
+      trx?.HIDE_FROM_PENJUALAN === true ||
+      trx?.HIDE_FROM_TABLE === true ||
+      status === "REFUND" ||
+      status === "REFUND_DELETED" ||
+      metode === "REFUND" ||
+      invoice.startsWith("REF-");
+
+    if (isRefund) return false;
+
+    if (metode === "PEMBELIAN") return false;
+    if (metode === "TRANSFER") return false;
+    if (status === "TRANSFER") return false;
+    if (status === "REJECT") return false;
+    if (status === "REJEK") return false;
+    if (status === "DITOLAK") return false;
+    if (status === "VOID") return false;
+
+    return true;
+  };
+
+  useEffect(() => {
+    penjualanList.forEach((trx) => {
+      if (!isValidPenjualan(trx)) {
+        console.log(
+          "⛔ DASHBOARD BLOCK:",
+          trx.invoice,
+          trx.STATUS,
+          trx.PAYMENT_METODE
+        );
+  
+        return;
+      }
+  
+      console.log(
+        "✅ DASHBOARD HITUNG:",
+        trx.invoice,
+        trx.STATUS,
+        trx.PAYMENT_METODE
+      );
+    });
+  }, [penjualanList]);
+
   const totalHariIni = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     return penjualan
@@ -483,6 +576,7 @@ export default function Dashboard() {
     const invoiceSet = new Set();
 
     penjualanList.forEach((trx) => {
+      if (!isValidPenjualan(trx)) return;
       // =====================================
       // SKIP REFUND
       // =====================================
@@ -502,10 +596,13 @@ export default function Dashboard() {
       // HANYA PENJUALAN KREDIT / PIUTANG
       // =====================================
       const isPiutang =
+      (
         String(trx?.SYSTEM_PAYMENT || "").toUpperCase() === "PIUTANG" ||
         String(trx?.systemPayment || "").toUpperCase() === "PIUTANG" ||
         String(trx?.paymentMethod || "").toUpperCase() === "KREDIT" ||
-        String(trx?.PAYMENT_METODE || "").toUpperCase() === "KREDIT";
+        String(trx?.PAYMENT_METODE || "").toUpperCase() === "KREDIT"
+      ) &&
+      isValidPenjualan(trx);
 
       if (!isPiutang) return;
 
@@ -542,6 +639,7 @@ export default function Dashboard() {
     const mapInvoice = {};
 
     penjualanList.forEach((trx) => {
+      if (!isValidPenjualan(trx)) return;
       // =====================================
       // SKIP REFUND
       // =====================================
@@ -592,20 +690,8 @@ export default function Dashboard() {
     const invoiceMap = {};
 
     penjualanList.forEach((trx) => {
-      // =====================================
-      // SKIP REFUND
-      // =====================================
-      const isRefund =
-        trx?.deleted === true ||
-        trx?.deletedFromPenjualan === true ||
-        trx?.refundProcessed === true ||
-        trx?.refundLocked === true ||
-        trx?.IS_REFUND === true ||
-        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
-        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
-        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
-
-      if (isRefund) return;
+      if (!isValidPenjualan(trx)) return;
+   
 
       // =====================================
       // TANGGAL TRANSAKSI
@@ -661,20 +747,8 @@ export default function Dashboard() {
     const mapInvoice = {};
 
     penjualanList.forEach((trx) => {
-      // =====================================
-      // SKIP REFUND
-      // =====================================
-      const isRefund =
-        trx?.deleted === true ||
-        trx?.deletedFromPenjualan === true ||
-        trx?.refundProcessed === true ||
-        trx?.refundLocked === true ||
-        trx?.IS_REFUND === true ||
-        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
-        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
-        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
-
-      if (isRefund) return;
+      if (!isValidPenjualan(trx)) return;
+    
 
       // =====================================
       // TANGGAL TRANSAKSI

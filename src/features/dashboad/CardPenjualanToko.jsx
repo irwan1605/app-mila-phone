@@ -111,6 +111,44 @@ export default function CardPenjualanToko() {
         .trim()
         .toUpperCase();
 
+        const invoiceUpper = String(
+          trx?.invoice ||
+          trx?.NO_INVOICE ||
+          ""
+        )
+          .trim()
+          .toUpperCase();
+        
+        const isRefund =
+          trx?.deleted === true ||
+          trx?.deletedFromPenjualan === true ||
+          trx?.refundProcessed === true ||
+          trx?.refundLocked === true ||
+          trx?.IS_REFUND === true ||
+          trx?.HIDE_FROM_PENJUALAN === true ||
+          trx?.HIDE_FROM_TABLE === true ||
+          metode === "REFUND" ||
+          status === "REFUND" ||
+          status === "REFUND_DELETED" ||
+          invoiceUpper.startsWith("REF-");
+
+          if (
+            metode === "REFUND" ||
+            status === "REFUND" ||
+            status === "REFUND_DELETED"
+          ) {
+            console.log(
+              "⛔ REFUND TERBLOCK CARD TOKO",
+              trx.invoice
+            );
+          
+            return;
+          }
+        
+        if (isRefund) {
+          return;
+        }
+
       // =================================================
       // FILTER HANYA PENJUALAN VALID
       // =================================================
@@ -147,21 +185,13 @@ export default function CardPenjualanToko() {
       if (status === "VOID") {
         return;
       }
+
+    
       // =================================================
       // FILTER REFUND
       // =================================================
-      const isRefund =
-        trx?.deleted === true ||
-        trx?.deletedFromPenjualan === true ||
-        trx?.refundProcessed === true ||
-        trx?.IS_REFUND === true ||
-        trx?.refundLocked === true ||
-        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
-        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
-        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
-
-      if (isRefund) return;
-
+     
+     
       // =================================================
       // TOKO
       // =================================================
