@@ -199,41 +199,40 @@ export default function InventoryReport() {
   }, [transaksi]);
 
   const totalStockRealSemuaToko = useMemo(() => {
-    let total = 0;
+    let totalMasuk = 0;
+    let totalKeluar = 0;
 
     transaksi.forEach((t) => {
-      if (!t || t.STATUS !== "Approved") return;
+      if (t.STATUS !== "Approved") return;
 
-      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-
-      // skip barang sudah terjual
-      if (t.IMEI && imeiTerjual.has(String(t.IMEI))) {
-        return;
-      }
+      const metode = String(t.PAYMENT_METODE || "")
+        .trim()
+        .toUpperCase();
 
       const qty = t.IMEI ? 1 : Number(t.QTY || 0);
 
-      // stok masuk
+      // ==========================
+      // STOK MASUK
+      // ==========================
       if (
-        [
-          "PEMBELIAN",
-          "TRANSFER_MASUK",
-          "TRANSFER_BARANG",
-          "REFUND",
-          "REJECT",
-        ].includes(metode)
+        metode === "PEMBELIAN" ||
+        metode === "TRANSFER_MASUK" ||
+        metode === "REFUND" ||
+        metode === "REJECT"
       ) {
-        total += qty;
+        totalMasuk += qty;
       }
 
-      // stok keluar
-      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
-        total -= qty;
+      // ==========================
+      // STOK KELUAR
+      // ==========================
+      if (metode === "PENJUALAN" || metode === "TRANSFER_KELUAR") {
+        totalKeluar += qty;
       }
     });
 
-    return Math.max(total, 0);
-  }, [transaksi, imeiTerjual]);
+    return totalMasuk - totalKeluar;
+  }, [transaksi]);
 
   // ======================
   // DETAIL TABLE
@@ -681,16 +680,16 @@ export default function InventoryReport() {
             <div>
               <h2 className="text-2xl font-bold">CILANGKAP PUSAT</h2>
               <p className="text-sm opacity-80">
-              TOTAL STOCK SEMUA TOKO: {totalStockRealSemuaToko}
+                TOTAL STOCK SEMUA TOKO: {totalStockRealSemuaToko}
               </p>
             </div>
           </div>
           <div className="text-sm font-semibold">
-          Total Item: {totalStockRealSemuaToko}
+            Total Item: {totalStockRealSemuaToko}
           </div>
 
           <p className="mt-4 text-4xl font-bold">
-          {totalStockRealSemuaToko.toLocaleString("id-ID")}
+            {totalStockRealSemuaToko.toLocaleString("id-ID")}
           </p>
         </div>
         {/* ================================================================== */}
