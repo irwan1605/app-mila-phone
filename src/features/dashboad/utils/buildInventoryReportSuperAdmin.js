@@ -4,6 +4,11 @@ export const buildInventoryReportSuperAdmin = ({ detailStock = {} }) => {
   Object.entries(detailStock || {}).forEach(([stockKey, stockData]) => {
     const qty = Number(stockData?.qty || stockData || 0);
 
+    // HAPUS DATA SPAM
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return;
+    }
+
     // stok kosong langsung skip
     if (qty <= 0) return;
 
@@ -38,6 +43,20 @@ export const buildInventoryReportSuperAdmin = ({ detailStock = {} }) => {
     }
 
     tokoMap[namaToko][kategori] = (tokoMap[namaToko][kategori] || 0) + qty;
+  });
+
+  Object.keys(tokoMap).forEach((namaToko) => {
+    Object.keys(tokoMap[namaToko] || {}).forEach((kategori) => {
+      const qty = Number(tokoMap[namaToko][kategori] || 0);
+
+      if (qty <= 0) {
+        delete tokoMap[namaToko][kategori];
+      }
+    });
+
+    if (Object.keys(tokoMap[namaToko] || {}).length === 0) {
+      delete tokoMap[namaToko];
+    }
   });
 
   return Object.entries(tokoMap)

@@ -15,7 +15,43 @@ export const exportStockExcel = ({
     // ======================================
     // 🔥 FORMAT FINAL
     // ======================================
-    const exportRows = rows.map((r, i) => ({
+    // ======================================
+    // 🔥 FILTER EXPORT ONLY
+    // HILANGKAN BARANG SUDAH KELUAR
+    // TANPA MENGUBAH TAMPILAN TABLE
+    // ======================================
+
+    const finalRows = (rows || []).filter((r) => {
+      const statusBarang = String(r.statusBarang || "").toUpperCase();
+
+      const keterangan = String(r.keterangan || "").toUpperCase();
+
+      const qty = Number(r.qty || 0);
+
+      // stok habis
+      if (qty <= 0) {
+        return false;
+      }
+
+      // sudah terjual
+      if (statusBarang.includes("TERJUAL")) {
+        return false;
+      }
+
+      // reject
+      if (keterangan.includes("REJECT")) {
+        return false;
+      }
+
+      // opname keluar
+      if (keterangan.includes("STOK OPNAME")) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const exportRows = finalRows.map((r, i) => ({
       NO: i + 1,
 
       TANGGAL: r.tanggal || "-",

@@ -16,6 +16,8 @@ import {
 } from "react-icons/fa";
 import { buildFinalStockRows } from "../../utils/buildFinalStockRows";
 import { exportStockExcel } from "../../utils/stock/exportStockExcel";
+import { filterExportRows }
+from "../../utils/stock/filterExportRows";
 /* ======================
    HELPER RUPIAH
 ====================== */
@@ -1018,8 +1020,13 @@ const rows = useMemo(() => {
      EXPORT EXCEL
   ====================== */
   const exportExcel = () => {
-    exportStockExcel({
+    const exportRows = filterExportRows({
       rows: filtered,
+      transaksi,
+    });
+  
+    exportStockExcel({
+      rows: exportRows,
       namaToko,
       fileName: "DETAIL_STOCK",
     });

@@ -10,9 +10,7 @@ import {
 import { FaStore } from "react-icons/fa";
 import { useNavigate, useLocation } from "react-router-dom";
 import { hitungSemuaStok } from "../../utils/stockUtils";
-import CardPersediaanBarang
-from "../../features/dashboad/CardPersediaanBarang";
-
+import CardPersediaanBarang from "../../features/dashboad/CardPersediaanBarang";
 
 // =======================
 // CONST
@@ -308,6 +306,24 @@ export default function InventoryReport() {
 
       const qty = t.IMEI ? 1 : Number(t.QTY || 0);
 
+      // const stockKey = `${normalize(tokoAsal)}|${normalize(
+      //   t.NAMA_BRAND
+      // )}|${normalize(t.NAMA_BARANG)}`;
+
+      // const stockReal = Number(
+      //   stokMap?.[stockKey]?.qty || stokMap?.[stockKey] || 0
+      // );
+
+      // // Barang sudah habis di stok final
+      // if (
+      //   stockReal <= 0 &&
+      //   (metode === "PEMBELIAN" ||
+      //     metode === "TRANSFER_MASUK" ||
+      //     metode === "REFUND")
+      // ) {
+      //   return;
+      // }
+
       // =========================
       // PEMBELIAN
       // =========================
@@ -345,6 +361,20 @@ export default function InventoryReport() {
       }
     });
 
+    // ====================================
+    // VALIDASI DENGAN STOK REAL
+    // ====================================
+
+    Object.keys(result).forEach((namaToko) => {
+      Object.keys(result[namaToko] || {}).forEach((kategori) => {
+        const qty = Number(result[namaToko][kategori] || 0);
+
+        if (qty <= 0) {
+          delete result[namaToko][kategori];
+        }
+      });
+    });
+
     // hilangkan minus
     return TOKO_LIST.map((toko) => {
       const norm = normalize(toko);
@@ -352,44 +382,87 @@ export default function InventoryReport() {
       return {
         toko,
         kategori: Object.fromEntries(
-          Object.entries(result[norm] || {}).filter(([_, v]) => v > 0)
+          Object.entries(result[norm] || {}).filter(([_, v]) => Number(v) > 0)
         ),
       };
     });
-  }, [transaksi]);
+  }, [transaksi, stokMap, imeiTerjual]);
 
-  const stockRealSuperAdmin =
-  CardPersediaanBarang({
+  const stockRealSuperAdmin = CardPersediaanBarang({
     detailStock: stokMap,
   });
 
-  
-  
+  const stockRealFiltered = useMemo(() => {
+    return (stockRealSuperAdmin || []).filter((row) => {
+      const total = Object.values(row.kategori || {}).reduce(
+        (sum, qty) => sum + Number(qty || 0),
+        0
+      );
+
+      return total > 0;
+    });
+  }, [stockRealSuperAdmin]);
+
+  const stockRealMap = useMemo(() => {
+    const map = {};
+
+    (stockRealSuperAdmin || []).forEach((row) => {
+      map[normalize(row.toko)] = row.kategori || {};
+    });
+
+    return map;
+  }, [stockRealSuperAdmin]);
+
+  console.log("🔥 REAL TOKO", stockRealMap);
+
+  console.log("🔥 MARKETPLACE REAL", stockRealMap["MARKETPLACE"]);
 
   const filteredStockPerToko = useMemo(() => {
-    if (!searchGlobal) return cardStockPerToko;
+    // daftar toko yang benar-benar punya stok real
+    const tokoReal = new Set(
+      (stockRealSuperAdmin || []).map((x) => normalize(x.toko))
+    );
 
-    const keyword = searchGlobal.toLowerCase();
+    const source = (cardStockPerToko || []).map((row) => {
+      let kategori = { ...(row.kategori || {}) };
 
-    return cardStockPerToko
-      .map((toko) => {
-        const filteredKategori = Object.fromEntries(
-          Object.entries(toko.kategori || {}).filter(([kategori]) =>
+      // 🔥 khusus MARKETPLACE
+      // jika tidak ada stok real maka kosongkan kategori
+      if (
+        normalize(row.toko) === "MARKETPLACE" &&
+        !tokoReal.has("MARKETPLACE")
+      ) {
+        kategori = {};
+      }
+
+      // 🔥 hilangkan qty <= 0
+      kategori = Object.fromEntries(
+        Object.entries(kategori).filter(([_, qty]) => Number(qty || 0) > 0)
+      );
+
+      return {
+        ...row,
+        kategori,
+      };
+    });
+
+    if (!searchGlobal) {
+      return source;
+    }
+
+    const keyword = String(searchGlobal).toLowerCase();
+
+    return source
+      .map((row) => ({
+        ...row,
+        kategori: Object.fromEntries(
+          Object.entries(row.kategori || {}).filter(([kategori]) =>
             kategori.toLowerCase().includes(keyword)
           )
-        );
-
-        return {
-          ...toko,
-          kategori: filteredKategori,
-        };
-      })
-      .filter((t) => Object.keys(t.kategori).length > 0);
-  }, [cardStockPerToko, searchGlobal]);
-
-  
-
-  
+        ),
+      }))
+      .filter((row) => Object.keys(row.kategori || {}).length > 0);
+  }, [cardStockPerToko, stockRealSuperAdmin, searchGlobal]);
 
   const tokoHasilPencarian = useMemo(() => {
     if (!searchGlobal) return [];
@@ -437,15 +510,15 @@ export default function InventoryReport() {
   // TOTAL STOCK SEMUA TOKO (FIX FINAL)
   // ==========================
   const totalStockSemuaToko = useMemo(() => {
-    return cardStockPerToko.reduce((grandTotal, toko) => {
-      const totalPerToko = Object.values(toko.kategori || {}).reduce(
+    return (stockRealSuperAdmin || []).reduce((grandTotal, toko) => {
+      const total = Object.values(toko.kategori || {}).reduce(
         (sum, qty) => sum + Number(qty || 0),
         0
       );
 
-      return grandTotal + totalPerToko;
+      return grandTotal + total;
     }, 0);
-  }, [cardStockPerToko]);
+  }, [stockRealSuperAdmin]);
 
   useEffect(() => {
     if (!searchGlobal) return;
@@ -617,12 +690,16 @@ export default function InventoryReport() {
                 }`}
               >
                 <div className="font-bold mb-2">{t.toko}</div>
-                {Object.entries(t.kategori).map(([k, v]) => (
-                  <div key={k} className="flex justify-between text-sm">
-                    <span>{k}</span>
-                    <span className="font-bold">{v}</span>
-                  </div>
-                ))}
+                {Object.keys(t.kategori || {}).length === 0 ? (
+                  <div className="text-xs opacity-60">Tidak ada stok</div>
+                ) : (
+                  Object.entries(t.kategori).map(([k, v]) => (
+                    <div key={k} className="flex justify-between text-sm">
+                      <span>{k}</span>
+                      <span className="font-bold">{v}</span>
+                    </div>
+                  ))
+                )}
               </div>
             ))}
         </div>

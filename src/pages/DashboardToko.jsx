@@ -25,6 +25,8 @@ import {
 } from "../services/FirebaseService";
 import { buildFinalStockRows } from "../utils/buildFinalStockRows";
 import { exportStockExcel } from "../utils/stock/exportStockExcel";
+import { filterExportRows }
+from "../utils/stock/filterExportRows";
 
 import { buildDashboardStockRows } from "../utils/stock/buildDashboardStockRows";
 
@@ -1240,8 +1242,13 @@ export default function DashboardToko(props) {
   // SYNC 100% DENGAN TABLE
   // ======================================
   const exportDashboardStock = () => {
-    exportStockExcel({
+    const exportRows = filterExportRows({
       rows: finalTableRows,
+      transaksi,
+    });
+  
+    exportStockExcel({
+      rows: exportRows,
       namaToko: TOKO_AKTIF,
       fileName: "DETAIL_STOCK",
     });

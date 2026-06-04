@@ -19,7 +19,8 @@ import { useLocation } from "react-router-dom";
 import { deriveStockFromTransaksi } from "../utils/stockDerived";
 import { useNavigate } from "react-router-dom";
 import { buildFinalStockRows } from "../utils/buildFinalStockRows";
-
+import { filterExportRows }
+from "../utils/stock/filterExportRows";
 import { exportStockExcel } from "../utils/stock/exportStockExcel";
 
 import { importStockExcel } from "../utils/stock/importStockExcel";
@@ -850,9 +851,17 @@ export default function StockOpname() {
   // HASIL 100% SAMA DENGAN DetailStockToko.jsx
   // ==========================================
   const exportStockOpnameExcel = () => {
-    exportStockExcel({
+    const exportRows = filterExportRows({
       rows: filteredTableData,
-      namaToko: filterToko === "semua" ? "SEMUA_TOKO" : filterToko,
+      transaksi: allTransaksi,
+    });
+  
+    exportStockExcel({
+      rows: exportRows,
+      namaToko:
+        filterToko === "semua"
+          ? "SEMUA_TOKO"
+          : filterToko,
       fileName: "STOCK_OPNAME",
     });
   };
