@@ -198,6 +198,43 @@ export default function InventoryReport() {
     return sold;
   }, [transaksi]);
 
+  const totalStockRealSemuaToko = useMemo(() => {
+    let total = 0;
+
+    transaksi.forEach((t) => {
+      if (!t || t.STATUS !== "Approved") return;
+
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+      // skip barang sudah terjual
+      if (t.IMEI && imeiTerjual.has(String(t.IMEI))) {
+        return;
+      }
+
+      const qty = t.IMEI ? 1 : Number(t.QTY || 0);
+
+      // stok masuk
+      if (
+        [
+          "PEMBELIAN",
+          "TRANSFER_MASUK",
+          "TRANSFER_BARANG",
+          "REFUND",
+          "REJECT",
+        ].includes(metode)
+      ) {
+        total += qty;
+      }
+
+      // stok keluar
+      if (["PENJUALAN", "TRANSFER_KELUAR"].includes(metode)) {
+        total -= qty;
+      }
+    });
+
+    return Math.max(total, 0);
+  }, [transaksi, imeiTerjual]);
+
   // ======================
   // DETAIL TABLE
   // ======================
@@ -644,16 +681,16 @@ export default function InventoryReport() {
             <div>
               <h2 className="text-2xl font-bold">CILANGKAP PUSAT</h2>
               <p className="text-sm opacity-80">
-                TOTAL STOCK SEMUA TOKO: {totalStockSemuaToko}
+              TOTAL STOCK SEMUA TOKO: {totalStockRealSemuaToko}
               </p>
             </div>
           </div>
           <div className="text-sm font-semibold">
-            Total Item: {totalStockSemuaToko}
+          Total Item: {totalStockRealSemuaToko}
           </div>
 
           <p className="mt-4 text-4xl font-bold">
-            {totalStockSemuaToko.toLocaleString("id-ID")}
+          {totalStockRealSemuaToko.toLocaleString("id-ID")}
           </p>
         </div>
         {/* ================================================================== */}
