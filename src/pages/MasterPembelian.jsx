@@ -38,6 +38,8 @@ import { deletePembelian } from "../features/pembelian/editDelete/deletePembelia
 import { buildPembelianRealtime } from "../features/pembelian/utils/pembelianRealtime";
 import { saveEditPembelian } from "../features/pembelian/editDelete/editPembelian";
 import SelectDeleteMasterPembelian from "../features/Select/SelectDeleteMasterPembelian";
+import { fixManualPembelianStock } from "../features/pembelian/utils/fixManualPembelianStock";
+import { saveManualPembelianQty } from "../features/pembelian/utils/saveManualPembelianQty";
 
 const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
 // ===============================
@@ -695,15 +697,31 @@ export default function MasterPembelian() {
             NAMA_BARANG: barang,
 
             QTY: qty,
+
+            // ==========================
+            // BARU
+            // ==========================
+            QTY_INPUT_MANUAL: qty,
+
             IMEI: "",
 
             HARGA_SUPLAYER: hSup,
             HARGA_UNIT: hSup,
             TOTAL: hSup * qty,
 
+            HARGA_SRP: Number(hargaSRP || 0),
+            HARGA_GROSIR: Number(hargaGrosir || 0),
+            HARGA_RESELLER: Number(hargaReseller || 0),
+
             PAYMENT_METODE: "PEMBELIAN",
             STATUS: "Approved",
             CREATED_AT: Date.now(),
+          });
+          await fixManualPembelianStock({
+            namaToko,
+            brand,
+            barang,
+            qty,
           });
         }
       }
@@ -796,8 +814,6 @@ export default function MasterPembelian() {
 
       const masterRef = masterBarangMap[masterKey] || {};
 
-      
-
       // ======================================
       // INIT GROUP
       // ======================================
@@ -833,6 +849,8 @@ export default function MasterPembelian() {
           // FIX REALTIME QTY
           // ======================================
           totalQty: 0,
+
+          qtyInputManual: 0,
 
           imeis: [],
 
@@ -881,9 +899,20 @@ export default function MasterPembelian() {
       // SEMUA DATA PEMBELIAN
       // ======================================
       if (t.__ALL_DATA) {
-        const qtyAll = Number(t.QTY || 0);
 
-        map[keyGroup].totalHargaSup += qtyAll * Number(t.HARGA_SUPLAYER || 0);
+        const qtyManual =
+          Number(t.QTY_INPUT_MANUAL || 0);
+      
+        if (qtyManual > 0) {
+          map[keyGroup].qtyInputManual += qtyManual;
+        }
+      
+        const qtyAll =
+          Number(t.QTY || 0);
+      
+        map[keyGroup].totalHargaSup +=
+          qtyAll *
+          Number(t.HARGA_SUPLAYER || 0);
       }
     });
 
@@ -1593,16 +1622,12 @@ export default function MasterPembelian() {
         });
       }
 
-      // ===============================
-      // UPDATE STOK TOKO TUJUAN
-      // ===============================
-      if (namaToko !== "CILANGKAP PUSAT") {
-        await addStock(namaToko, sku, {
-          brand,
-          barang,
-          qty: finalQty,
-        });
-      }
+      await fixManualPembelianStock({
+        namaToko,
+        brand,
+        barang,
+        qty: imeis.length,
+      });
 
       if (isBandlingItem) {
         const skuBandling = `BANDLING-${tipeBandling}`;
