@@ -575,13 +575,11 @@ export default function Dashboard() {
       // HANYA PENJUALAN KREDIT / PIUTANG
       // =====================================
       const isPiutang =
-      (
-        String(trx?.SYSTEM_PAYMENT || "").toUpperCase() === "PIUTANG" ||
-        String(trx?.systemPayment || "").toUpperCase() === "PIUTANG" ||
-        String(trx?.paymentMethod || "").toUpperCase() === "KREDIT" ||
-        String(trx?.PAYMENT_METODE || "").toUpperCase() === "KREDIT"
-      ) &&
-      isValidPenjualan(trx);
+        (String(trx?.SYSTEM_PAYMENT || "").toUpperCase() === "PIUTANG" ||
+          String(trx?.systemPayment || "").toUpperCase() === "PIUTANG" ||
+          String(trx?.paymentMethod || "").toUpperCase() === "KREDIT" ||
+          String(trx?.PAYMENT_METODE || "").toUpperCase() === "KREDIT") &&
+        isValidPenjualan(trx);
 
       if (!isPiutang) return;
 
@@ -670,7 +668,6 @@ export default function Dashboard() {
 
     penjualanList.forEach((trx) => {
       if (!isValidPenjualan(trx)) return;
-   
 
       // =====================================
       // TANGGAL TRANSAKSI
@@ -715,6 +712,18 @@ export default function Dashboard() {
     return Object.values(invoiceMap).reduce((sum, qty) => sum + qty, 0);
   }, [penjualanList]);
 
+  const totalPenjualanBarangReal = useMemo(() => {
+    const totalPembelian = transaksi
+      .filter(
+        (x) =>
+          String(x.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
+          x.STATUS === "Approved"
+      )
+      .reduce((sum, x) => sum + (x.IMEI ? 1 : Number(x.QTY || 0)), 0);
+
+    return totalPembelian - totalStockSemuaToko;
+  }, [transaksi, totalStockSemuaToko]);
+
   const totalNominalPenjualanPerBulan = useMemo(() => {
     if (!Array.isArray(penjualanList)) return 0;
 
@@ -727,7 +736,6 @@ export default function Dashboard() {
 
     penjualanList.forEach((trx) => {
       if (!isValidPenjualan(trx)) return;
-    
 
       // =====================================
       // TANGGAL TRANSAKSI
@@ -1135,7 +1143,7 @@ export default function Dashboard() {
           </div>
 
           <div className="text-xl font-bold text-sky-600">
-            {totalPenjualanBarangPerBulan.toLocaleString("id-ID")} Unit
+            {totalPenjualanBarangReal.toLocaleString("id-ID")} Unit
           </div>
 
           <p className="text-[11px] text-gray-500">
