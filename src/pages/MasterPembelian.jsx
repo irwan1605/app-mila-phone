@@ -1689,12 +1689,19 @@ export default function MasterPembelian() {
 
     groupedPurchases.forEach((r) => {
       const hargaSatuan = Number(r.hargaSup || 0);
-      const totalQty = Number(r.totalQty || 0);
+      const totalQty = Number(
+        r.qtyInputManual || 0
+      );
       const totalHargaGroup = Number(r.totalHargaSup || 0);
 
       const imeiList = (r.imeis || [])
         .map((x) => (x || "").toString().trim())
         .filter(Boolean);
+
+        const qtyPembelian = Number(
+          r.qtyInputManual || 0
+        );
+        
 
       if (imeiList.length === 0) {
         // no IMEI: single row representing the whole purchase (bulk)
@@ -1708,7 +1715,7 @@ export default function MasterPembelian() {
           "Nama Barang": r.barang,
           "No IMEI": "",
           "Harga Supplier (Satuan)": hargaSatuan || "",
-          Qty: totalQty || "",
+          Qty: qtyPembelian || "",
           "Total Harga Supplier": totalHargaGroup || "",
         });
       } else {
