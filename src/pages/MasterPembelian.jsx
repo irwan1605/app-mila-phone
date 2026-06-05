@@ -40,6 +40,7 @@ import { saveEditPembelian } from "../features/pembelian/editDelete/editPembelia
 import SelectDeleteMasterPembelian from "../features/Select/SelectDeleteMasterPembelian";
 import { fixManualPembelianStock } from "../features/pembelian/utils/fixManualPembelianStock";
 import { saveManualPembelianQty } from "../features/pembelian/utils/saveManualPembelianQty";
+import { getMasterPembelianQty } from "../features/pembelian/utils/getMasterPembelianQty";
 
 const KATEGORI_WAJIB_IMEI = ["SEPEDA LISTRIK", "MOTOR LISTRIK", "HANDPHONE"];
 // ===============================
@@ -899,20 +900,12 @@ export default function MasterPembelian() {
       // SEMUA DATA PEMBELIAN
       // ======================================
       if (t.__ALL_DATA) {
+        const qtyPembelian = getMasterPembelianQty(t);
 
-        const qtyManual =
-          Number(t.QTY_INPUT_MANUAL || 0);
-      
-        if (qtyManual > 0) {
-          map[keyGroup].qtyInputManual += qtyManual;
-        }
-      
-        const qtyAll =
-          Number(t.QTY || 0);
-      
+        map[keyGroup].qtyInputManual += qtyPembelian;
+
         map[keyGroup].totalHargaSup +=
-          qtyAll *
-          Number(t.HARGA_SUPLAYER || 0);
+          qtyPembelian * Number(t.HARGA_SUPLAYER || 0);
       }
     });
 
@@ -2225,14 +2218,14 @@ export default function MasterPembelian() {
                           Rp {fmt(item.hargaSup)}
                         </td>
 
-                        <td className="border p-2 text-center font-semibold">
-                          {KATEGORI_WAJIB_IMEI.includes(
-                            String(item.kategoriBrand || "")
-                              .trim()
-                              .toUpperCase()
-                          )
-                            ? item.totalImei || item.imeis?.length || 0
-                            : item.totalQty || 0}
+                        <td
+                          className="
+    border p-2
+    text-center
+    font-semibold
+  "
+                        >
+                          {item.qtyInputManual}
                         </td>
 
                         <td className="border p-2 text-right">
