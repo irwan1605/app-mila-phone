@@ -101,6 +101,53 @@ export default function Dashboard() {
     );
   };
 
+  const isValidPenjualan = (trx = {}) => {
+    const invoice = String(trx?.invoice || trx?.NO_INVOICE || "")
+      .trim()
+      .toUpperCase();
+
+    const status = String(
+      trx?.STATUS || trx?.status || trx?.statusPembayaran || ""
+    )
+      .trim()
+      .toUpperCase();
+
+    const metode = String(
+      trx?.PAYMENT_METODE || trx?.paymentMetode || trx?.paymentMetodeUser || ""
+    )
+      .trim()
+      .toUpperCase();
+
+    const toko = String(trx?.NAMA_TOKO || trx?.TOKO || trx?.toko || "")
+      .trim()
+      .toUpperCase();
+
+    const isRefund =
+      trx?.deleted === true ||
+      trx?.deletedFromPenjualan === true ||
+      trx?.refundProcessed === true ||
+      trx?.refundLocked === true ||
+      trx?.IS_REFUND === true ||
+      trx?.HIDE_FROM_PENJUALAN === true ||
+      trx?.HIDE_FROM_TABLE === true ||
+      status === "REFUND" ||
+      status === "REFUND_DELETED" ||
+      metode === "REFUND" ||
+      invoice.startsWith("REF-");
+
+    if (isRefund) return false;
+
+    if (metode === "PEMBELIAN") return false;
+    if (metode === "TRANSFER") return false;
+    if (status === "TRANSFER") return false;
+    if (status === "REJECT") return false;
+    if (status === "REJEK") return false;
+    if (status === "DITOLAK") return false;
+    if (status === "VOID") return false;
+
+    return true;
+  };
+
   useEffect(() => {
     const unsub = listenPenjualan((data) => {
       console.log("🔥 DATA PENJUALAN DARI listenPenjualan:", data);
@@ -251,6 +298,35 @@ export default function Dashboard() {
     };
   }, [penjualanList]);
 
+  const totalTransaksiSalesReport = useMemo(() => {
+    const today = new Date().toLocaleDateString("en-CA");
+  
+    const mapInvoice = {};
+  
+    penjualanList.forEach((trx) => {
+      if (!isValidPenjualan(trx)) return;
+  
+      const tanggal = new Date(
+        trx?.tanggal ||
+        trx?.createdAt
+      ).toLocaleDateString("en-CA");
+  
+      if (tanggal !== today) return;
+  
+      const invoice = String(
+        trx?.invoice ||
+        trx?.NO_INVOICE ||
+        ""
+      ).trim();
+  
+      if (!invoice) return;
+  
+      mapInvoice[invoice] = true;
+    });
+  
+    return Object.keys(mapInvoice).length;
+  }, [penjualanList]);
+
   /* ================= LISTENER ================= */
 
   // useEffect(() => {
@@ -345,52 +421,7 @@ export default function Dashboard() {
     return () => unsub && unsub();
   }, []);
 
-  const isValidPenjualan = (trx = {}) => {
-    const invoice = String(trx?.invoice || trx?.NO_INVOICE || "")
-      .trim()
-      .toUpperCase();
 
-    const status = String(
-      trx?.STATUS || trx?.status || trx?.statusPembayaran || ""
-    )
-      .trim()
-      .toUpperCase();
-
-    const metode = String(
-      trx?.PAYMENT_METODE || trx?.paymentMetode || trx?.paymentMetodeUser || ""
-    )
-      .trim()
-      .toUpperCase();
-
-    const toko = String(trx?.NAMA_TOKO || trx?.TOKO || trx?.toko || "")
-      .trim()
-      .toUpperCase();
-
-    const isRefund =
-      trx?.deleted === true ||
-      trx?.deletedFromPenjualan === true ||
-      trx?.refundProcessed === true ||
-      trx?.refundLocked === true ||
-      trx?.IS_REFUND === true ||
-      trx?.HIDE_FROM_PENJUALAN === true ||
-      trx?.HIDE_FROM_TABLE === true ||
-      status === "REFUND" ||
-      status === "REFUND_DELETED" ||
-      metode === "REFUND" ||
-      invoice.startsWith("REF-");
-
-    if (isRefund) return false;
-
-    if (metode === "PEMBELIAN") return false;
-    if (metode === "TRANSFER") return false;
-    if (status === "TRANSFER") return false;
-    if (status === "REJECT") return false;
-    if (status === "REJEK") return false;
-    if (status === "DITOLAK") return false;
-    if (status === "VOID") return false;
-
-    return true;
-  };
 
   const totalHariIni = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -467,6 +498,19 @@ export default function Dashboard() {
 
     return f;
   }, [dataTransaksi, filterType, filterValue, filterToko, filterSales]);
+
+ 
+  console.log(
+    "SALES REPORT TOTAL =",
+    filteredData.length
+  );
+  
+  console.log(
+    "DASHBOARD TOTAL =",
+    totalTransaksiSalesReport
+  );
+
+  console.log("DASHBOARD TRANSAKSI =", totalTransaksiSalesReport);
 
   const dataHariIni = useMemo(() => {
     return filteredData.filter(
@@ -984,7 +1028,7 @@ export default function Dashboard() {
           </div>
 
           <div className="text-xl font-bold text-blue-600">
-            {dashboardPenjualan.totalTransaksi} Transaksi
+            {totalTransaksiSalesReport.toLocaleString("id-ID")} Transaksi
           </div>
 
           <p className="text-[11px] text-gray-500">Total Transaksi Hari Ini</p>
@@ -1160,30 +1204,35 @@ export default function Dashboard() {
         {/* =================================================== */}
         {/* ROW 1 */}
         {/* =================================================== */}
-        <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
-          <div
-            className="
+        <div className="space-y-6 mt-6">
+
+{/* ===================================== */}
+{/* PENJUALAN PER TOKO FULL WIDTH */}
+{/* ===================================== */}
+<div
+  className="
     bg-white
     border
     border-slate-200
     rounded-3xl
     shadow-sm
     p-5
+    w-full
   "
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <h3 className="text-xl font-bold text-slate-800">
-                  Penjualan Per Toko
-                </h3>
+>
+  <div className="flex items-center justify-between mb-3">
+    <div>
+      <h3 className="text-xl font-bold text-slate-800">
+        Penjualan Per Toko
+      </h3>
 
-                <p className="text-sm text-slate-500">
-                  Klik toko untuk membuka table penjualan
-                </p>
-              </div>
+      <p className="text-sm text-slate-500">
+        Monitoring realtime seluruh toko
+      </p>
+    </div>
 
-              <div
-                className="
+    <div
+      className="
         px-3 py-1
         rounded-full
         bg-emerald-100
@@ -1191,31 +1240,31 @@ export default function Dashboard() {
         text-xs
         font-semibold
       "
-              >
-                Realtime
-              </div>
-            </div>
+    >
+      Realtime
+    </div>
+  </div>
 
-            <div className="max-h-[650px] overflow-auto pr-2">
-              <CardPenjualanToko />
-            </div>
-          </div>
+  <div className="max-h-[700px] overflow-auto">
+    <CardPenjualanToko />
+  </div>
+</div>
 
-          {/* =============================================== */}
-          {/* OMZET HARIAN & BULANAN */}
-          {/* =============================================== */}
-          <div className="space-y-6">
+      {/* ===================================== */}
+  {/* CHART HARIAN + BULANAN */}
+  {/* ===================================== */}
+  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {/* HARIAN */}
             <div
-              className="
-        bg-white
-        border
-        border-slate-200
-        rounded-3xl
-        shadow-sm
-        p-5
-      "
-            >
+  className="
+    bg-white
+    border
+    border-slate-200
+    rounded-3xl
+    shadow-sm
+    p-5
+  "
+>
               <div className="mb-4">
                 <h3 className="text-xl font-bold text-slate-800">
                   Omzet Harian
@@ -1264,15 +1313,15 @@ export default function Dashboard() {
 
             {/* BULANAN */}
             <div
-              className="
-        bg-white
-        border
-        border-slate-200
-        rounded-3xl
-        shadow-sm
-        p-5
-      "
-            >
+  className="
+    bg-white
+    border
+    border-slate-200
+    rounded-3xl
+    shadow-sm
+    p-5
+  "
+>
               <div className="mb-4">
                 <h3 className="text-xl font-bold text-slate-800">
                   Omzet Bulanan
