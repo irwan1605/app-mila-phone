@@ -2410,6 +2410,12 @@ const imeiAvailableFinalList = useMemo(() => {
                     alert(
                       `❌ IMEI ${imei} SUDAH TERJUAL`
                     );
+
+                    console.log(
+                      "FINAL IMEI",
+                      imei,
+                      finalImei
+                    );
                   
                     updateItem(idx,{
                       imei:"",
@@ -2471,27 +2477,17 @@ const imeiAvailableFinalList = useMemo(() => {
                     // =====================================
                     // 🔥 FINAL VALIDASI
                     // =====================================
-                    const soldLocked = stockRealtime?.soldImei?.[imei];
+                    const finalStatus = finalImeiStock?.[imei];
 
-                    const detailStock = stockRealtime?.detailStock?.[imei];
-
-                    const refundReady =
-                      detailStock?.READY_RESALE === true ||
-                      detailStock?.statusRefund === "READY_RESALE" ||
-                      detailStock?.IS_REFUND === true;
-
-                    if (
-                      (!existsInGlobal && !existsInTransfer && !refundReady) ||
-                      (soldLocked && !refundReady)
-                    ) {
-                      alert("❌ IMEI tidak tersedia di toko ini");
-
+                    if (!finalStatus?.available) {
+                      alert(`❌ IMEI ${imei} SUDAH TERJUAL`);
+                    
                       updateItem(idx, {
                         imei: "",
                         imeiList: [],
                         qty: 0,
                       });
-
+                    
                       return;
                     }
 
