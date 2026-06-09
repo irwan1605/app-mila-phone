@@ -1,5 +1,7 @@
 // src/utils/buildFinalStockRows.js
 
+import { buildFinalImeiStockOpname } from "../features/FiturPenjualan/ImeiStock/buildFinalImeiStockOpname";
+
 export const normalize = (v) =>
   String(v || "")
     .trim()
@@ -38,6 +40,10 @@ export const buildFinalStockRows = ({
       new Date(a.CREATED_AT || 0).getTime() -
       new Date(b.CREATED_AT || 0).getTime()
   );
+
+  const activeImeiSet = buildFinalImeiStockOpname({
+    transaksi,
+  });
 
   sorted.forEach((t) => {
     if (!t?.IMEI) return;
@@ -182,6 +188,11 @@ export const buildFinalStockRows = ({
       // 🔥 TRANSFER JANGAN HAPUS
       // ======================================
       if (["PENJUALAN", "REJECT", "STOK OPNAME"].includes(metode)) {
+        delete map[imei];
+        return;
+      }
+
+      if (!activeImeiSet.has(normalizeImei(imei))) {
         delete map[imei];
         return;
       }
@@ -370,9 +381,52 @@ export const buildFinalStockRows = ({
   });
 
   // ======================================
+  // 🔥 FINAL ACTIVE IMEI
+  // ======================================
+  const imeiFinalActive = new Set();
+
+  sorted.forEach((t) => {
+    if (!t?.IMEI) return;
+
+    const imei = normalizeImei(t.IMEI);
+
+    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+    const status = String(t.STATUS || "").toUpperCase();
+
+    if (!["APPROVED", "REFUND"].includes(status)) return;
+
+    if (
+      [
+        "PEMBELIAN",
+        "TRANSFER_MASUK",
+        "REFUND",
+        "TRANSFER_REJECT",
+        "VOID OPNAME",
+      ].includes(metode)
+    ) {
+      imeiFinalActive.add(imei);
+    }
+
+    if (["PENJUALAN", "REJECT", "STOK OPNAME"].includes(metode)) {
+      imeiFinalActive.delete(imei);
+    }
+  });
+
+  // ======================================
   // 🔥 FINAL CLEAN
   // ======================================
   return Object.values(map)
-    .filter((x) => Number(x.qty || 0) > 0)
+
+    .filter((row) => {
+      if (!row.imei) {
+        return Number(row.qty || 0) > 0;
+      }
+
+      return activeImeiSet.has(normalizeImei(row.imei));
+    })
+
+    .filter((row) => Number(row.qty || 0) > 0)
+
     .sort((a, b) => String(a.brand || "").localeCompare(String(b.brand || "")));
 };

@@ -23,6 +23,7 @@ import { useLocation } from "react-router-dom";
 import { ref, onValue } from "firebase/database";
 import { db } from "../../../firebase/FirebaseInit";
 import { getFinalIMEIStatus } from "../../../utils/imeiStatusEngine";
+import { validateFinalImeiSale } from "../../../utils/validateFinalImeiSale";
 
 import {
   listenPenjualan,
@@ -56,7 +57,6 @@ const normalizeImei = (v) =>
   String(v || "")
     .trim()
     .toUpperCase();
-    
 
 // =====================================
 // 🔥 CEK REFUND READY
@@ -69,12 +69,9 @@ const isRefundReady = (imei, transaksi = []) => {
 
     return (
       String(t.IMEI || "").trim() === String(imei || "").trim() &&
-      [
-        "REFUND",
-        "READY_RESALE",
-        "BISA_DIJUAL_LAGI",
-        "AVAILABLE",
-      ].includes(metode) &&
+      ["REFUND", "READY_RESALE", "BISA_DIJUAL_LAGI", "AVAILABLE"].includes(
+        metode
+      ) &&
       String(t.STATUS || "").toUpperCase() === "APPROVED"
     );
   });
@@ -83,20 +80,14 @@ const isRefundReady = (imei, transaksi = []) => {
 // =====================================
 // 🔥 IMEI BOLEH DIJUAL KEMBALI
 // =====================================
-const isResellAllowed = (
-  imei,
-  detailStockLookup = {}
-) => {
+const isResellAllowed = (imei, detailStockLookup = {}) => {
   const stock =
     detailStockLookup?.[imei] ||
     Object.values(detailStockLookup || {}).find(
       (x) =>
         String(x?.imei || "")
           .trim()
-          .toUpperCase() ===
-        String(imei)
-          .trim()
-          .toUpperCase()
+          .toUpperCase() === String(imei).trim().toUpperCase()
     );
 
   if (!stock) return false;
@@ -533,13 +524,24 @@ export default function CardPenjualanToko() {
             imei,
             detailStock: detailStockLookup,
           });
-          
-          console.log(
-            "🔥 FINAL STATUS:",
-            imei,
-            finalStatus
-          );
-          
+
+          if (
+            [
+              "PENJUALAN",
+              "TRANSFER_KELUAR",
+              "SOLD",
+            ].includes(
+              String(finalStatus)
+                .toUpperCase()
+            )
+          ) {
+            throw new Error(
+              `IMEI ${imei} sudah TERJUAL`
+            );
+          }
+
+          console.log("🔥 FINAL STATUS:", imei, finalStatus);
+
           const canSell = [
             "AVAILABLE",
             "REFUND",
@@ -553,48 +555,75 @@ export default function CardPenjualanToko() {
               .trim()
               .toUpperCase()
           );
-          
+
           if (!canSell) {
             throw new Error(
               `IMEI ${imei} tidak dapat dijual. Status terakhir = ${finalStatus}`
             );
           }
 
-          const sudahAdaDiTable = penjualanList.some(
-            (trx) => {
-              const isRefund =
-                String(
-                  trx.statusPembayaran ||
-                  trx.PAYMENT_METODE ||
-                  trx.STATUS ||
-                  ""
-                ).toUpperCase() === "REFUND";
-          
-              if (isRefund) return false;
-          
-              return (
-                Array.isArray(trx.items) &&
-                trx.items.some(
-                  (it) =>
-                    Array.isArray(it.imeiList) &&
-                    it.imeiList.some(
-                      (im) =>
-                        String(im).trim() ===
-                        String(imei).trim()
-                    )
-                )
-              );
-            }
-          );
+          const sudahAdaDiTable = penjualanList.some((trx) => {
+            const isRefund =
+              String(
+                trx.statusPembayaran || trx.PAYMENT_METODE || trx.STATUS || ""
+              ).toUpperCase() === "REFUND";
+
+            if (isRefund) return false;
+
+            return (
+              Array.isArray(trx.items) &&
+              trx.items.some(
+                (it) =>
+                  Array.isArray(it.imeiList) &&
+                  it.imeiList.some(
+                    (im) => String(im).trim() === String(imei).trim()
+                  )
+              )
+            );
+          });
 
           const sold = await cekImeiSudahTerjual(imei);
 
-          const resellAllowed =
-            isResellAllowed(
-              imei,
-              detailStockLookup
-            );
+          // =====================================
+          // VALIDASI FINAL BERDASARKAN DETAIL STOCK
+          // =====================================
+          const stockData = detailStockLookup?.[imei];
           
+          const stockFinalStatus = String(
+            stockData?.LAST_ACTION ||
+            stockData?.PAYMENT_METODE ||
+            stockData?.status ||
+            stockData?.STATUS ||
+            ""
+          ).toUpperCase();
+          
+          const bolehJual = [
+            "AVAILABLE",
+            "REFUND",
+            "REJECT",
+            "TRANSFER_REJECT",
+            "TRANSFER_MASUK",
+            "READY_RESALE",
+            "PEMBELIAN",
+          ].includes(
+            String(finalStatus || "").toUpperCase()
+          );
+          
+          console.log("🔥 FINAL SALE CHECK", {
+            imei,
+            stockFinalStatus,
+            stockData,
+            bolehJual,
+          });
+          
+          if (!bolehJual) {
+            throw new Error(
+              `IMEI ${imei} sudah TERJUAL`
+            );
+          }
+
+          const resellAllowed = isResellAllowed(imei, detailStockLookup);
+
           if (sold && !resellAllowed) {
             throw new Error(
               `IMEI ${imei} Cek Stok barang Atau sudah pernah terjual`

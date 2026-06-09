@@ -514,6 +514,14 @@ export default function StockOpname() {
       supplierLookup,
     });
 
+    // rows = rows.filter((r) => {
+    //   if (!r.imei) {
+    //     return Number(r.qty || 0) > 0;
+    //   }
+    
+    //   return Number(r.qty || 0) > 0;
+    // });
+
     // ======================================
     // 🔥 FILTER TOKO
     // ======================================

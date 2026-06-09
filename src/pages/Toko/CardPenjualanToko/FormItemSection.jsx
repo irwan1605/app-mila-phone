@@ -16,6 +16,7 @@ import { db } from "../../../firebase/FirebaseInit";
 import { useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { buildFinalNonImeiStock } from "../../../features/FiturPenjualan/nonImeiStock/buildFinalNonImeiStock";
+import { buildFinalImeiStock } from "../../../features/FiturPenjualan/ImeiStock/buildFinalImeiStock";
 
 /* ================= KONSTANTA ================= */
 const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
@@ -48,6 +49,12 @@ export default function FormItemSection({
   const [stokToko, setStokToko] = useState([]);
   const [editIndex, setEditIndex] = useState(null);
   const [showTable, setShowTable] = useState(false);
+
+  const finalImeiStock = useMemo(() => {
+    return buildFinalImeiStock({
+      transaksi: allTransaksi,
+    });
+  }, [allTransaksi]);
 
   /* ================= HELPER CEK TOKO DARI TRANSFER ================= */
   const findTokoByTransfer = (imei) => {
@@ -617,6 +624,8 @@ export default function FormItemSection({
     );
   };
 
+
+
   /* ================= IMEI BY BARANG ================= */
   /* ================= IMEI BY BARANG ================= */
   const imeiByBarang = useMemo(() => {
@@ -642,45 +651,23 @@ export default function FormItemSection({
 
       // 🔥 HILANGKAN IMEI SUDAH TERJUAL
       .filter((imei) => {
-        const trxRefund = allTransaksi.find(
-          (t) =>
-            String(t.IMEI || "").trim() === String(imei).trim() &&
-            ["REFUND", "READY_RESALE"].includes(
-              String(t.PAYMENT_METODE || t.statusRefund || "").toUpperCase()
-            ) &&
-            String(t.STATUS || "").toUpperCase() === "APPROVED"
-        );
-
-        // =====================================
-        // 🔥 JIKA HASIL REFUND
-        // MAKA BOLEH MUNCUL LAGI
-        // =====================================
-        if (trxRefund) {
-          return true;
-        }
-
-        // =====================================
-        // 🔥 NORMAL VALIDATION
-        // =====================================
-        return !stockRealtime?.soldImei?.[imei];
+        const finalImei =
+          finalImeiStock?.[imei];
+      
+        return finalImei?.available === true;
       });
 
     // =====================================
     // 🔥 IMEI HASIL TRANSFER BARANG
     // =====================================
     const imeiTransfer = stokToko
-      .filter(
-        (s) =>
-          s &&
-          s.imei &&
-          String(s.namaBarang || "").toUpperCase() ===
-            String(items[0]?.namaBarang || "").toUpperCase() &&
-          String(s.status || "AVAILABLE").toUpperCase() === "AVAILABLE"
-      )
-      .map((s) => String(s.imei).trim())
-
-      // 🔥 HILANGKAN IMEI TERJUAL
-      .filter((imei) => !stockRealtime?.soldImei?.[imei]);
+    .map((s) => String(s.imei || "").trim())
+    .filter(Boolean)
+    .filter((imei) => {
+      const final = finalImeiStock?.[imei];
+  
+      return final?.available === true;
+    });
 
     // =====================================
     // 🔥 GABUNGKAN + HILANGKAN DUPLIKAT
@@ -1113,6 +1100,8 @@ export default function FormItemSection({
       return total + harga * qty;
     }, 0);
   }, [items]);
+
+ 
 
   // =====================================
   // 🔥 FINAL NON IMEI STOCK
@@ -1765,6 +1754,17 @@ IMEI + NON IMEI
       .filter((imei) => !stockRealtime?.soldImei?.[imei]);
   }, [globalStockMap, stockRealtime]);
 
+  // =====================================
+// 🔥 FINAL IMEI AVAILABLE
+// SOURCE OF TRUTH BARU
+// =====================================
+const imeiAvailableFinalList = useMemo(() => {
+  return Object.values(finalImeiStock)
+    .filter((x) => x?.available === true)
+    .map((x) => x.imei)
+    .filter(Boolean);
+}, [finalImeiStock]);
+
   const findBarangUniversal = (imei) => {
     const imeiFix = String(imei || "").trim();
 
@@ -2387,6 +2387,44 @@ IMEI + NON IMEI
                   }}
                   onBlur={async () => {
                     const imei = (item.imei || "").trim();
+                    const finalImei =
+                    finalImeiStock?.[imei];
+                  
+                  if (!finalImei) {
+                    alert(
+                      `❌ IMEI ${imei} tidak ditemukan`
+                    );
+                  
+                    updateItem(idx,{
+                      imei:"",
+                      imeiList:[],
+                      qty:0,
+                    });
+                  
+                    return;
+                  }
+                  
+                  if (
+                    finalImei.available !== true
+                  ) {
+                    alert(
+                      `❌ IMEI ${imei} SUDAH TERJUAL`
+                    );
+                  
+                    updateItem(idx,{
+                      imei:"",
+                      imeiList:[],
+                      qty:0,
+                    });
+                  
+                    return;
+                  }
+
+                  console.log(
+                    "IMEI DEBUG",
+                    "352246838561390",
+                    finalImeiStock["352246838561390"]
+                  );
                     if (!imei) return;
 
                     /* ===============================
@@ -2457,31 +2495,7 @@ IMEI + NON IMEI
                       return;
                     }
 
-                    /* ===============================
-                       2. CEK IMEI DARI TRANSFER
-                       (TAMBAHAN - TIDAK MERUBAH LOGIC LAMA)
-                    =============================== */
-                    const imeiFromTransfer = stokToko.some(
-                      (s) => String(s.imei).trim() === imei
-                    );
-
-                    /* ===============================
-                       3. VALIDASI AVAILABLE
-                       (LOGIC LAMA + TRANSFER)
-                    =============================== */
-                    if (
-                      (!imeiAvailableList.includes(imei) &&
-                        !imeiFromTransfer) ||
-                      stockRealtime?.soldImei?.[imei]
-                    ) {
-                      alert("❌ IMEI sudah terjual / tidak tersedia");
-                      updateItem(idx, {
-                        imei: "",
-                        imeiList: [],
-                        qty: 0,
-                      });
-                      return;
-                    }
+                
 
                     /* ===============================
                        4. VALIDASI TOKO OWNER
