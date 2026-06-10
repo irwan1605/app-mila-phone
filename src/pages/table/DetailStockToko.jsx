@@ -18,6 +18,8 @@ import { buildFinalStockRows } from "../../utils/buildFinalStockRows";
 import { exportStockExcel } from "../../utils/stock/exportStockExcel";
 import { filterExportRows }
 from "../../utils/stock/filterExportRows";
+import { filterRefundSoldRows }
+from "../../features/Refund/BarangRefund";
 /* ======================
    HELPER RUPIAH
 ====================== */
@@ -337,6 +339,18 @@ export default function DetailStockToko(props) {
 
     return map;
   }, [transaksi]);
+
+  const refundSoldImeiSet = useMemo(() => {
+    const set = new Set();
+  
+    Object.entries(refundFinalTracker).forEach(([imei, data]) => {
+      if (data?.active === false) {
+        set.add(imei);
+      }
+    });
+  
+    return set;
+  }, [refundFinalTracker]);
 
   // ======================================
   // 🔥 FINAL OWNER TRACKER
@@ -762,17 +776,23 @@ export default function DetailStockToko(props) {
 
     return map;
   }, [transaksi]);
+  
 
   /* ======================
    BUILD ROWS (FIX FINAL)
 ====================== */
 const rows = useMemo(() => {
-  return buildFinalStockRows({
+  const result = buildFinalStockRows({
     transaksi,
     detailStock,
     namaToko,
     masterMap,
     supplierLookup,
+  });
+
+  return filterRefundSoldRows({
+    rows: result,
+    transaksi,
   });
 }, [
   transaksi,
@@ -781,6 +801,8 @@ const rows = useMemo(() => {
   masterMap,
   supplierLookup,
 ]);
+
+
 
   // ======================================
   // 🔥 MERGED ROWS FINAL
@@ -891,6 +913,7 @@ const rows = useMemo(() => {
     });
 
     return Object.values(finalMap).filter((r) => {
+      
       // ======================================
       // 🔥 HAPUS BARANG LIAR
       // ======================================

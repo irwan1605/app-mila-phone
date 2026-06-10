@@ -17,6 +17,10 @@ import { useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { buildFinalNonImeiStock } from "../../../features/FiturPenjualan/nonImeiStock/buildFinalNonImeiStock";
 import { buildFinalImeiStock } from "../../../features/FiturPenjualan/ImeiStock/buildFinalImeiStock";
+import { filterRefundSoldRows } from "../../../features/Refund/BarangRefund";
+import {
+  buildRefundSoldSet,
+} from "../../../features/Refund/BarangRefund";
 
 /* ================= KONSTANTA ================= */
 const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
@@ -56,39 +60,33 @@ export default function FormItemSection({
     });
   }, [allTransaksi]);
 
+  const refundSoldSet = useMemo(() => {
+    return buildRefundSoldSet(allTransaksi);
+  }, [allTransaksi]);
+
   const soldImeiSet = useMemo(() => {
     const set = new Set();
-  
+
     allTransaksi.forEach((t) => {
       const imei = String(t.IMEI || "").trim();
-  
+
       if (!imei) return;
-  
-      const metode = String(
-        t.PAYMENT_METODE || ""
-      ).toUpperCase();
-  
-      const status = String(
-        t.STATUS || ""
-      ).toUpperCase();
-  
+
+      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+      const status = String(t.STATUS || "").toUpperCase();
+
       // PENJUALAN APPROVED = TERJUAL
-      if (
-        metode === "PENJUALAN" &&
-        status === "APPROVED"
-      ) {
+      if (metode === "PENJUALAN" && status === "APPROVED") {
         set.add(imei);
       }
-  
+
       // REFUND = KEMBALI AKTIF
-      if (
-        metode === "REFUND" &&
-        ["APPROVED", "REFUND"].includes(status)
-      ) {
+      if (metode === "REFUND" && ["APPROVED", "REFUND"].includes(status)) {
         set.delete(imei);
       }
     });
-  
+
     return set;
   }, [allTransaksi]);
 
@@ -403,17 +401,33 @@ export default function FormItemSection({
     }
 
     // ================= TAMBAH ITEM BARU =================
-    const newItem = {
-      id: Date.now(),
-      kategoriBarang: "",
-      namaBrand: "",
-      namaBarang: "",
-      imei: "",
-      imeiList: [],
-      qty: 0,
-      hargaAktif: 0,
-      isImei: false,
-    };
+   const newItem = {
+  id: Date.now(),
+
+  kategoriBarang: "",
+
+  namaBrand: "",
+
+  namaBarang: "",
+
+  imei: "",
+
+  imeiList: [],
+
+  qty: 0,
+
+  hargaAktif: 0,
+
+  skemaHarga: "srp",
+
+  hargaMap: {
+    srp: 0,
+    grosir: 0,
+    reseller: 0,
+  },
+
+  isImei: false,
+};
 
     safeOnChange([...items, newItem]);
     setEditIndex(items.length); // langsung edit baris baru
@@ -644,6 +658,8 @@ export default function FormItemSection({
         return;
       }
 
+   
+
       finalMap[finalKey] = {
         ...barangMaster,
 
@@ -660,72 +676,49 @@ export default function FormItemSection({
     );
   };
 
- 
-
   /* ================= IMEI BY BARANG ================= */
   /* ================= IMEI BY BARANG ================= */
   const imeiByBarang = useMemo(() => {
     if (!tokoLogin) return [];
-  
+
     return [
       ...new Set(
         stokToko
           .filter((s) => {
-            const imei = String(
-              s.imei || ""
-            ).trim();
-  
+            const imei = String(s.imei || "").trim();
+
             if (!imei) return false;
-  
+
             // barang harus sama
             if (
-              String(
-                s.namaBarang ||
-                s.NAMA_BARANG ||
-                ""
-              ).toUpperCase() !==
-              String(
-                items[0]?.namaBarang || ""
-              ).toUpperCase()
+              String(s.namaBarang || s.NAMA_BARANG || "").toUpperCase() !==
+              String(items[0]?.namaBarang || "").toUpperCase()
             ) {
               return false;
             }
-  
+
             // =====================================
             // 🔥 HARUS MASIH ADA DI DETAIL STOK TOKO
             // =====================================
-            const final =
-              finalImeiStock?.[imei];
-  
-            if (
-              final?.available !== true
-            ) {
+            const final = finalImeiStock?.[imei];
+
+            if (final?.available !== true) {
               return false;
             }
-  
+
             // =====================================
             // 🔥 SUDAH TERJUAL TIDAK BOLEH MUNCUL
             // =====================================
-            if (
-              soldImeiSet.has(imei)
-            ) {
+            if (soldImeiSet.has(imei)) {
               return false;
             }
-  
+
             return true;
           })
-          .map((s) =>
-            String(s.imei).trim()
-          )
+          .map((s) => String(s.imei).trim())
       ),
     ];
-  }, [
-    stokToko,
-    finalImeiStock,
-    soldImeiSet,
-    tokoLogin,
-    items,
-  ]);
+  }, [stokToko, finalImeiStock, soldImeiSet, tokoLogin, items]);
 
   const handleTambahBarang = () => {
     // validasi minimal
@@ -1153,8 +1146,6 @@ export default function FormItemSection({
     }, 0);
   }, [items]);
 
- 
-
   // =====================================
   // 🔥 FINAL NON IMEI STOCK
   // REFUND + REJECT + TRANSFER SYNC
@@ -1466,6 +1457,12 @@ IMEI + NON IMEI
     Object.keys(map).forEach((k) => {
       if (map[k] < 0) {
         map[k] = 0;
+      }
+    });
+
+    Object.keys(map).forEach((key) => {
+      if (refundSoldSet.has(key)) {
+        delete map[key];
       }
     });
 
@@ -1807,15 +1804,15 @@ IMEI + NON IMEI
   }, [globalStockMap, stockRealtime]);
 
   // =====================================
-// 🔥 FINAL IMEI AVAILABLE
-// SOURCE OF TRUTH BARU
-// =====================================
-const imeiAvailableFinalList = useMemo(() => {
-  return Object.values(finalImeiStock)
-    .filter((x) => x?.available === true)
-    .map((x) => x.imei)
-    .filter(Boolean);
-}, [finalImeiStock]);
+  // 🔥 FINAL IMEI AVAILABLE
+  // SOURCE OF TRUTH BARU
+  // =====================================
+  const imeiAvailableFinalList = useMemo(() => {
+    return Object.values(finalImeiStock)
+      .filter((x) => x?.available === true)
+      .map((x) => x.imei)
+      .filter(Boolean);
+  }, [finalImeiStock]);
 
   const findBarangUniversal = (imei) => {
     const imeiFix = String(imei || "").trim();
@@ -2440,62 +2437,49 @@ const imeiAvailableFinalList = useMemo(() => {
                   onBlur={async () => {
                     const imei = (item.imei || "").trim();
                     if (soldImeiSet.has(imei)) {
-                      alert(
-                        `❌ IMEI ${imei} sudah terjual`
-                      );
-                    
+                      alert(`❌ IMEI ${imei} sudah terjual`);
+
                       updateItem(idx, {
                         imei: "",
                         imeiList: [],
                         qty: 0,
                       });
-                    
+
                       return;
                     }
-                    const finalImei =
-                    finalImeiStock?.[imei];
-                  
-                  if (!finalImei) {
-                    alert(
-                      `❌ IMEI ${imei} tidak ditemukan`
-                    );
-                  
-                    updateItem(idx,{
-                      imei:"",
-                      imeiList:[],
-                      qty:0,
-                    });
-                  
-                    return;
-                  }
-                  
-                  if (
-                    finalImei.available !== true
-                  ) {
-                    alert(
-                      `❌ IMEI ${imei} SUDAH TERJUAL`
-                    );
+                    const finalImei = finalImeiStock?.[imei];
+
+                    if (!finalImei) {
+                      alert(`❌ IMEI ${imei} tidak ditemukan`);
+
+                      updateItem(idx, {
+                        imei: "",
+                        imeiList: [],
+                        qty: 0,
+                      });
+
+                      return;
+                    }
+
+                    if (finalImei.available !== true) {
+                      alert(`❌ IMEI ${imei} SUDAH TERJUAL`);
+
+                      console.log("FINAL IMEI", imei, finalImei);
+
+                      updateItem(idx, {
+                        imei: "",
+                        imeiList: [],
+                        qty: 0,
+                      });
+
+                      return;
+                    }
 
                     console.log(
-                      "FINAL IMEI",
-                      imei,
-                      finalImei
+                      "IMEI DEBUG",
+                      "352246838561390",
+                      finalImeiStock["352246838561390"]
                     );
-                  
-                    updateItem(idx,{
-                      imei:"",
-                      imeiList:[],
-                      qty:0,
-                    });
-                  
-                    return;
-                  }
-
-                  console.log(
-                    "IMEI DEBUG",
-                    "352246838561390",
-                    finalImeiStock["352246838561390"]
-                  );
                     if (!imei) return;
 
                     /* ===============================
@@ -2546,17 +2530,15 @@ const imeiAvailableFinalList = useMemo(() => {
 
                     if (!finalStatus?.available) {
                       alert(`❌ IMEI ${imei} SUDAH TERJUAL`);
-                    
+
                       updateItem(idx, {
                         imei: "",
                         imeiList: [],
                         qty: 0,
                       });
-                    
+
                       return;
                     }
-
-                
 
                     /* ===============================
                        4. VALIDASI TOKO OWNER

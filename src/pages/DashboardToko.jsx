@@ -25,8 +25,8 @@ import {
 } from "../services/FirebaseService";
 import { buildFinalStockRows } from "../utils/buildFinalStockRows";
 import { exportStockExcel } from "../utils/stock/exportStockExcel";
-import { filterExportRows }
-from "../utils/stock/filterExportRows";
+import { filterExportRows } from "../utils/stock/filterExportRows";
+import { filterRefundSoldRows } from "../features/Refund/BarangRefund";
 
 import { buildDashboardStockRows } from "../utils/stock/buildDashboardStockRows";
 
@@ -1080,12 +1080,17 @@ export default function DashboardToko(props) {
    BUILD ROWS UNIVERSAL (SYNC DETAIL STOCK)
 ====================== */
   const rows = useMemo(() => {
-    return buildDashboardStockRows({
+    const result = buildDashboardStockRows({
       transaksi,
       detailStock,
       namaToko,
       masterMap,
       supplierLookup,
+    });
+
+    return filterRefundSoldRows({
+      rows: result,
+      transaksi,
     });
   }, [transaksi, detailStock, namaToko, masterMap, supplierLookup]);
 
@@ -1246,7 +1251,7 @@ export default function DashboardToko(props) {
       rows: finalTableRows,
       transaksi,
     });
-  
+
     exportStockExcel({
       rows: exportRows,
       namaToko: TOKO_AKTIF,

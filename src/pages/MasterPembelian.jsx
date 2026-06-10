@@ -1910,7 +1910,7 @@ export default function MasterPembelian() {
               onClick={exportExcel}
               className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center text-xs md:text-sm shadow-md transition transform hover:-translate-y-[1px]"
             >
-              <FaFileExcel className="mr-2" /> Excel
+              <FaFileExcel className="mr-2" /> Export Excel
             </button>
 
             <button
