@@ -22,8 +22,10 @@ import { buildFinalStockRows } from "../utils/buildFinalStockRows";
 import { filterExportRows }
 from "../utils/stock/filterExportRows";
 import { exportStockExcel } from "../utils/stock/exportStockExcel";
-import { filterRefundSoldRows }
-from "../features/Refund/BarangRefund";
+import {
+  filterRefundSoldRows,
+  buildRefundSoldSet,
+} from "../features/Refund/BarangRefund";
 
 import { importStockExcel } from "../utils/stock/importStockExcel";
 
@@ -339,6 +341,13 @@ export default function StockOpname() {
     return soldSet;
   }, [allTransaksi]);
 
+  // ======================================
+// 🔥 REFUND SUDAH TERJUAL LAGI
+// ======================================
+const refundSoldSet = useMemo(() => {
+  return buildRefundSoldSet(allTransaksi);
+}, [allTransaksi]);
+
   // ===============================
   // 🔥 SUPPLIER LOOKUP FINAL
   // ===============================
@@ -514,6 +523,17 @@ export default function StockOpname() {
       namaToko: filterToko === "semua" ? "" : filterToko,
       masterMap: {},
       supplierLookup,
+    });
+
+    rows = rows.filter((row) => {
+
+      if (!row.imei) {
+        return true;
+      }
+    
+      return !refundSoldSet.has(
+        normalizeImei(row.imei)
+      );
     });
 
     rows = filterRefundSoldRows({

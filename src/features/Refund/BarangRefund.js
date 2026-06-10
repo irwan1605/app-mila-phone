@@ -33,6 +33,9 @@ const buildRefundSoldTracker = (transaksi = []) => {
     // ======================
     // IMEI
     // ======================
+    // ======================
+    // IMEI NORMAL
+    // ======================
     if (t.IMEI) {
       const key = normalizeImei(t.IMEI);
 
@@ -50,6 +53,27 @@ const buildRefundSoldTracker = (transaksi = []) => {
       if (metode === "PENJUALAN" && tracker[key].hasRefund) {
         tracker[key].soldAfterRefund = true;
       }
+
+      return;
+    }
+
+    // ======================
+    // PENJUALAN DARI items[].imeiList
+    // ======================
+    if (metode === "PENJUALAN" && Array.isArray(t.items)) {
+      t.items.forEach((item) => {
+        (item.imeiList || []).forEach((imei) => {
+          const key = normalizeImei(imei);
+
+          if (tracker[key]?.hasRefund) {
+            tracker[key].soldAfterRefund = true;
+          }
+          console.log(
+            "REFUND SOLD DETECTED",
+            key
+          );
+        });
+      });
 
       return;
     }
@@ -75,7 +99,7 @@ const buildRefundSoldTracker = (transaksi = []) => {
 
     if (metode === "PENJUALAN") {
       tracker[skuKey].soldQty += Number(t.QTY || 0);
-    
+
       if (tracker[skuKey].refundQty > 0) {
         tracker[skuKey].lastStatus = "REFUND";
       }
@@ -98,7 +122,12 @@ export const filterRefundSoldRows = ({ rows = [], transaksi = [] }) => {
 
       const data = tracker[key];
 
-      if (data?.hasRefund && data?.soldAfterRefund) {
+      if (!data) {
+        return true;
+      }
+
+      // REFUND -> PENJUALAN
+      if (data.hasRefund === true && data.soldAfterRefund === true) {
         return false;
       }
 
@@ -160,29 +189,23 @@ export const filterRefundSoldRows = ({ rows = [], transaksi = [] }) => {
 export const buildRefundSoldSet = (transaksi = []) => {
   const tracker = buildRefundSoldTracker(transaksi);
 
-  const soldSet = new Set();
+  const set = new Set();
 
-  Object.entries(tracker).forEach(([key, val]) => {
-    if (val?.hasRefund && val?.soldAfterRefund) {
-      soldSet.add(key);
+  Object.entries(tracker).forEach(([imei, data]) => {
+    if (data?.hasRefund && data?.soldAfterRefund) {
+      set.add(imei);
     }
   });
 
-  return soldSet;
+  console.log("REFUND SOLD SET", Array.from(set));
+
+  return set;
 };
 
-export const isRefundSoldImei = (
-  imei,
-  transaksi = []
-) => {
+export const isRefundSoldImei = (imei, transaksi = []) => {
   const tracker = buildRefundSoldTracker(transaksi);
 
   const key = normalizeImei(imei);
 
-  return Boolean(
-    tracker?.[key]?.hasRefund &&
-      tracker?.[key]?.soldAfterRefund
-  );
+  return Boolean(tracker?.[key]?.hasRefund && tracker?.[key]?.soldAfterRefund);
 };
-
-

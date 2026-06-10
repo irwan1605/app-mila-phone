@@ -300,30 +300,25 @@ export default function Dashboard() {
 
   const totalTransaksiSalesReport = useMemo(() => {
     const today = new Date().toLocaleDateString("en-CA");
-  
+
     const mapInvoice = {};
-  
+
     penjualanList.forEach((trx) => {
       if (!isValidPenjualan(trx)) return;
-  
+
       const tanggal = new Date(
-        trx?.tanggal ||
-        trx?.createdAt
+        trx?.tanggal || trx?.createdAt
       ).toLocaleDateString("en-CA");
-  
+
       if (tanggal !== today) return;
-  
-      const invoice = String(
-        trx?.invoice ||
-        trx?.NO_INVOICE ||
-        ""
-      ).trim();
-  
+
+      const invoice = String(trx?.invoice || trx?.NO_INVOICE || "").trim();
+
       if (!invoice) return;
-  
+
       mapInvoice[invoice] = true;
     });
-  
+
     return Object.keys(mapInvoice).length;
   }, [penjualanList]);
 
@@ -421,8 +416,6 @@ export default function Dashboard() {
     return () => unsub && unsub();
   }, []);
 
-
-
   const totalHariIni = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     return penjualan
@@ -499,16 +492,9 @@ export default function Dashboard() {
     return f;
   }, [dataTransaksi, filterType, filterValue, filterToko, filterSales]);
 
- 
-  console.log(
-    "SALES REPORT TOTAL =",
-    filteredData.length
-  );
-  
-  console.log(
-    "DASHBOARD TOTAL =",
-    totalTransaksiSalesReport
-  );
+  console.log("SALES REPORT TOTAL =", filteredData.length);
+
+  console.log("DASHBOARD TOTAL =", totalTransaksiSalesReport);
 
   console.log("DASHBOARD TRANSAKSI =", totalTransaksiSalesReport);
 
@@ -757,16 +743,48 @@ export default function Dashboard() {
   }, [penjualanList]);
 
   const totalPenjualanBarangReal = useMemo(() => {
-    const totalPembelian = transaksi
-      .filter(
-        (x) =>
-          String(x.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
-          x.STATUS === "Approved"
-      )
-      .reduce((sum, x) => sum + (x.IMEI ? 1 : Number(x.QTY || 0)), 0);
-
-    return totalPembelian - totalStockSemuaToko;
-  }, [transaksi, totalStockSemuaToko]);
+    const mapInvoice = {};
+  
+    penjualanList.forEach((trx) => {
+      if (!Array.isArray(trx.items)) return;
+  
+      const invoice = String(trx.invoice || "").trim();
+  
+      if (!invoice) return;
+  
+      const isRefund =
+        trx?.deleted === true ||
+        trx?.deletedFromPenjualan === true ||
+        trx?.refundProcessed === true ||
+        trx?.refundLocked === true ||
+        trx?.IS_REFUND === true ||
+        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
+        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
+        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
+  
+      if (isRefund) return;
+  
+      const totalQty = trx.items.reduce(
+        (s, item) => s + Number(item.qty || 0),
+        0
+      );
+  
+      if (!mapInvoice[invoice]) {
+        mapInvoice[invoice] = {
+          qty: totalQty,
+          toko: trx.toko || "-",
+          status: trx.statusPembayaran || "OK",
+        };
+      }
+    });
+  
+    const salesReportData = Object.values(mapInvoice);
+  
+    return salesReportData.reduce(
+      (sum, row) => sum + Number(row.qty || 0),
+      0
+    );
+  }, [penjualanList]);
 
   const totalNominalPenjualanPerBulan = useMemo(() => {
     if (!Array.isArray(penjualanList)) return 0;
@@ -1205,12 +1223,11 @@ export default function Dashboard() {
         {/* ROW 1 */}
         {/* =================================================== */}
         <div className="space-y-6 mt-6">
-
-{/* ===================================== */}
-{/* PENJUALAN PER TOKO FULL WIDTH */}
-{/* ===================================== */}
-<div
-  className="
+          {/* ===================================== */}
+          {/* PENJUALAN PER TOKO FULL WIDTH */}
+          {/* ===================================== */}
+          <div
+            className="
     bg-white
     border
     border-slate-200
@@ -1219,20 +1236,20 @@ export default function Dashboard() {
     p-5
     w-full
   "
->
-  <div className="flex items-center justify-between mb-3">
-    <div>
-      <h3 className="text-xl font-bold text-slate-800">
-        Penjualan Per Toko
-      </h3>
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">
+                  Penjualan Per Toko
+                </h3>
 
-      <p className="text-sm text-slate-500">
-        Monitoring realtime seluruh toko
-      </p>
-    </div>
+                <p className="text-sm text-slate-500">
+                  Monitoring realtime seluruh toko
+                </p>
+              </div>
 
-    <div
-      className="
+              <div
+                className="
         px-3 py-1
         rounded-full
         bg-emerald-100
@@ -1240,23 +1257,23 @@ export default function Dashboard() {
         text-xs
         font-semibold
       "
-    >
-      Realtime
-    </div>
-  </div>
+              >
+                Realtime
+              </div>
+            </div>
 
-  <div className="max-h-[700px] overflow-auto">
-    <CardPenjualanToko />
-  </div>
-</div>
+            <div className="max-h-[700px] overflow-auto">
+              <CardPenjualanToko />
+            </div>
+          </div>
 
-      {/* ===================================== */}
-  {/* CHART HARIAN + BULANAN */}
-  {/* ===================================== */}
-  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {/* ===================================== */}
+          {/* CHART HARIAN + BULANAN */}
+          {/* ===================================== */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {/* HARIAN */}
             <div
-  className="
+              className="
     bg-white
     border
     border-slate-200
@@ -1264,7 +1281,7 @@ export default function Dashboard() {
     shadow-sm
     p-5
   "
->
+            >
               <div className="mb-4">
                 <h3 className="text-xl font-bold text-slate-800">
                   Omzet Harian
@@ -1313,7 +1330,7 @@ export default function Dashboard() {
 
             {/* BULANAN */}
             <div
-  className="
+              className="
     bg-white
     border
     border-slate-200
@@ -1321,7 +1338,7 @@ export default function Dashboard() {
     shadow-sm
     p-5
   "
->
+            >
               <div className="mb-4">
                 <h3 className="text-xl font-bold text-slate-800">
                   Omzet Bulanan
