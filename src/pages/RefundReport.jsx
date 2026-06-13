@@ -74,9 +74,16 @@ export default function RefundReport() {
         }
 
         if (
-          String(t?.PAYMENT_METODE || "").toUpperCase() === "REFUND" ||
-          String(t?.STATUS || "").toUpperCase() === "REFUND" ||
-          t?.IS_REFUND === true
+          (
+            String(t?.PAYMENT_METODE || "").toUpperCase() === "REFUND" ||
+            String(t?.STATUS || "").toUpperCase() === "REFUND" ||
+            t?.IS_REFUND === true
+          ) &&
+          (
+            t.NAMA_BARANG ||
+            t.IMEI ||
+            t.NAMA_BRAND
+          )
         ) {
           refundRowsRaw.push({
             id: t.id || `${t.NO_INVOICE}-${t.IMEI}`,
@@ -103,7 +110,30 @@ export default function RefundReport() {
       // 2️⃣ hilangkan duplicate berdasarkan ITEM (IMEI / SKU)
       const uniqueMap = new Map();
 
-      refundRowsRaw.forEach((r) => {
+      const isValidRefundRow = (row) => {
+        const toko = String(row.NAMA_TOKO || "").trim();
+      
+        // reject firebase key
+        if (/^-O[A-Za-z0-9_-]{10,}$/.test(toko)) {
+          return false;
+        }
+      
+        // reject toko kosong
+        if (!toko || toko === "-") {
+          return false;
+        }
+      
+        // wajib punya nama barang
+        if (!row.NAMA_BARANG || row.NAMA_BARANG === "-") {
+          return false;
+        }
+      
+        return true;
+      };
+
+      refundRowsRaw
+      .filter(isValidRefundRow)
+      .forEach((r) => {
         // ✅ KEY UNIK PER ITEM
         const key = `${r.NO_INVOICE}|${r.IMEI}|${r.NAMA_BARANG}`;
         // NON IMEI tetap unik per item
@@ -135,6 +165,29 @@ export default function RefundReport() {
 
         return db - da;
       });
+
+      const cleanedRows = sorted.filter((r) => {
+        const toko = String(r.NAMA_TOKO || "").trim();
+      
+        // hilangkan firebase key
+        if (/^-O[A-Za-z0-9_-]{10,}$/.test(toko)) {
+          return false;
+        }
+      
+        // hilangkan data kosong
+        if (
+          !r.NAMA_BARANG ||
+          r.NAMA_BARANG === "-" ||
+          !r.NAMA_TOKO ||
+          r.NAMA_TOKO === "-"
+        ) {
+          return false;
+        }
+      
+        return true;
+      });
+      
+      setRows(cleanedRows);
 
       setRows(sorted);
     });
