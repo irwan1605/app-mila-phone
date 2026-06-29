@@ -180,6 +180,12 @@ export default function MasterPembelian() {
     qty: 1,
   });
 
+  const [barangKeyword, setBarangKeyword] = useState("");
+  const [showBarangDropdown, setShowBarangDropdown] = useState(false);
+  const [selectedBarangIndex, setSelectedBarangIndex] = useState(-1);
+
+  const barangRef = useRef(null);
+
   useEffect(() => {
     const unsub = listenMasterToko((rows) => {
       setMasterToko(rows || []);
@@ -282,6 +288,21 @@ export default function MasterPembelian() {
       setTambahForm((prev) => ({ ...prev, noDo: autoNo }));
     }
   }, [showTambah, tambahForm.tanggal, allTransaksi]);
+
+  // ==========================================
+  // TUTUP DROPDOWN NAMA BARANG JIKA KLIK DI LUAR
+  // ==========================================
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (barangRef.current && !barangRef.current.contains(e.target)) {
+        setShowBarangDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const masterBarangList = useMemo(() => {
     const map = {};
@@ -439,6 +460,37 @@ export default function MasterPembelian() {
       .map((b) => b.namaBarang)
       .filter(Boolean);
   }, [masterBarang, tambahForm.brand, tambahForm.kategoriBrand]);
+
+  const filteredBarangOptions = useMemo(() => {
+    const keyword = barangKeyword.trim().toLowerCase();
+
+    // ===============================
+    // JIKA BELUM MENGETIK
+    // TAMPILKAN SEMUA DATA
+    // ===============================
+    if (!keyword) {
+      return [...namaBarangOptions].sort((a, b) => a.localeCompare(b));
+    }
+
+    // ===============================
+    // FILTER SESUAI KEYWORD
+    // ===============================
+    return namaBarangOptions
+
+      .filter((item) => item.toLowerCase().includes(keyword))
+
+      .sort((a, b) => {
+        const aStart = a.toLowerCase().startsWith(keyword);
+
+        const bStart = b.toLowerCase().startsWith(keyword);
+
+        if (aStart && !bStart) return -1;
+
+        if (!aStart && bStart) return 1;
+
+        return a.localeCompare(b);
+      });
+  }, [barangKeyword, namaBarangOptions]);
 
   // const namaBarangOptions = useMemo(() => {
   //   if (!tambahForm.brand) {
@@ -754,6 +806,20 @@ export default function MasterPembelian() {
     // ======================================
     // BUILD REALTIME PEMBELIAN
     // ======================================
+    // ======================================================
+    // PEMBELIAN ASLI
+    // ======================================================
+    const pembelianRows = (allTransaksi || [])
+      .filter(
+        (t) =>
+          String(t.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN" &&
+          String(t.STATUS || "").toUpperCase() !== "VOID"
+      )
+      .sort((a, b) => Number(b.CREATED_AT || 0) - Number(a.CREATED_AT || 0));
+
+    // ======================================================
+    // STOCK REALTIME
+    // ======================================================
     const realtimeRows = buildPembelianRealtime(allTransaksi || []);
 
     // ======================================
@@ -766,19 +832,25 @@ export default function MasterPembelian() {
     // ======================================
     // GABUNGKAN DATA
     // ======================================
-    const mergedRows = [
-      ...allPembelianRows.map((x) => ({
-        ...x,
+    const mergedRows = pembelianRows.map((row) => {
+      const realtime = realtimeRows.find(
+        (r) =>
+          String(r.NAMA_TOKO).trim() === String(row.NAMA_TOKO).trim() &&
+          String(r.NAMA_BRAND).trim() === String(row.NAMA_BRAND).trim() &&
+          String(r.NAMA_BARANG).trim() === String(row.NAMA_BARANG).trim() &&
+          (row.IMEI ? String(r.IMEI).trim() === String(row.IMEI).trim() : true)
+      );
+
+      return {
+        ...row,
 
         __ALL_DATA: true,
-      })),
 
-      ...realtimeRows.map((x) => ({
-        ...x,
+        REAL_QTY: realtime?.REAL_QTY ?? 0,
 
-        __REALTIME: true,
-      })),
-    ];
+        SISA_STOK: realtime?.REAL_QTY ?? 0,
+      };
+    });
 
     const map = {};
 
@@ -822,7 +894,9 @@ export default function MasterPembelian() {
         map[keyGroup] = {
           __KEY__: keyGroup,
 
-          tanggal: t.TANGGAL_TRANSAKSI,
+          tanggal: "",
+
+          createdAtPembelian: 0,
 
           noDo: t.NO_INVOICE,
 
@@ -846,11 +920,13 @@ export default function MasterPembelian() {
 
           qty: 0,
 
-          // ======================================
-          // FIX REALTIME QTY
-          // ======================================
+          // stok realtime
           totalQty: 0,
 
+          // qty pembelian asli
+          qtyPembelianAsli: 0,
+
+          // tetap dipakai untuk compatibility
           qtyInputManual: 0,
 
           imeis: [],
@@ -866,12 +942,12 @@ export default function MasterPembelian() {
       // ======================================
       // REALTIME ROW
       // ======================================
-      if (t.__REALTIME) {
-        const qty = Number(t.QTY || 0);
+      // if (t.__REALTIME) {
+      //   const qty = Number(t.QTY || 0);
 
-        map[keyGroup].totalQty =
-          Number(map[keyGroup].totalQty || 0) + Number(qty || 0);
-      }
+      //   map[keyGroup].totalQty =
+      //     Number(map[keyGroup].totalQty || 0) + Number(qty || 0);
+      // }
 
       // ======================================
       // SIMPAN IMEI HANDPHONE
@@ -900,8 +976,26 @@ export default function MasterPembelian() {
       // SEMUA DATA PEMBELIAN
       // ======================================
       if (t.__ALL_DATA) {
-        const qtyPembelian = getMasterPembelianQty(t);
+        map[keyGroup].totalQty += Number(t.REAL_QTY || 0);
 
+        const createdAt = Number(t.CREATED_AT ?? t.UPDATED_AT ?? 0);
+
+        if (
+          !map[keyGroup].createdAtPembelian ||
+          createdAt < map[keyGroup].createdAtPembelian
+        ) {
+          map[keyGroup].createdAtPembelian = createdAt;
+          map[keyGroup].tanggal = t.TANGGAL_TRANSAKSI;
+        }
+
+        const qtyPembelian = Number(
+          t.QTY_INPUT_MANUAL ?? t.QTY_INPUT ?? t.QTY ?? 0
+        );
+
+        // Qty asli yang diinput saat pembelian
+        map[keyGroup].qtyPembelianAsli += qtyPembelian;
+
+        // Tetap isi field lama agar tidak merusak logic lain
         map[keyGroup].qtyInputManual += qtyPembelian;
 
         map[keyGroup].totalHargaSup +=
@@ -918,16 +1012,16 @@ export default function MasterPembelian() {
         // ======================================
         // FILTER INVALID
         // ======================================
-        .filter(
-          (x) =>
-            x &&
-            (Number(x.totalQty || 0) > 0 || Number(x.totalHargaSup || 0) > 0)
-        )
+        .filter((x) => Number(x.qtyPembelianAsli || 0) > 0)
 
         // ======================================
         // SORT TERBARU
         // ======================================
-        .sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal))
+        .sort(
+          (a, b) =>
+            Number(b.createdAtPembelian || 0) -
+            Number(a.createdAtPembelian || 0)
+        )
     );
   }, [allTransaksi, masterBarangMap, deletedKeys]);
 
@@ -1689,19 +1783,14 @@ export default function MasterPembelian() {
 
     groupedPurchases.forEach((r) => {
       const hargaSatuan = Number(r.hargaSup || 0);
-      const totalQty = Number(
-        r.qtyInputManual || 0
-      );
+      const totalQty = Number(r.qtyInputManual || 0);
       const totalHargaGroup = Number(r.totalHargaSup || 0);
 
       const imeiList = (r.imeis || [])
         .map((x) => (x || "").toString().trim())
         .filter(Boolean);
 
-        const qtyPembelian = Number(
-          r.qtyInputManual || 0
-        );
-        
+      const qtyPembelian = Number(r.qtyInputManual || 0);
 
       if (imeiList.length === 0) {
         // no IMEI: single row representing the whole purchase (bulk)
@@ -2636,38 +2725,107 @@ export default function MasterPembelian() {
               </div>
 
               {/* Nama Barang */}
-              {/* Nama Barang */}
-              <div>
+              <div className="relative" ref={barangRef}>
                 <label className="text-xs font-semibold text-slate-600">
                   Nama Barang
                 </label>
-                <input
-                  list="barang-master-list"
-                  className="input"
-                  placeholder="Pilih Nama Barang"
-                  disabled={!tambahForm.brand}
-                  value={tambahForm.barang}
-                  onChange={(e) => {
-                    const val = e.target.value;
 
-                    // ✅ VALIDASI HARUS ADA DI MASTER
-                    if (!namaBarangOptions.includes(val)) {
-                      alert("❌ Barang harus dipilih dari Master Barang");
-                      return;
-                    }
+                <input
+                  className="input"
+                  placeholder="Ketik Nama Barang..."
+                  disabled={!tambahForm.brand}
+                  value={barangKeyword}
+                  autoComplete="off"
+                  onFocus={() => {
+                    setShowBarangDropdown(true);
+                  }}
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    setBarangKeyword(value);
 
                     setTambahForm((prev) => ({
                       ...prev,
-                      barang: val,
+                      barang: value,
                     }));
+
+                    setSelectedBarangIndex(-1);
+                    setShowBarangDropdown(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (!showBarangDropdown) return;
+
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setSelectedBarangIndex((prev) =>
+                        Math.min(prev + 1, filteredBarangOptions.length - 1)
+                      );
+                    }
+
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setSelectedBarangIndex((prev) => Math.max(prev - 1, 0));
+                    }
+
+                    if (e.key === "Enter") {
+                      if (selectedBarangIndex >= 0) {
+                        e.preventDefault();
+
+                        const item = filteredBarangOptions[selectedBarangIndex];
+
+                        setBarangKeyword(item);
+
+                        setTambahForm((prev) => ({
+                          ...prev,
+                          barang: item,
+                        }));
+
+                        setShowBarangDropdown(false);
+                      }
+                    }
                   }}
                 />
 
-                <datalist id="barang-master-list">
-                  {namaBarangOptions.map((b, i) => (
-                    <option key={i} value={b} />
-                  ))}
-                </datalist>
+                {showBarangDropdown && filteredBarangOptions.length > 0 && (
+                  <div
+                    className="
+                 absolute
+                 left-0
+                 right-0
+                 mt-1
+                 bg-white
+                 border
+                 rounded-lg
+                 shadow-lg
+                 max-h-72
+                 overflow-y-auto
+                 z-50
+                 "
+                  >
+                    {filteredBarangOptions.map((item, index) => (
+                      <div
+                        key={item}
+                        className={`px-3 py-2 cursor-pointer ${
+                          index === selectedBarangIndex
+                            ? "bg-blue-100"
+                            : "hover:bg-blue-50"
+                        }`}
+                        onMouseDown={() => {
+                          setBarangKeyword(item);
+
+                          setTambahForm((prev) => ({
+                            ...prev,
+                            barang: item,
+                          }));
+
+                          setShowBarangDropdown(false);
+                        }}
+                      >
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Harga */}

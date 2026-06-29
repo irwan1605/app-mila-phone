@@ -342,6 +342,7 @@ export default function SalesReport() {
 
     return () => unsub && unsub();
   }, [masterSH, masterKaryawan, masterPayment]);
+  
 
   const storeHeadMap = useMemo(() => {
     const map = {};

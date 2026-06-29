@@ -48,9 +48,17 @@ export const buildPembelianRealtime = (allTransaksi = []) => {
   // ======================================
   // SORT BERDASARKAN WAKTU
   // ======================================
-  const sortedRows = [...validRows].sort(
-    (a, b) => Number(a.CREATED_AT || 0) - Number(b.CREATED_AT || 0)
-  );
+  const sortedRows = [...validRows].sort((a, b) => {
+    const timeA =
+        Number(a.CREATED_AT) ||
+        new Date(a.TANGGAL_TRANSAKSI || 0).getTime();
+
+    const timeB =
+        Number(b.CREATED_AT) ||
+        new Date(b.TANGGAL_TRANSAKSI || 0).getTime();
+
+    return timeA - timeB;
+});
 
   // ======================================
   // BUILD STOCK REALTIME
@@ -140,6 +148,37 @@ export const buildPembelianRealtime = (allTransaksi = []) => {
       nonImeiStockMap[key] += qty;
     }
   });
+
+  // ======================================
+// BUILD ACTIVE IMEI
+// ======================================
+sortedRows.forEach((trx) => {
+  const kategori = normalizeText(trx.KATEGORI_BRAND);
+
+  if (!KATEGORI_IMEI.includes(kategori)) return;
+
+  const imei = String(trx.IMEI || "").trim();
+
+  if (!imei) return;
+
+  const metode = normalizeText(trx.PAYMENT_METODE);
+
+  switch (metode) {
+    case "PEMBELIAN":
+    case "REFUND":
+    case "TRANSFER_MASUK":
+      activeImeiMap.add(imei);
+      break;
+
+    case "PENJUALAN":
+    case "TRANSFER_KELUAR":
+      activeImeiMap.delete(imei);
+      break;
+
+    default:
+      break;
+  }
+});
 
   // ======================================
   // FILTER PEMBELIAN YANG MASIH AKTIF
