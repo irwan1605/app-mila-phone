@@ -18,9 +18,7 @@ import { useLocation } from "react-router-dom";
 import { buildFinalNonImeiStock } from "../../../features/FiturPenjualan/nonImeiStock/buildFinalNonImeiStock";
 import { buildFinalImeiStock } from "../../../features/FiturPenjualan/ImeiStock/buildFinalImeiStock";
 import { filterRefundSoldRows } from "../../../features/Refund/BarangRefund";
-import {
-  buildRefundSoldSet,
-} from "../../../features/Refund/BarangRefund";
+import { buildRefundSoldSet } from "../../../features/Refund/BarangRefund";
 
 /* ================= KONSTANTA ================= */
 const KATEGORI_IMEI = ["MOTOR LISTRIK", "SEPEDA LISTRIK", "HANDPHONE"];
@@ -401,33 +399,33 @@ export default function FormItemSection({
     }
 
     // ================= TAMBAH ITEM BARU =================
-   const newItem = {
-  id: Date.now(),
+    const newItem = {
+      id: Date.now(),
 
-  kategoriBarang: "",
+      kategoriBarang: "",
 
-  namaBrand: "",
+      namaBrand: "",
 
-  namaBarang: "",
+      namaBarang: "",
 
-  imei: "",
+      imei: "",
 
-  imeiList: [],
+      imeiList: [],
 
-  qty: 0,
+      qty: 0,
 
-  hargaAktif: 0,
+      hargaAktif: 0,
 
-  skemaHarga: "srp",
+      skemaHarga: "srp",
 
-  hargaMap: {
-    srp: 0,
-    grosir: 0,
-    reseller: 0,
-  },
+      hargaMap: {
+        srp: 0,
+        grosir: 0,
+        reseller: 0,
+      },
 
-  isImei: false,
-};
+      isImei: false,
+    };
 
     safeOnChange([...items, newItem]);
     setEditIndex(items.length); // langsung edit baris baru
@@ -657,8 +655,6 @@ export default function FormItemSection({
       if (finalMap[finalKey]) {
         return;
       }
-
-   
 
       finalMap[finalKey] = {
         ...barangMaster,
@@ -976,7 +972,11 @@ export default function FormItemSection({
 
     allTransaksi.forEach((t) => {
       if (!t) return;
-      if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
+      const status = normalize(t.STATUS);
+
+      if (!["APPROVED", "REFUND"].includes(status)) {
+        return;
+      }
       if (
         String(t.NAMA_TOKO || "").toUpperCase() !==
         String(tokoLogin || "").toUpperCase()
@@ -1504,7 +1504,16 @@ IMEI + NON IMEI
       // 1. NON IMEI
       // 2. IMEI
       // =====================================
-      const finalStockGabungan = universalStockMap || {};
+      const finalStockGabungan = {
+        ...universalStockMap,
+      };
+
+      Object.entries(finalNonImeiStock || {}).forEach(([k, qty]) => {
+        finalStockGabungan[k] = Math.max(
+          Number(finalStockGabungan[k] || 0),
+          Number(qty || 0)
+        );
+      });
 
       Object.entries(finalStockGabungan).forEach(([key, qty]) => {
         // =====================================
@@ -1610,12 +1619,15 @@ IMEI + NON IMEI
             reseller: 0,
           },
 
-          stok: Number(
-            universalStockMap?.[
-              `${normalize(brand)}|${normalize(namaBarang)}`
-            ] ||
-              qty ||
-              0
+          stok: Math.max(
+            Number(
+              getFinalStockBarang({
+                barang: barangFix.namaBarang,
+                brand: barangFix.namaBrand,
+                kategoriBarang: barangFix.kategoriBarang,
+              })
+            ),
+            Number(qty || 0)
           ),
         };
       });

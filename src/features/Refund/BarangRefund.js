@@ -82,28 +82,40 @@ const buildRefundSoldTracker = (transaksi = []) => {
     // NON IMEI
     // ======================
     const skuKey =
-      `${normalizeText(t.NAMA_TOKO)}|` +
-      `${normalizeText(t.NAMA_BRAND)}|` +
-      `${normalizeText(t.NAMA_BARANG)}`;
-
-    if (!tracker[skuKey]) {
-      tracker[skuKey] = {
-        refundQty: 0,
-        soldQty: 0,
-      };
-    }
-
-    if (metode === "REFUND") {
-      tracker[skuKey].refundQty += Number(t.QTY || 0);
-    }
-
-    if (metode === "PENJUALAN") {
-      tracker[skuKey].soldQty += Number(t.QTY || 0);
-
-      if (tracker[skuKey].refundQty > 0) {
-        tracker[skuKey].lastStatus = "REFUND";
-      }
-    }
+    `${normalizeText(t.NAMA_TOKO)}|` +
+    `${normalizeText(t.NAMA_BRAND)}|` +
+    `${normalizeText(t.NAMA_BARANG)}`;
+  
+  if (!tracker[skuKey]) {
+    tracker[skuKey] = {
+      refundQty: 0,
+      soldQty: 0,
+      lastStatus: "",
+    };
+  }
+  
+  // ======================================
+  // DETEKSI SEMUA TIPE REFUND
+  // ======================================
+  const isRefund =
+    metode === "REFUND" ||
+    t.IS_REFUND === true ||
+    String(t.statusPembayaran || "").toUpperCase() === "REFUND";
+  
+  // ======================================
+  // STOCK MASUK DARI REFUND
+  // ======================================
+  if (isRefund) {
+    tracker[skuKey].refundQty += Number(t.QTY || 0);
+    tracker[skuKey].lastStatus = "REFUND";
+  }
+  
+  // ======================================
+  // TERJUAL KEMBALI
+  // ======================================
+  if (metode === "PENJUALAN" && !isRefund) {
+    tracker[skuKey].soldQty += Number(t.QTY || 0);
+  }
   });
 
   return tracker;
