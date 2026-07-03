@@ -265,6 +265,37 @@ export const kurangiStokSetelahPenjualan = async (trx) => {
         SOLD_AT: Date.now(),
         SOLD_BY: trx.invoice,
       });
+
+      // ========================================
+// RESET STATUS REFUND
+// AGAR BISA DIREFUND LAGI
+// ========================================
+
+await update(ref(db, `detail_stock/${imei}`), {
+
+  READY_RESALE: false,
+
+  IS_REFUND: false,
+
+  LAST_ACTION: "PENJUALAN",
+
+  PAYMENT_METODE: "PENJUALAN",
+
+  sold: true,
+
+  status: "SOLD",
+
+  updatedAt: Date.now(),
+
+  updatedAtServer: serverTimestamp(),
+
+});
+
+// ========================================
+// HAPUS LOCK REFUND LAMA
+// ========================================
+
+await remove(ref(db, `imei_refund_lock/${imei}`));
     }
   }
 };

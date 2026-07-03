@@ -134,27 +134,16 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
   // BLOCK DUPLIKAT REFUND
   // ====================================================
 
- 
+  const allowRepeatRefund =
+    fbData?.READY_RESALE === true ||
+    fbData?.IS_REFUND === true ||
+    String(fbData?.LAST_ACTION || fbData?.PAYMENT_METODE || "")
+      .trim()
+      .toUpperCase() === "REFUND";
 
-const allowRepeatRefund =
-  fbData?.READY_RESALE === true ||
-  fbData?.IS_REFUND === true ||
-  String(
-    fbData?.LAST_ACTION ||
-    fbData?.PAYMENT_METODE ||
-    ""
-  )
-    .trim()
-    .toUpperCase() === "REFUND";
-
-if (
-  refundHistorySnap.exists() &&
-  !allowRepeatRefund
-) {
-  throw new Error(
-    "Refund invoice sudah pernah diproses"
-  );
-}
+  if (refundHistorySnap.exists() && !allowRepeatRefund) {
+    throw new Error("Refund invoice sudah pernah diproses");
+  }
 
   // ====================================================
   // SAVE REFUND HISTORY
@@ -275,6 +264,10 @@ if (
           await set(imeiRefundRef, null);
         }
 
+        const refundKey = normalize(trx.invoice);
+
+        await set(ref(db, `refund_history/${refundKey}`), null);
+
         // ============================================
         // BLOCK DOUBLE REFUND IMEI
         // ============================================
@@ -282,17 +275,59 @@ if (
 
         const stockDataCheck = stockSnapCheck.val() || {};
 
+        const lastAction = normalize(
+          stockDataCheck?.LAST_ACTION || stockDataCheck?.PAYMENT_METODE
+        );
+
         const canReuse =
-          stockDataCheck?.READY_RESALE === true ||
-          stockDataCheck?.IS_REFUND === true ||
-          normalize(stockDataCheck?.LAST_ACTION) === "REFUND";
+          (stockDataCheck?.READY_RESALE === true ||
+            stockDataCheck?.IS_REFUND === true ||
+            lastAction === "REFUND") &&
+          lastAction !== "PENJUALAN";
 
-        if (imeiSnap.exists() && !canReuse) {
-          throw new Error(`IMEI ${imei} sudah pernah direfund`);
-        }
+        // ============================================
+        // 🔥 INVOICE OVERRIDE
+        // IMEI BOLEH DIREFUND LAGI JIKA BERASAL
+        // DARI INVOICE BERBEDA
+        // ============================================
 
-        if (imeiSnap.exists() && canReuse) {
-          await set(imeiRefundRef, null);
+        const currentInvoice = normalize(trx.invoice);
+
+        if (imeiSnap.exists()) {
+          const imeiLockData = imeiSnap.val() || {};
+
+          const lockedInvoice = normalize(
+            imeiLockData.invoice || imeiLockData.NO_INVOICE
+          );
+
+          // =====================================
+          // 1. Invoice berbeda
+          // =====================================
+          if (lockedInvoice && lockedInvoice !== currentInvoice) {
+            console.log("♻️ RELEASE LOCK BERBEDA INVOICE", imei);
+
+            await set(imeiRefundRef, null);
+          }
+
+          // =====================================
+          // 2. Invoice sama
+          // =====================================
+          else if (canReuse) {
+            console.log("♻️ READY RESALE RELEASE", imei);
+
+            await set(imeiRefundRef, null);
+          }
+
+          // =====================================
+          // 3. Refresh
+          // =====================================
+          // const checkAgain = await get(imeiRefundRef);
+
+          // if (checkAgain.exists()) {
+          //   throw new Error(
+          //     `IMEI ${imei} pada Invoice ${currentInvoice} sudah pernah direfund`
+          //   );
+          // }
         }
 
         // ============================================
@@ -303,6 +338,8 @@ if (
           imei,
 
           invoice: trx.invoice || "",
+
+          LAST_ACTION: "REFUND",
 
           refundAt: Date.now(),
 
@@ -323,8 +360,7 @@ if (
 
       const qty = Number(item.qty || item.QTY || 0);
 
-      const nonImeiKey =
-      `${refundKey}_${brand}_${barang}_${qty}`;
+      const nonImeiKey = `${refundKey}_${brand}_${barang}_${qty}`;
 
       const nonImeiRef = ref(db, `non_imei_refund_lock/${nonImeiKey}`);
 
@@ -334,37 +370,22 @@ if (
       // BLOCK DOUBLE NON IMEI
       // ============================================
 
-      const nonImeiData =
-      nonImeiSnap.val() || {};
-    
-    const allowRepeatRefund =
-      fbData?.READY_RESALE === true ||
-      fbData?.IS_REFUND === true ||
-      normalize(
-        fbData?.LAST_ACTION ||
-        fbData?.PAYMENT_METODE
-      ) === "REFUND";
-    
-    if (
-      nonImeiSnap.exists() &&
-      !allowRepeatRefund
-    ) {
-      throw new Error(
-        `${barang} sudah pernah direfund`
-      );
-    }
+      const nonImeiData = nonImeiSnap.val() || {};
 
-    if (
-      nonImeiSnap.exists() &&
-      allowRepeatRefund
-    ) {
-      console.log(
-        "♻️ RELEASE NON IMEI LOCK",
-        barang
-      );
-    
-      await set(nonImeiRef, null);
-    }
+      const allowRepeatRefund =
+        fbData?.READY_RESALE === true ||
+        fbData?.IS_REFUND === true ||
+        normalize(fbData?.LAST_ACTION || fbData?.PAYMENT_METODE) === "REFUND";
+
+      if (nonImeiSnap.exists() && !allowRepeatRefund) {
+        throw new Error(`${barang} sudah pernah direfund`);
+      }
+
+      if (nonImeiSnap.exists() && allowRepeatRefund) {
+        console.log("♻️ RELEASE NON IMEI LOCK", barang);
+
+        await set(nonImeiRef, null);
+      }
 
       // ============================================
       // SAVE NON IMEI LOCK
