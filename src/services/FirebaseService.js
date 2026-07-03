@@ -2851,6 +2851,8 @@ export const approveTransferFINAL = async ({ transfer }) => {
         STATUS: "Approved",
 
         CREATED_AT: approvedAt,
+
+        
       });
 
       // 🔺 TRANSFER MASUK
@@ -2946,6 +2948,13 @@ export const approveTransferFINAL = async ({ transfer }) => {
       QTY: safeQty,
 
       PAYMENT_METODE: "TRANSFER_KELUAR",
+
+      OWNER_AKHIR: ke,
+      
+      OWNER_SEBELUM: tokoPengirim,
+      
+      TRANSFER_OWNER: true,
+      
       NAMA_SUPPLIER: finalSupplier,
 
       SYSTEM_PAYMENT: "SYSTEM",
@@ -2976,7 +2985,14 @@ export const approveTransferFINAL = async ({ transfer }) => {
       QTY: safeQty,
 
       PAYMENT_METODE: "TRANSFER_MASUK",
-      NAMA_SUPPLIER: finalSupplier,
+
+OWNER_AKHIR: ke,
+
+OWNER_SEBELUM: tokoPengirim,
+
+TRANSFER_OWNER: true,
+
+NAMA_SUPPLIER: finalSupplier,
 
       SYSTEM_PAYMENT: "SYSTEM",
       STATUS: "Approved",

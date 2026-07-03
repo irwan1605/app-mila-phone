@@ -145,9 +145,20 @@ export const buildFinalImeiStock = ({
     // ======================================
     if (metode === "TRANSFER_REJECT") {
       imeiMap[imei] = {
-        toko: trxToko,
+
+        toko: ownerToko,
+    
         status: "AVAILABLE",
-      };
+    
+        ownerHistory: [
+    
+            ...(imeiMap[imei]?.ownerHistory || []),
+    
+            ownerToko,
+    
+        ],
+    
+    };
     }
 
     // ======================================
