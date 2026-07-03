@@ -36,6 +36,14 @@ export const buildTransferStock = ({ transaksi = [], tokoPengirim = "" }) => {
         delete imeiMap[imei];
       }
 
+      if (metode === "TRANSFER_KELUAR") {
+        delete imeiMap[imei];
+    }
+    
+    if (["PENJUALAN"].includes(metode)) {
+        delete imeiMap[imei];
+    }
+
       return;
     }
 

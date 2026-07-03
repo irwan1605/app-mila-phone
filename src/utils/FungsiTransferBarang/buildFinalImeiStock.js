@@ -46,10 +46,22 @@ export const buildFinalImeiStock = ({
     }
 
     const trxBrand = normalizeText(trx.NAMA_BRAND);
-
     const trxBarang = normalizeText(trx.NAMA_BARANG);
 
     const trxToko = normalizeText(trx.NAMA_TOKO);
+
+    const ownerToko = normalizeText(
+      trx.ke || trx.TOKO_TUJUAN || trx.tokoTujuan || trx.NAMA_TOKO
+    );
+
+    const metode = normalizeText(trx.PAYMENT_METODE);
+
+    if (["TRANSFER_MASUK", "TRANSFER BARANG"].includes(metode)) {
+      imeiMap[imei] = {
+        toko: ownerToko,
+        status: "AVAILABLE",
+      };
+    }
 
     // ======================================
     // 🔥 FILTER BARANG
@@ -60,8 +72,6 @@ export const buildFinalImeiStock = ({
     ) {
       return;
     }
-
-    const metode = normalizeText(trx.PAYMENT_METODE);
 
     // ======================================
     // 🔥 PEMBELIAN
@@ -88,19 +98,46 @@ export const buildFinalImeiStock = ({
     // ======================================
     if (["TRANSFER_MASUK", "TRANSFER BARANG"].includes(metode)) {
       imeiMap[imei] = {
-        toko: trxToko,
+        toko: ownerToko,
         status: "AVAILABLE",
       };
+    }
+
+    if (metode === "TRANSFER_MASUK" && ownerToko === normalizeText(toko)) {
+      imeiMap[imei] = {
+        toko: ownerToko,
+        status: "AVAILABLE",
+        force: true,
+      };
+
+      return;
     }
 
     // ======================================
     // 🔥 TRANSFER KELUAR
     // ======================================
+    // ======================================
+    // 🔥 TRANSFER KELUAR
+    // ======================================
+
     if (["TRANSFER_KELUAR", "TRANSFER BARANG KELUAR"].includes(metode)) {
+      const tujuan =
+        trx.TOKO_TUJUAN ||
+        trx.ke ||
+        trx.tokoTujuan ||
+        trx.tokoPenerima ||
+        trx.NAMA_TOKO;
+
       imeiMap[imei] = {
-        toko: trxToko,
-        status: "OUT",
+        toko: normalizeText(tujuan),
+
+        // JANGAN HILANGKAN STOCK
+        status: "AVAILABLE",
+
+        transfer: true,
       };
+
+      return;
     }
 
     // ======================================

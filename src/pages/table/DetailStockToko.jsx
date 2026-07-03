@@ -771,6 +771,72 @@ export default function DetailStockToko(props) {
       supplierLookup,
     });
 
+    // ===========================================
+    // FORCE HISTORY TRANSFER
+    // ===========================================
+
+    const transferRows = transaksi
+      .filter((t) => {
+        const ownerToko = normalize(
+          t.ke || t.TOKO_TUJUAN || t.tokoTujuan || t.NAMA_TOKO
+        );
+
+        return (
+          String(t.STATUS).toUpperCase() === "APPROVED" &&
+          String(t.PAYMENT_METODE).toUpperCase() === "TRANSFER_MASUK" &&
+          ownerToko === normalize(namaToko)
+        );
+      })
+      .map((t) => ({
+        tanggal: t.TANGGAL_TRANSAKSI,
+
+        noDo: t.NO_SURAT_JALAN || t.NO_INVOICE,
+
+        supplier: t.NAMA_SUPPLIER || "ONLINE NON PKP",
+
+        namaToko: t.ke || t.TOKO_TUJUAN || t.tokoTujuan || t.NAMA_TOKO,
+
+        brand: t.NAMA_BRAND,
+
+        barang: t.NAMA_BARANG,
+
+        imei: t.IMEI,
+
+        qty: 1,
+
+        hargaSRP:
+          masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
+
+        hargaGrosir:
+          masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
+
+        hargaReseller:
+          masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+
+        statusBarang: "TERSEDIA",
+
+        keterangan: "TRANSFER BARANG",
+
+        forceTransferHistory: true,
+      }));
+
+      const mergeTransfer = new Map();
+
+      [
+          ...result,
+          ...transferRows
+      ].forEach((row) => {
+      
+          const key = row.imei
+              ? "IMEI_" + normalizeImei(row.imei)
+              : `${normalize(row.namaToko)}|${normalizeText(row.brand)}|${normalizeText(row.barang)}`;
+      
+          mergeTransfer.set(key, row);
+      
+      });
+      
+      result = [...mergeTransfer.values()];
+
     // ======================================
     // 🔥 HILANGKAN IMEI REFUND YANG SUDAH TERJUAL
     // ======================================
@@ -788,6 +854,75 @@ export default function DetailStockToko(props) {
     result = filterRefundSoldRows({
       rows: result,
       transaksi,
+    });
+
+    // =======================================================
+    // FORCE TAMPILKAN SEMUA TRANSFER MASUK YANG MASIH AKTIF
+    // PATCH BARU
+    // =======================================================
+
+    const transferImei = new Set(
+      result.filter((r) => r.imei).map((r) => normalizeImei(r.imei))
+    );
+
+    transaksi.forEach((trx) => {
+      if (!trx?.IMEI) return;
+
+      if (String(trx.STATUS).toUpperCase() !== "APPROVED") return;
+
+      if (String(trx.PAYMENT_METODE).toUpperCase() !== "TRANSFER_MASUK") return;
+
+      const ownerToko = normalize(
+        trx.ke ||
+        trx.TOKO_TUJUAN ||
+        trx.tokoTujuan ||
+        trx.tokoPenerima ||
+        trx.NAMA_TOKO
+    );
+    
+    if (ownerToko !== normalize(namaToko))
+        return;
+
+      const imei = normalizeImei(trx.IMEI);
+
+      if (transferImei.has(imei)) return;
+
+      result.push({
+        tanggal: trx.TANGGAL_TRANSAKSI || "-",
+
+        noDo: trx.NO_SURAT_JALAN || trx.NO_INVOICE || "-",
+
+        supplier:
+          trx.NAMA_SUPPLIER || supplierLookup?.[imei] || "ONLINE NON PKP",
+
+          namaToko: ownerToko,
+
+        brand: trx.NAMA_BRAND,
+
+        barang: trx.NAMA_BARANG,
+
+        imei: trx.IMEI,
+
+        qty: 1,
+
+        hargaSRP:
+          masterMap?.[`${trx.NAMA_BRAND}|${trx.NAMA_BARANG}`]?.hargaSRP || 0,
+
+        hargaGrosir:
+          masterMap?.[`${trx.NAMA_BRAND}|${trx.NAMA_BARANG}`]?.hargaGrosir || 0,
+
+        hargaReseller:
+          masterMap?.[`${trx.NAMA_BRAND}|${trx.NAMA_BARANG}`]?.hargaReseller ||
+          0,
+
+        statusBarang: "TERSEDIA",
+
+        sumberStock: "TRANSFER",
+
+        keterangan: "TRANSFER BARANG",
+
+        forceTransferHistory: true,
+      });
     });
 
     return result;
@@ -813,12 +948,30 @@ export default function DetailStockToko(props) {
       if (r.imei) {
         const imeiKey = normalizeImei(r.imei);
 
-        finalMap[`IMEI_${imeiKey}`] = {
-          ...r,
+        const key = `IMEI_${normalizeImei(r.imei)}`;
 
-          qty: 1,
-
-          statusBarang: Number(r.qty || 0) > 0 ? "TERSEDIA" : "HABIS",
+        if (
+            finalMap[key]?.forceTransferHistory &&
+            !r.forceTransferHistory
+        ){
+            return;
+        }
+        
+        if (r.forceTransferHistory){
+            finalMap[key]={
+                ...r,
+                qty:1,
+                statusBarang:"TERSEDIA"
+            };
+            return;
+        }
+        
+        finalMap[key]={
+            ...r,
+            qty:1,
+            statusBarang:Number(r.qty)>0
+                ?"TERSEDIA"
+                :"HABIS"
         };
 
         return;
@@ -906,6 +1059,67 @@ export default function DetailStockToko(props) {
             : finalMap[skuKey].keterangan || "-",
         };
       }
+    });
+
+    // ======================================================
+    // PATCH FINAL
+    // FORCE TAMPILKAN TRANSFER MASUK
+    // ======================================================
+
+    transaksi.forEach((t) => {
+      if (!t?.IMEI) return;
+
+      if (String(t.STATUS).toUpperCase() !== "APPROVED") return;
+
+      if (String(t.PAYMENT_METODE).toUpperCase() !== "TRANSFER_MASUK") return;
+
+      const ownerToko = normalize(
+        t.ke ||
+        t.TOKO_TUJUAN ||
+        t.tokoTujuan ||
+        t.tokoPenerima ||
+        t.NAMA_TOKO
+    );
+    
+    if (ownerToko !== normalize(namaToko))
+        return;
+
+      const key = "IMEI_" + normalizeImei(t.IMEI);
+
+      if (finalMap[key]) return;
+
+      finalMap[key] = {
+        tanggal: t.TANGGAL_TRANSAKSI,
+
+        noDo: t.NO_SURAT_JALAN || t.NO_INVOICE,
+
+        supplier: t.NAMA_SUPPLIER,
+
+        namaToko: ownerToko,
+
+        brand: t.NAMA_BRAND,
+
+        barang: t.NAMA_BARANG,
+
+        imei: t.IMEI,
+
+        qty: 1,
+
+        hargaSRP:
+          masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
+
+        hargaGrosir:
+          masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
+
+        hargaReseller:
+          masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+
+        statusBarang: "TERSEDIA",
+
+        keterangan: "TRANSFER BARANG",
+
+        sumberStock: "TRANSFER",
+      };
     });
 
     return Object.values(finalMap).filter((r) => {

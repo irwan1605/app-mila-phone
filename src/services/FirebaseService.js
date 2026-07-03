@@ -2838,6 +2838,13 @@ export const approveTransferFINAL = async ({ transfer }) => {
         QTY: 1,
 
         PAYMENT_METODE: "TRANSFER_KELUAR",
+
+        OWNER_AKHIR: ke,
+        
+        OWNER_SEBELUM: tokoPengirim,
+        
+        TRANSFER_OWNER: true,
+        
         NAMA_SUPPLIER: finalSupplier,
 
         SYSTEM_PAYMENT: "SYSTEM",
@@ -2876,6 +2883,13 @@ export const approveTransferFINAL = async ({ transfer }) => {
         QTY: 1,
 
         PAYMENT_METODE: "TRANSFER_MASUK",
+
+        OWNER_AKHIR: ke,
+        
+        OWNER_SEBELUM: tokoPengirim,
+        
+        TRANSFER_OWNER: true,
+        
         NAMA_SUPPLIER: finalSupplier,
 
         // =====================================
