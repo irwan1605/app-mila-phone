@@ -355,23 +355,31 @@ export const buildFinalStockRows = ({
           String(t.IS_REFUND_TRANSFER || "").toUpperCase() === "TRUE");
 
       // ======================================
-      // JANGAN TIMPA OWNER TERBARU
-      // ======================================
-      // ======================================
-      // 🔥 HANYA OWNER TERAKHIR YANG BOLEH TAMPIL
+      // FINAL OWNER ENTERPRISE
+      // HANYA OWNER TERAKHIR YANG BOLEH MUNCUL
       // ======================================
 
       const latestOwner = finalOwnerTracker[imei];
 
       if (!latestOwner) {
-        return;
-      }
-
-      if (normalize(latestOwner.toko) !== normalize(ownerToko)) {
         delete map[imei];
-
         return;
       }
+
+      // sudah terjual
+      if (latestOwner.active === false) {
+        delete map[imei];
+        return;
+      }
+
+      // bukan owner terakhir
+      if (normalize(latestOwner.toko) !== normalize(namaToko)) {
+        delete map[imei];
+        return;
+      }
+
+      // paksa selalu mengikuti owner terakhir
+      owner.toko = latestOwner.toko;
 
       map[imei] = {
         tanggal: t.TANGGAL_TRANSAKSI || "-",
@@ -801,6 +809,49 @@ export const buildFinalStockRows = ({
       delete map[key];
     }
   });
+
+  // ====================================================
+// FINAL TRANSFER OWNER
+// HANYA TRANSFER APPROVED TERAKHIR
+// ====================================================
+
+Object.keys(map).forEach((key) => {
+
+    const row = map[key];
+
+    if (!row?.imei) return;
+
+    const imei = normalizeImei(row.imei);
+
+    const owner = finalOwnerTracker[imei];
+
+    if (!owner) {
+        delete map[key];
+        return;
+    }
+
+    if (!owner.active) {
+        delete map[key];
+        return;
+    }
+
+    if (
+        normalize(row.namaToko) !==
+        normalize(owner.toko)
+    ) {
+        delete map[key];
+        return;
+    }
+
+    // sinkronkan data owner terakhir
+    row.namaToko = owner.toko;
+
+    row.keterangan =
+        owner.metode === "TRANSFER_KELUAR"
+            ? "TRANSFER BARANG"
+            : row.keterangan;
+
+});
 
   // =======================================================
   // 🔥 FINAL OWNER SYNC
