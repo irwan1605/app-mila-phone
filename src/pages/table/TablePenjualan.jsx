@@ -318,6 +318,7 @@ export default function TablePenjualan({ data = [] }) {
   /* ================= FLATTEN DATA ================= */
   const tableRows = useMemo(() => {
     const map = {};
+    
 
     // ======================================
     // 🔥 CLEAR REFUND CACHE
@@ -326,7 +327,67 @@ export default function TablePenjualan({ data = [] }) {
       delete map[k];
     });
 
-    (rows || []).forEach((trx) => {
+    // ======================================================
+// FIX TRANSAKSI TERAKHIR YANG BELUM MASUK REALTIME
+// ======================================================
+const safeRows = (() => {
+
+  const invoiceMap = new Map();
+
+  (rows || []).forEach((trx) => {
+
+      if (!trx) return;
+
+      const invoice = String(
+          trx.invoice ||
+          trx.NO_INVOICE ||
+          ""
+      ).trim();
+
+      if (!invoice) return;
+
+      const old = invoiceMap.get(invoice);
+
+      if (!old) {
+          invoiceMap.set(invoice, trx);
+          return;
+      }
+
+      const oldItems = Array.isArray(old.items)
+          ? old.items.length
+          : 0;
+
+      const newItems = Array.isArray(trx.items)
+          ? trx.items.length
+          : 0;
+
+      // pilih data yang itemnya paling lengkap
+      if (newItems > oldItems) {
+          invoiceMap.set(invoice, trx);
+          return;
+      }
+
+      // jika item sama pilih createdAt terbaru
+      if (
+          Number(trx.createdAt || 0) >
+          Number(old.createdAt || 0)
+      ) {
+          invoiceMap.set(invoice, trx);
+      }
+
+  });
+
+  return [...invoiceMap.values()]
+      .sort(
+          (a, b) =>
+              Number(b.createdAt || 0) -
+              Number(a.createdAt || 0)
+      );
+
+})();
+
+safeRows.forEach((trx) => {
+      
       // ======================================
       // 🔥 BLOCK SEMUA DATA REFUND
       // ======================================
