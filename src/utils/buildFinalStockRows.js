@@ -1,5 +1,7 @@
 // src/utils/buildFinalStockRows.js
 
+import { buildFinalNonImeiStock } from "./FungsiTransferBarang/buildFinalNonImeiStock";
+
 export const normalize = (v) =>
   String(v || "")
     .trim()
@@ -32,6 +34,8 @@ export const buildFinalStockRows = ({
   // 🔥 FINAL OWNER TRACKER
   // ======================================
   const finalOwnerTracker = {};
+
+  const finalImeiOwner = {};
 
   const sorted = [...transaksi].sort(
     (a, b) =>
@@ -120,6 +124,54 @@ export const buildFinalStockRows = ({
         toko: t.NAMA_TOKO || "-",
         active: false,
       };
+
+      // if (!t.IMEI) return;
+
+      // const imei = normalizeImei(t.IMEI);
+
+      // const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+      // const status = String(t.STATUS || "").toUpperCase();
+
+      // if (!["APPROVED", "REFUND"].includes(status)) return;
+
+      // =============================
+      // STOCK MASUK
+      // =============================
+      if (
+        [
+          "PEMBELIAN",
+          "TRANSFER_MASUK",
+          "REFUND",
+          "TRANSFER_REJECT",
+          "VOID OPNAME",
+        ].includes(metode)
+      ) {
+        finalImeiOwner[imei] = normalize(
+          t.OWNER_AKHIR ||
+            t.ke ||
+            t.TOKO_TUJUAN ||
+            t.tokoTujuan ||
+            t.tokoPenerima ||
+            t.NAMA_TOKO
+        );
+      }
+
+      // =============================
+      // TRANSFER KELUAR
+      // =============================
+      if (metode === "TRANSFER_KELUAR") {
+        finalImeiOwner[imei] = normalize(
+          t.TOKO_TUJUAN || t.ke || t.tokoTujuan || t.tokoPenerima
+        );
+      }
+
+      // =============================
+      // TERJUAL
+      // =============================
+      if (metode === "PENJUALAN") {
+        delete finalImeiOwner[imei];
+      }
     }
   });
 
@@ -167,55 +219,45 @@ export const buildFinalStockRows = ({
         metode === "TRANSFER_MASUK" &&
         status === "APPROVED" &&
         ownerToko === normalize(namaToko)
-    ) {
-    
+      ) {
         map[imei] = {
-    
-            tanggal: t.TANGGAL_TRANSAKSI || "-",
-    
-            noDo: t.NO_SURAT_JALAN || t.NO_INVOICE || "-",
-    
-            supplier:
-                t.NAMA_SUPPLIER ||
-                supplierLookup?.[imei] ||
-                "ONLINE NON PKP",
-    
-            namaToko: ownerToko,
-    
-            brand: t.NAMA_BRAND,
-    
-            barang: t.NAMA_BARANG,
-    
-            imei,
-    
-            qty: 1,
-    
-            hargaSRP:
-                masterMap?.[
-                    `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
-                ]?.hargaSRP || 0,
-    
-            hargaGrosir:
-                masterMap?.[
-                    `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
-                ]?.hargaGrosir || 0,
-    
-            hargaReseller:
-                masterMap?.[
-                    `${t.NAMA_BRAND}|${t.NAMA_BARANG}`
-                ]?.hargaReseller || 0,
-    
-            statusBarang: "TERSEDIA",
-    
-            sumberStock: "TRANSFER",
-    
-            keterangan: "TRANSFER BARANG",
-    
-            __FORCE_TRANSFER__: true,
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
+
+          noDo: t.NO_SURAT_JALAN || t.NO_INVOICE || "-",
+
+          supplier:
+            t.NAMA_SUPPLIER || supplierLookup?.[imei] || "ONLINE NON PKP",
+
+          namaToko: ownerToko,
+
+          brand: t.NAMA_BRAND,
+
+          barang: t.NAMA_BARANG,
+
+          imei,
+
+          qty: 1,
+
+          hargaSRP:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
+
+          hargaGrosir:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
+
+          hargaReseller:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+
+          statusBarang: "TERSEDIA",
+
+          sumberStock: "TRANSFER",
+
+          keterangan: "TRANSFER BARANG",
+
+          __FORCE_TRANSFER__: true,
         };
-    
+
         // JANGAN RETURN
-    }
+      }
       // ======================================
       // 🔥 FINAL OWNER
       // ======================================
@@ -255,26 +297,16 @@ export const buildFinalStockRows = ({
       // 🔥 VALIDASI OWNER FINAL
       // ======================================
       const finalOwnerToko = normalize(
-
         owner?.toko ||
-    
-        ownerToko ||
-    
-        currentToko ||
-    
-        t.OWNER_AKHIR ||
-    
-        t.ke ||
-    
-        t.TOKO_TUJUAN ||
-    
-        t.tokoTujuan ||
-    
-        t.tokoPenerima ||
-    
-        t.NAMA_TOKO
-    
-    );
+          ownerToko ||
+          currentToko ||
+          t.OWNER_AKHIR ||
+          t.ke ||
+          t.TOKO_TUJUAN ||
+          t.tokoTujuan ||
+          t.tokoPenerima ||
+          t.NAMA_TOKO
+      );
 
       // ======================================
       // JIKA OWNER BELUM ADA
@@ -307,15 +339,15 @@ export const buildFinalStockRows = ({
       if (!owner.active) {
         delete map[imei];
         return;
-    }
-    
-    if (
+      }
+
+      if (
         metode !== "TRANSFER_MASUK" &&
         normalize(owner.toko) !== normalize(namaToko)
-    ) {
+      ) {
         delete map[imei];
         return;
-    }
+      }
 
       // ======================================
       // 🔥 STOCK KELUAR
@@ -327,8 +359,6 @@ export const buildFinalStockRows = ({
         delete map[imei];
         return;
       }
-
-   
 
       // ======================================
       // 🔥 DETECT TRANSFER REFUND
@@ -342,26 +372,21 @@ export const buildFinalStockRows = ({
       // ======================================
       // JANGAN TIMPA OWNER TERBARU
       // ======================================
-     // ======================================
-// 🔥 HANYA OWNER TERAKHIR YANG BOLEH TAMPIL
-// ======================================
+      // ======================================
+      // 🔥 HANYA OWNER TERAKHIR YANG BOLEH TAMPIL
+      // ======================================
 
-const latestOwner = finalOwnerTracker[imei];
+      const latestOwner = finalOwnerTracker[imei];
 
-if (!latestOwner) {
-    return;
-}
+      if (!latestOwner) {
+        return;
+      }
 
-if (
-    normalize(latestOwner.toko) !==
-    normalize(ownerToko)
-){
+      if (normalize(latestOwner.toko) !== normalize(ownerToko)) {
+        delete map[imei];
 
-    delete map[imei];
-
-    return;
-
-}
+        return;
+      }
 
       map[imei] = {
         tanggal: t.TANGGAL_TRANSAKSI || "-",
@@ -411,22 +436,22 @@ if (
     // ======================================
     // 🔥 NON IMEI
     // ======================================
-   // ======================================
-// 🔥 FINAL OWNER NON IMEI
-// ======================================
-const ownerToko = normalize(
-  t.OWNER_AKHIR ||
-  t.ke ||
-  t.TOKO_TUJUAN ||
-  t.tokoTujuan ||
-  t.tokoPenerima ||
-  t.NAMA_TOKO
-);
+    // ======================================
+    // 🔥 FINAL OWNER NON IMEI
+    // ======================================
+    const ownerToko = normalize(
+      t.OWNER_AKHIR ||
+        t.ke ||
+        t.TOKO_TUJUAN ||
+        t.tokoTujuan ||
+        t.tokoPenerima ||
+        t.NAMA_TOKO
+    );
 
-const skuKey =
-  `${ownerToko}|` +
-  `${normalizeText(t.NAMA_BRAND)}|` +
-  `${normalizeText(t.NAMA_BARANG)}`;
+    const skuKey =
+      `${ownerToko}|` +
+      `${normalizeText(t.NAMA_BRAND)}|` +
+      `${normalizeText(t.NAMA_BARANG)}`;
 
     if (!map[skuKey]) {
       map[skuKey] = {
@@ -447,7 +472,7 @@ const skuKey =
           ] ||
           "-",
 
-          namaToko: ownerToko,
+        namaToko: ownerToko,
 
         brand: t.NAMA_BRAND || "-",
 
@@ -543,60 +568,125 @@ const skuKey =
     }
 
     // ======================================
-// 🔥 ENGINE PINDAH OWNER NON IMEI
-// TRANSFER BOLEH BERKALI-KALI
-// ======================================
-if (metode === "TRANSFER_KELUAR") {
+    // 🔥 ENGINE PINDAH OWNER NON IMEI
+    // TRANSFER BOLEH BERKALI-KALI
+    // ======================================
+    // ======================================
+    // 🔥 ENGINE PINDAH OWNER NON IMEI
+    // ======================================
+    if (metode === "TRANSFER_KELUAR") {
+      const tujuan = normalize(
+        t.OWNER_AKHIR || t.ke || t.TOKO_TUJUAN || t.tokoTujuan || t.tokoPenerima
+      );
 
-  const tujuan = normalize(
-      t.OWNER_AKHIR ||
-      t.ke ||
-      t.TOKO_TUJUAN ||
-      t.tokoTujuan ||
-      t.tokoPenerima
-  );
+      const oldKey =
+        `${normalize(
+          t.OWNER_SEBELUM || t.tokoPengirim || t.dari || t.NAMA_TOKO
+        )}|` +
+        `${normalizeText(t.NAMA_BRAND)}|` +
+        `${normalizeText(t.NAMA_BARANG)}`;
 
-  const oldKey =
-      `${normalize(t.NAMA_TOKO)}|` +
-      `${normalizeText(t.NAMA_BRAND)}|` +
-      `${normalizeText(t.NAMA_BARANG)}`;
+      const newKey =
+        `${tujuan}|` +
+        `${normalizeText(t.NAMA_BRAND)}|` +
+        `${normalizeText(t.NAMA_BARANG)}`;
 
-  const newKey =
-      `${tujuan}|` +
-      `${normalizeText(t.NAMA_BRAND)}|` +
-      `${normalizeText(t.NAMA_BARANG)}`;
+      const qty = Math.abs(Number(t.QTY || 0));
 
-  if (!map[newKey]) {
+      if (!map[oldKey]) {
+        map[oldKey] = {
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
 
-      map[newKey] = {
+          noDo: t.NO_SURAT_JALAN || t.NO_INVOICE || "-",
 
-          ...map[oldKey],
+          supplier:
+            t.NAMA_SUPPLIER || supplierLookup?.[newKey] || "ONLINE NON PKP",
 
-          namaToko: tujuan,
+          namaToko: normalize(
+            t.OWNER_SEBELUM || t.tokoPengirim || t.dari || t.NAMA_TOKO
+          ),
+
+          brand: t.NAMA_BRAND || "-",
+
+          barang: t.NAMA_BARANG || "-",
+
+          imei: "",
 
           qty: 0,
 
-      };
+          hargaSRP:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
 
-  }
+          hargaGrosir:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
 
-  map[newKey].qty += Math.abs(Number(t.QTY || 0));
+          hargaReseller:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
 
-  map[oldKey].qty -= Math.abs(Number(t.QTY || 0));
+          statusBarang: "TERSEDIA",
 
-}
+          keterangan: "TRANSFER BARANG",
+        };
+      }
+
+      map[oldKey].qty = Math.max(0, Number(map[oldKey].qty || 0) - qty);
+
+      if (map[oldKey].qty === 0) {
+        delete map[oldKey];
+      }
+
+      if (!map[newKey]) {
+        map[newKey] = {
+          ...(map[oldKey] || {}),
+
+          tanggal: t.TANGGAL_TRANSAKSI || "-",
+
+          noDo: t.NO_SURAT_JALAN || t.NO_INVOICE || "-",
+
+          supplier:
+            t.NAMA_SUPPLIER ||
+            supplierLookup?.[newKey] ||
+            supplierLookup?.[
+              `${normalizeText(t.NAMA_BRAND)}|${normalizeText(t.NAMA_BARANG)}`
+            ] ||
+            "ONLINE NON PKP",
+
+          namaToko: tujuan,
+
+          brand: t.NAMA_BRAND || "-",
+
+          barang: t.NAMA_BARANG || "-",
+
+          imei: "",
+
+          qty: 0,
+
+          hargaSRP:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
+
+          hargaGrosir:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaGrosir || 0,
+
+          hargaReseller:
+            masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaReseller || 0,
+
+          statusBarang: "TERSEDIA",
+
+          keterangan: "TRANSFER BARANG",
+        };
+      }
+
+      map[newKey].qty += qty;
+    }
 
     // ======================================
     // 🔥 STOCK KELUAR
     // ======================================
-    if (
-      ["PENJUALAN", "TRANSFER_KELUAR", "REJECT", "STOK OPNAME"].includes(metode)
-    ) {
+
+    if (["PENJUALAN", "REJECT", "STOK OPNAME"].includes(metode)) {
       map[skuKey].qty -= Math.abs(Number(t.QTY || 0));
     }
   });
-
-  
 
   // ==========================================================
   // 🔥 PATCH ENTERPRISE
@@ -649,23 +739,17 @@ if (metode === "TRANSFER_KELUAR") {
       return;
     }
 
-    Object.keys(map).forEach((key)=>{
+    Object.keys(map).forEach((key) => {
+      if (key === imei) return;
 
-      if(key===imei) return;
-  
-      const row=map[key];
-  
-      if(!row) return;
-  
-      if(
-          normalizeImei(row.imei)===imei
-      ){
-  
-          delete map[key];
-  
+      const row = map[key];
+
+      if (!row) return;
+
+      if (normalizeImei(row.imei) === imei) {
+        delete map[key];
       }
-  
-  });
+    });
 
     map[imei] = {
       tanggal: trx.TANGGAL_TRANSAKSI || "-",
@@ -703,59 +787,106 @@ if (metode === "TRANSFER_KELUAR") {
     };
   });
 
+  Object.keys(map).forEach((key) => {
+    const row = map[key];
+
+    if (!row?.imei) {
+      if (Number(row.qty) <= 0) {
+        delete map[key];
+      }
+    }
+  });
+
   // =======================================================
-// 🔥 FINAL OWNER SYNC NON IMEI
-// =======================================================
+  // 🔥 FINAL OWNER SYNC NON IMEI
+  // =======================================================
 
-Object.keys(map).forEach((key) => {
+  Object.keys(map).forEach((key) => {
+    const row = map[key];
 
-  const row = map[key];
+    if (row?.imei) return;
 
-  if (row?.imei) return;
+    const owner = normalize(row.namaToko);
 
-  const owner = normalize(row.namaToko);
+    const currentKey = `${owner}|${normalizeText(row.brand)}|${normalizeText(
+      row.barang
+    )}`;
 
-  const currentKey =
-      `${owner}|${normalizeText(row.brand)}|${normalizeText(row.barang)}`;
-
-  if (key !== currentKey) {
-
+    if (key !== currentKey) {
       delete map[key];
-
-  }
-
-});
+    }
+  });
 
   // =======================================================
-// 🔥 FINAL OWNER SYNC
-// IMEI HANYA BOLEH ADA DI SATU TOKO
-// =======================================================
+  // 🔥 FINAL OWNER SYNC
+  // IMEI HANYA BOLEH ADA DI SATU TOKO
+  // =======================================================
 
-Object.keys(map).forEach((key) => {
+  Object.keys(map).forEach((key) => {
+    const row = map[key];
 
-  const row = map[key];
+    if (!row?.imei) return;
 
-  if (!row?.imei) return;
+    const imei = normalizeImei(row.imei);
 
-  const imei = normalizeImei(row.imei);
+    const owner = finalOwnerTracker[imei];
 
-  const owner = finalOwnerTracker[imei];
+    if (!owner) return;
 
-  if (!owner) return;
-
-  // bukan owner terakhir
-  if (normalize(row.namaToko) !== normalize(owner.toko)) {
-
+    // bukan owner terakhir
+    if (normalize(row.namaToko) !== normalize(owner.toko)) {
       delete map[key];
 
       return;
+    }
 
-  }
+    // pastikan nama toko mengikuti owner terakhir
+    row.namaToko = owner.toko;
+  });
 
-  // pastikan nama toko mengikuti owner terakhir
-  row.namaToko = owner.toko;
+  // =====================================================
+  // FINAL RECALCULATE NON IMEI
+  // SATUKAN DENGAN ENGINE STOCK OPNAME
+  // =====================================================
 
-});
+  Object.keys(map).forEach((key) => {
+    const row = map[key];
+
+    if (!row) return;
+
+    // hanya NON IMEI
+    if (row.imei) return;
+
+    row.qty = buildFinalNonImeiStock({
+      transaksi: sorted,
+      toko: row.namaToko,
+      brand: row.brand,
+      barang: row.barang,
+    });
+
+    // jika sudah habis jangan tampil
+    if (row.qty <= 0) {
+      delete map[key];
+    }
+  });
+
+  Object.keys(map).forEach((key) => {
+    const row = map[key];
+
+    if (!row?.imei) return;
+
+    const owner = finalImeiOwner[normalizeImei(row.imei)];
+
+    if (!owner) {
+      delete map[key];
+
+      return;
+    }
+
+    if (normalize(row.namaToko) !== owner) {
+      delete map[key];
+    }
+  });
 
   // ======================================
   // 🔥 FINAL CLEAN

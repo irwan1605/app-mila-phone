@@ -15,6 +15,7 @@ import {
   FaCashRegister,
 } from "react-icons/fa";
 import { buildFinalStockRows } from "../../utils/buildFinalStockRows";
+import { buildFinalNonImeiStock } from "../../utils/FungsiTransferBarang/buildFinalNonImeiStock";
 import { exportStockExcel } from "../../utils/stock/exportStockExcel";
 import { filterExportRows } from "../../utils/stock/filterExportRows";
 import { filterRefundSoldRows } from "../../features/Refund/BarangRefund";
@@ -802,8 +803,7 @@ export default function DetailStockToko(props) {
 
         imei: t.IMEI,
 
-        qty: 1,
-
+        qty: t.IMEI ? 1 : Number(t.QTY || t.qty || 0),
         hargaSRP:
           masterMap?.[`${t.NAMA_BRAND}|${t.NAMA_BARANG}`]?.hargaSRP || 0,
 
@@ -820,22 +820,19 @@ export default function DetailStockToko(props) {
         forceTransferHistory: true,
       }));
 
-      const mergeTransfer = new Map();
+    const mergeTransfer = new Map();
 
-      [
-          ...result,
-          ...transferRows
-      ].forEach((row) => {
-      
-          const key = row.imei
-              ? "IMEI_" + normalizeImei(row.imei)
-              : `${normalize(row.namaToko)}|${normalizeText(row.brand)}|${normalizeText(row.barang)}`;
-      
-          mergeTransfer.set(key, row);
-      
-      });
-      
-      result = [...mergeTransfer.values()];
+    [...result, ...transferRows].forEach((row) => {
+      const key = row.imei
+        ? "IMEI_" + normalizeImei(row.imei)
+        : `${normalize(row.namaToko)}|${normalizeText(
+            row.brand
+          )}|${normalizeText(row.barang)}`;
+
+      mergeTransfer.set(key, row);
+    });
+
+    result = [...mergeTransfer.values()];
 
     // ======================================
     // 🔥 HILANGKAN IMEI REFUND YANG SUDAH TERJUAL
@@ -874,14 +871,13 @@ export default function DetailStockToko(props) {
 
       const ownerToko = normalize(
         trx.ke ||
-        trx.TOKO_TUJUAN ||
-        trx.tokoTujuan ||
-        trx.tokoPenerima ||
-        trx.NAMA_TOKO
-    );
-    
-    if (ownerToko !== normalize(namaToko))
-        return;
+          trx.TOKO_TUJUAN ||
+          trx.tokoTujuan ||
+          trx.tokoPenerima ||
+          trx.NAMA_TOKO
+      );
+
+      if (ownerToko !== normalize(namaToko)) return;
 
       const imei = normalizeImei(trx.IMEI);
 
@@ -895,7 +891,7 @@ export default function DetailStockToko(props) {
         supplier:
           trx.NAMA_SUPPLIER || supplierLookup?.[imei] || "ONLINE NON PKP",
 
-          namaToko: ownerToko,
+        namaToko: ownerToko,
 
         brand: trx.NAMA_BRAND,
 
@@ -950,28 +946,23 @@ export default function DetailStockToko(props) {
 
         const key = `IMEI_${normalizeImei(r.imei)}`;
 
-        if (
-            finalMap[key]?.forceTransferHistory &&
-            !r.forceTransferHistory
-        ){
-            return;
+        if (finalMap[key]?.forceTransferHistory && !r.forceTransferHistory) {
+          return;
         }
-        
-        if (r.forceTransferHistory){
-            finalMap[key]={
-                ...r,
-                qty:1,
-                statusBarang:"TERSEDIA"
-            };
-            return;
-        }
-        
-        finalMap[key]={
+
+        if (r.forceTransferHistory) {
+          finalMap[key] = {
             ...r,
-            qty:1,
-            statusBarang:Number(r.qty)>0
-                ?"TERSEDIA"
-                :"HABIS"
+            qty: 1,
+            statusBarang: "TERSEDIA",
+          };
+          return;
+        }
+
+        finalMap[key] = {
+          ...r,
+          qty: 1,
+          statusBarang: Number(r.qty) > 0 ? "TERSEDIA" : "HABIS",
         };
 
         return;
@@ -984,6 +975,13 @@ export default function DetailStockToko(props) {
         `${normalize(r.namaToko)}|` +
         `${normalizeText(r.brand)}|` +
         `${normalizeText(r.barang)}`;
+
+      const finalQty = buildFinalNonImeiStock({
+        transaksi,
+        toko: r.namaToko,
+        brand: r.brand,
+        barang: r.barang,
+      });
 
       if (!finalMap[skuKey]) {
         finalMap[skuKey] = {
@@ -1003,7 +1001,7 @@ export default function DetailStockToko(props) {
 
           imei: r.imei || "",
 
-          qty: Number(r.qty || 0),
+          qty: finalQty,
 
           hargaSRP:
             masterMap?.[`${r.brand}|${r.barang}`]?.hargaSRP || r.hargaSRP || 0,
@@ -1018,7 +1016,7 @@ export default function DetailStockToko(props) {
             r.hargaReseller ||
             0,
 
-          statusBarang: Number(r.qty || 0) > 0 ? "TERSEDIA" : "HABIS",
+          statusBarang: finalQty > 0 ? "TERSEDIA" : "HABIS",
 
           keterangan: String(r.keterangan || "")
             .toUpperCase()
@@ -1039,7 +1037,7 @@ export default function DetailStockToko(props) {
 
           supplier: r.supplier || finalMap[skuKey].supplier,
 
-          qty: Math.max(Number(finalMap[skuKey].qty || 0), Number(r.qty || 0)),
+          qty: finalQty,
 
           hargaSRP: r.hargaSRP || finalMap[skuKey].hargaSRP || 0,
 
@@ -1047,7 +1045,7 @@ export default function DetailStockToko(props) {
 
           hargaReseller: r.hargaReseller || finalMap[skuKey].hargaReseller || 0,
 
-          statusBarang: Number(r.qty || 0) > 0 ? "TERSEDIA" : "HABIS",
+          statusBarang: finalQty > 0 ? "TERSEDIA" : "HABIS",
 
           // ======================================
           // 🔥 REFUND PRIORITAS
@@ -1074,15 +1072,10 @@ export default function DetailStockToko(props) {
       if (String(t.PAYMENT_METODE).toUpperCase() !== "TRANSFER_MASUK") return;
 
       const ownerToko = normalize(
-        t.ke ||
-        t.TOKO_TUJUAN ||
-        t.tokoTujuan ||
-        t.tokoPenerima ||
-        t.NAMA_TOKO
-    );
-    
-    if (ownerToko !== normalize(namaToko))
-        return;
+        t.ke || t.TOKO_TUJUAN || t.tokoTujuan || t.tokoPenerima || t.NAMA_TOKO
+      );
+
+      if (ownerToko !== normalize(namaToko)) return;
 
       const key = "IMEI_" + normalizeImei(t.IMEI);
 
@@ -1121,6 +1114,35 @@ export default function DetailStockToko(props) {
         sumberStock: "TRANSFER",
       };
     });
+
+    // ======================================
+// 🔥 SYNC NON IMEI DENGAN STOCK OPNAME
+// ======================================
+
+Object.values(finalMap).forEach((row) => {
+
+  if (row.imei) return;
+
+  row.qty = buildFinalNonImeiStock({
+      transaksi,
+      toko: row.namaToko,
+      brand: row.brand,
+      barang: row.barang,
+  });
+
+  row.statusBarang =
+      row.qty > 0
+          ? "TERSEDIA"
+          : "HABIS";
+
+  if (
+      String(row.keterangan)
+          .toUpperCase()
+          .includes("TRANSFER")
+  ) {
+      row.keterangan = "TRANSFER BARANG";
+  }
+});
 
     return Object.values(finalMap).filter((r) => {
       // ======================================
