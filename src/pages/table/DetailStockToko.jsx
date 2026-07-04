@@ -929,25 +929,17 @@ export default function DetailStockToko(props) {
       });
     });
 
-    result = result.filter((row)=>{
+    result = result.filter((row) => {
+      if (!row.imei) return true;
 
-      if(!row.imei) return true;
-  
-      const owner =
-          finalOwnerTracker[
-              normalizeImei(row.imei)
-          ];
-  
-      if(!owner) return false;
-  
-      if(!owner.active) return false;
-  
-      return (
-          normalize(owner.toko) ===
-          normalize(row.namaToko)
-      );
-  
-  });
+      const owner = finalOwnerTracker[normalizeImei(row.imei)];
+
+      if (!owner) return false;
+
+      if (!owner.active) return false;
+
+      return normalize(owner.toko) === normalize(row.namaToko);
+    });
 
     return result;
   }, [
@@ -1151,6 +1143,96 @@ export default function DetailStockToko(props) {
 
         sumberStock: "TRANSFER",
       };
+    });
+
+    // ======================================
+    // 🔥 PATCH FINAL OWNER ENTERPRISE
+    // SATU IMEI = SATU OWNER AKHIR
+    // ======================================
+
+    const ownerMap = {};
+
+    // ======================================
+    // BUILD OWNER TERAKHIR BERDASARKAN HISTORI
+    // ======================================
+    transaksi
+      .sort((a, b) => new Date(a.CREATED_AT || 0) - new Date(b.CREATED_AT || 0))
+      .forEach((t) => {
+        if (!t?.IMEI) return;
+
+        const imei = normalizeImei(t.IMEI);
+
+        const metode = String(t.PAYMENT_METODE || "").toUpperCase();
+
+        const status = String(t.STATUS || "").toUpperCase();
+
+        if (!["APPROVED", "REFUND"].includes(status)) return;
+
+        // ===============================
+        // STOCK MASUK
+        // ===============================
+        if (
+          [
+            "PEMBELIAN",
+            "TRANSFER_MASUK",
+            "REFUND",
+            "TRANSFER_REJECT",
+            "VOID OPNAME",
+          ].includes(metode)
+        ) {
+          ownerMap[imei] = normalize(
+            t.OWNER_AKHIR ||
+              t.ke ||
+              t.TOKO_TUJUAN ||
+              t.tokoTujuan ||
+              t.tokoPenerima ||
+              t.NAMA_TOKO
+          );
+        }
+
+        // ===============================
+        // TRANSFER KELUAR
+        // OWNER PINDAH KE TOKO TUJUAN
+        // ===============================
+        if (metode === "TRANSFER_KELUAR") {
+          ownerMap[imei] = normalize(
+            t.TOKO_TUJUAN || t.ke || t.tokoTujuan || t.tokoPenerima
+          );
+        }
+
+        // ===============================
+        // PENJUALAN
+        // HILANG DARI STOK
+        // ===============================
+        if (metode === "PENJUALAN") {
+          delete ownerMap[imei];
+        }
+      });
+
+    // ======================================
+    // VALIDASI FINAL OWNER
+    // ======================================
+
+    Object.values(finalMap).forEach((row) => {
+      if (!row.imei) return;
+
+      const owner = ownerMap[normalizeImei(row.imei)];
+
+      const key = "IMEI_" + normalizeImei(row.imei);
+
+      // owner sudah tidak ada
+      if (!owner) {
+        delete finalMap[key];
+
+        return;
+      }
+
+      // owner berbeda
+      if (normalize(row.namaToko) !== owner) {
+        delete finalMap[key];
+
+        return;
+      }
     });
 
     // ======================================
