@@ -125,19 +125,10 @@ export const buildFinalStockRows = ({
         active: false,
       };
 
-      // if (!t.IMEI) return;
-
-      // const imei = normalizeImei(t.IMEI);
-
-      // const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-
-      // const status = String(t.STATUS || "").toUpperCase();
-
-      // if (!["APPROVED", "REFUND"].includes(status)) return;
-
       // =============================
-      // STOCK MASUK
+      // FINAL IMEI OWNER
       // =============================
+
       if (
         [
           "PEMBELIAN",
@@ -157,18 +148,12 @@ export const buildFinalStockRows = ({
         );
       }
 
-      // =============================
-      // TRANSFER KELUAR
-      // =============================
       if (metode === "TRANSFER_KELUAR") {
         finalImeiOwner[imei] = normalize(
           t.TOKO_TUJUAN || t.ke || t.tokoTujuan || t.tokoPenerima
         );
       }
 
-      // =============================
-      // TERJUAL
-      // =============================
       if (metode === "PENJUALAN") {
         delete finalImeiOwner[imei];
       }
@@ -866,24 +851,6 @@ export const buildFinalStockRows = ({
 
     // jika sudah habis jangan tampil
     if (row.qty <= 0) {
-      delete map[key];
-    }
-  });
-
-  Object.keys(map).forEach((key) => {
-    const row = map[key];
-
-    if (!row?.imei) return;
-
-    const owner = finalImeiOwner[normalizeImei(row.imei)];
-
-    if (!owner) {
-      delete map[key];
-
-      return;
-    }
-
-    if (normalize(row.namaToko) !== owner) {
       delete map[key];
     }
   });
