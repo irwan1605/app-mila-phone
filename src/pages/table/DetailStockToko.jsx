@@ -883,6 +883,14 @@ export default function DetailStockToko(props) {
 
       if (transferImei.has(imei)) return;
 
+      const owner = finalOwnerTracker[normalizeImei(trx.IMEI)];
+
+      if (!owner) return;
+
+      if (!owner.active) return;
+
+      if (normalize(owner.toko) !== ownerToko) return;
+
       result.push({
         tanggal: trx.TANGGAL_TRANSAKSI || "-",
 
@@ -920,6 +928,26 @@ export default function DetailStockToko(props) {
         forceTransferHistory: true,
       });
     });
+
+    result = result.filter((row)=>{
+
+      if(!row.imei) return true;
+  
+      const owner =
+          finalOwnerTracker[
+              normalizeImei(row.imei)
+          ];
+  
+      if(!owner) return false;
+  
+      if(!owner.active) return false;
+  
+      return (
+          normalize(owner.toko) ===
+          normalize(row.namaToko)
+      );
+  
+  });
 
     return result;
   }, [
@@ -1081,6 +1109,16 @@ export default function DetailStockToko(props) {
 
       if (finalMap[key]) return;
 
+      const owner = finalOwnerTracker[normalizeImei(t.IMEI)];
+
+      if (!owner) return;
+
+      if (!owner.active) return;
+
+      if (normalize(owner.toko) !== ownerToko) {
+        return;
+      }
+
       finalMap[key] = {
         tanggal: t.TANGGAL_TRANSAKSI,
 
@@ -1116,33 +1154,25 @@ export default function DetailStockToko(props) {
     });
 
     // ======================================
-// 🔥 SYNC NON IMEI DENGAN STOCK OPNAME
-// ======================================
+    // 🔥 SYNC NON IMEI DENGAN STOCK OPNAME
+    // ======================================
 
-Object.values(finalMap).forEach((row) => {
+    Object.values(finalMap).forEach((row) => {
+      if (row.imei) return;
 
-  if (row.imei) return;
+      row.qty = buildFinalNonImeiStock({
+        transaksi,
+        toko: row.namaToko,
+        brand: row.brand,
+        barang: row.barang,
+      });
 
-  row.qty = buildFinalNonImeiStock({
-      transaksi,
-      toko: row.namaToko,
-      brand: row.brand,
-      barang: row.barang,
-  });
+      row.statusBarang = row.qty > 0 ? "TERSEDIA" : "HABIS";
 
-  row.statusBarang =
-      row.qty > 0
-          ? "TERSEDIA"
-          : "HABIS";
-
-  if (
-      String(row.keterangan)
-          .toUpperCase()
-          .includes("TRANSFER")
-  ) {
-      row.keterangan = "TRANSFER BARANG";
-  }
-});
+      if (String(row.keterangan).toUpperCase().includes("TRANSFER")) {
+        row.keterangan = "TRANSFER BARANG";
+      }
+    });
 
     return Object.values(finalMap).filter((r) => {
       // ======================================
