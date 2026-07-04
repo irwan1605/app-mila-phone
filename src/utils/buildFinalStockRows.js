@@ -1,6 +1,7 @@
 // src/utils/buildFinalStockRows.js
 
 import { buildFinalNonImeiStock } from "./FungsiTransferBarang/buildFinalNonImeiStock";
+import { RemoveSoldItemsInsideInvoice } from "./RemoveSoldItemsInsideInvoice";
 
 export const normalize = (v) =>
   String(v || "")
@@ -811,12 +812,11 @@ export const buildFinalStockRows = ({
   });
 
   // ====================================================
-// FINAL TRANSFER OWNER
-// HANYA TRANSFER APPROVED TERAKHIR
-// ====================================================
+  // FINAL TRANSFER OWNER
+  // HANYA TRANSFER APPROVED TERAKHIR
+  // ====================================================
 
-Object.keys(map).forEach((key) => {
-
+  Object.keys(map).forEach((key) => {
     const row = map[key];
 
     if (!row?.imei) return;
@@ -826,32 +826,26 @@ Object.keys(map).forEach((key) => {
     const owner = finalOwnerTracker[imei];
 
     if (!owner) {
-        delete map[key];
-        return;
+      delete map[key];
+      return;
     }
 
     if (!owner.active) {
-        delete map[key];
-        return;
+      delete map[key];
+      return;
     }
 
-    if (
-        normalize(row.namaToko) !==
-        normalize(owner.toko)
-    ) {
-        delete map[key];
-        return;
+    if (normalize(row.namaToko) !== normalize(owner.toko)) {
+      delete map[key];
+      return;
     }
 
     // sinkronkan data owner terakhir
     row.namaToko = owner.toko;
 
     row.keterangan =
-        owner.metode === "TRANSFER_KELUAR"
-            ? "TRANSFER BARANG"
-            : row.keterangan;
-
-});
+      owner.metode === "TRANSFER_KELUAR" ? "TRANSFER BARANG" : row.keterangan;
+  });
 
   // =======================================================
   // 🔥 FINAL OWNER SYNC
@@ -909,7 +903,25 @@ Object.keys(map).forEach((key) => {
   // ======================================
   // 🔥 FINAL CLEAN
   // ======================================
-  return Object.values(map)
-    .filter((x) => Number(x.qty || 0) > 0)
-    .sort((a, b) => String(a.brand || "").localeCompare(String(b.brand || "")));
+// ======================================
+// 🔥 FINAL CLEAN
+// ======================================
+
+let rows = Object.values(map)
+  .filter((x) => Number(x.qty || 0) > 0)
+  .sort((a, b) =>
+    String(a.brand || "").localeCompare(String(b.brand || ""))
+  );
+
+// ======================================
+// 🔥 HILANGKAN BARANG YANG SUDAH TERJUAL
+// DALAM SATU NO INVOICE
+// ======================================
+
+rows = RemoveSoldItemsInsideInvoice({
+  rows,
+  transaksi: sorted,
+});
+
+return rows;
 };
