@@ -19,8 +19,7 @@ import { useLocation } from "react-router-dom";
 import { deriveStockFromTransaksi } from "../utils/stockDerived";
 import { useNavigate } from "react-router-dom";
 import { buildFinalStockRows } from "../utils/buildFinalStockRows";
-import { filterExportRows }
-from "../utils/stock/filterExportRows";
+import { filterExportRows } from "../utils/stock/filterExportRows";
 import { exportStockExcel } from "../utils/stock/exportStockExcel";
 import {
   filterRefundSoldRows,
@@ -342,11 +341,11 @@ export default function StockOpname() {
   }, [allTransaksi]);
 
   // ======================================
-// 🔥 REFUND SUDAH TERJUAL LAGI
-// ======================================
-const refundSoldSet = useMemo(() => {
-  return buildRefundSoldSet(allTransaksi);
-}, [allTransaksi]);
+  // 🔥 REFUND SUDAH TERJUAL LAGI
+  // ======================================
+  const refundSoldSet = useMemo(() => {
+    return buildRefundSoldSet(allTransaksi);
+  }, [allTransaksi]);
 
   // ===============================
   // 🔥 SUPPLIER LOOKUP FINAL
@@ -526,14 +525,11 @@ const refundSoldSet = useMemo(() => {
     });
 
     rows = rows.filter((row) => {
-
       if (!row.imei) {
         return true;
       }
-    
-      return !refundSoldSet.has(
-        normalizeImei(row.imei)
-      );
+
+      return !refundSoldSet.has(normalizeImei(row.imei));
     });
 
     rows = filterRefundSoldRows({
@@ -541,11 +537,29 @@ const refundSoldSet = useMemo(() => {
       transaksi: allTransaksi,
     });
 
+    // ======================================
+    // 🔥 HILANGKAN BARANG SUDAH TERJUAL
+    // ======================================
+
+    rows = rows.filter((row) => {
+      // stok habis
+      if (Number(row.qty || 0) <= 0) {
+        return false;
+      }
+
+      // IMEI sudah terjual
+      if (row.imei && imeiTerjual.has(normalizeImei(row.imei))) {
+        return false;
+      }
+
+      return true;
+    });
+
     // rows = rows.filter((r) => {
     //   if (!r.imei) {
     //     return Number(r.qty || 0) > 0;
     //   }
-    
+
     //   return Number(r.qty || 0) > 0;
     // });
 
@@ -890,13 +904,10 @@ const refundSoldSet = useMemo(() => {
       rows: filteredTableData,
       transaksi: allTransaksi,
     });
-  
+
     exportStockExcel({
       rows: exportRows,
-      namaToko:
-        filterToko === "semua"
-          ? "SEMUA_TOKO"
-          : filterToko,
+      namaToko: filterToko === "semua" ? "SEMUA_TOKO" : filterToko,
       fileName: "STOCK_OPNAME",
     });
   };
