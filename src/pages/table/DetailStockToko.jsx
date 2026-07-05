@@ -829,7 +829,24 @@ export default function DetailStockToko(props) {
             row.brand
           )}|${normalizeText(row.barang)}`;
 
-      mergeTransfer.set(key, row);
+          const old = mergeTransfer.get(key);
+
+          if (!old) {
+              mergeTransfer.set(key, row);
+              return;
+          }
+          
+          // PRIORITAS HASIL ENGINE
+          if (old.forceTransferOwner) {
+              return;
+          }
+          
+          if (row.forceTransferOwner) {
+              mergeTransfer.set(key, row);
+              return;
+          }
+          
+          mergeTransfer.set(key, row);
     });
 
     result = [...mergeTransfer.values()];
