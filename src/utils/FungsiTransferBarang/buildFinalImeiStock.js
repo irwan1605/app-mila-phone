@@ -1,3 +1,6 @@
+import { buildFinalTransferOwner }
+from "./buildFinalTransferOwner";
+
 const normalizeText = (v) =>
   String(v || "")
     .trim()
@@ -32,6 +35,8 @@ export const buildFinalImeiStock = ({
 
     return ta - tb;
   });
+
+  const transferOwnerMap = buildFinalTransferOwner(sorted);
 
   sorted.forEach((trx) => {
     if (!trx) return;
@@ -145,20 +150,12 @@ export const buildFinalImeiStock = ({
     // ======================================
     if (metode === "TRANSFER_REJECT") {
       imeiMap[imei] = {
-
         toko: ownerToko,
-    
+
         status: "AVAILABLE",
-    
-        ownerHistory: [
-    
-            ...(imeiMap[imei]?.ownerHistory || []),
-    
-            ownerToko,
-    
-        ],
-    
-    };
+
+        ownerHistory: [...(imeiMap[imei]?.ownerHistory || []), ownerToko],
+      };
     }
 
     // ======================================
@@ -170,6 +167,36 @@ export const buildFinalImeiStock = ({
         status: "SOLD",
       };
     }
+  });
+
+  // ==========================================
+  // SYNC OWNER DENGAN TRANSFER OWNER
+  // ==========================================
+
+  Object.keys(imeiMap).forEach((imei) => {
+    const latestOwner = transferOwnerMap[imei];
+
+    if (!latestOwner) {
+      delete imeiMap[imei];
+      return;
+    }
+
+    if (!latestOwner.active) {
+      delete imeiMap[imei];
+      return;
+    }
+
+    imeiMap[imei] = {
+      ...imeiMap[imei],
+
+      toko: latestOwner.toko,
+
+      status: "AVAILABLE",
+
+      lastMethod: latestOwner.metode,
+
+      transferHistory: latestOwner.history || [],
+    };
   });
 
   // ======================================

@@ -17,3 +17,35 @@ export const validateTransferStock = ({ imeis = [], stock = [] }) => {
 
   return true;
 };
+
+export function normalizeTransferTransactions(transaksi = []) {
+
+  const rows = [];
+
+  transaksi.forEach((trx)=>{
+
+      if(Array.isArray(trx.imeis) && trx.imeis.length){
+
+          trx.imeis.forEach((imei)=>{
+
+              rows.push({
+
+                  ...trx,
+
+                  IMEI: imei
+
+              });
+
+          });
+
+      }else{
+
+          rows.push(trx);
+
+      }
+
+  });
+
+  return rows;
+
+}

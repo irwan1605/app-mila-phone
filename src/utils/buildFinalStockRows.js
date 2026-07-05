@@ -2,6 +2,7 @@
 
 import { buildFinalNonImeiStock } from "./FungsiTransferBarang/buildFinalNonImeiStock";
 import { RemoveSoldItemsInsideInvoice } from "./RemoveSoldItemsInsideInvoice";
+import { buildFinalTransferOwner } from "./FungsiTransferBarang/buildFinalTransferOwner";
 
 export const normalize = (v) =>
   String(v || "")
@@ -31,12 +32,19 @@ export const buildFinalStockRows = ({
 
   const map = {};
 
+  const transferOwnerMap = buildFinalTransferOwner(transaksi);
+
   // ======================================
   // 🔥 FINAL OWNER TRACKER
   // ======================================
-  const finalOwnerTracker = {};
 
   const finalImeiOwner = {};
+  // ======================================================
+  // FINAL OWNER HISTORY
+  // SATU IMEI = SATU OWNER TERAKHIR
+  // ======================================================
+
+  const finalOwnerTracker = {};
 
   const sorted = [...transaksi].sort(
     (a, b) =>
@@ -44,120 +52,78 @@ export const buildFinalStockRows = ({
       new Date(b.CREATED_AT || 0).getTime()
   );
 
-  sorted.forEach((t) => {
-    if (!t?.IMEI) return;
+  sorted.forEach((trx) => {
+    if (!trx?.IMEI) return;
 
-    const imei = normalizeImei(t.IMEI);
-
-    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-
-    const status = String(t.STATUS || "").toUpperCase();
+    const status = String(trx.STATUS || "").toUpperCase();
 
     if (!["APPROVED", "REFUND"].includes(status)) return;
 
-    // ======================================
-    // 🔥 STOCK MASUK
-    // ======================================
-    if (
-      [
-        "PEMBELIAN",
-        "TRANSFER_MASUK",
-        "REFUND",
-        "TRANSFER_REJECT",
-        "VOID OPNAME",
-      ].includes(metode)
-    ) {
-      const ownerToko = normalize(
-        t.OWNER_AKHIR ||
-          t.ke ||
-          t.TOKO_TUJUAN ||
-          t.tokoTujuan ||
-          t.tokoPenerima ||
-          t.NAMA_TOKO
-      );
+    const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
 
-      finalOwnerTracker[imei] = {
-        toko: ownerToko,
-        active: true,
-      };
+    const imei = normalizeImei(trx.IMEI);
 
-      return;
-    }
+    const asal = normalize(
+      trx.OWNER_SEBELUM || trx.dari || trx.tokoPengirim || trx.NAMA_TOKO
+    );
 
-    // ======================================
-    // 🔥 TRANSFER KELUAR
-    // ======================================
-    // ======================================
-    // 🔥 TRANSFER KELUAR
-    // ======================================
-    if (metode === "TRANSFER_KELUAR") {
-      finalOwnerTracker[imei] = {
-        toko:
-          t.TOKO_TUJUAN ||
-          t.ke ||
-          t.tokoTujuan ||
-          t.tokoPenerima ||
-          t.NAMA_TOKO ||
-          "-",
+    const tujuan = normalize(
+      trx.OWNER_AKHIR ||
+        trx.ke ||
+        trx.TOKO_TUJUAN ||
+        trx.tokoTujuan ||
+        trx.tokoPenerima ||
+        trx.NAMA_TOKO
+    );
 
-        active: true,
+    switch (metode) {
+      case "PEMBELIAN":
+      case "REFUND":
+      case "TRANSFER_REJECT":
+      case "VOID OPNAME":
+        finalOwnerTracker[imei] = {
+          toko: tujuan,
+          active: true,
+          metode,
+        };
 
-        metode: "TRANSFER_KELUAR",
+        break;
 
-        asal: t.NAMA_TOKO || t.tokoPengirim || t.dari || "-",
+      case "TRANSFER_KELUAR":
+        finalOwnerTracker[imei] = {
+          toko: tujuan,
+          active: true,
+          metode,
+          asal,
+          tujuan,
+        };
 
-        tujuan: t.TOKO_TUJUAN || t.ke || t.tokoTujuan || t.tokoPenerima || "-",
+        break;
 
-        isRefundTransfer:
-          String(t.IS_REFUND_TRANSFER || "").toUpperCase() === "TRUE" ||
-          String(t.SUMBER_STOCK || "").toUpperCase() === "REFUND" ||
-          String(t.LAST_ACTION || "").toUpperCase() === "REFUND",
-      };
+      case "TRANSFER_MASUK":
+        finalOwnerTracker[imei] = {
+          toko: tujuan,
+          active: true,
+          metode,
+          asal,
+          tujuan,
+        };
 
-      return;
-    }
+        break;
 
-    // ======================================
-    // 🔥 STOCK KELUAR
-    // ======================================
-    if (["PENJUALAN", "REJECT", "STOK OPNAME"].includes(metode)) {
-      finalOwnerTracker[imei] = {
-        toko: t.NAMA_TOKO || "-",
-        active: false,
-      };
+      case "PENJUALAN":
+      case "REJECT":
+      case "STOK OPNAME":
+        finalOwnerTracker[imei] = {
+          toko: tujuan,
+          active: false,
+          metode,
+        };
 
-      // =============================
-      // FINAL IMEI OWNER
-      // =============================
+        break;
 
-      if (
-        [
-          "PEMBELIAN",
-          "TRANSFER_MASUK",
-          "REFUND",
-          "TRANSFER_REJECT",
-          "VOID OPNAME",
-        ].includes(metode)
-      ) {
-        finalImeiOwner[imei] = normalize(
-          t.OWNER_AKHIR ||
-            t.ke ||
-            t.TOKO_TUJUAN ||
-            t.tokoTujuan ||
-            t.tokoPenerima ||
-            t.NAMA_TOKO
-        );
-      }
-
-      if (metode === "TRANSFER_KELUAR") {
-        finalImeiOwner[imei] = normalize(
-          t.TOKO_TUJUAN || t.ke || t.tokoTujuan || t.tokoPenerima
-        );
-      }
-
-      if (metode === "PENJUALAN") {
-        delete finalImeiOwner[imei];
-      }
+      default:
+        break;
     }
   });
 
@@ -360,24 +326,29 @@ export const buildFinalStockRows = ({
       // HANYA OWNER TERAKHIR YANG BOLEH MUNCUL
       // ======================================
 
-      const latestOwner = finalOwnerTracker[imei];
+      const latestOwner = transferOwnerMap[imei];
 
       if (!latestOwner) {
         delete map[imei];
         return;
       }
 
-      // sudah terjual
-      if (latestOwner.active === false) {
+      if (!latestOwner.active) {
         delete map[imei];
         return;
       }
 
-      // bukan owner terakhir
+      // ======================================================
+      // HANYA OWNER TERAKHIR YANG BOLEH TAMPIL
+      // ======================================================
+
       if (normalize(latestOwner.toko) !== normalize(namaToko)) {
         delete map[imei];
+
         return;
       }
+
+      owner = latestOwner;
 
       // paksa selalu mengikuti owner terakhir
       owner.toko = latestOwner.toko;
@@ -733,16 +704,55 @@ export const buildFinalStockRows = ({
       return;
     }
 
-    Object.keys(map).forEach((key) => {
-      if (key === imei) return;
+    // =====================================================
+    // FINAL OWNER FILTER
+    // =====================================================
 
+    Object.keys(map).forEach((key) => {
       const row = map[key];
 
-      if (!row) return;
+      if (!row?.imei) return;
 
-      if (normalizeImei(row.imei) === imei) {
-        delete map[key];
+      const imei = normalizeImei(row.imei);
+
+      const owner = finalOwnerTracker[imei];
+
+      const latestOwner = transferOwnerMap[imei];
+
+      if (latestOwner) {
+        row.namaToko = latestOwner.toko;
+
+        row.ownerFinal = latestOwner.toko;
+
+        row.keterangan = "TRANSFER BARANG";
+
+        row.statusBarang = "TERSEDIA";
       }
+
+      if (!owner) {
+        delete map[key];
+
+        return;
+      }
+
+      if (!owner.active) {
+        delete map[key];
+
+        return;
+      }
+
+      if (normalize(owner.toko) !== normalize(row.namaToko)) {
+        delete map[key];
+
+        return;
+      }
+
+      row.namaToko = owner.toko;
+
+      row.keterangan =
+        owner.metode === "TRANSFER_KELUAR" || owner.metode === "TRANSFER_MASUK"
+          ? "TRANSFER BARANG"
+          : row.keterangan;
     });
 
     map[imei] = {
@@ -903,25 +913,23 @@ export const buildFinalStockRows = ({
   // ======================================
   // 🔥 FINAL CLEAN
   // ======================================
-// ======================================
-// 🔥 FINAL CLEAN
-// ======================================
+  // ======================================
+  // 🔥 FINAL CLEAN
+  // ======================================
 
-let rows = Object.values(map)
-  .filter((x) => Number(x.qty || 0) > 0)
-  .sort((a, b) =>
-    String(a.brand || "").localeCompare(String(b.brand || ""))
-  );
+  let rows = Object.values(map)
+    .filter((x) => Number(x.qty || 0) > 0)
+    .sort((a, b) => String(a.brand || "").localeCompare(String(b.brand || "")));
 
-// ======================================
-// 🔥 HILANGKAN BARANG YANG SUDAH TERJUAL
-// DALAM SATU NO INVOICE
-// ======================================
+  // ======================================
+  // 🔥 HILANGKAN BARANG YANG SUDAH TERJUAL
+  // DALAM SATU NO INVOICE
+  // ======================================
 
-rows = RemoveSoldItemsInsideInvoice({
-  rows,
-  transaksi: sorted,
-});
+  rows = RemoveSoldItemsInsideInvoice({
+    rows,
+    transaksi: sorted,
+  });
 
-return rows;
+  return rows;
 };
