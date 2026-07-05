@@ -155,6 +155,7 @@ export default function CardPenjualanToko() {
   const [listBarang, setListBarang] = useState([]);
   const [detailStockLookup, setDetailStockLookup] = useState({});
   const [isStockReady, setIsStockReady] = useState(false);
+  const [stockOpnameRows, setStockOpnameRows] = useState([]);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "detail_stock"), (snap) => {
@@ -254,6 +255,36 @@ export default function CardPenjualanToko() {
       window.removeEventListener("beforeunload", unlockAll);
     };
   }, [items]);
+
+  useEffect(() => {
+    if (!location.state?.fromStockOpname) return;
+
+    const row = location.state.stockData;
+
+    if (!row) return;
+
+    if (row.imei) {
+      setItems([
+        {
+          id: Date.now(),
+
+          kategoriBarang: row.kategoriBarang,
+
+          namaBrand: row.brand,
+
+          namaBarang: row.barang,
+
+          imei: row.imei,
+
+          imeiList: [row.imei],
+
+          qty: 1,
+
+          isImei: true,
+        },
+      ]);
+    }
+  }, [location.state]);
 
   const handlePreview = () => {
     const draftTransaksi = {
@@ -526,18 +557,11 @@ export default function CardPenjualanToko() {
           });
 
           if (
-            [
-              "PENJUALAN",
-              "TRANSFER_KELUAR",
-              "SOLD",
-            ].includes(
-              String(finalStatus)
-                .toUpperCase()
+            ["PENJUALAN", "TRANSFER_KELUAR", "SOLD"].includes(
+              String(finalStatus).toUpperCase()
             )
           ) {
-            throw new Error(
-              `IMEI ${imei} sudah TERJUAL`
-            );
+            throw new Error(`IMEI ${imei} sudah TERJUAL`);
           }
 
           console.log("🔥 FINAL STATUS:", imei, finalStatus);
@@ -588,15 +612,15 @@ export default function CardPenjualanToko() {
           // VALIDASI FINAL BERDASARKAN DETAIL STOCK
           // =====================================
           const stockData = detailStockLookup?.[imei];
-          
+
           const stockFinalStatus = String(
             stockData?.LAST_ACTION ||
-            stockData?.PAYMENT_METODE ||
-            stockData?.status ||
-            stockData?.STATUS ||
-            ""
+              stockData?.PAYMENT_METODE ||
+              stockData?.status ||
+              stockData?.STATUS ||
+              ""
           ).toUpperCase();
-          
+
           const bolehJual = [
             "AVAILABLE",
             "REFUND",
@@ -605,21 +629,17 @@ export default function CardPenjualanToko() {
             "TRANSFER_MASUK",
             "READY_RESALE",
             "PEMBELIAN",
-          ].includes(
-            String(finalStatus || "").toUpperCase()
-          );
-          
+          ].includes(String(finalStatus || "").toUpperCase());
+
           console.log("🔥 FINAL SALE CHECK", {
             imei,
             stockFinalStatus,
             stockData,
             bolehJual,
           });
-          
+
           if (!bolehJual) {
-            throw new Error(
-              `IMEI ${imei} sudah TERJUAL`
-            );
+            throw new Error(`IMEI ${imei} sudah TERJUAL`);
           }
 
           const resellAllowed = isResellAllowed(imei, detailStockLookup);
@@ -641,8 +661,6 @@ export default function CardPenjualanToko() {
           if (qty <= 0) throw new Error(`QTY tidak valid (${item.namaBarang})`);
         }
       }
-
-      
 
       /* =================================================
          2️⃣ BENTUK TRANSAKSI
@@ -803,6 +821,7 @@ export default function CardPenjualanToko() {
             allowManual={true}
             tahap1Valid={isTahap1Valid} // ⬅️ WAJIB
             stockRealtime={stockRealtime}
+            stockOpnameRows={stockOpnameRows}
           />
         </div>
 

@@ -31,12 +31,19 @@ const normalize = (v) =>
     .trim();
 
 export default function FormItemSection({
-  value = [],
+  value,
+
   onChange,
+
   tokoLogin,
-  allowManual = false,
-  stockRealtime = {},
-  tahap1Valid = false, // ✅ VALIDATOR TAHAP 1
+
+  allowManual,
+
+  stockRealtime,
+
+  stockOpnameRows = [],
+
+  tahap1Valid,
 }) {
   const items = useMemo(() => (Array.isArray(value) ? value : []), [value]);
   const safeOnChange = useCallback(
@@ -51,6 +58,30 @@ export default function FormItemSection({
   const [stokToko, setStokToko] = useState([]);
   const [editIndex, setEditIndex] = useState(null);
   const [showTable, setShowTable] = useState(false);
+
+  // ======================================
+  // STOCK FINAL DARI STOCK OPNAME
+  // ======================================
+
+  const availableStock = useMemo(() => {
+    return stockOpnameRows.filter((row) => {
+      if (Number(row.qty) <= 0) return false;
+
+      if (normalize(row.toko) !== normalize(tokoLogin)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [stockOpnameRows, tokoLogin]);
+
+  const availableImei = useMemo(() => {
+    return availableStock.filter((r) => r.imei);
+  }, [availableStock]);
+
+  const availableSku = useMemo(() => {
+    return availableStock.filter((r) => !r.imei);
+  }, [availableStock]);
 
   const finalImeiStock = useMemo(() => {
     return buildFinalImeiStock({
@@ -529,6 +560,19 @@ export default function FormItemSection({
           reseller: 0,
         },
       };
+
+      availableImei.forEach((row)=>{
+
+        if(
+            normalize(row.kategoriBarang)!==
+            normalize(kategori)
+        ){
+            return;
+        }
+    
+        map.add(row.brand);
+    
+    });
 
       const barangFix = barangMaster || fallbackBarang;
 
