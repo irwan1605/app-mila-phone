@@ -414,36 +414,24 @@ export default function DetailStockToko(props) {
       // 🔥 TRANSFER KELUAR
       // ======================================
       if (metode === "TRANSFER_KELUAR") {
-
         map[imei] = {
-    
-            toko:
-    
-                t.OWNER_AKHIR ||
-    
-                t.TOKO_TUJUAN ||
-    
-                t.TOKO_PENERIMA ||
-    
-                t.tokoPenerima ||
-    
-                t.tokoTujuan ||
-    
-                t.ke ||
-    
-                t.NAMA_TOKO ||
-    
-                "-",
-    
-            active: true,
-    
-            metode
-    
+          toko:
+            t.OWNER_AKHIR ||
+            t.TOKO_TUJUAN ||
+            t.TOKO_PENERIMA ||
+            t.tokoPenerima ||
+            t.tokoTujuan ||
+            t.ke ||
+            t.NAMA_TOKO ||
+            "-",
+
+          active: true,
+
+          metode,
         };
-    
+
         return;
-    
-    }
+      }
 
       // ======================================
       // 🔥 STOCK BENAR-BENAR KELUAR
@@ -803,20 +791,18 @@ export default function DetailStockToko(props) {
           String(t.PAYMENT_METODE).toUpperCase() === "TRANSFER_MASUK" &&
           ownerToko === normalize(namaToko) &&
           !result.some((r) => {
-      
-              if (r.imei && t.IMEI) {
-                  return normalizeImei(r.imei) === normalizeImei(t.IMEI);
-              }
-      
-              return (
-                  !r.imei &&
-                  normalize(r.namaToko) === ownerToko &&
-                  normalizeText(r.brand) === normalizeText(t.NAMA_BRAND) &&
-                  normalizeText(r.barang) === normalizeText(t.NAMA_BARANG)
-              );
-      
+            if (r.imei && t.IMEI) {
+              return normalizeImei(r.imei) === normalizeImei(t.IMEI);
+            }
+
+            return (
+              !r.imei &&
+              normalize(r.namaToko) === ownerToko &&
+              normalizeText(r.brand) === normalizeText(t.NAMA_BRAND) &&
+              normalizeText(r.barang) === normalizeText(t.NAMA_BARANG)
+            );
           })
-      );
+        );
       })
       .map((t) => ({
         tanggal: t.TANGGAL_TRANSAKSI,
@@ -937,6 +923,16 @@ export default function DetailStockToko(props) {
       if (!owner.active) return;
 
       if (normalize(owner.toko) !== ownerToko) return;
+
+      // sudah terjual
+      if (imeiTerjual.has(imei) && !refundAvailableSet.has(imei)) {
+        return;
+      }
+
+      // refund sudah dijual lagi
+      if (refundSoldSet.has(imei)) {
+        return;
+      }
 
       result.push({
         tanggal: trx.TANGGAL_TRANSAKSI || "-",
@@ -1174,6 +1170,16 @@ export default function DetailStockToko(props) {
 
       const key = "IMEI_" + normalizeImei(t.IMEI);
 
+      const imei = normalizeImei(t.IMEI);
+
+      if (imeiTerjual.has(imei) && !refundAvailableSet.has(imei)) {
+        return;
+      }
+
+      if (refundSoldSet.has(imei)) {
+        return;
+      }
+
       if (finalMap[key]) return;
 
       const owner = finalOwnerTracker[normalizeImei(t.IMEI)];
@@ -1221,43 +1227,36 @@ export default function DetailStockToko(props) {
     });
 
     // ======================================
-// FINAL VALIDATION
-// SINGLE SOURCE OF TRUTH
-// menggunakan finalOwnerTracker
-// ======================================
+    // FINAL VALIDATION
+    // SINGLE SOURCE OF TRUTH
+    // menggunakan finalOwnerTracker
+    // ======================================
 
-Object.keys(finalMap).forEach((key) => {
+    Object.keys(finalMap).forEach((key) => {
+      const row = finalMap[key];
 
-  const row = finalMap[key];
+      if (!row?.imei) return;
 
-  if (!row?.imei) return;
+      const owner = finalOwnerTracker[normalizeImei(row.imei)];
 
-  const owner = finalOwnerTracker[
-      normalizeImei(row.imei)
-  ];
+      // sudah tidak ada owner
+      if (!owner) {
+        delete finalMap[key];
+        return;
+      }
 
-  // sudah tidak ada owner
-  if (!owner) {
-      delete finalMap[key];
-      return;
-  }
+      // stok sudah keluar
+      if (!owner.active) {
+        delete finalMap[key];
+        return;
+      }
 
-  // stok sudah keluar
-  if (!owner.active) {
-      delete finalMap[key];
-      return;
-  }
-
-  // owner berbeda
-  if (
-      normalize(owner.toko) !==
-      normalize(row.namaToko)
-  ) {
-      delete finalMap[key];
-      return;
-  }
-
-});
+      // owner berbeda
+      if (normalize(owner.toko) !== normalize(row.namaToko)) {
+        delete finalMap[key];
+        return;
+      }
+    });
 
     // ======================================
     // 🔥 SYNC NON IMEI DENGAN STOCK OPNAME
@@ -1280,57 +1279,59 @@ Object.keys(finalMap).forEach((key) => {
       }
     });
 
-    return Object.values(finalMap).filter((r) => {
-      // ======================================
-      // 🔥 HAPUS BARANG LIAR
-      // ======================================
-      if (
-        String(r.keterangan || "")
-          .toUpperCase()
-          .includes("SYNC STOCK OPNAME")
-      ) {
-        return false;
-      }
-      // ======================================
-      // 🔥 QTY HABIS
-      // ======================================
-      if (Number(r.qty || 0) <= 0) {
+    return Object.values(finalMap).filter((row) => {
+      // ============================
+      // HILANGKAN QTY HABIS
+      // ============================
+
+      if (Number(row.qty || 0) <= 0) {
         return false;
       }
 
-      // ======================================
-      // 🔥 FILTER TOKO
-      // ======================================
-      if (normalize(r.namaToko || r.toko) !== normalize(namaToko)) {
+      // ============================
+      // FILTER TOKO
+      // ============================
+
+      if (normalize(row.namaToko || row.toko) !== normalize(namaToko)) {
         return false;
       }
 
-      // ======================================
-      // 🔥 IMEI TERJUAL
-      // ======================================
-      if (r.imei) {
-        const cleanImei = normalizeImei(r.imei);
+      // ============================
+      // IMEI
+      // ============================
 
-        // ======================================
-        // 🔥 REFUND SUDAH TERJUAL LAGI
-        // ======================================
-        if (
-          String(r.keterangan || "")
-            .toUpperCase()
-            .includes("REFUND")
-        ) {
-          const refundState = refundFinalTracker?.[cleanImei];
+      if (row.imei) {
+        const imei = normalizeImei(row.imei);
 
-          // ✅ refund sudah dijual lagi
-          if (refundState && refundState.active === false) {
-            return false;
-          }
+        // owner sudah tidak aktif
+        const owner = finalOwnerTracker?.[imei];
+
+        if (!owner) {
+          return false;
         }
 
-        // ======================================
-        // 🔥 STOCK TERJUAL NORMAL
-        // ======================================
-        if (imeiTerjual.has(cleanImei) && !refundAvailableSet.has(cleanImei)) {
+        if (!owner.active) {
+          return false;
+        }
+
+        // owner bukan toko ini
+        if (normalize(owner.toko) !== normalize(namaToko)) {
+          return false;
+        }
+
+        // ============================
+        // BARANG SUDAH TERJUAL
+        // ============================
+
+        if (imeiTerjual.has(imei) && !refundAvailableSet.has(imei)) {
+          return false;
+        }
+
+        // ============================
+        // REFUND SUDAH TERJUAL LAGI
+        // ============================
+
+        if (refundSoldSet.has(imei)) {
           return false;
         }
       }
