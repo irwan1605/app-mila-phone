@@ -542,18 +542,40 @@ export default function StockOpname() {
     // ======================================
 
     rows = rows.filter((row) => {
-      // stok habis
+
+      const lastAction = String(
+          row.keterangan ||
+          row.lastTransaksi ||
+          ""
+      ).toUpperCase();
+  
+      const isRefund =
+          lastAction.includes("REFUND");
+  
+      // ======================================
+      // BARANG REFUND HARUS TETAP TAMPIL
+      // ======================================
+      if (isRefund) {
+          return true;
+      }
+  
+      // ======================================
+      // BARANG LAIN
+      // ======================================
       if (Number(row.qty || 0) <= 0) {
-        return false;
+          return false;
       }
-
-      // IMEI sudah terjual
-      if (row.imei && imeiTerjual.has(normalizeImei(row.imei))) {
-        return false;
+  
+      if (
+          row.imei &&
+          imeiTerjual.has(normalizeImei(row.imei))
+      ) {
+          return false;
       }
-
+  
       return true;
-    });
+  
+  });
 
     // rows = rows.filter((r) => {
     //   if (!r.imei) {

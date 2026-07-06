@@ -64,16 +64,17 @@ export const buildFinalStockRows = ({
         "PEMBELIAN",
         "TRANSFER_MASUK",
         "REFUND",
+        "RETUR",              // ✅ Tambahkan
         "TRANSFER_REJECT",
         "VOID OPNAME",
       ].includes(metode)
     ) {
-      finalOwnerTracker[imei] = {
-        toko: t.NAMA_TOKO || "-",
-        active: true,
-      };
-
-      return;
+        finalOwnerTracker[imei] = {
+            toko: t.NAMA_TOKO || "-",
+            active: true,
+        };
+    
+        return;
     }
 
     // ======================================
@@ -237,11 +238,16 @@ export const buildFinalStockRows = ({
         // ======================================
         // 🔥 KETERANGAN FINAL
         // ======================================
-        keterangan: isTransferRefund
-          ? "TRANSFER REFUND"
-          : metode === "TRANSFER_MASUK"
-          ? "TRANSFER BARANG"
-          : metode,
+        keterangan:
+        isTransferRefund
+            ? "TRANSFER REFUND"
+            : metode === "TRANSFER_MASUK"
+            ? "TRANSFER BARANG"
+            : metode === "REFUND"
+            ? "REFUND BARANG"
+            : metode === "RETUR"
+            ? "RETUR BARANG"
+            : metode,
 
         sumberStock: isTransferRefund ? "REFUND" : "NORMAL",
       };
@@ -360,15 +366,16 @@ export const buildFinalStockRows = ({
     // ======================================
     if (
       [
-        "PEMBELIAN",
-        "TRANSFER_MASUK",
-        "TRANSFER_REJECT",
-        "REFUND",
-        "VOID OPNAME",
+          "PEMBELIAN",
+          "TRANSFER_MASUK",
+          "TRANSFER_REJECT",
+          "REFUND",
+          "RETUR",          // ✅ Tambahkan
+          "VOID OPNAME",
       ].includes(metode)
-    ) {
-      map[skuKey].qty += Math.abs(Number(t.QTY || 0));
-    }
+      ){
+          map[skuKey].qty += Math.abs(Number(t.QTY || 0));
+      }
 
     // ======================================
     // 🔥 STOCK KELUAR
@@ -398,15 +405,16 @@ export const buildFinalStockRows = ({
 
     if (
       [
-        "PEMBELIAN",
-        "TRANSFER_MASUK",
-        "REFUND",
-        "TRANSFER_REJECT",
-        "VOID OPNAME",
+          "PEMBELIAN",
+          "TRANSFER_MASUK",
+          "REFUND",
+          "RETUR",          // ✅ Tambahkan
+          "TRANSFER_REJECT",
+          "VOID OPNAME",
       ].includes(metode)
-    ) {
-      imeiFinalActive.add(imei);
-    }
+      ){
+          imeiFinalActive.add(imei);
+      }
 
     if (["PENJUALAN", "REJECT", "STOK OPNAME"].includes(metode)) {
       imeiFinalActive.delete(imei);
@@ -418,15 +426,46 @@ export const buildFinalStockRows = ({
   // ======================================
   return Object.values(map)
 
-    .filter((row) => {
-      if (!row.imei) {
-        return Number(row.qty || 0) > 0;
+  .filter((row)=>{
+  
+      const lastAction = String(
+          row.keterangan || ""
+      ).toUpperCase();
+  
+      // ======================================
+      // REFUND & RETUR HARUS TETAP TAMPIL
+      // ======================================
+      if (
+          lastAction.includes("REFUND") ||
+          lastAction.includes("RETUR")
+      ){
+          return true;
       }
-
-      return activeImeiSet.has(normalizeImei(row.imei));
-    })
-
-    .filter((row) => Number(row.qty || 0) > 0)
-
-    .sort((a, b) => String(a.brand || "").localeCompare(String(b.brand || "")));
+  
+      if(!row.imei){
+          return Number(row.qty||0)>0;
+      }
+  
+      return activeImeiSet.has(
+          normalizeImei(row.imei)
+      );
+  
+  })
+  
+  .filter((row)=>{
+  
+      const lastAction = String(
+          row.keterangan || ""
+      ).toUpperCase();
+  
+      if (
+          lastAction.includes("REFUND") ||
+          lastAction.includes("RETUR")
+      ){
+          return true;
+      }
+  
+      return Number(row.qty||0)>0;
+  
+  });
 };
