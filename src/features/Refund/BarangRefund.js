@@ -30,6 +30,16 @@ const buildRefundSoldTracker = (transaksi = []) => {
 
     const metode = String(t.PAYMENT_METODE || "").toUpperCase();
 
+    const qty = Math.abs(Number(t.QTY || 0));
+
+    const isTransferMasuk = metode === "TRANSFER_MASUK";
+
+    const isTransferKeluar = metode === "TRANSFER_KELUAR";
+
+    const isRetur = metode === "RETUR";
+
+    const isRejectTransfer = metode === "TRANSFER_REJECT";
+
     // ======================
     // IMEI
     // ======================
@@ -68,10 +78,7 @@ const buildRefundSoldTracker = (transaksi = []) => {
           if (tracker[key]?.hasRefund) {
             tracker[key].soldAfterRefund = true;
           }
-          console.log(
-            "REFUND SOLD DETECTED",
-            key
-          );
+          console.log("REFUND SOLD DETECTED", key);
         });
       });
 
@@ -81,41 +88,82 @@ const buildRefundSoldTracker = (transaksi = []) => {
     // ======================
     // NON IMEI
     // ======================
-    const skuKey =
-    `${normalizeText(t.NAMA_TOKO)}|` +
+    const tokoAktif =
+    t.OWNER_AKHIR ||
+    t.TOKO_PENERIMA ||
+    t.TOKO_TUJUAN ||
+    t.NAMA_TOKO ||
+    "-";
+
+const skuKey =
+    `${normalizeText(tokoAktif)}|` +
     `${normalizeText(t.NAMA_BRAND)}|` +
     `${normalizeText(t.NAMA_BARANG)}`;
-  
-  if (!tracker[skuKey]) {
-    tracker[skuKey] = {
-      refundQty: 0,
-      soldQty: 0,
-      lastStatus: "",
+
+    if (!tracker[skuKey]) {
+      tracker[skuKey] = {
+        refundQty: 0,
+        soldQty: 0,
+        saldo: 0,
+        lastStatus: "",
     };
-  }
-  
-  // ======================================
-  // DETEKSI SEMUA TIPE REFUND
-  // ======================================
-  const isRefund =
-    metode === "REFUND" ||
-    t.IS_REFUND === true ||
-    String(t.statusPembayaran || "").toUpperCase() === "REFUND";
-  
-  // ======================================
-  // STOCK MASUK DARI REFUND
-  // ======================================
-  if (isRefund) {
-    tracker[skuKey].refundQty += Number(t.QTY || 0);
-    tracker[skuKey].lastStatus = "REFUND";
-  }
-  
-  // ======================================
-  // TERJUAL KEMBALI
-  // ======================================
-  if (metode === "PENJUALAN" && !isRefund) {
-    tracker[skuKey].soldQty += Number(t.QTY || 0);
-  }
+    }
+
+    // ======================================
+    // DETEKSI SEMUA TIPE REFUND
+    // ======================================
+    // ======================================
+    // DETEKSI REFUND
+    // ======================================
+
+    const isRefund =
+      metode === "REFUND" ||
+      t.IS_REFUND === true ||
+      String(t.statusPembayaran || "").toUpperCase() === "REFUND";
+
+    // ======================================
+    // REFUND / RETUR
+    // ======================================
+
+    if (isRefund || isRetur) {
+      tracker[skuKey].refundQty += qty;
+      tracker[skuKey].saldo += qty;
+      tracker[skuKey].lastStatus = "REFUND";
+    }
+
+    // ======================================
+    // TRANSFER MASUK
+    // ======================================
+    else if (isTransferMasuk) {
+      // Transfer masuk bukan penjualan.
+      // Jangan ubah refundQty.
+      // Jangan ubah soldQty.
+    }
+
+    // ======================================
+    // TRANSFER KELUAR
+    // ======================================
+    else if (isTransferKeluar) {
+      // Transfer keluar hanya perpindahan toko.
+      // Jangan ubah refundQty.
+      // Jangan ubah soldQty.
+    }
+
+    // ======================================
+    // TRANSFER REJECT
+    // ======================================
+    else if (isRejectTransfer) {
+      // Barang reject kembali menjadi stok.
+      // Tidak dianggap penjualan.
+    }
+
+    // ======================================
+    // PENJUALAN
+    // ======================================
+    else if (metode === "PENJUALAN") {
+      tracker[skuKey].soldQty += qty;
+      tracker[skuKey].saldo -= qty;
+    }
   });
 
   return tracker;
@@ -158,7 +206,9 @@ export const filterRefundSoldRows = ({ rows = [], transaksi = [] }) => {
 
     const ket = String(row.keterangan || row.statusBarang || "").toUpperCase();
 
-    const isRefundRow = ket.includes("REFUND");
+    const isRefundRow =
+    ket.includes("REFUND") ||
+    ket.includes("RETUR");
 
     if (!isRefundRow) {
       return true;
@@ -168,33 +218,18 @@ export const filterRefundSoldRows = ({ rows = [], transaksi = [] }) => {
       return true;
     }
 
-    const refundQty = Number(data.refundQty || 0);
+    const saldo = Number(data.saldo || 0);
 
-    const soldQty = Number(data.soldQty || 0);
-
-    const sisaRefund = refundQty - soldQty;
-
-    // =====================================
-    // REFUND HABIS TERJUAL
-    // =====================================
-    if (sisaRefund <= 0) {
-      return false;
+    if (saldo <= 0) {
+        return false;
     }
 
-    // =====================================
-    // JANGAN TAMPILKAN QTY LEBIH BESAR
-    // DARI SISA REFUND
-    // =====================================
-    row.qty = Math.min(Number(row.qty || 0), sisaRefund);
+    // ======================================================
+    // JANGAN UBAH row.qty
+    // Qty sudah dihitung oleh PASS 2 (stockByStore)
+    // ======================================================
 
-    if (
-      data?.lastStatus === "REFUND" &&
-      String(row.keterangan || "").toUpperCase() === "PENJUALAN"
-    ) {
-      row.keterangan = "REFUND";
-    }
-
-    return row.qty > 0;
+    return true;
   });
 };
 

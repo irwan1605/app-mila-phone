@@ -105,6 +105,21 @@ const normalizeImei = (v) =>
     .replace(/\s+/g, "")
     .toUpperCase();
 
+// =====================================================
+// 🔥 CEK IMEI SUDAH TERJUAL
+// =====================================================
+const getSoldImeiInfo = (imei = "", transaksi = []) => {
+  const clean = normalizeImei(imei);
+
+  return transaksi.find((trx) => {
+    return (
+      normalizeImei(trx.IMEI) === clean &&
+      String(trx.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN" &&
+      String(trx.STATUS || "").toUpperCase() === "APPROVED"
+    );
+  });
+};
+
 /* ========================================================= */
 export default function TransferBarang() {
   const navigate = useNavigate();
@@ -1713,19 +1728,44 @@ export default function TransferBarang() {
 
     const found = getLatestInventoryItem(im);
 
-    // const found = inventory.find(
-    //   (i) => String(i.imei).trim() === String(im).trim()
-    // );
-
     console.log("IMEI dicari:", im, "FOUND:", found);
 
     if (!found) {
       alert("❌ No IMEI tidak ditemukan di stok");
+
+      return false;
+    }
+
+    // =========================================
+    // 🔥 CEK IMEI SUDAH TERJUAL
+    // =========================================
+    const soldInfo = getSoldImeiInfo(im, allTransaksi);
+
+    if (soldInfo) {
+      alert(
+        `❌ IMEI SUDAH TERJUAL
+
+Brand       : ${soldInfo.NAMA_BRAND}
+
+Barang      : ${soldInfo.NAMA_BARANG}
+
+IMEI        : ${soldInfo.IMEI}
+
+Invoice     : ${soldInfo.NO_INVOICE || "-"}
+
+Toko        : ${soldInfo.NAMA_TOKO || "-"}
+
+Status      : SUDAH TERJUAL
+
+Barang yang sudah terjual tidak dapat dipindahkan lagi.`
+      );
+
       return false;
     }
 
     if (!isImeiAllowedForTransfer(found.status)) {
       alert("❌ No IMEI tidak tersedia untuk transfer");
+
       return false;
     }
 
@@ -2271,6 +2311,13 @@ export default function TransferBarang() {
     // ================= HARD GLOBAL VALIDATION =================
     for (const imei of form.imeis || []) {
       const clean = normalizeImei(imei);
+
+       // =====================================
+    // VALIDASI BARU
+    // =====================================
+    if (!validateImeiBeforeAdd(clean)) {
+      return;
+  }
 
       // ❌ DUPLIKAT DI TRANSFER PENDING
       if (isImeiUsedInPendingTransfer(clean)) {
