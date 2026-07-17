@@ -58,6 +58,13 @@ export default function FormItemSection({
   const [stokToko, setStokToko] = useState([]);
   const [editIndex, setEditIndex] = useState(null);
   const [showTable, setShowTable] = useState(false);
+  const [stockPickerOpen, setStockPickerOpen] = useState(false);
+
+const [stockSearch, setStockSearch] = useState("");
+
+const [selectedKategori, setSelectedKategori] = useState("");
+
+const [selectedBrand, setSelectedBrand] = useState("");
 
   // ======================================
   // STOCK FINAL DARI STOCK OPNAME
@@ -82,6 +89,28 @@ export default function FormItemSection({
   const availableSku = useMemo(() => {
     return availableStock.filter((r) => !r.imei);
   }, [availableStock]);
+
+  // ======================================
+// FINAL STOCK YANG AKAN DITAMPILKAN
+// DI MODAL AMBIL STOCK TOKO
+// ======================================
+
+const finalAvailableStock = useMemo(() => {
+
+  const rows = [...availableStock];
+
+  return rows
+      .filter(x => Number(x.qty || 0) > 0)
+      .filter(x => normalize(x.toko) === normalize(tokoLogin))
+      .sort((a, b) =>
+          String(a.barang || "")
+              .localeCompare(String(b.barang || ""))
+      );
+
+}, [
+  availableStock,
+  tokoLogin
+]);
 
   const finalImeiStock = useMemo(() => {
     return buildFinalImeiStock({

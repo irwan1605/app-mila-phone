@@ -75,12 +75,21 @@ const isImeiAllowedForTransfer = (status) => {
 
   return [
     "AVAILABLE",
+
     "TRANSFER_MASUK",
+
     "TRANSFER_KELUAR",
+
     "OUT",
+
     "READY",
+
     "REFUND",
+
+    "RETUR",
+
     "PEMBELIAN",
+
     "TRANSFER_REJECT",
   ].includes(finalStatus);
 };
@@ -111,13 +120,52 @@ const normalizeImei = (v) =>
 const getSoldImeiInfo = (imei = "", transaksi = []) => {
   const clean = normalizeImei(imei);
 
-  return transaksi.find((trx) => {
-    return (
-      normalizeImei(trx.IMEI) === clean &&
-      String(trx.PAYMENT_METODE || "").toUpperCase() === "PENJUALAN" &&
-      String(trx.STATUS || "").toUpperCase() === "APPROVED"
-    );
-  });
+  const rows = transaksi
+    .filter((t) => normalizeImei(t.IMEI) === clean)
+    .sort((a, b) => {
+      const ta =
+        a.UPDATED_AT || a.updatedAt || a.CREATED_AT || a.createdAt || 0;
+
+      const tb =
+        b.UPDATED_AT || b.updatedAt || b.CREATED_AT || b.createdAt || 0;
+
+      return ta - tb;
+    });
+
+  if (!rows.length) return null;
+
+  const last = rows[rows.length - 1];
+
+  const metode = String(last.PAYMENT_METODE || "").toUpperCase();
+
+  //--------------------------------------------------
+  // STATUS YANG AKTIF KEMBALI
+  //--------------------------------------------------
+
+  if (
+    [
+      "REFUND",
+      "RETUR",
+      "TRANSFER_MASUK",
+      "TRANSFER_REJECT",
+      "PEMBELIAN",
+    ].includes(metode)
+  ) {
+    return null;
+  }
+
+  //--------------------------------------------------
+  // MASIH TERJUAL
+  //--------------------------------------------------
+
+  if (
+    metode === "PENJUALAN" &&
+    String(last.STATUS || "").toUpperCase() === "APPROVED"
+  ) {
+    return last;
+  }
+
+  return null;
 };
 
 /* ========================================================= */
@@ -456,6 +504,17 @@ export default function TransferBarang() {
 
           if (metode === "REFUND") {
             map[imei].status = "AVAILABLE";
+            map[imei].status = "AVAILABLE";
+
+            map[imei].CAN_TRANSFER = true;
+
+            map[imei].CAN_SELL = true;
+
+            map[imei].SUMBER_STOCK = "REFUND";
+
+            map[imei].CURRENT_OWNER = v.NAMA_TOKO;
+
+            map[imei].IS_REFUND = true;
 
             // 🔥 OWNER
             map[imei].toko = String(v.NAMA_TOKO || "").trim();
@@ -478,6 +537,22 @@ export default function TransferBarang() {
               v.CREATED_AT ||
               v.createdAt ||
               Date.now();
+          }
+
+          if (metode === "RETUR") {
+            map[imei].status = "AVAILABLE";
+
+            map[imei].toko = v.NAMA_TOKO;
+
+            map[imei].CAN_TRANSFER = true;
+
+            map[imei].CAN_SELL = true;
+
+            map[imei].SUMBER_STOCK = "RETUR";
+
+            map[imei].CURRENT_OWNER = v.NAMA_TOKO;
+
+            map[imei].IS_RETUR = true;
           }
 
           if (metode === "TRANSFER_KELUAR") {
@@ -646,8 +721,31 @@ export default function TransferBarang() {
             map[imei].status = "AVAILABLE";
             map[imei].toko = String(v.NAMA_TOKO || "").trim();
           } else if (metode === "REFUND") {
+            map[imei].CAN_TRANSFER = true;
+
+            map[imei].CAN_SELL = true;
+
+            map[imei].SUMBER_STOCK = "REFUND";
+
+            map[imei].CURRENT_OWNER = v.NAMA_TOKO;
+
+            map[imei].IS_REFUND = true;
             map[imei].status = "AVAILABLE";
             map[imei].toko = String(v.NAMA_TOKO || "").trim();
+          } else if (metode === "RETUR") {
+            map[imei].status = "AVAILABLE";
+
+            map[imei].toko = v.NAMA_TOKO;
+
+            map[imei].CAN_TRANSFER = true;
+
+            map[imei].CAN_SELL = true;
+
+            map[imei].SUMBER_STOCK = "RETUR";
+
+            map[imei].CURRENT_OWNER = v.NAMA_TOKO;
+
+            map[imei].IS_RETUR = true;
           } else if (metode === "PENJUALAN") {
             map[imei].status = "SOLD";
           }
@@ -1092,9 +1190,15 @@ export default function TransferBarang() {
       // ======================================================
       const allowedStatus = [
         "AVAILABLE",
+
         "TRANSFER_MASUK",
+
         "REFUND",
+
+        "RETUR",
+
         "PEMBELIAN",
+
         "OUT",
       ];
 
@@ -1763,6 +1867,28 @@ Barang yang sudah terjual tidak dapat dipindahkan lagi.`
       return false;
     }
 
+    if (soldInfo) {
+      const latest = getLatestInventoryItem(im);
+
+      if (
+        latest &&
+        (latest.IS_REFUND || latest.IS_RETUR || latest.status === "AVAILABLE")
+      ) {
+        // refund / retur aktif lagi
+      } else {
+        alert(`
+❌ IMEI SUDAH TERJUAL
+
+Brand   : ${soldInfo.NAMA_BRAND}
+Barang  : ${soldInfo.NAMA_BARANG}
+IMEI    : ${soldInfo.IMEI}
+Invoice : ${soldInfo.NO_INVOICE}
+`);
+
+        return false;
+      }
+    }
+
     if (!isImeiAllowedForTransfer(found.status)) {
       alert("❌ No IMEI tidak tersedia untuk transfer");
 
@@ -2312,12 +2438,12 @@ Barang yang sudah terjual tidak dapat dipindahkan lagi.`
     for (const imei of form.imeis || []) {
       const clean = normalizeImei(imei);
 
-       // =====================================
-    // VALIDASI BARU
-    // =====================================
-    if (!validateImeiBeforeAdd(clean)) {
-      return;
-  }
+      // =====================================
+      // VALIDASI BARU
+      // =====================================
+      if (!validateImeiBeforeAdd(clean)) {
+        return;
+      }
 
       // ❌ DUPLIKAT DI TRANSFER PENDING
       if (isImeiUsedInPendingTransfer(clean)) {

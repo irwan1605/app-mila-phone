@@ -267,35 +267,33 @@ export const kurangiStokSetelahPenjualan = async (trx) => {
       });
 
       // ========================================
-// RESET STATUS REFUND
-// AGAR BISA DIREFUND LAGI
-// ========================================
+      // RESET STATUS REFUND
+      // AGAR BISA DIREFUND LAGI
+      // ========================================
 
-await update(ref(db, `detail_stock/${imei}`), {
+      await update(ref(db, `detail_stock/${imei}`), {
+        READY_RESALE: false,
 
-  READY_RESALE: false,
+        IS_REFUND: false,
 
-  IS_REFUND: false,
+        LAST_ACTION: "PENJUALAN",
 
-  LAST_ACTION: "PENJUALAN",
+        PAYMENT_METODE: "PENJUALAN",
 
-  PAYMENT_METODE: "PENJUALAN",
+        sold: true,
 
-  sold: true,
+        status: "SOLD",
 
-  status: "SOLD",
+        updatedAt: Date.now(),
 
-  updatedAt: Date.now(),
+        updatedAtServer: serverTimestamp(),
+      });
 
-  updatedAtServer: serverTimestamp(),
+      // ========================================
+      // HAPUS LOCK REFUND LAMA
+      // ========================================
 
-});
-
-// ========================================
-// HAPUS LOCK REFUND LAMA
-// ========================================
-
-await remove(ref(db, `imei_refund_lock/${imei}`));
+      await remove(ref(db, `imei_refund_lock/${imei}`));
     }
   }
 };
@@ -2839,20 +2837,50 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         PAYMENT_METODE: "TRANSFER_KELUAR",
 
+        // ===============================
+        // ENGINE REFUND / RETUR
+        // ===============================
+
+        SUMBER_STOCK:
+          transfer.SUMBER_STOCK ||
+          (transfer.IS_REFUND
+            ? "REFUND"
+            : transfer.IS_RETUR
+            ? "RETUR"
+            : "NORMAL"),
+
+        IS_REFUND: transfer.IS_REFUND === true,
+
+        IS_RETUR: transfer.IS_RETUR === true,
+
+        IS_REFUND_TRANSFER: transfer.IS_REFUND === true,
+
+        IS_RETUR_TRANSFER: transfer.IS_RETUR === true,
+
+        CAN_TRANSFER: true,
+
+        CAN_SELL: true,
+
+        CURRENT_OWNER: ke,
+
+        LAST_ACTION: transfer.IS_REFUND
+          ? "TRANSFER_REFUND"
+          : transfer.IS_RETUR
+          ? "TRANSFER_RETUR"
+          : "TRANSFER",
+
         OWNER_AKHIR: ke,
-        
+
         OWNER_SEBELUM: tokoPengirim,
-        
+
         TRANSFER_OWNER: true,
-        
+
         NAMA_SUPPLIER: finalSupplier,
 
         SYSTEM_PAYMENT: "SYSTEM",
         STATUS: "Approved",
 
         CREATED_AT: approvedAt,
-
-        
       });
 
       // 🔺 TRANSFER MASUK
@@ -2886,33 +2914,41 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         PAYMENT_METODE: "TRANSFER_MASUK",
 
+        SUMBER_STOCK:
+          transfer.SUMBER_STOCK ||
+          (transfer.IS_REFUND
+            ? "REFUND"
+            : transfer.IS_RETUR
+            ? "RETUR"
+            : "NORMAL"),
+
+        IS_REFUND: transfer.IS_REFUND === true,
+
+        IS_RETUR: transfer.IS_RETUR === true,
+
+        IS_REFUND_TRANSFER: transfer.IS_REFUND === true,
+
+        IS_RETUR_TRANSFER: transfer.IS_RETUR === true,
+
+        CAN_TRANSFER: true,
+
+        CAN_SELL: true,
+
+        CURRENT_OWNER: ke,
+
+        LAST_ACTION: transfer.IS_REFUND
+          ? "TRANSFER_REFUND"
+          : transfer.IS_RETUR
+          ? "TRANSFER_RETUR"
+          : "TRANSFER",
+
         OWNER_AKHIR: ke,
-        
+
         OWNER_SEBELUM: tokoPengirim,
-        
+
         TRANSFER_OWNER: true,
-        
+
         NAMA_SUPPLIER: finalSupplier,
-
-        // =====================================
-        // 🔥 SETELAH TRANSFER
-        // STOCK MENJADI NORMAL
-        // =====================================
-        SUMBER_STOCK: "NORMAL",
-
-        // =====================================
-        // 🔥 TRANSFER SUDAH AKTIF NORMAL
-        // =====================================
-        IS_REFUND_TRANSFER: false,
-
-        // =====================================
-        // 🔥 FINAL LAST ACTION
-        // =====================================
-        // SETELAH TRANSFER
-        // STATUS HARUS MENJADI TRANSFER
-        // AGAR TIDAK TERBACA REFUND LAGI
-        // =====================================
-        LAST_ACTION: "TRANSFER",
 
         SYSTEM_PAYMENT: "SYSTEM",
 
@@ -2950,11 +2986,11 @@ export const approveTransferFINAL = async ({ transfer }) => {
       PAYMENT_METODE: "TRANSFER_KELUAR",
 
       OWNER_AKHIR: ke,
-      
+
       OWNER_SEBELUM: tokoPengirim,
-      
+
       TRANSFER_OWNER: true,
-      
+
       NAMA_SUPPLIER: finalSupplier,
 
       SYSTEM_PAYMENT: "SYSTEM",
@@ -2986,13 +3022,13 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
       PAYMENT_METODE: "TRANSFER_MASUK",
 
-OWNER_AKHIR: ke,
+      OWNER_AKHIR: ke,
 
-OWNER_SEBELUM: tokoPengirim,
+      OWNER_SEBELUM: tokoPengirim,
 
-TRANSFER_OWNER: true,
+      TRANSFER_OWNER: true,
 
-NAMA_SUPPLIER: finalSupplier,
+      NAMA_SUPPLIER: finalSupplier,
 
       SYSTEM_PAYMENT: "SYSTEM",
       STATUS: "Approved",
