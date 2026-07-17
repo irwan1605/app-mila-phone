@@ -361,31 +361,55 @@ export const buildFinalStockRows = ({
       map[skuKey].supplier = latestSupplier;
     }
 
-    // ======================================
-    // 🔥 STOCK MASUK
-    // ======================================
-    if (
-      [
-          "PEMBELIAN",
-          "TRANSFER_MASUK",
-          "TRANSFER_REJECT",
-          "REFUND",
-          "RETUR",          // ✅ Tambahkan
-          "VOID OPNAME",
-      ].includes(metode)
-      ){
-          map[skuKey].qty += Math.abs(Number(t.QTY || 0));
-      }
+    const qty = Math.abs(Number(t.QTY || 0));
 
-    // ======================================
-    // 🔥 STOCK KELUAR
-    // ======================================
-    if (
-      ["PENJUALAN", "TRANSFER_KELUAR", "REJECT", "STOK OPNAME"].includes(metode)
-    ) {
-      map[skuKey].qty -= Math.abs(Number(t.QTY || 0));
-    }
+    const effect = (() => {
+    
+        switch (metode) {
+    
+            // ==========================
+            // STOCK MASUK
+            // ==========================
+    
+            case "PEMBELIAN":
+            case "REFUND":
+            case "RETUR":
+            case "TRANSFER_MASUK":
+            case "TRANSFER_REJECT":
+            case "VOID OPNAME":
+    
+                return qty;
+    
+            // ==========================
+            // STOCK KELUAR
+            // ==========================
+    
+            case "PENJUALAN":
+            case "TRANSFER_KELUAR":
+            case "REJECT":
+            case "STOK OPNAME":
+    
+                return -qty;
+    
+            default:
+    
+                return 0;
+        }
+    
+    })();
+    
+    map[skuKey].qty += effect;
   });
+
+  Object.values(map).forEach((row) => {
+
+    if (!row.imei) {
+
+        row.qty = Math.max(0, Number(row.qty || 0));
+
+    }
+
+});
 
   // ======================================
   // 🔥 FINAL ACTIVE IMEI
@@ -421,10 +445,13 @@ export const buildFinalStockRows = ({
     }
   });
 
+  
+
   // ======================================
   // 🔥 FINAL CLEAN
   // ======================================
   return Object.values(map)
+  
 
   .filter((row)=>{
   

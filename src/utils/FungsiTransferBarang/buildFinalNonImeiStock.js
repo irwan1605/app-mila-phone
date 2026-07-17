@@ -70,47 +70,48 @@ export const buildFinalNonImeiStock = ({
     // ======================================
     // 🔥 QTY
     // ======================================
-    const qty = Number(trx.QTY || trx.qty || 0);
+    const qty = Math.abs(Number(trx.QTY || trx.qty || 0));
 
     // ======================================
     // 🔥 METODE
     // ======================================
     const metode = normalizeText(trx.PAYMENT_METODE || trx.metode || trx.jenis);
 
-    // ======================================
-    // 🔥 STOCK MASUK
-    // ======================================
-    if (
-      [
-        "PEMBELIAN",
-        "TRANSFER_MASUK",
-        "TRANSFER BARANG",
-        "REFUND",
-        "TRANSFER_REJECT",
-        "RETUR",
-      ].includes(metode)
-    ) {
-      saldo += qty;
-    }
+    // =============================
+    // LETAKKAN CODE BARU DI SINI
+    // =============================
 
-    // ======================================
-    // 🔥 STOCK KELUAR
-    // ======================================
-    if (
-      ["PENJUALAN", "TRANSFER_KELUAR", "TRANSFER BARANG KELUAR"].includes(
-        metode
-      )
-    ) {
-      saldo -= qty;
-    }
+    const effect = (() => {
+      switch (metode) {
+        case "PEMBELIAN":
+        case "REFUND":
+        case "RETUR":
+        case "TRANSFER_MASUK":
+        case "TRANSFER_REJECT":
+        case "TRANSFER BARANG":
+          return qty;
+
+        case "PENJUALAN":
+        case "TRANSFER_KELUAR":
+        case "TRANSFER BARANG KELUAR":
+          return -qty;
+
+        default:
+          return 0;
+      }
+    })();
+
+    saldo += effect;
   });
+
+  saldo = Math.max(0, saldo);
 
   console.log("🔥 FINAL NON IMEI STOCK:", {
-    toko,
-    brand,
-    barang,
-    saldo,
+      toko,
+      brand,
+      barang,
+      saldo,
   });
-
-  return saldo < 0 ? 0 : saldo;
+  
+  return saldo;
 };
