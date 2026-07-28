@@ -25,6 +25,14 @@ export default function Login({ onLogin, users: usersProp }) {
       const data = Array.isArray(list) ? list : [];
       setOnlineUsers(data);
       localStorage.setItem("users", JSON.stringify(data));
+      // ================= SESSION LOGIN =================
+      const loginTime = Date.now();
+
+      localStorage.setItem("LOGIN_TIME", loginTime);
+
+      const SESSION_DURATION = 8 * 60 * 60 * 1000;
+
+      localStorage.setItem("SESSION_EXPIRE", loginTime + SESSION_DURATION);
     });
 
     return () => unsub && unsub();

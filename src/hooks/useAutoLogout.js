@@ -1,27 +1,41 @@
 import { useEffect } from "react";
-
-const IDLE_LIMIT = 15 * 60 * 1000; // 15 menit
+import { clearSession } from "../utils/sessionManager";
 
 export default function useAutoLogout(logout) {
-  useEffect(() => {
-    let timer;
 
-    const resetTimer = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        alert("⏱️ Logout otomatis karena tidak ada aktivitas");
-        logout();
-      }, IDLE_LIMIT);
-    };
+    useEffect(() => {
 
-    const events = ["mousemove", "keydown", "click", "scroll"];
+        const timer = setInterval(() => {
 
-    events.forEach((e) => window.addEventListener(e, resetTimer));
-    resetTimer();
+            const expire = Number(
+                localStorage.getItem("SESSION_EXPIRE")
+            );
 
-    return () => {
-      clearTimeout(timer);
-      events.forEach((e) => window.removeEventListener(e, resetTimer));
-    };
-  }, [logout]);
+            if (!expire) return;
+
+            if (Date.now() >= expire) {
+
+                alert(
+                    "Session telah berakhir.\nSilakan login kembali."
+                );
+
+                clearSession();
+
+                if (logout) {
+
+                    logout();
+
+                } else {
+
+                    window.location.href = "/";
+                }
+
+            }
+
+        },10000);
+
+        return ()=>clearInterval(timer);
+
+    },[logout]);
+
 }
