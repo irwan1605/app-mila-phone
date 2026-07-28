@@ -163,7 +163,7 @@ export default function TablePenjualan({ data = [] }) {
 
   useEffect(() => {
     const unsub = listenRefundRealtime(setGlobalRefundRealtime);
-  
+
     return () => unsub && unsub();
   }, []);
 
@@ -233,22 +233,42 @@ export default function TablePenjualan({ data = [] }) {
   }, []);
 
   const [roleDb, setRoleDb] = useState(null);
+  const roleCache = useRef(null);
 
   // DEBUG
-  console.log("LOGIN:", userLogin);
-  console.log(
-    "LOGIN KEY:",
-    userLogin?.username || userLogin?.name || userLogin?.nik
+  const DEV =
+  typeof process !== "undefined" &&
+  process.env &&
+  process.env.NODE_ENV === "development";
+
+  DEV && console.log("LOGIN:", userLogin);
+  
+  DEV && console.log(
+      "LOGIN KEY:",
+      userLogin?.username ||
+      userLogin?.name ||
+      userLogin?.nik
   );
-  console.log("ROLE DB:", roleDb);
+  
+  DEV && console.log("ROLE DB:", roleDb);
 
   useEffect(() => {
     const loginKey = userLogin?.username || userLogin?.name || userLogin?.nik;
 
     if (!loginKey) return;
 
-    getUserRole(loginKey).then(setRoleDb);
-  }, [userLogin]);
+    // gunakan cache
+    if (roleCache.current) {
+      setRoleDb(roleCache.current);
+      return;
+    }
+
+    getUserRole(loginKey).then((role) => {
+      roleCache.current = role;
+
+      setRoleDb(role);
+    });
+  }, []);
 
   const roleFinal = roleDb || userLogin?.role || "";
 
@@ -318,7 +338,6 @@ export default function TablePenjualan({ data = [] }) {
   /* ================= FLATTEN DATA ================= */
   const tableRows = useMemo(() => {
     const map = {};
-    
 
     // ======================================
     // 🔥 CLEAR REFUND CACHE
@@ -328,66 +347,47 @@ export default function TablePenjualan({ data = [] }) {
     });
 
     // ======================================================
-// FIX TRANSAKSI TERAKHIR YANG BELUM MASUK REALTIME
-// ======================================================
-const safeRows = (() => {
+    // FIX TRANSAKSI TERAKHIR YANG BELUM MASUK REALTIME
+    // ======================================================
+    const safeRows = (() => {
+      const invoiceMap = new Map();
 
-  const invoiceMap = new Map();
+      (rows || []).forEach((trx) => {
+        if (!trx) return;
 
-  (rows || []).forEach((trx) => {
+        const invoice = String(trx.invoice || trx.NO_INVOICE || "").trim();
 
-      if (!trx) return;
+        if (!invoice) return;
 
-      const invoice = String(
-          trx.invoice ||
-          trx.NO_INVOICE ||
-          ""
-      ).trim();
+        const old = invoiceMap.get(invoice);
 
-      if (!invoice) return;
-
-      const old = invoiceMap.get(invoice);
-
-      if (!old) {
+        if (!old) {
           invoiceMap.set(invoice, trx);
           return;
-      }
+        }
 
-      const oldItems = Array.isArray(old.items)
-          ? old.items.length
-          : 0;
+        const oldItems = Array.isArray(old.items) ? old.items.length : 0;
 
-      const newItems = Array.isArray(trx.items)
-          ? trx.items.length
-          : 0;
+        const newItems = Array.isArray(trx.items) ? trx.items.length : 0;
 
-      // pilih data yang itemnya paling lengkap
-      if (newItems > oldItems) {
+        // pilih data yang itemnya paling lengkap
+        if (newItems > oldItems) {
           invoiceMap.set(invoice, trx);
           return;
-      }
+        }
 
-      // jika item sama pilih createdAt terbaru
-      if (
-          Number(trx.createdAt || 0) >
-          Number(old.createdAt || 0)
-      ) {
+        // jika item sama pilih createdAt terbaru
+        if (Number(trx.createdAt || 0) > Number(old.createdAt || 0)) {
           invoiceMap.set(invoice, trx);
-      }
+        }
+      });
 
-  });
-
-  return [...invoiceMap.values()]
-      .sort(
-          (a, b) =>
-              Number(b.createdAt || 0) -
-              Number(a.createdAt || 0)
+      return [...invoiceMap.values()].sort(
+        (a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0)
       );
+    })();
 
-})();
-
-safeRows.forEach((trx) => {
-      
+    safeRows.forEach((trx) => {
       // ======================================
       // 🔥 BLOCK SEMUA DATA REFUND
       // ======================================
@@ -797,7 +797,7 @@ safeRows.forEach((trx) => {
         .trim()
         .toUpperCase();
 
-        const isDeletedRealtime =
+      const isDeletedRealtime =
         deletedRows?.[invoiceKey] === true ||
         deletedRows?.[r.invoice] === true ||
         instantRefund?.[invoiceKey] === true ||
@@ -806,7 +806,7 @@ safeRows.forEach((trx) => {
         localHiddenRefund?.[r.invoice] === true ||
         globalRefundRealtime?.[invoiceKey] === true ||
         refundRealtimeBlacklist?.has(invoiceKey) ||
-        refundBlacklist?.includes(invoiceKey);;
+        refundBlacklist?.includes(invoiceKey);
 
       // ======================================
       // 🔥 FORCE HIDE REALTIME

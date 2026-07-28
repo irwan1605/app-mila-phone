@@ -353,30 +353,52 @@ export default function FormPaymentSection({
   ]);
 
   /* ================= SYNC KE PARENT ================= */
+  const lastPayload = React.useRef(null);
+
   useEffect(() => {
-    onChange({
-      ...paymentSafe,
+  
+      const payload = {
+  
+          ...paymentSafe,
+  
+          nominalMdr,
+  
+          grandTotal,
+  
+          dashboardPayment,
+  
+          splitPayment: paymentSplit.enabled
+              ? paymentSplit.detail
+              : null,
+  
+          totalSplit,
+  
+          kurangBayar,
+  
+          rumusDpTalangan,
+  
+          nominalKurangBayarKredit,
+  
+      };
+  
+      const json = JSON.stringify(payload);
+  
+      if (lastPayload.current === json) return;
+  
+      lastPayload.current = json;
+  
+      onChange(payload);
+  
+  },[
+      paymentSafe,
       nominalMdr,
       grandTotal,
       dashboardPayment,
-
-      splitPayment: paymentSplit.enabled ? paymentSplit.detail : null,
+      paymentSplit,
       totalSplit,
       kurangBayar,
-
       rumusDpTalangan,
-
       nominalKurangBayarKredit,
-    });
-  }, [
-    paymentSafe,
-    nominalMdr,
-    grandTotal,
-    dashboardPayment,
-    paymentSplit,
-    totalSplit,
-    kurangBayar,
-    rumusDpTalangan,
   ]);
 
   const findBankByNama = (nama) => {
