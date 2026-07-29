@@ -121,6 +121,7 @@ export default function StockOpname() {
   const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageDefault);
   const [filterSupplier, setFilterSupplier] = useState("");
   const [filterImei, setFilterImei] = useState("");
+  const DEV = process.env.NODE_ENV === "development";
 
   const [transaksi, setTransaksi] = useState([]);
   const [exportMode, setExportMode] = useState("filter");
@@ -200,7 +201,9 @@ export default function StockOpname() {
     if (typeof listenAllTransaksi !== "function") return;
 
     const unsub = listenAllTransaksi((rows = []) => {
-      console.log("🔥 ALL TRANSAKSI (RAW):", rows);
+      if (DEV) {
+        console.log("🔥 ALL TRANSAKSI (RAW):", rows);
+      }
 
       setAllTransaksi(
         rows.filter(
@@ -423,7 +426,9 @@ export default function StockOpname() {
       }
     });
 
+    if (DEV) {
     console.log("🔥 SUPPLIER LOOKUP FINAL:", map);
+    }
 
     return map;
   }, [transaksi]);
@@ -542,40 +547,32 @@ export default function StockOpname() {
     // ======================================
 
     rows = rows.filter((row) => {
-
       const lastAction = String(
-          row.keterangan ||
-          row.lastTransaksi ||
-          ""
+        row.keterangan || row.lastTransaksi || ""
       ).toUpperCase();
-  
-      const isRefund =
-          lastAction.includes("REFUND");
-  
+
+      const isRefund = lastAction.includes("REFUND");
+
       // ======================================
       // BARANG REFUND HARUS TETAP TAMPIL
       // ======================================
       if (isRefund) {
-          return true;
+        return true;
       }
-  
+
       // ======================================
       // BARANG LAIN
       // ======================================
       if (Number(row.qty || 0) <= 0) {
-          return false;
+        return false;
       }
-  
-      if (
-          row.imei &&
-          imeiTerjual.has(normalizeImei(row.imei))
-      ) {
-          return false;
+
+      if (row.imei && imeiTerjual.has(normalizeImei(row.imei))) {
+        return false;
       }
-  
+
       return true;
-  
-  });
+    });
 
     // rows = rows.filter((r) => {
     //   if (!r.imei) {
@@ -772,7 +769,9 @@ export default function StockOpname() {
       }
     });
 
+    if (DEV) {
     console.log("MASTER PEMBELIAN LOOKUP:", map);
+    }
     return map;
   }, [allTransaksi]);
 
