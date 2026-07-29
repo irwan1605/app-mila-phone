@@ -156,6 +156,7 @@ export default function CardPenjualanToko() {
   const [detailStockLookup, setDetailStockLookup] = useState({});
   const [isStockReady, setIsStockReady] = useState(false);
   const [stockOpnameRows, setStockOpnameRows] = useState([]);
+  const DEV = process.env.NODE_ENV === "development";
 
   useEffect(() => {
     const unsub = onValue(ref(db, "detail_stock"), (snap) => {
@@ -171,7 +172,9 @@ export default function CardPenjualanToko() {
   }, []);
 
   useEffect(() => {
+    if (DEV) {
     console.log("PENJUALAN LIST:", penjualanList);
+    }
   }, [penjualanList]);
 
   useEffect(() => {
@@ -465,7 +468,9 @@ export default function CardPenjualanToko() {
       return;
     }
 
+    if (DEV) {
     console.log("PAYMENT:", payment);
+    }
 
     const tokoIdFix = normalizeTokoId(tokoAktifId);
 
@@ -564,7 +569,9 @@ export default function CardPenjualanToko() {
             throw new Error(`IMEI ${imei} sudah TERJUAL`);
           }
 
+          if (DEV) {
           console.log("🔥 FINAL STATUS:", imei, finalStatus);
+          }
 
           const canSell = [
             "AVAILABLE",
@@ -631,12 +638,14 @@ export default function CardPenjualanToko() {
             "PEMBELIAN",
           ].includes(String(finalStatus || "").toUpperCase());
 
+          if (DEV) {
           console.log("🔥 FINAL SALE CHECK", {
             imei,
             stockFinalStatus,
             stockData,
             bolehJual,
           });
+        }
 
           if (!bolehJual) {
             throw new Error(`IMEI ${imei} sudah TERJUAL`);

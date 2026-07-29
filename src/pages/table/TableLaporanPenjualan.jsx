@@ -18,17 +18,18 @@ export default function TableLaporanPenjualan({ data = [] }) {
   const [page, setPage] = useState(1);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
   const [masterBarang, setMasterBarang] = useState({});
+  const DEV = process.env.NODE_ENV === "development";
 
   const pageSize = 10;
 
   useEffect(() => {
     const dbRef = ref(db, "dataManagement/masterBarang");
-  
+
     onValue(dbRef, (snapshot) => {
       const val = snapshot.val();
-  
-      console.log("🔥 MASTER BARANG:", val);
-  
+      if (DEV) {
+        console.log("🔥 MASTER BARANG:", val);
+      }
       setMasterBarang(val || {});
     });
   }, []);
@@ -107,14 +108,14 @@ export default function TableLaporanPenjualan({ data = [] }) {
 
   const masterBarangMap = useMemo(() => {
     const map = {};
-  
+
     Object.values(masterBarang || {}).forEach((item) => {
       const key = item.namaBarang?.toLowerCase().trim();
       if (key) {
         map[key] = item;
       }
     });
-  
+
     return map;
   }, [masterBarang]);
 
@@ -122,7 +123,9 @@ export default function TableLaporanPenjualan({ data = [] }) {
   // 🔥 FLATTEN PER BARANG (LEVEL DETAIL)
   // ===============================
   const tableData = useMemo(() => {
-    console.log("DATA MASUK:", data);
+    if (DEV) {
+      console.log("DATA MASUK:", data);
+    }
     const rows = [];
 
     (data || []).forEach((trx) => {
@@ -161,133 +164,120 @@ export default function TableLaporanPenjualan({ data = [] }) {
 
         const imei = item.imeiList?.join(", ") || item.IMEI || trx.IMEI || "-";
         const barangKey = (item.namaBarang || trx.NAMA_BARANG || "")
-  .toLowerCase()
-  .trim();
+          .toLowerCase()
+          .trim();
 
-const barangMaster = masterBarangMap[barangKey] || {};
+        const barangMaster = masterBarangMap[barangKey] || {};
 
         rows.push({
-            NO: rows.length + 1,
-          
-            "Tgl transaksi": tanggal,
-            "No RESI / INVOICE": invoice,
-          
-            "MASA KERJA": salesData.MASA_KERJA || "-",
-          
-            NIK: salesData.NIK || user.idPelanggan || "-",
-          
-            "NAMA SALES/FL": salesData.NAMA || salesName || "-",
-          
-            REFERENSI: imei,
-          
-            TOKO: trx.toko || trx.NAMA_TOKO || "-",
-          
-            LEADER: salesData.LEADER || user.storeHead || "-",
-          
-            KOMODITI:
-              barangMaster.kategoriBarang ||
-              item.kategoriBarang ||
-              trx.KATEGORI_BARANG ||
-              "-",
-          
-            "NAMA BRAND":
-              barangMaster.brand ||
-              item.namaBrand ||
-              trx.NAMA_BRAND ||
-              "-",
-          
-            "TYPE UNIT":
-              barangMaster.namaBarang ||
-              item.namaBarang ||
-              trx.NAMA_BARANG ||
-              "-",
-          
-            "IMEI / NO MESIN": imei,
-          
-            "HARGA UNIT":
-              item.hargaAktif ||
-              trx.HARGA ||
-              barangMaster.harga?.srp ||
-              0,
-          
-            "KATEGORI HARGA":
-              trx.KATEGORI_HARGA || "SRP",
-          
-            "MARKET PRICE":
-              barangMaster.harga?.srp || 0,
-          
-            "AKSESORIS / SPAREPART / ONGKIR":
-              trx.AKSESORIS || trx.SPAREPART || trx.ONGKIR || "-",
-          
-            "HARGA AKSESORIS DLL":
-              trx.HARGA_AKSESORIS ||
-              trx.HARGA_SPAREPART ||
-              trx.HARGA_ONGKIR ||
-              0,
-          
-            "MP PROTECK": trx.MP_PROTECK || "-",
-          
-            "PAYMENT METODE":
-              trx.payment?.metode || trx.PAYMENT_METODE || "-",
-          
-            "SYSTEM PAYMENT":
-              trx.payment?.status === "PIUTANG"
-                ? "KREDIT"
-                : "CASH",
-          
-            "TOTAL PAYMENT USER":
-              trx.payment?.nominalPayment || 0,
-          
-            MDR: trx.payment?.nominalMdr || 0,
-          
-            "POTONGAN MDR": trx.payment?.nominalMdr || 0,
-          
-            TOTAL:
-              (item.qty || trx.QTY || 1) *
-              (item.hargaAktif ||
-                trx.HARGA ||
-                barangMaster.harga?.srp ||
-                0),
-          
-            "SISA LIMIT UNIT": trx.SISA_LIMIT || "-",
-          
-            "NO KONTRAK": trx.NO_KONTRAK || invoice,
-          
-            "NAMA AKUN": user.namaPelanggan || "-",
-          
-            "NO HP": user.noTlpPelanggan || "-",
-          
-            TENOR: trx.payment?.tenor || "-",
-          
-            "DP USER (MERCHANT)": trx.payment?.dpTalangan || 0,
-          
-            "DP USER (TOKO)": trx.DP_TOKO || 0,
-          
-            "REQUEST DP": trx.REQUEST_DP || 0,
-          
-            "SALDO TOKO": trx.SALDO_TOKO || 0,
-          
-            "SALDO FL": trx.SALDO_FL || 0,
-          
-            SISA: trx.payment?.kurangBayar || 0,
-          
-            "NAMA FL": trx.NAMA_FL || "-",
-          
-            "NAMA TEKNISI": trx.NAMA_TEKNISI || "-",
-          
-            "SALES HANDLE": user.salesHandle || "-",
-          
-            "STATUS PICKUP":
-              trx.STATUS || trx.statusPembayaran || "-",
-          
-            KETERANGAN: trx.keterangan || "-",
-          });
+          NO: rows.length + 1,
+
+          "Tgl transaksi": tanggal,
+          "No RESI / INVOICE": invoice,
+
+          "MASA KERJA": salesData.MASA_KERJA || "-",
+
+          NIK: salesData.NIK || user.idPelanggan || "-",
+
+          "NAMA SALES/FL": salesData.NAMA || salesName || "-",
+
+          REFERENSI: imei,
+
+          TOKO: trx.toko || trx.NAMA_TOKO || "-",
+
+          LEADER: salesData.LEADER || user.storeHead || "-",
+
+          KOMODITI:
+            barangMaster.kategoriBarang ||
+            item.kategoriBarang ||
+            trx.KATEGORI_BARANG ||
+            "-",
+
+          "NAMA BRAND":
+            barangMaster.brand || item.namaBrand || trx.NAMA_BRAND || "-",
+
+          "TYPE UNIT":
+            barangMaster.namaBarang ||
+            item.namaBarang ||
+            trx.NAMA_BARANG ||
+            "-",
+
+          "IMEI / NO MESIN": imei,
+
+          "HARGA UNIT":
+            item.hargaAktif || trx.HARGA || barangMaster.harga?.srp || 0,
+
+          "KATEGORI HARGA": trx.KATEGORI_HARGA || "SRP",
+
+          "MARKET PRICE": barangMaster.harga?.srp || 0,
+
+          "AKSESORIS / SPAREPART / ONGKIR":
+            trx.AKSESORIS || trx.SPAREPART || trx.ONGKIR || "-",
+
+          "HARGA AKSESORIS DLL":
+            trx.HARGA_AKSESORIS || trx.HARGA_SPAREPART || trx.HARGA_ONGKIR || 0,
+
+          "MP PROTECK": trx.MP_PROTECK || "-",
+
+          "PAYMENT METODE": trx.payment?.metode || trx.PAYMENT_METODE || "-",
+
+          "SYSTEM PAYMENT":
+            trx.payment?.status === "PIUTANG" ? "KREDIT" : "CASH",
+
+          "TOTAL PAYMENT USER": trx.payment?.nominalPayment || 0,
+
+          MDR: trx.payment?.nominalMdr || 0,
+
+          "POTONGAN MDR": trx.payment?.nominalMdr || 0,
+
+          TOTAL:
+            (item.qty || trx.QTY || 1) *
+            (item.hargaAktif || trx.HARGA || barangMaster.harga?.srp || 0),
+
+          "SISA LIMIT UNIT": trx.SISA_LIMIT || "-",
+
+          "NO KONTRAK": trx.NO_KONTRAK || invoice,
+
+          "NAMA AKUN": user.namaPelanggan || "-",
+
+          "NO HP": user.noTlpPelanggan || "-",
+
+          TENOR: trx.payment?.tenor || "-",
+
+          "DP USER (MERCHANT)": trx.payment?.dpTalangan || 0,
+
+          "DP USER (TOKO)": trx.DP_TOKO || 0,
+
+          "REQUEST DP": trx.REQUEST_DP || 0,
+
+          "SALDO TOKO": trx.SALDO_TOKO || 0,
+
+          "SALDO FL": trx.SALDO_FL || 0,
+
+          SISA: trx.payment?.kurangBayar || 0,
+
+          "NAMA FL": trx.NAMA_FL || "-",
+
+          "NAMA TEKNISI": trx.NAMA_TEKNISI || "-",
+
+          "SALES HANDLE": user.salesHandle || "-",
+
+          "STATUS PICKUP": trx.STATUS || trx.statusPembayaran || "-",
+
+          KETERANGAN: trx.keterangan || "-",
+        });
       });
     });
 
-    console.log("HASIL TABLE:", rows);
-    console.log("DATA RAW:", data);
-    console.log("JUMLAH DATA:", data.length);
+    if (DEV) {
+      console.log("HASIL TABLE:", rows);
+    }
+    if (DEV) {
+      console.log("DATA RAW:", data);
+    }
+    if (DEV) {
+      console.log("JUMLAH DATA:", data.length);
+    }
 
     return rows;
   }, [data, karyawanMap]);

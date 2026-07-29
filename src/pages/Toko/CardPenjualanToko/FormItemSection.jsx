@@ -59,12 +59,13 @@ export default function FormItemSection({
   const [editIndex, setEditIndex] = useState(null);
   const [showTable, setShowTable] = useState(false);
   const [stockPickerOpen, setStockPickerOpen] = useState(false);
+  const DEV = process.env.NODE_ENV === "development";
 
-const [stockSearch, setStockSearch] = useState("");
+  const [stockSearch, setStockSearch] = useState("");
 
-const [selectedKategori, setSelectedKategori] = useState("");
+  const [selectedKategori, setSelectedKategori] = useState("");
 
-const [selectedBrand, setSelectedBrand] = useState("");
+  const [selectedBrand, setSelectedBrand] = useState("");
 
   // ======================================
   // STOCK FINAL DARI STOCK OPNAME
@@ -91,26 +92,20 @@ const [selectedBrand, setSelectedBrand] = useState("");
   }, [availableStock]);
 
   // ======================================
-// FINAL STOCK YANG AKAN DITAMPILKAN
-// DI MODAL AMBIL STOCK TOKO
-// ======================================
+  // FINAL STOCK YANG AKAN DITAMPILKAN
+  // DI MODAL AMBIL STOCK TOKO
+  // ======================================
 
-const finalAvailableStock = useMemo(() => {
+  const finalAvailableStock = useMemo(() => {
+    const rows = [...availableStock];
 
-  const rows = [...availableStock];
-
-  return rows
-      .filter(x => Number(x.qty || 0) > 0)
-      .filter(x => normalize(x.toko) === normalize(tokoLogin))
+    return rows
+      .filter((x) => Number(x.qty || 0) > 0)
+      .filter((x) => normalize(x.toko) === normalize(tokoLogin))
       .sort((a, b) =>
-          String(a.barang || "")
-              .localeCompare(String(b.barang || ""))
+        String(a.barang || "").localeCompare(String(b.barang || ""))
       );
-
-}, [
-  availableStock,
-  tokoLogin
-]);
+  }, [availableStock, tokoLogin]);
 
   const finalImeiStock = useMemo(() => {
     return buildFinalImeiStock({
@@ -590,18 +585,13 @@ const finalAvailableStock = useMemo(() => {
         },
       };
 
-      availableImei.forEach((row)=>{
-
-        if(
-            normalize(row.kategoriBarang)!==
-            normalize(kategori)
-        ){
-            return;
+      availableImei.forEach((row) => {
+        if (normalize(row.kategoriBarang) !== normalize(kategori)) {
+          return;
         }
-    
+
         map.add(row.brand);
-    
-    });
+      });
 
       const barangFix = barangMaster || fallbackBarang;
 
@@ -1560,7 +1550,9 @@ IMEI + NON IMEI
   };
 
   useEffect(() => {
-    console.log("🔥 FINAL STOCK:", stockGabunganToko);
+    if (DEV) {
+      console.log("🔥 FINAL STOCK:", stockGabunganToko);
+    }
   }, [stockGabunganToko]);
 
   const barangByKategoriMap = useMemo(() => {
@@ -1724,14 +1716,19 @@ IMEI + NON IMEI
 
   // 🔥 DEBUG DI SINI
   useEffect(() => {
-    console.log("🔥 MASTER:", masterBarang);
-    console.log("🔥 STOCK:", stockGabunganToko);
+    if (DEV) {
+      console.log("🔥 MASTER:", masterBarang);
+    }
+    if (DEV) {
+      console.log("🔥 STOCK:", stockGabunganToko);
+    }
 
     const found = Object.keys(stockGabunganToko).find((k) =>
       k.includes("BATERAI SLA 12A")
     );
-
-    console.log("🔥 CEK SLA 12A:", found);
+    if (DEV) {
+      console.log("🔥 CEK SLA 12A:", found);
+    }
   }, [stockGabunganToko, masterBarang]);
 
   /* =========================================
@@ -2355,13 +2352,14 @@ IMEI + NON IMEI
                 const barangMaster = masterBarang.find(
                   (b) => normalize(b.namaBarang) === normalize(barang)
                 );
-
-                console.log(
-                  "STOK DROPDOWN",
-                  barang,
-                  finalNonImeiStock?.[key],
-                  universalStockMap?.[key]
-                );
+                if (DEV) {
+                  console.log(
+                    "STOK DROPDOWN",
+                    barang,
+                    finalNonImeiStock?.[key],
+                    universalStockMap?.[key]
+                  );
+                }
 
                 const stokFinal = getFinalStockBarang({
                   barang,
@@ -2548,9 +2546,9 @@ IMEI + NON IMEI
 
                     if (finalImei.available !== true) {
                       alert(`❌ IMEI ${imei} SUDAH TERJUAL`);
-
-                      console.log("FINAL IMEI", imei, finalImei);
-
+                      if (DEV) {
+                        console.log("FINAL IMEI", imei, finalImei);
+                      }
                       updateItem(idx, {
                         imei: "",
                         imeiList: [],
@@ -2559,12 +2557,13 @@ IMEI + NON IMEI
 
                       return;
                     }
-
-                    console.log(
-                      "IMEI DEBUG",
-                      "352246838561390",
-                      finalImeiStock["352246838561390"]
-                    );
+                    if (DEV) {
+                      console.log(
+                        "IMEI DEBUG",
+                        "352246838561390",
+                        finalImeiStock["352246838561390"]
+                      );
+                    }
                     if (!imei) return;
 
                     /* ===============================
@@ -2666,9 +2665,12 @@ IMEI + NON IMEI
                         return;
                       }
                     }
-
+                    if (DEV) {
                     console.log("🔥 STOK TOKO:", stokToko);
+                    }
+                    if (DEV) {
                     console.log("🔥 IMEI:", imei);
+                    }
 
                     /* ===============================
                        5. AUTO DETECT BARANG

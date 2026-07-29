@@ -237,19 +237,18 @@ export default function TablePenjualan({ data = [] }) {
 
   // DEBUG
   const DEV =
-  typeof process !== "undefined" &&
-  process.env &&
-  process.env.NODE_ENV === "development";
+    typeof process !== "undefined" &&
+    process.env &&
+    process.env.NODE_ENV === "development";
 
   DEV && console.log("LOGIN:", userLogin);
-  
-  DEV && console.log(
+
+  DEV &&
+    console.log(
       "LOGIN KEY:",
-      userLogin?.username ||
-      userLogin?.name ||
-      userLogin?.nik
-  );
-  
+      userLogin?.username || userLogin?.name || userLogin?.nik
+    );
+
   DEV && console.log("ROLE DB:", roleDb);
 
   useEffect(() => {
@@ -404,8 +403,9 @@ export default function TablePenjualan({ data = [] }) {
         normalize(trx?.statusPembayaran) === "REFUND";
 
       if (isRefundFinal) {
-        console.log("⛔ BLOCK REFUND:", trx.invoice);
-
+        if (DEV) {
+          console.log("⛔ BLOCK REFUND:", trx.invoice);
+        }
         return;
       }
       // ======================================
@@ -421,8 +421,9 @@ export default function TablePenjualan({ data = [] }) {
         normalize(trx?.STATUS) === "REFUND" ||
         normalize(trx?.statusPembayaran) === "REFUND"
       ) {
-        console.log("⛔ SKIP REFUND ROW:", trx.invoice);
-
+        if (DEV) {
+          console.log("⛔ SKIP REFUND ROW:", trx.invoice);
+        }
         return;
       }
       // ======================================
@@ -936,9 +937,9 @@ export default function TablePenjualan({ data = [] }) {
 
       return invoiceA === invoiceB;
     });
-
-    console.log("🔥 TRX REFUND:", trx);
-
+    if (DEV) {
+      console.log("🔥 TRX REFUND:", trx);
+    }
     if (!trx) return alert("Data transaksi tidak ditemukan");
 
     setPrintData(trx);
