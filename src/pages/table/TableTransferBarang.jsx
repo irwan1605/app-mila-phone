@@ -15,9 +15,16 @@ export default function TableTransferBarang({ currentRole }) {
     .trim()
     .replace(/\s+/g, "_");
 
+  const DEV = process.env.NODE_ENV === "development";
+
   // DEBUG
-  console.log("ROLE RAW:", currentRole);
-  console.log("ROLE NORMALIZED:", role);
+  if (DEV) {
+    console.log("ROLE RAW:", currentRole);
+  }
+
+  if (DEV) {
+    console.log("ROLE NORMALIZED:", role);
+  }
 
   // ================= ROLE ENGINE =================
   const isSuperAdmin = role === "superadmin";
@@ -34,9 +41,17 @@ export default function TableTransferBarang({ currentRole }) {
   // 🔥 ROLE YANG BOLEH APPROVE
   const canRoleApprove = isSuperAdmin || isSpv || isPic;
 
-  console.log("IS SUPERADMIN:", isSuperAdmin);
-  console.log("IS SPV:", isSpv);
-  console.log("IS PIC:", isPic);
+  if (DEV) {
+    console.log("IS SUPERADMIN:", isSuperAdmin);
+  }
+
+  if (DEV) {
+    console.log("IS SPV:", isSpv);
+  }
+
+  if (DEV) {
+    console.log("IS PIC:", isPic);
+  }
 
   const [rows, setRows] = useState([]);
 
@@ -64,9 +79,17 @@ export default function TableTransferBarang({ currentRole }) {
     const owner = String(found.toko || "").toUpperCase();
     const tokoPengirim = String(toko || "").toUpperCase();
 
-    console.log("IMEI:", imei);
-    console.log("OWNER:", owner);
-    console.log("TOKO PENGIRIM:", tokoPengirim);
+    if (DEV) {
+      console.log("IMEI:", imei);
+    }
+
+    if (DEV) {
+      console.log("OWNER:", owner);
+    }
+
+    if (DEV) {
+      console.log("TOKO PENGIRIM:", tokoPengirim);
+    }
 
     return owner === tokoPengirim;
   };
@@ -247,7 +270,9 @@ export default function TableTransferBarang({ currentRole }) {
         });
       });
 
-      console.log("🔥 DATA TRANSFER TABLE:", arr);
+      if (DEV) {
+        console.log("🔥 DATA TRANSFER TABLE:", arr);
+      }
       setRows(arr);
     });
   }, []);
@@ -706,7 +731,9 @@ export default function TableTransferBarang({ currentRole }) {
                               String(found.status || "").toUpperCase() ===
                               "REFUND"
                             ) {
-                              console.log("🔥 REFUND ACTIVE:", imei);
+                              if (DEV) {
+                                console.log("🔥 REFUND ACTIVE:", imei);
+                              }
                             }
 
                             // 🔒 cek owner hanya untuk user biasa
@@ -852,10 +879,12 @@ export default function TableTransferBarang({ currentRole }) {
                               }
                             });
 
-                            console.log(
-                              "🔥 TOTAL DO ITEMS:",
-                              sameDoRows.length
-                            );
+                            if (DEV) {
+                              console.log(
+                                "🔥 TOTAL DO ITEMS:",
+                                sameDoRows.length
+                              );
+                            }
 
                             // 🔥 GABUNGKAN SEMUA ITEM (TANPA FILTER)
                             const allItems = [];
@@ -889,7 +918,9 @@ export default function TableTransferBarang({ currentRole }) {
                               0
                             );
 
+                            if (DEV) {
                             console.log("🔥 FINAL ITEMS:", allItems);
+                            }
 
                             // 🔥 CEK / BUAT NO SURAT JALAN
                             const noSuratJalanFix =
