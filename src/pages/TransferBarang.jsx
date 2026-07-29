@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FaExchangeAlt, FaSearch, FaPlus, FaPrint } from "react-icons/fa";
 
@@ -14,6 +20,7 @@ import { hitungStokBarang } from "../utils/stockUtils";
 import FirebaseService from "../services/FirebaseService";
 import { ref, onValue, update, push, off } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
+import { listenTokoCached } from "../services/FirebaseCache";
 import TableTransferBarang from "./table/TableTransferBarang";
 import PrintSuratJalan from "./Print/PrintSuratJalan";
 import { getAvailableNonImeiStock } from "../utils/FungsiTransferBarang/getAvailableNonImeiStock";
@@ -177,11 +184,24 @@ export default function TransferBarang() {
   const [stokAccessories, setStokAccessories] = useState([]);
   const [previewSJ, setPreviewSJ] = useState(null);
   const [allTransaksi, setAllTransaksi] = useState([]);
+  const DEV = process.env.NODE_ENV === "development";
+
+  const transaksiHash = useRef("");
+
+  const handleAllTransaksi = useCallback((rows) => {
+    const json = JSON.stringify(rows);
+
+    if (transaksiHash.current === json) {
+      return;
+    }
+
+    transaksiHash.current = json;
+
+    setAllTransaksi(rows);
+  }, []);
 
   useEffect(() => {
-    const tokoRef = ref(db, "toko");
-
-    return onValue(tokoRef, (snap) => {
+    return listenTokoCached((snap) => {
       const arr = [];
 
       snap.forEach((tokoSnap) => {
@@ -199,9 +219,11 @@ export default function TransferBarang() {
         });
       });
 
-      console.log("🔥 ALL TRANSAKSI:", arr.length);
+      if (DEV) {
+        console.log("🔥 ALL TRANSAKSI:", arr.length);
+      }
 
-      setAllTransaksi(arr);
+      handleAllTransaksi(arr);
     });
   }, []);
 
@@ -353,11 +375,13 @@ export default function TransferBarang() {
       latest.status = "AVAILABLE";
     }
 
-    console.log("🔥 FINAL INVENTORY FIX:", {
-      imei: clean,
-      toko: latest?.toko,
-      status: latest?.status,
-    });
+    if (DEV) {
+      console.log("🔥 FINAL INVENTORY FIX:", {
+        imei: clean,
+        toko: latest?.toko,
+        status: latest?.status,
+      });
+    }
 
     return latest;
   };
@@ -435,9 +459,23 @@ export default function TransferBarang() {
   const [editIndex, setEditIndex] = useState(null);
   const [inventoryAccessories, setInventoryAccessories] = useState([]);
 
+  const inventoryAccessoriesHash = useRef("");
+
+  const handleInventoryAccessories = useCallback((rows) => {
+    const json = JSON.stringify(rows);
+
+    if (inventoryAccessoriesHash.current === json) {
+      return;
+    }
+
+    inventoryAccessoriesHash.current = json;
+
+    setInventoryAccessories(rows);
+  }, []);
+
   // ================= INVENTORY ACCESSORIES (NON IMEI) =================
   useEffect(() => {
-    return onValue(ref(db, "toko"), (snap) => {
+    return listenTokoCached((snap) => {
       const map = {};
 
       snap.forEach((tokoSnap) => {
@@ -614,7 +652,7 @@ export default function TransferBarang() {
       });
 
       // 🔥 FIX: jangan filter qty (karena IMEI tidak punya qty)
-      setInventoryAccessories(Object.values(map));
+      handleInventoryAccessories(Object.values(map));
     });
   }, []);
 
@@ -661,11 +699,23 @@ export default function TransferBarang() {
   const [loading, setLoading] = useState(false);
   const [daftarTransfer, setDaftarTransfer] = useState([]);
 
+  const inventoryHash = useRef("");
+
+  const handleInventory = useCallback((rows) => {
+    const json = JSON.stringify(rows);
+
+    if (inventoryHash.current === json) {
+      return;
+    }
+
+    inventoryHash.current = json;
+
+    setInventory(rows);
+  }, []);
+
   // ================= INVENTORY NORMALIZATION (FINAL) =================
   useEffect(() => {
-    const tokoRef = ref(db, "toko");
-
-    const unsubscribe = onValue(tokoRef, (snap) => {
+    return listenTokoCached((snap) => {
       const map = {}; // key = imei
 
       snap.forEach((tokoSnap) => {
@@ -805,10 +855,8 @@ export default function TransferBarang() {
       // ===============================
       // 🔥 FINAL SET INVENTORY
       // ===============================
-      setInventory(Object.values(map));
+      handleInventory(Object.values(map));
     });
-
-    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -1158,10 +1206,12 @@ export default function TransferBarang() {
 
         // 🔥 kalau owner masih ada → anggap valid
         if (fallbackOwner) {
-          console.log("🔥 FALLBACK REFUND VALID:", {
-            imei: clean,
-            owner: fallbackOwner,
-          });
+          if (DEV) {
+            console.log("🔥 FALLBACK REFUND VALID:", {
+              imei: clean,
+              owner: fallbackOwner,
+            });
+          }
 
           continue;
         }
@@ -1271,11 +1321,13 @@ export default function TransferBarang() {
       // ======================================================
       // 🔥 DEBUG LOG
       // ======================================================
-      console.log("✅ VALID IMEI:", {
-        imei: clean,
-        owner,
-        status: finalStatus,
-      });
+      if (DEV) {
+        console.log("✅ VALID IMEI:", {
+          imei: clean,
+          owner,
+          status: finalStatus,
+        });
+      }
     }
 
     // ========================================================
@@ -1307,12 +1359,14 @@ export default function TransferBarang() {
 
     const tokoLogin = normalizeText(form.tokoPengirim);
 
-    console.log("🔥 CEK OWNER FINAL:", {
-      imei,
-      owner,
-      tokoLogin,
-      found,
-    });
+    if (DEV) {
+      console.log("🔥 CEK OWNER FINAL:", {
+        imei,
+        owner,
+        tokoLogin,
+        found,
+      });
+    }
 
     // 🔥 PRIORITAS OWNER FINAL
     const finalOwner = normalizeText(getFinalOwner(imei) || owner);
@@ -1628,6 +1682,32 @@ export default function TransferBarang() {
     return [...new Set([...masterList, ...inventoryList])];
   }, [inventory, masterBarang, form.kategori, form.brand]);
 
+  const finalNonImeiStock = useMemo(() => {
+    if (isKategoriImeiFinal) {
+      return 0;
+    }
+
+    return buildFinalNonImeiStock({
+      transaksi: allTransaksi,
+
+      toko: form.tokoPengirim,
+
+      brand: form.brand,
+
+      barang: form.barang,
+    });
+  }, [
+    allTransaksi,
+
+    form.tokoPengirim,
+
+    form.brand,
+
+    form.barang,
+
+    isKategoriImeiFinal,
+  ]);
+
   const stokTersedia = useMemo(() => {
     if (!form.tokoPengirim || !form.barang) return 0;
 
@@ -1662,15 +1742,7 @@ export default function TransferBarang() {
     // 🔥 NON IMEI FINAL REAL
     // =====================
     if (!isKategoriImeiFinal) {
-      return buildFinalNonImeiStock({
-        transaksi: allTransaksi,
-
-        toko: form.tokoPengirim,
-
-        brand: form.brand,
-
-        barang: form.barang,
-      });
+      return finalNonImeiStock;
     }
 
     return 0;
@@ -1718,15 +1790,7 @@ export default function TransferBarang() {
   useEffect(() => {
     if (isKategoriImeiFinal) return;
 
-    const stock = buildFinalNonImeiStock({
-      transaksi: allTransaksi,
-
-      toko: form.tokoPengirim,
-
-      brand: form.brand,
-
-      barang: form.barang,
-    });
+    const stock = finalNonImeiStock;
 
     // ======================================
     // 🔥 AUTO LIMIT QTY
@@ -1832,7 +1896,9 @@ export default function TransferBarang() {
 
     const found = getLatestInventoryItem(im);
 
-    console.log("IMEI dicari:", im, "FOUND:", found);
+    if (DEV) {
+      console.log("IMEI dicari:", im, "FOUND:", found);
+    }
 
     if (!found) {
       alert("❌ No IMEI tidak ditemukan di stok");
@@ -1995,10 +2061,12 @@ Invoice : ${soldInfo.NO_INVOICE}
     // 🔥 FIX FINAL
     const found = getLatestInventoryItem(clean);
 
-    console.log("🔥 VALIDATE IMEI:", {
-      imei: clean,
-      found,
-    });
+    if (DEV) {
+      console.log("🔥 VALIDATE IMEI:", {
+        imei: clean,
+        found,
+      });
+    }
 
     // ❌ tidak ditemukan
     if (!found) {
@@ -2106,14 +2174,16 @@ Invoice : ${soldInfo.NO_INVOICE}
     // ================= 🔥 AMBIL DATA TERAKHIR =================
     const found = getLatestInventoryItem(im);
 
-    console.log("🔥 FOUND IMEI FINAL:", {
-      imei: im,
-      namaBarang: found?.namaBarang,
-      namaBrand: found?.namaBrand,
-      kategori: found?.kategori,
-      status: found?.status,
-      toko: found?.toko,
-    });
+    if (DEV) {
+      console.log("🔥 FOUND IMEI FINAL:", {
+        imei: im,
+        namaBarang: found?.namaBarang,
+        namaBrand: found?.namaBrand,
+        kategori: found?.kategori,
+        status: found?.status,
+        toko: found?.toko,
+      });
+    }
 
     if (!found) {
       alert("❌ No IMEI tidak ditemukan di stok");
@@ -2132,12 +2202,14 @@ Invoice : ${soldInfo.NO_INVOICE}
         ""
     );
 
-    console.log("🔥 FINAL OWNER CHECK:", {
-      imei: im,
-      realOwner,
-      tokoPengirim: form.tokoPengirim,
-      found,
-    });
+    if (DEV) {
+      console.log("🔥 FINAL OWNER CHECK:", {
+        imei: im,
+        realOwner,
+        tokoPengirim: form.tokoPengirim,
+        found,
+      });
+    }
 
     const finalOwner = normalizeText(getFinalOwner(im) || realOwner);
 
@@ -2177,7 +2249,9 @@ Invoice : ${soldInfo.NO_INVOICE}
 
     // 🔥 IZINKAN TRANSFER BERULANG
     if (!isImeiAllowedForTransfer(finalStatus)) {
-      console.log("⚠️ STATUS TETAP DIIJINKAN:", finalStatus);
+      if (DEV) {
+        console.log("⚠️ STATUS TETAP DIIJINKAN:", finalStatus);
+      }
     }
 
     // ================= 🔥 CEK STOK REAL (FIX BUG UTAMA) =================
@@ -2237,12 +2311,14 @@ Invoice : ${soldInfo.NO_INVOICE}
     }
 
     // ================= DEBUG (OPTIONAL) =================
-    console.log("IMEI DEBUG:", {
-      imei: im,
-      status: found.status,
-      owner: found.toko,
-      tokoPengirim: form.tokoPengirim,
-    });
+    if (DEV) {
+      console.log("IMEI DEBUG:", {
+        imei: im,
+        status: found.status,
+        owner: found.toko,
+        tokoPengirim: form.tokoPengirim,
+      });
+    }
 
     // ================= MASUKKAN KE FORM =================
     // =========================================
@@ -2700,12 +2776,13 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
 
       // 🔥 fallback ke stokTersedia kalau accessories belum kebaca
       const finalStok = stokReal > 0 ? stokReal : Number(stokTersedia || 0);
-
-      console.log("DEBUG STOK:", {
-        stokAccessories: stokReal,
-        stokTersedia,
-        finalStok,
-      });
+      if (DEV) {
+        console.log("DEBUG STOK:", {
+          stokAccessories: stokReal,
+          stokTersedia,
+          finalStok,
+        });
+      }
 
       if (finalStok <= 0 && !isNonImeiKategori) {
         return `Stok barang ${form.barang} di toko ${form.tokoPengirim} tidak tersedia`;
@@ -2770,7 +2847,9 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
           });
 
           const found = candidates[0];
+          if (DEV) {
           console.log("DEBUG INVENTORY IMEI:", found);
+          }
         }
       }
 

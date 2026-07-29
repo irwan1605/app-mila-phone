@@ -67,3 +67,45 @@ export function listenDetailStockCached(callback) {
     }
   };
 }
+
+/* =======================================================
+   TOKO CACHE
+======================================================= */
+
+let tokoSnapshot = null;
+
+let tokoSubscribers = [];
+
+let tokoUnsubscribe = null;
+
+export function listenTokoCached(callback) {
+  tokoSubscribers.push(callback);
+
+  if (tokoSnapshot) {
+    callback(tokoSnapshot);
+  }
+
+  if (!tokoUnsubscribe) {
+    tokoUnsubscribe = onValue(
+      ref(db, "toko"),
+
+      (snap) => {
+        tokoSnapshot = snap;
+
+        tokoSubscribers.forEach((cb) => cb(snap));
+      }
+    );
+  }
+
+  return () => {
+    tokoSubscribers = tokoSubscribers.filter((cb) => cb !== callback);
+
+    if (tokoSubscribers.length === 0 && tokoUnsubscribe) {
+      tokoUnsubscribe();
+
+      tokoUnsubscribe = null;
+
+      tokoSnapshot = null;
+    }
+  };
+}
