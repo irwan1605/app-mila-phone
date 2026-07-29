@@ -1,5 +1,11 @@
 // src/pages/DashboardToko.jsx
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+} from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   FaStore,
@@ -23,6 +29,10 @@ import {
   listenAllTransaksi,
   listenMasterBarang,
 } from "../services/FirebaseService";
+import {
+  listenDetailStockCached,
+  listenAllTransaksiCached,
+} from "../services/FirebaseCache";
 import { buildFinalStockRows } from "../utils/buildFinalStockRows";
 import { exportStockExcel } from "../utils/stock/exportStockExcel";
 import { filterExportRows } from "../utils/stock/filterExportRows";
@@ -119,6 +129,19 @@ export default function DashboardToko(props) {
   const [transaksiToko, setTransaksiToko] = useState([]);
   const [stockToko, setStockToko] = useState([]);
   const [detailStock, setDetailStock] = useState({});
+  const detailStockHash = useRef("");
+  const handleDetailStock = useCallback((rows) => {
+    const json = JSON.stringify(rows);
+
+    if (detailStockHash.current === json) {
+      return;
+    }
+
+    detailStockHash.current = json;
+
+    setDetailStock(rows);
+  }, []);
+
   const [loadingStock, setLoadingStock] = useState(true);
   const [searchStock, setSearchStock] = useState("");
   const [dashboardSearch, setDashboardSearch] = useState("");
@@ -139,7 +162,7 @@ export default function DashboardToko(props) {
      REALTIME LISTENER
   ====================== */
   useEffect(() => {
-    const unsub1 = listenAllTransaksi((rows) => setTransaksi(rows || []));
+    const unsub1 = listenAllTransaksiCached((rows) => setTransaksi(rows || []));
     const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
 
     return () => {
@@ -151,15 +174,10 @@ export default function DashboardToko(props) {
   // ===============================
   // 🔥 DETAIL STOCK REALTIME
   // ===============================
+
   useEffect(() => {
-    const refStock = ref(db, "detail_stock");
-
-    const unsub = onValue(refStock, (snap) => {
-      setDetailStock(snap.val() || {});
-    });
-
-    return () => unsub();
-  }, []);
+    return listenDetailStockCached(handleDetailStock);
+  }, [handleDetailStock]);
 
   useEffect(() => {
     if (!firebaseTokoId) return;

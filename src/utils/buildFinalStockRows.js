@@ -64,17 +64,17 @@ export const buildFinalStockRows = ({
         "PEMBELIAN",
         "TRANSFER_MASUK",
         "REFUND",
-        "RETUR",              // ✅ Tambahkan
+        "RETUR", // ✅ Tambahkan
         "TRANSFER_REJECT",
         "VOID OPNAME",
       ].includes(metode)
     ) {
-        finalOwnerTracker[imei] = {
-            toko: t.NAMA_TOKO || "-",
-            active: true,
-        };
-    
-        return;
+      finalOwnerTracker[imei] = {
+        toko: t.NAMA_TOKO || "-",
+        active: true,
+      };
+
+      return;
     }
 
     // ======================================
@@ -238,16 +238,15 @@ export const buildFinalStockRows = ({
         // ======================================
         // 🔥 KETERANGAN FINAL
         // ======================================
-        keterangan:
-        isTransferRefund
-            ? "TRANSFER REFUND"
-            : metode === "TRANSFER_MASUK"
-            ? "TRANSFER BARANG"
-            : metode === "REFUND"
-            ? "REFUND BARANG"
-            : metode === "RETUR"
-            ? "RETUR BARANG"
-            : metode,
+        keterangan: isTransferRefund
+          ? "TRANSFER REFUND"
+          : metode === "TRANSFER_MASUK"
+          ? "TRANSFER BARANG"
+          : metode === "REFUND"
+          ? "REFUND BARANG"
+          : metode === "RETUR"
+          ? "RETUR BARANG"
+          : metode,
 
         sumberStock: isTransferRefund ? "REFUND" : "NORMAL",
       };
@@ -364,52 +363,42 @@ export const buildFinalStockRows = ({
     const qty = Math.abs(Number(t.QTY || 0));
 
     const effect = (() => {
-    
-        switch (metode) {
-    
-            // ==========================
-            // STOCK MASUK
-            // ==========================
-    
-            case "PEMBELIAN":
-            case "REFUND":
-            case "RETUR":
-            case "TRANSFER_MASUK":
-            case "TRANSFER_REJECT":
-            case "VOID OPNAME":
-    
-                return qty;
-    
-            // ==========================
-            // STOCK KELUAR
-            // ==========================
-    
-            case "PENJUALAN":
-            case "TRANSFER_KELUAR":
-            case "REJECT":
-            case "STOK OPNAME":
-    
-                return -qty;
-    
-            default:
-    
-                return 0;
-        }
-    
+      switch (metode) {
+        // ==========================
+        // STOCK MASUK
+        // ==========================
+
+        case "PEMBELIAN":
+        case "REFUND":
+        case "RETUR":
+        case "TRANSFER_MASUK":
+        case "TRANSFER_REJECT":
+        case "VOID OPNAME":
+          return qty;
+
+        // ==========================
+        // STOCK KELUAR
+        // ==========================
+
+        case "PENJUALAN":
+        case "TRANSFER_KELUAR":
+        case "REJECT":
+        case "STOK OPNAME":
+          return -qty;
+
+        default:
+          return 0;
+      }
     })();
-    
+
     map[skuKey].qty += effect;
   });
 
   Object.values(map).forEach((row) => {
-
     if (!row.imei) {
-
-        row.qty = Math.max(0, Number(row.qty || 0));
-
+      row.qty = Math.max(0, Number(row.qty || 0));
     }
-
-});
+  });
 
   // ======================================
   // 🔥 FINAL ACTIVE IMEI
@@ -429,70 +418,51 @@ export const buildFinalStockRows = ({
 
     if (
       [
-          "PEMBELIAN",
-          "TRANSFER_MASUK",
-          "REFUND",
-          "RETUR",          // ✅ Tambahkan
-          "TRANSFER_REJECT",
-          "VOID OPNAME",
+        "PEMBELIAN",
+        "TRANSFER_MASUK",
+        "REFUND",
+        "RETUR", // ✅ Tambahkan
+        "TRANSFER_REJECT",
+        "VOID OPNAME",
       ].includes(metode)
-      ){
-          imeiFinalActive.add(imei);
-      }
+    ) {
+      imeiFinalActive.add(imei);
+    }
 
     if (["PENJUALAN", "REJECT", "STOK OPNAME"].includes(metode)) {
       imeiFinalActive.delete(imei);
     }
   });
 
-  
-
   // ======================================
   // 🔥 FINAL CLEAN
   // ======================================
   return Object.values(map)
-  
 
-  .filter((row)=>{
-  
-      const lastAction = String(
-          row.keterangan || ""
-      ).toUpperCase();
-  
+    .filter((row) => {
+      const lastAction = String(row.keterangan || "").toUpperCase();
+
       // ======================================
       // REFUND & RETUR HARUS TETAP TAMPIL
       // ======================================
-      if (
-          lastAction.includes("REFUND") ||
-          lastAction.includes("RETUR")
-      ){
-          return true;
+      if (lastAction.includes("REFUND") || lastAction.includes("RETUR")) {
+        return true;
       }
-  
-      if(!row.imei){
-          return Number(row.qty||0)>0;
+
+      if (!row.imei) {
+        return Number(row.qty || 0) > 0;
       }
-  
-      return activeImeiSet.has(
-          normalizeImei(row.imei)
-      );
-  
-  })
-  
-  .filter((row)=>{
-  
-      const lastAction = String(
-          row.keterangan || ""
-      ).toUpperCase();
-  
-      if (
-          lastAction.includes("REFUND") ||
-          lastAction.includes("RETUR")
-      ){
-          return true;
+
+      return activeImeiSet.has(normalizeImei(row.imei));
+    })
+
+    .filter((row) => {
+      const lastAction = String(row.keterangan || "").toUpperCase();
+
+      if (lastAction.includes("REFUND") || lastAction.includes("RETUR")) {
+        return true;
       }
-  
-      return Number(row.qty||0)>0;
-  
-  });
+
+      return Number(row.qty || 0) > 0;
+    });
 };

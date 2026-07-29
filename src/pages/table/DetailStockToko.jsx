@@ -1,10 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   listenAllTransaksi,
   listenMasterBarang,
   deleteTransaksi,
 } from "../../services/FirebaseService";
+import {
+  listenDetailStockCached,
+  listenAllTransaksiCached,
+} from "../../services/FirebaseCache";
 import { ref, remove, get, onValue } from "firebase/database";
 import { db } from "../../firebase";
 import * as XLSX from "xlsx";
@@ -48,6 +52,7 @@ export default function DetailStockToko(props) {
   const { state } = useLocation();
   const navigate = useNavigate();
   const tableRef = useRef(null);
+  const DEV = process.env.NODE_ENV === "development";
 
   const namaToko = props?.namaToko || state?.namaToko || "";
 
@@ -55,6 +60,7 @@ export default function DetailStockToko(props) {
      STATE
   ====================== */
   const [transaksi, setTransaksi] = useState([]);
+  const [allTransaksi, setAllTransaksi] = useState([]);
   const [masterBarang, setMasterBarang] = useState([]);
   const [search, setSearch] = useState(props?.searchTerm || "");
 
@@ -70,6 +76,23 @@ export default function DetailStockToko(props) {
   const [page, setPage] = useState(1);
   const [deletedIds, setDeletedIds] = useState(new Set());
   const [detailStock, setDetailStock] = useState({});
+  const detailStockHash = useRef("");
+  const handleDetailStock = useCallback((rows) => {
+
+    const json = JSON.stringify(rows);
+
+    if (detailStockHash.current === json) {
+
+        return;
+
+    }
+
+    detailStockHash.current = json;
+
+    setDetailStock(rows);
+
+}, []);
+
   const refundSoldSet = useMemo(
     () => buildRefundSoldSet(transaksi),
     [transaksi]
@@ -81,18 +104,15 @@ export default function DetailStockToko(props) {
   // 🔥 LISTENER DETAIL STOCK
   // ======================================
   useEffect(() => {
-    const refStock = ref(db, "detail_stock");
 
-    const unsub = onValue(refStock, (snap) => {
-      setDetailStock(snap.val() || {});
-    });
+    return listenDetailStockCached(handleDetailStock);
 
-    return () => unsub();
-  }, []);
+}, [handleDetailStock]);
 
   useEffect(() => {
-    const unsub1 = listenAllTransaksi((rows) => {
+    const unsub1 = listenAllTransaksiCached((rows) => {
       const filtered = (rows || []).filter((r) => !deletedIds.has(r.id));
+
       setTransaksi(filtered);
     });
 
@@ -581,7 +601,9 @@ export default function DetailStockToko(props) {
       }
     });
 
-    console.log("🔥 SUPPLIER LOOKUP FINAL:", map);
+    if (DEV) {
+      console.log("🔥 SUPPLIER LOOKUP FINAL:", map);
+  }
 
     return map;
   }, [transaksi]);
@@ -610,7 +632,10 @@ export default function DetailStockToko(props) {
               .trim() === String(row.brand).toLowerCase().trim()
           ) {
             const path = `toko/${tokoId}/transaksi/${id}`;
+           
+            if (DEV) {
             console.log("🔥 FORCE DELETE:", path);
+            }
 
             await remove(ref(db, path));
             totalDelete++;
@@ -628,7 +653,10 @@ export default function DetailStockToko(props) {
         .replace(/\s+/g, "_");
 
       const stockPath = `stock/${namaToko}/${sku}`;
-      console.log("🔥 DELETE STOCK:", stockPath);
+
+      if (DEV) {
+        console.log("🔥 DELETE STOCK:", stockPath);
+    }
 
       await remove(ref(db, stockPath));
 
@@ -796,10 +824,8 @@ export default function DetailStockToko(props) {
   /* ======================
    BUILD ROWS (FIX FINAL)
 ====================== */
-const rows = useMemo(() => {
-
-  let result = buildFinalStockRows({
-
+  const rows = useMemo(() => {
+    let result = buildFinalStockRows({
       transaksi,
 
       detailStock,
@@ -809,60 +835,74 @@ const rows = useMemo(() => {
       masterMap,
 
       supplierLookup,
+    });
 
-  });
-
-  result = filterRefundSoldRows({
-
+    result = filterRefundSoldRows({
       rows: result,
 
       transaksi,
+    });
 
-  });
-
-  result = result.filter((row)=>{
-
-      if(Number(row.qty||0)<=0){
-
-          return false;
-
+    result = result.filter((row) => {
+      if (Number(row.qty || 0) <= 0) {
+        return false;
       }
 
-      if(row.imei){
+      if (row.imei) {
+        if (!validateFinalOwner(row)) {
+          return false;
+        }
 
-          if(
-              !validateFinalOwner(row)
-          ){
-              return false;
-          }
-
-          if(
-              refundSoldSet.has(
-                  normalizeImei(row.imei)
-              )
-          ){
-              return false;
-          }
-
+        if (refundSoldSet.has(normalizeImei(row.imei))) {
+          return false;
+        }
       }
 
       return true;
+    });
 
-  });
+    return result;
+  }, [
+    transaksi,
+    detailStock,
+    namaToko,
+    masterMap,
+    supplierLookup,
+    refundSoldSet,
+    finalOwnerTracker,
+  ]);
 
-  return result;
+  const nonImeiStockCache = useMemo(() => {
 
-},[
-  transaksi,
-  detailStock,
-  namaToko,
-  masterMap,
-  supplierLookup,
-  refundSoldSet,
-  finalOwnerTracker
-]);
+    const cache = {};
 
-    
+    rows.forEach((row) => {
+
+        if (row.imei) return;
+
+        const key =
+            `${row.namaToko}|${row.brand}|${row.barang}`;
+
+        if (cache[key] !== undefined) return;
+
+        cache[key] = buildFinalNonImeiStock({
+
+            transaksi,
+
+            toko: row.namaToko,
+
+            brand: row.brand,
+
+            barang: row.barang,
+
+        });
+
+    });
+
+    return cache;
+
+}, [rows, transaksi]);
+
   // ======================================
   // 🔥 MERGED ROWS FINAL
   // ======================================
@@ -879,27 +919,24 @@ const rows = useMemo(() => {
         const imei = normalizeImei(r.imei);
 
         const owner = finalOwnerTracker[imei];
-        
+
         if (!owner) {
-            return;
+          return;
         }
-        
+
         if (!owner.active) {
-            return;
+          return;
         }
-        
-        if (
-            normalize(owner.toko) !==
-            normalize(namaToko)
-        ) {
-            return;
+
+        if (normalize(owner.toko) !== normalize(namaToko)) {
+          return;
         }
-        
+
         finalMap["IMEI_" + imei] = {
-            ...r,
-            namaToko: owner.toko,
-            qty: 1,
-            statusBarang: "TERSEDIA",
+          ...r,
+          namaToko: owner.toko,
+          qty: 1,
+          statusBarang: "TERSEDIA",
         };
 
         return;
@@ -913,12 +950,11 @@ const rows = useMemo(() => {
         `${normalizeText(r.brand)}|` +
         `${normalizeText(r.barang)}`;
 
-      const finalQty = buildFinalNonImeiStock({
-        transaksi,
-        toko: r.namaToko,
-        brand: r.brand,
-        barang: r.barang,
-      });
+        const key =
+        `${r.namaToko}|${r.brand}|${r.barang}`;
+    
+    const finalQty =
+        nonImeiStockCache[key] ?? 0;
 
       if (!finalMap[skuKey]) {
         finalMap[skuKey] = {
@@ -1095,12 +1131,11 @@ const rows = useMemo(() => {
     Object.values(finalMap).forEach((row) => {
       if (row.imei) return;
 
-      row.qty = buildFinalNonImeiStock({
-        transaksi,
-        toko: row.namaToko,
-        brand: row.brand,
-        barang: row.barang,
-      });
+      const key =
+      `${row.namaToko}|${row.brand}|${row.barang}`;
+  
+  row.qty =
+      nonImeiStockCache[key] ?? 0;
 
       row.statusBarang = row.qty > 0 ? "TERSEDIA" : "HABIS";
 
@@ -1108,7 +1143,6 @@ const rows = useMemo(() => {
         row.keterangan = "TRANSFER BARANG";
       }
     });
-    
 
     return Object.values(finalMap).filter((row) => {
       // ============================

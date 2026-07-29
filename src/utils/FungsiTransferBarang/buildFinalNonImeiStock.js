@@ -4,6 +4,8 @@ const normalizeText = (v) =>
     .replace(/\s+/g, " ")
     .toUpperCase();
 
+    const DEV = process.env.NODE_ENV === "development";
+
 // ======================================
 // 🔥 DETECT NON IMEI
 // ======================================
@@ -106,12 +108,14 @@ export const buildFinalNonImeiStock = ({
 
   saldo = Math.max(0, saldo);
 
-  console.log("🔥 FINAL NON IMEI STOCK:", {
-      toko,
-      brand,
-      barang,
-      saldo,
-  });
+  if (DEV) {
+    console.log("🔥 FINAL NON IMEI STOCK:", {
+        toko,
+        brand,
+        barang,
+        saldo,
+    });
+}
   
   return saldo;
 };
