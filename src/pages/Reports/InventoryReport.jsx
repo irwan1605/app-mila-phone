@@ -76,6 +76,7 @@ export default function InventoryReport() {
   const pageSize = 25;
 
   const [searchGlobal, setSearchGlobal] = useState("");
+  const DEV = process.env.NODE_ENV === "development";
 
   const location = useLocation();
   const state = location.state;
@@ -448,11 +449,12 @@ export default function InventoryReport() {
 
     return map;
   }, [stockRealSuperAdmin]);
-
-  console.log("🔥 REAL TOKO", stockRealMap);
-
-  console.log("🔥 MARKETPLACE REAL", stockRealMap["MARKETPLACE"]);
-
+  if (DEV) {
+    console.log("🔥 REAL TOKO", stockRealMap);
+  }
+  if (DEV) {
+    console.log("🔥 MARKETPLACE REAL", stockRealMap["MARKETPLACE"]);
+  }
   const filteredStockPerToko = useMemo(() => {
     // daftar toko yang benar-benar punya stok real
     const tokoReal = new Set(

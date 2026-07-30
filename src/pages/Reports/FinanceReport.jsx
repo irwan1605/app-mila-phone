@@ -155,6 +155,7 @@ export default function FinanceReport() {
   const tokoNameFromState = location.state?.tokoName || null;
   const [uploading, setUploading] = useState(false);
   const [dataPenjualan, setDataPenjualan] = useState([]);
+  const DEV = process.env.NODE_ENV === "development";
 
   const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
   const role = String(loggedUser?.role || "").toLowerCase();
@@ -204,7 +205,9 @@ export default function FinanceReport() {
 
   useEffect(() => {
     const unsub = listenTransaksi((rows) => {
-      console.log("🔥 DATA MASUK KE TABLE:", rows);
+      if (DEV) {
+        console.log("🔥 DATA MASUK KE TABLE:", rows);
+      }
       setDataPenjualan(rows);
     });
 
@@ -347,9 +350,9 @@ export default function FinanceReport() {
           arr.push(String(val.jenis).toUpperCase());
         }
       });
-
-      console.log("JENIS LIST:", arr); // DEBUG
-
+      if (DEV) {
+        console.log("JENIS LIST:", arr); // DEBUG
+      }
       setPaymentJenisList(arr);
     });
 
@@ -357,7 +360,9 @@ export default function FinanceReport() {
   }, []);
   useEffect(() => {
     const unsub = listenPaymentJenis((list) => {
-      console.log("JENIS LIST:", list);
+      if (DEV) {
+        console.log("JENIS LIST:", list);
+      }
       setPaymentJenisList(list);
     });
 
@@ -416,9 +421,15 @@ export default function FinanceReport() {
     if (!form.QTY || !form.HARGA) return;
 
     const total = Number(form.QTY) * Number(form.HARGA);
-    console.log("FORM:", form);
-    console.log("ALL DATA:", allData);
-    console.log("SETORAN:", setoran);
+    if (DEV) {
+      console.log("FORM:", form);
+    }
+    if (DEV) {
+      console.log("ALL DATA:", allData);
+    }
+    if (DEV) {
+      console.log("SETORAN:", setoran);
+    }
 
     setForm((prev) => ({
       ...prev,
@@ -612,9 +623,15 @@ export default function FinanceReport() {
         s.KATEGORI_PEMBAYARAN !== filter.kategori
       )
         return false;
-      console.log("ROLE:", role);
-      console.log("IS PIC:", isPicToko);
-      console.log("TOKO LOGIN:", tokoLogin);
+      if (DEV) {
+        console.log("ROLE:", role);
+      }
+      if (DEV) {
+        console.log("IS PIC:", isPicToko);
+      }
+      if (DEV) {
+        console.log("TOKO LOGIN:", tokoLogin);
+      }
 
       if (filter.dateFrom && s.TANGGAL_TRANSAKSI < filter.dateFrom)
         return false;

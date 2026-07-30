@@ -27,9 +27,15 @@ export default function CetakInvoicePenjualan({
     documentTitle: transaksi?.invoice || "Invoice",
   });
 
+  const DEV = process.env.NODE_ENV === "development";
+
   useEffect(() => {
-    console.log("PRINT DATA:", transaksi);
-    console.log("REF:", printRef.current);
+    if (DEV) {
+      console.log("PRINT DATA:", transaksi);
+    }
+    if (DEV) {
+      console.log("REF:", printRef.current);
+    }
   }, [transaksi]);
 
   if (!transaksi) return null;
@@ -54,9 +60,7 @@ export default function CetakInvoicePenjualan({
 
   const totalBarang = items.reduce(
     (s, it) =>
-      s +
-      Number(it.qty || 0) *
-        Number(it.hargaUnit || it.hargaAktif || 0),
+      s + Number(it.qty || 0) * Number(it.hargaUnit || it.hargaAktif || 0),
     0
   );
 
@@ -116,10 +120,18 @@ export default function CetakInvoicePenjualan({
 
         {/* INFO */}
         <div className="grid grid-cols-1 gap-1 mb-2">
-          <p><b>Toko</b> : {toko}</p>
-          <p><b>Sales</b> : {user?.namaSales}</p>
-          <p><b>Pelanggan</b> : {user?.namaPelanggan}</p>
-          <p><b>No HP</b> : {user?.noTlpPelanggan}</p>
+          <p>
+            <b>Toko</b> : {toko}
+          </p>
+          <p>
+            <b>Sales</b> : {user?.namaSales}
+          </p>
+          <p>
+            <b>Pelanggan</b> : {user?.namaPelanggan}
+          </p>
+          <p>
+            <b>No HP</b> : {user?.noTlpPelanggan}
+          </p>
         </div>
 
         {/* TABLE */}
@@ -168,9 +180,7 @@ export default function CetakInvoicePenjualan({
             {safePayment.splitPayment.map((p, i) => (
               <div key={i} className="flex justify-between text-[9px]">
                 <span>{p.metode}</span>
-                <span>
-                  Rp {safeNumber(p.nominal).toLocaleString("id-ID")}
-                </span>
+                <span>Rp {safeNumber(p.nominal).toLocaleString("id-ID")}</span>
               </div>
             ))}
           </div>
@@ -178,15 +188,11 @@ export default function CetakInvoicePenjualan({
 
         <hr className="my-2" />
 
-        <p className="text-center text-[9px]">
-          Terima kasih telah berbelanja
-        </p>
+        <p className="text-center text-[9px]">Terima kasih telah berbelanja</p>
 
         {/* ================= PERINGATAN ================= */}
         <div className="mt-2 border border-red-500 p-2 text-red-600 text-[8px] leading-tight">
-          <div className="font-bold text-center mb-1">
-            PERHATIAN !!!
-          </div>
+          <div className="font-bold text-center mb-1">PERHATIAN !!!</div>
 
           <ul className="list-disc pl-3 space-y-0.5">
             <li>Mohon diperiksa kembali kelengkapan dan kelayakan unit</li>
@@ -195,11 +201,12 @@ export default function CetakInvoicePenjualan({
               Garansi Toko:
               <br />- Garansi Tukar Unit 1 × 24 jam
               <br />- Garansi Home Service 1 Hari
-              <br />- Lebih dari 1 Hari dikenakan Biaya Transport Teknisi / Driver
+              <br />- Lebih dari 1 Hari dikenakan Biaya Transport Teknisi /
+              Driver
             </li>
             <li>
-              Ketentuan & regulasi garansi pabrik mengikuti buku garansi
-              yang tersedia di setiap unit sepeda atau motor
+              Ketentuan & regulasi garansi pabrik mengikuti buku garansi yang
+              tersedia di setiap unit sepeda atau motor
             </li>
           </ul>
         </div>
