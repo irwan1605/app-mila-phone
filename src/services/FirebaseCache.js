@@ -1,9 +1,52 @@
 import { ref, onValue } from "firebase/database";
 import { db } from "../firebase";
-import { listenAllTransaksi } from "./FirebaseService";
+import { listenAllTransaksi, listenStockAll } from "./FirebaseService";
 /* =======================================================
    DETAIL STOCK CACHE
 ======================================================= */
+let stockCache = [];
+
+let stockListeners = [];
+
+let stockUnsub = null;
+
+export function listenStockAllCached(callback) {
+
+    stockListeners.push(callback);
+
+    callback(stockCache);
+
+    if (!stockUnsub) {
+
+        stockUnsub = listenStockAll((rows) => {
+
+            stockCache = rows || [];
+
+            stockListeners.forEach(cb => cb(stockCache));
+
+        });
+
+    }
+
+    return () => {
+
+        stockListeners =
+            stockListeners.filter(x => x !== callback);
+
+        if (stockListeners.length === 0) {
+
+            stockUnsub?.();
+
+            stockUnsub = null;
+
+            stockCache = [];
+
+        }
+
+    };
+
+}
+
 let transaksiCache = [];
 
 let transaksiSubscribers = [];

@@ -33,11 +33,15 @@ import {
 import CardPenjualanToko from "../features/dashboad/CardPenjualanToko";
 
 import {
-  listenAllTransaksi,
   listenStockAll,
   forceDeleteTransaksi,
   listenPenjualan,
 } from "../services/FirebaseService";
+
+import {
+  listenAllTransaksiCached,
+  listenStockAllCached,
+} from "../services/FirebaseCache";
 
 // 🔥 TAMBAHKAN DISINI
 const TOKO_LIST = [
@@ -58,11 +62,11 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   /* ================= STATE ================= */
-  const [dataTransaksi, setDataTransaksi] = useState([]);
+  // const [dataTransaksi, setDataTransaksi] = useState([]);
+
   const [stokMaster, setStokMaster] = useState([]);
 
-  const [tokoList, setTokoList] = useState([]);
-  const [salesList, setSalesList] = useState([]);
+  
 
   const [filterType, setFilterType] = useState("semua");
   const [filterValue, setFilterValue] = useState("");
@@ -73,6 +77,82 @@ export default function Dashboard() {
 
   const [stockData, setStockData] = useState({});
   const [transaksi, setTransaksi] = useState([]);
+  const dataTransaksi = useMemo(() => {
+    return transaksi.map((r) => ({
+      ...r,
+
+      id: r.id,
+
+      TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || r.TANGGAL || "",
+
+      NO_INVOICE: r.NO_INVOICE || "",
+
+      NAMA_USER: r.NAMA_USER || "",
+
+      NO_HP_USER: r.NO_HP_USER || "",
+
+      NAMA_PIC_TOKO: r.NAMA_PIC_TOKO || "",
+
+      NAMA_SALES: r.NAMA_SALES || "",
+
+      TITIPAN_REFERENSI: r.TITIPAN_REFERENSI || "",
+
+      NAMA_TOKO: String(r.NAMA_TOKO || r.TOKO || ""),
+
+      TOKO: String(r.NAMA_TOKO || r.TOKO || ""),
+
+      NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "",
+
+      NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "",
+
+      QTY: Number(r.QTY || 0),
+
+      NOMOR_UNIK: r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
+
+      IMEI: r.IMEI || "",
+
+      TOTAL:
+        Number(r.TOTAL) ||
+        Number(r.QTY || 0) * Number(r.HARGA_UNIT || r.HARGA || 0),
+    }));
+  }, [transaksi]);
+
+  const tokoList = useMemo(() => {
+
+    return [
+
+        ...new Set(
+
+            dataTransaksi
+
+                .map(x => x.NAMA_TOKO || x.TOKO)
+
+                .filter(Boolean)
+
+        )
+
+    ];
+
+}, [dataTransaksi]);
+
+const salesList = useMemo(() => {
+
+  return [
+
+      ...new Set(
+
+          dataTransaksi
+
+              .map(x => x.NAMA_SALES)
+
+              .filter(Boolean)
+
+      )
+
+  ];
+
+}, [dataTransaksi]);
+
   const [penjualan, setPenjualan] = useState([]);
 
   const [penjualanList, setPenjualanList] = useState([]);
@@ -338,23 +418,22 @@ export default function Dashboard() {
   // }, []);
 
   useEffect(() => {
-    const u1 = listenStockAll((s) => setStockData(s || {}));
-    const u2 = listenAllTransaksi((t) =>
-      setTransaksi(Array.isArray(t) ? t : [])
-    );
+    const u1 = listenStockAllCached((s) => {
+      setStockData(s || {});
+    });
+
+    const u2 = listenAllTransaksiCached((rows) => {
+      setTransaksi(Array.isArray(rows) ? rows : []);
+    });
 
     return () => {
-      u1 && u1();
-      u2 && u2();
+      u1?.();
+
+      u2?.();
     };
   }, []);
 
-  useEffect(() => {
-    const unsub = listenStockAll((listRaw = []) => {
-      setStokMaster(Array.isArray(listRaw) ? listRaw : []);
-    });
-    return () => unsub && unsub();
-  }, []);
+ 
 
   useEffect(() => {
     // 🔥 HAPUS TRANSAKSI LEGACY DARI TOKO 1
@@ -366,60 +445,60 @@ export default function Dashboard() {
   // =======================================================
   // LISTEN SEMUA TRANSAKSI (UNTUK OMZET, PIUTANG, DLL)
   // =======================================================
-  useEffect(() => {
-    const unsub = listenAllTransaksi((listRaw = []) => {
-      const formatted = (listRaw || []).map((r) => ({
-        ...r,
-        id: r.id,
-        TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || r.TANGGAL || "",
-        NO_INVOICE: r.NO_INVOICE || "",
-        NAMA_USER: r.NAMA_USER || "",
-        NO_HP_USER: r.NO_HP_USER || "",
-        NAMA_PIC_TOKO: r.NAMA_PIC_TOKO || "",
-        NAMA_SALES: r.NAMA_SALES || "",
-        TITIPAN_REFERENSI: r.TITIPAN_REFERENSI || "",
-        NAMA_TOKO: String(r.NAMA_TOKO || r.TOKO || ""),
-        TOKO: String(r.NAMA_TOKO || r.TOKO || ""),
-        NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "",
-        NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "",
-        QTY: Number(r.QTY || 0),
-        NOMOR_UNIK: r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
-        IMEI: r.IMEI || "",
-        NO_DINAMO: r.NO_DINAMO || "",
-        NO_RANGKA: r.NO_RANGKA || "",
-        KATEGORI_HARGA: r.KATEGORI_HARGA || "",
-        HARGA_UNIT: Number(r.HARGA_UNIT || r.HARGA || 0),
-        PAYMENT_METODE: r.PAYMENT_METODE || "",
-        SYSTEM_PAYMENT: r.SYSTEM_PAYMENT || "",
-        MDR: Number(r.MDR || 0),
-        POTONGAN_MDR: Number(r.POTONGAN_MDR || 0),
-        NO_ORDER_KONTRAK: r.NO_ORDER_KONTRAK || "",
-        TENOR: r.TENOR || "",
-        DP_USER_MERCHANT: Number(r.DP_USER_MERCHANT || 0),
-        DP_USER_TOKO: Number(r.DP_USER_TOKO || 0),
-        REQUEST_DP_TALANGAN: Number(r.REQUEST_DP_TALANGAN || 0),
-        KETERANGAN: r.KETERANGAN || "",
-        STATUS: r.STATUS || "Pending",
-        TOTAL:
-          Number(r.TOTAL) ||
-          Number(r.QTY || 0) * Number(r.HARGA_UNIT || r.HARGA || 0),
-      }));
+  // useEffect(() => {
+  //   const unsub = listenAllTransaksi((listRaw = []) => {
+  //     const formatted = (listRaw || []).map((r) => ({
+  //       ...r,
+  //       id: r.id,
+  //       TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || r.TANGGAL || "",
+  //       NO_INVOICE: r.NO_INVOICE || "",
+  //       NAMA_USER: r.NAMA_USER || "",
+  //       NO_HP_USER: r.NO_HP_USER || "",
+  //       NAMA_PIC_TOKO: r.NAMA_PIC_TOKO || "",
+  //       NAMA_SALES: r.NAMA_SALES || "",
+  //       TITIPAN_REFERENSI: r.TITIPAN_REFERENSI || "",
+  //       NAMA_TOKO: String(r.NAMA_TOKO || r.TOKO || ""),
+  //       TOKO: String(r.NAMA_TOKO || r.TOKO || ""),
+  //       NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "",
+  //       NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "",
+  //       QTY: Number(r.QTY || 0),
+  //       NOMOR_UNIK: r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
+  //       IMEI: r.IMEI || "",
+  //       NO_DINAMO: r.NO_DINAMO || "",
+  //       NO_RANGKA: r.NO_RANGKA || "",
+  //       KATEGORI_HARGA: r.KATEGORI_HARGA || "",
+  //       HARGA_UNIT: Number(r.HARGA_UNIT || r.HARGA || 0),
+  //       PAYMENT_METODE: r.PAYMENT_METODE || "",
+  //       SYSTEM_PAYMENT: r.SYSTEM_PAYMENT || "",
+  //       MDR: Number(r.MDR || 0),
+  //       POTONGAN_MDR: Number(r.POTONGAN_MDR || 0),
+  //       NO_ORDER_KONTRAK: r.NO_ORDER_KONTRAK || "",
+  //       TENOR: r.TENOR || "",
+  //       DP_USER_MERCHANT: Number(r.DP_USER_MERCHANT || 0),
+  //       DP_USER_TOKO: Number(r.DP_USER_TOKO || 0),
+  //       REQUEST_DP_TALANGAN: Number(r.REQUEST_DP_TALANGAN || 0),
+  //       KETERANGAN: r.KETERANGAN || "",
+  //       STATUS: r.STATUS || "Pending",
+  //       TOTAL:
+  //         Number(r.TOTAL) ||
+  //         Number(r.QTY || 0) * Number(r.HARGA_UNIT || r.HARGA || 0),
+  //     }));
 
-      setDataTransaksi(formatted);
+  //     setDataTransaksi(formatted);
 
-      const tokoNames = [
-        ...new Set(formatted.map((r) => r.NAMA_TOKO || r.TOKO).filter(Boolean)),
-      ];
-      if (tokoNames.length > 0) setTokoList(tokoNames);
+  //     const tokoNames = [
+  //       ...new Set(formatted.map((r) => r.NAMA_TOKO || r.TOKO).filter(Boolean)),
+  //     ];
+  //     if (tokoNames.length > 0) setTokoList(tokoNames);
 
-      const uniqueSales = [
-        ...new Set(formatted.map((r) => r.NAMA_SALES).filter(Boolean)),
-      ];
-      setSalesList(uniqueSales);
-    });
+  //     const uniqueSales = [
+  //       ...new Set(formatted.map((r) => r.NAMA_SALES).filter(Boolean)),
+  //     ];
+  //     setSalesList(uniqueSales);
+  //   });
 
-    return () => unsub && unsub();
-  }, []);
+  //   return () => unsub && unsub();
+  // }, []);
 
   const totalHariIni = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
