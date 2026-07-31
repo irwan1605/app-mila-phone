@@ -12,6 +12,17 @@ import {
   listenMasterStoreHead,
 } from "../../../services/FirebaseService";
 
+const normalizeText = (value) => String(value || "").trim().toUpperCase();
+const getSalesName = (sales) =>
+  String(
+    sales?.namaSales ||
+      sales?.NAMA_SALES ||
+      sales?.nama ||
+      sales?.NAMA ||
+      sales?.name ||
+      ""
+  ).trim();
+
 export default function FormUserSection({ value = {}, onChange }) {
   /* ================= STATE ================= */
 
@@ -39,21 +50,6 @@ export default function FormUserSection({ value = {}, onChange }) {
       unsubSales && unsubSales();
       unsubKar && unsubKar();
       unsubStoreHead && unsubStoreHead(); // ✅
-    };
-  }, []);
-
-  useEffect(() => {
-    const unsubToko = listenMasterToko((rows) => {
-      setMasterToko(Array.isArray(rows) ? rows : []);
-    });
-
-    const unsubSales = listenMasterSales((rows) => {
-      setMasterSales(Array.isArray(rows) ? rows : []);
-    });
-
-    return () => {
-      unsubToko && unsubToko();
-      unsubSales && unsubSales();
     };
   }, []);
 
@@ -115,15 +111,38 @@ export default function FormUserSection({ value = {}, onChange }) {
   // SALES = hanya yg bertugas di toko + jabatan sales / leader
   // ================= FILTER SALES DARI MASTER SALES =================
   const salesByToko = useMemo(() => {
-    if (!form.namaToko) return [];
+    const toko = normalizeText(form.namaToko);
+    const matchingSales = toko
+      ? masterSales.filter(
+          (sales) =>
+            normalizeText(
+              sales?.namaToko ||
+                sales?.NAMA_TOKO ||
+                sales?.toko ||
+                sales?.tokoName
+            ) === toko
+        )
+      : [];
 
-    return masterSales.filter((s) => s?.namaToko === form.namaToko);
+    // Data master lama bisa belum memiliki field toko. Tetap tampilkan sales
+    // yang tersedia agar Tahap 1 tidak kosong, lalu simpan pilihan normal.
+    const source = matchingSales.length ? matchingSales : masterSales;
+    const unique = new Map();
+
+    source.forEach((sales) => {
+      const namaSales = getSalesName(sales);
+      if (namaSales) unique.set(normalizeText(namaSales), { ...sales, namaSales });
+    });
+
+    return Array.from(unique.values());
   }, [masterSales, form.namaToko]);
 
   // SALES HANDLE = semua karyawan
   // SALES HANDLE = semua data dari MASTER SALES
   const salesHandleList = useMemo(() => {
-    return masterSales;
+    return masterSales
+      .map((sales) => ({ ...sales, namaSales: getSalesName(sales) }))
+      .filter((sales) => sales.namaSales);
   }, [masterSales]);
 
   // Store Head → sesuai Master Store Head + sesuai Toko

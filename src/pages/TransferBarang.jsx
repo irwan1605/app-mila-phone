@@ -18,7 +18,7 @@ import {
 import { hitungStokBarang } from "../utils/stockUtils";
 
 import FirebaseService from "../services/FirebaseService";
-import { ref, onValue, update, push, off } from "firebase/database";
+import { ref, onValue, update, push } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
 import { listenTokoCached } from "../services/FirebaseCache";
 import TableTransferBarang from "./table/TableTransferBarang";
@@ -186,18 +186,8 @@ export default function TransferBarang() {
   const [allTransaksi, setAllTransaksi] = useState([]);
   const DEV = process.env.NODE_ENV === "development";
 
-  const transaksiHash = useRef("");
-
   const handleAllTransaksi = useCallback((rows) => {
-    const json = JSON.stringify(rows);
-
-    if (transaksiHash.current === json) {
-      return;
-    }
-
-    transaksiHash.current = json;
-
-    setAllTransaksi(rows);
+    setAllTransaksi(rows || []);
   }, []);
 
   useEffect(() => {
@@ -459,18 +449,8 @@ export default function TransferBarang() {
   const [editIndex, setEditIndex] = useState(null);
   const [inventoryAccessories, setInventoryAccessories] = useState([]);
 
-  const inventoryAccessoriesHash = useRef("");
-
   const handleInventoryAccessories = useCallback((rows) => {
-    const json = JSON.stringify(rows);
-
-    if (inventoryAccessoriesHash.current === json) {
-      return;
-    }
-
-    inventoryAccessoriesHash.current = json;
-
-    setInventoryAccessories(rows);
+    setInventoryAccessories(rows || []);
   }, []);
 
   // ================= INVENTORY ACCESSORIES (NON IMEI) =================
@@ -682,14 +662,6 @@ export default function TransferBarang() {
     setDaftarTransfer((prev) => prev.filter((_, i) => i !== index));
   };
 
-  useEffect(() => {
-    const unsub = listenKaryawan((data) => {
-      setMasterKaryawan(Array.isArray(data) ? data : []);
-    });
-
-    return () => unsub && unsub();
-  }, []);
-
   /* ================= UI ================= */
   const [imeiInput, setImeiInput] = useState("");
   const [imeiSearch, setImeiSearch] = useState("");
@@ -699,18 +671,8 @@ export default function TransferBarang() {
   const [loading, setLoading] = useState(false);
   const [daftarTransfer, setDaftarTransfer] = useState([]);
 
-  const inventoryHash = useRef("");
-
   const handleInventory = useCallback((rows) => {
-    const json = JSON.stringify(rows);
-
-    if (inventoryHash.current === json) {
-      return;
-    }
-
-    inventoryHash.current = json;
-
-    setInventory(rows);
+    setInventory(rows || []);
   }, []);
 
   // ================= INVENTORY NORMALIZATION (FINAL) =================
@@ -859,21 +821,6 @@ export default function TransferBarang() {
     });
   }, []);
 
-  useEffect(() => {
-    const barangRef = ref(db, "dataManagement/masterBarang");
-
-    onValue(barangRef, (snap) => {
-      const data = snap.val() || {};
-      const arr = Object.entries(data).map(([id, v]) => ({
-        id,
-        ...v,
-      }));
-      setMasterBarang(arr);
-    });
-
-    return () => off(barangRef);
-  }, []);
-
   // ================= DARI NOTIFIKASI NAVBAR =================
   useEffect(() => {
     if (location.state?.fromNotif) {
@@ -891,10 +838,10 @@ export default function TransferBarang() {
   /* ================= MASTER DATA ================= */
   /* ================= MASTER DATA ================= */
   useEffect(() => {
-    listenMasterToko(setMasterToko);
-    listenMasterKategoriBarang(setMasterKategori);
-    listenMasterBarang(setMasterBarang);
-    FirebaseService.listenTransferRequests(setHistory);
+    const unsubMasterToko = listenMasterToko(setMasterToko);
+    const unsubMasterKategori = listenMasterKategoriBarang(setMasterKategori);
+    const unsubMasterBarang = listenMasterBarang(setMasterBarang);
+    const unsubTransfer = FirebaseService.listenTransferRequests(setHistory);
 
     // 🔥 MASTER KARYAWAN (NAMA PENGIRIM)
     const unsubKaryawan = listenKaryawan((data) => {
@@ -902,6 +849,10 @@ export default function TransferBarang() {
     });
 
     return () => {
+      unsubMasterToko && unsubMasterToko();
+      unsubMasterKategori && unsubMasterKategori();
+      unsubMasterBarang && unsubMasterBarang();
+      unsubTransfer && unsubTransfer();
       unsubKaryawan && unsubKaryawan();
     };
   }, []);
