@@ -1,20 +1,13 @@
-import React, {
-  memo,
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  listenDetailStockCached,
-  listenAllTransaksiCached,
-  listenMasterBarangCached,
-} from "../../services/FirebaseCache";
-import { get, ref, remove } from "firebase/database";
+  listenAllTransaksi,
+  listenMasterBarang,
+  deleteTransaksi,
+} from "../../services/FirebaseService";
+import { ref, remove, get, onValue } from "firebase/database";
 import { db } from "../../firebase";
+import * as XLSX from "xlsx";
 import {
   FaSearch,
   FaExchangeAlt,
@@ -51,11 +44,10 @@ const normalizeText = (v) =>
 
 const isApproved = (t) => String(t.STATUS || "").toUpperCase() === "APPROVED";
 
-function DetailStockToko(props) {
+export default function DetailStockToko(props) {
   const { state } = useLocation();
   const navigate = useNavigate();
   const tableRef = useRef(null);
-  const DEV = process.env.NODE_ENV === "development";
 
   const namaToko = props?.namaToko || state?.namaToko || "";
 
@@ -64,32 +56,20 @@ function DetailStockToko(props) {
   ====================== */
   const [transaksi, setTransaksi] = useState([]);
   const [masterBarang, setMasterBarang] = useState([]);
-  const [localSearch, setLocalSearch] = useState("");
-  const search = props?.searchTerm ?? localSearch;
-  const deferredSearch = useDeferredValue(search);
+  const [search, setSearch] = useState(props?.searchTerm || "");
 
   // ======================================
   // 🔥 SYNC SEARCH DASHBOARD
   // ======================================
-  const [page, setPage] = useState(1);
-  const [detailStock, setDetailStock] = useState({});
-  const detailStockHash = useRef("");
-  const handleDetailStock = useCallback((rows) => {
-
-    const json = JSON.stringify(rows);
-
-    if (detailStockHash.current === json) {
-
-        return;
-
+  useEffect(() => {
+    if (props?.searchTerm !== undefined) {
+      setSearch(props.searchTerm);
     }
+  }, [props?.searchTerm]);
 
-    detailStockHash.current = json;
-
-    setDetailStock(rows);
-
-}, []);
-
+  const [page, setPage] = useState(1);
+  const [deletedIds, setDeletedIds] = useState(new Set());
+  const [detailStock, setDetailStock] = useState({});
   const refundSoldSet = useMemo(
     () => buildRefundSoldSet(transaksi),
     [transaksi]
@@ -101,25 +81,28 @@ function DetailStockToko(props) {
   // 🔥 LISTENER DETAIL STOCK
   // ======================================
   useEffect(() => {
+    const refStock = ref(db, "detail_stock");
 
-    return listenDetailStockCached(handleDetailStock);
+    const unsub = onValue(refStock, (snap) => {
+      setDetailStock(snap.val() || {});
+    });
 
-}, [handleDetailStock]);
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
-    const unsub1 = listenAllTransaksiCached((rows) => {
-      setTransaksi((previous) => (previous === rows ? previous : rows || []));
+    const unsub1 = listenAllTransaksi((rows) => {
+      const filtered = (rows || []).filter((r) => !deletedIds.has(r.id));
+      setTransaksi(filtered);
     });
 
-    const unsub2 = listenMasterBarangCached((rows) => {
-      setMasterBarang((previous) => (previous === rows ? previous : rows || []));
-    });
+    const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
 
     return () => {
       unsub1 && unsub1();
       unsub2 && unsub2();
     };
-  }, []);
+  }, [deletedIds]); // 🔥 WAJIB
 
   // ===============================
   // 🔥 STOCK ENGINE UNIVERSAL
@@ -598,9 +581,7 @@ function DetailStockToko(props) {
       }
     });
 
-    if (DEV) {
-      console.log("🔥 SUPPLIER LOOKUP FINAL:", map);
-  }
+    console.log("🔥 SUPPLIER LOOKUP FINAL:", map);
 
     return map;
   }, [transaksi]);
@@ -629,10 +610,7 @@ function DetailStockToko(props) {
               .trim() === String(row.brand).toLowerCase().trim()
           ) {
             const path = `toko/${tokoId}/transaksi/${id}`;
-           
-            if (DEV) {
             console.log("🔥 FORCE DELETE:", path);
-            }
 
             await remove(ref(db, path));
             totalDelete++;
@@ -650,10 +628,7 @@ function DetailStockToko(props) {
         .replace(/\s+/g, "_");
 
       const stockPath = `stock/${namaToko}/${sku}`;
-
-      if (DEV) {
-        console.log("🔥 DELETE STOCK:", stockPath);
-    }
+      console.log("🔥 DELETE STOCK:", stockPath);
 
       await remove(ref(db, stockPath));
 
@@ -821,8 +796,10 @@ function DetailStockToko(props) {
   /* ======================
    BUILD ROWS (FIX FINAL)
 ====================== */
-  const rows = useMemo(() => {
-    let result = buildFinalStockRows({
+const rows = useMemo(() => {
+
+  let result = buildFinalStockRows({
+
       transaksi,
 
       detailStock,
@@ -832,74 +809,60 @@ function DetailStockToko(props) {
       masterMap,
 
       supplierLookup,
-    });
 
-    result = filterRefundSoldRows({
+  });
+
+  result = filterRefundSoldRows({
+
       rows: result,
 
       transaksi,
-    });
 
-    result = result.filter((row) => {
-      if (Number(row.qty || 0) <= 0) {
-        return false;
+  });
+
+  result = result.filter((row)=>{
+
+      if(Number(row.qty||0)<=0){
+
+          return false;
+
       }
 
-      if (row.imei) {
-        if (!validateFinalOwner(row)) {
-          return false;
-        }
+      if(row.imei){
 
-        if (refundSoldSet.has(normalizeImei(row.imei))) {
-          return false;
-        }
+          if(
+              !validateFinalOwner(row)
+          ){
+              return false;
+          }
+
+          if(
+              refundSoldSet.has(
+                  normalizeImei(row.imei)
+              )
+          ){
+              return false;
+          }
+
       }
 
       return true;
-    });
 
-    return result;
-  }, [
-    transaksi,
-    detailStock,
-    namaToko,
-    masterMap,
-    supplierLookup,
-    refundSoldSet,
-    finalOwnerTracker,
-  ]);
+  });
 
-  const nonImeiStockCache = useMemo(() => {
+  return result;
 
-    const cache = {};
+},[
+  transaksi,
+  detailStock,
+  namaToko,
+  masterMap,
+  supplierLookup,
+  refundSoldSet,
+  finalOwnerTracker
+]);
 
-    rows.forEach((row) => {
-
-        if (row.imei) return;
-
-        const key =
-            `${row.namaToko}|${row.brand}|${row.barang}`;
-
-        if (cache[key] !== undefined) return;
-
-        cache[key] = buildFinalNonImeiStock({
-
-            transaksi,
-
-            toko: row.namaToko,
-
-            brand: row.brand,
-
-            barang: row.barang,
-
-        });
-
-    });
-
-    return cache;
-
-}, [rows, transaksi]);
-
+    
   // ======================================
   // 🔥 MERGED ROWS FINAL
   // ======================================
@@ -916,24 +879,27 @@ function DetailStockToko(props) {
         const imei = normalizeImei(r.imei);
 
         const owner = finalOwnerTracker[imei];
-
+        
         if (!owner) {
-          return;
+            return;
         }
-
+        
         if (!owner.active) {
-          return;
+            return;
         }
-
-        if (normalize(owner.toko) !== normalize(namaToko)) {
-          return;
+        
+        if (
+            normalize(owner.toko) !==
+            normalize(namaToko)
+        ) {
+            return;
         }
-
+        
         finalMap["IMEI_" + imei] = {
-          ...r,
-          namaToko: owner.toko,
-          qty: 1,
-          statusBarang: "TERSEDIA",
+            ...r,
+            namaToko: owner.toko,
+            qty: 1,
+            statusBarang: "TERSEDIA",
         };
 
         return;
@@ -947,11 +913,12 @@ function DetailStockToko(props) {
         `${normalizeText(r.brand)}|` +
         `${normalizeText(r.barang)}`;
 
-        const key =
-        `${r.namaToko}|${r.brand}|${r.barang}`;
-    
-    const finalQty =
-        nonImeiStockCache[key] ?? 0;
+      const finalQty = buildFinalNonImeiStock({
+        transaksi,
+        toko: r.namaToko,
+        brand: r.brand,
+        barang: r.barang,
+      });
 
       if (!finalMap[skuKey]) {
         finalMap[skuKey] = {
@@ -1128,11 +1095,12 @@ function DetailStockToko(props) {
     Object.values(finalMap).forEach((row) => {
       if (row.imei) return;
 
-      const key =
-      `${row.namaToko}|${row.brand}|${row.barang}`;
-  
-  row.qty =
-      nonImeiStockCache[key] ?? 0;
+      row.qty = buildFinalNonImeiStock({
+        transaksi,
+        toko: row.namaToko,
+        brand: row.brand,
+        barang: row.barang,
+      });
 
       row.statusBarang = row.qty > 0 ? "TERSEDIA" : "HABIS";
 
@@ -1140,6 +1108,7 @@ function DetailStockToko(props) {
         row.keterangan = "TRANSFER BARANG";
       }
     });
+    
 
     return Object.values(finalMap).filter((row) => {
       // ============================
@@ -1213,7 +1182,7 @@ function DetailStockToko(props) {
    SEARCH FILTER UNIVERSAL
 ====================== */
   const filtered = useMemo(() => {
-    const keyword = String(deferredSearch || "")
+    const keyword = String(search || "")
       .trim()
       .toLowerCase();
 
@@ -1252,7 +1221,7 @@ function DetailStockToko(props) {
         keterangan.includes(keyword)
       );
     });
-  }, [mergedRows, deferredSearch]);
+  }, [mergedRows, search]);
 
   // ======================================
   // 🔥 TOTAL STOK FINAL
@@ -1285,11 +1254,6 @@ function DetailStockToko(props) {
     });
   };
 
-  // Dashboard hanya mengirim sinyal; ekspor memakai snapshot tabel ini.
-  useEffect(() => {
-    if (props?.exportSignal > 0) exportExcel();
-  }, [props?.exportSignal]);
-
   /* ======================
      RENDER
   ====================== */
@@ -1318,7 +1282,7 @@ function DetailStockToko(props) {
                 placeholder="Cari NO DO / Brand / Barang / IMEI"
                 value={search}
                 onChange={(e) => {
-                  setLocalSearch(e.target.value);
+                  setSearch(e.target.value);
                   setPage(1);
                 }}
               />
@@ -1504,5 +1468,3 @@ function DetailStockToko(props) {
     </div>
   );
 }
-
-export default memo(DetailStockToko);

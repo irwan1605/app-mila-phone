@@ -1,193 +1,193 @@
-import { ref, onValue } from "firebase/database";
-import { db } from "../firebase";
-import {
-  listenAllTransaksi,
-  listenStockAll,
-  listenMasterBarang,
-} from "./FirebaseService";
-/* =======================================================
-   DETAIL STOCK CACHE
-======================================================= */
+// import { ref, onValue } from "firebase/database";
+// import { db } from "../firebase";
+// import {
+//   listenAllTransaksi,
+//   listenStockAll,
+//   listenMasterBarang,
+// } from "./FirebaseService";
+// /* =======================================================
+//    DETAIL STOCK CACHE
+// ======================================================= */
 
 
-let transaksiCache = [];
+// let transaksiCache = [];
 
-let transaksiSubscribers = [];
+// let transaksiSubscribers = [];
 
-let transaksiUnsub = null;
+// let transaksiUnsub = null;
 
-export function listenAllTransaksiCached(callback) {
-  transaksiSubscribers.push(callback);
+// export function listenAllTransaksiCached(callback) {
+//   transaksiSubscribers.push(callback);
 
-  callback(transaksiCache);
+//   callback(transaksiCache);
 
-  if (!transaksiUnsub) {
-    transaksiUnsub = listenAllTransaksi((rows) => {
-      transaksiCache = rows || [];
+//   if (!transaksiUnsub) {
+//     transaksiUnsub = listenAllTransaksi((rows) => {
+//       transaksiCache = rows || [];
 
-      transaksiSubscribers.forEach((cb) => cb(transaksiCache));
-    });
-  }
+//       transaksiSubscribers.forEach((cb) => cb(transaksiCache));
+//     });
+//   }
 
-  return () => {
-    transaksiSubscribers = transaksiSubscribers.filter((cb) => cb !== callback);
+//   return () => {
+//     transaksiSubscribers = transaksiSubscribers.filter((cb) => cb !== callback);
 
-    if (transaksiSubscribers.length === 0 && transaksiUnsub) {
-      transaksiUnsub();
+//     if (transaksiSubscribers.length === 0 && transaksiUnsub) {
+//       transaksiUnsub();
 
-      transaksiUnsub = null;
-    }
-  };
-}
+//       transaksiUnsub = null;
+//     }
+//   };
+// }
 
-/* =======================================================
-   MASTER BARANG CACHE
-   Satu listener dipakai bersama oleh semua halaman yang memakai cache.
-======================================================= */
-let masterBarangCache = [];
-let masterBarangSubscribers = [];
-let masterBarangUnsub = null;
+// /* =======================================================
+//    MASTER BARANG CACHE
+//    Satu listener dipakai bersama oleh semua halaman yang memakai cache.
+// ======================================================= */
+// let masterBarangCache = [];
+// let masterBarangSubscribers = [];
+// let masterBarangUnsub = null;
 
-export function listenMasterBarangCached(callback) {
-  masterBarangSubscribers.push(callback);
-  callback(masterBarangCache);
+// export function listenMasterBarangCached(callback) {
+//   masterBarangSubscribers.push(callback);
+//   callback(masterBarangCache);
 
-  if (!masterBarangUnsub) {
-    masterBarangUnsub = listenMasterBarang((rows) => {
-      masterBarangCache = Array.isArray(rows) ? rows : [];
-      masterBarangSubscribers.forEach((subscriber) => subscriber(masterBarangCache));
-    });
-  }
+//   if (!masterBarangUnsub) {
+//     masterBarangUnsub = listenMasterBarang((rows) => {
+//       masterBarangCache = Array.isArray(rows) ? rows : [];
+//       masterBarangSubscribers.forEach((subscriber) => subscriber(masterBarangCache));
+//     });
+//   }
 
-  return () => {
-    masterBarangSubscribers = masterBarangSubscribers.filter(
-      (subscriber) => subscriber !== callback
-    );
+//   return () => {
+//     masterBarangSubscribers = masterBarangSubscribers.filter(
+//       (subscriber) => subscriber !== callback
+//     );
 
-    if (masterBarangSubscribers.length === 0 && masterBarangUnsub) {
-      masterBarangUnsub();
-      masterBarangUnsub = null;
-    }
-  };
-}
+//     if (masterBarangSubscribers.length === 0 && masterBarangUnsub) {
+//       masterBarangUnsub();
+//       masterBarangUnsub = null;
+//     }
+//   };
+// }
 
-let stockCache = [];
+// let stockCache = [];
 
-let stockListeners = [];
+// let stockListeners = [];
 
-let stockUnsub = null;
+// let stockUnsub = null;
 
-export function listenStockAllCached(callback) {
+// export function listenStockAllCached(callback) {
 
-    stockListeners.push(callback);
+//     stockListeners.push(callback);
 
-    callback(stockCache);
+//     callback(stockCache);
 
-    if (!stockUnsub) {
+//     if (!stockUnsub) {
 
-        stockUnsub = listenStockAll((rows) => {
+//         stockUnsub = listenStockAll((rows) => {
 
-            stockCache = rows || [];
+//             stockCache = rows || [];
 
-            stockListeners.forEach(cb => cb(stockCache));
+//             stockListeners.forEach(cb => cb(stockCache));
 
-        });
+//         });
 
-    }
+//     }
 
-    return () => {
+//     return () => {
 
-        stockListeners =
-            stockListeners.filter(x => x !== callback);
+//         stockListeners =
+//             stockListeners.filter(x => x !== callback);
 
-        if (stockListeners.length === 0) {
+//         if (stockListeners.length === 0) {
 
-            stockUnsub?.();
+//             stockUnsub?.();
 
-            stockUnsub = null;
+//             stockUnsub = null;
 
-            stockCache = [];
+//             stockCache = [];
 
-        }
+//         }
 
-    };
+//     };
 
-}
+// }
 
-let detailStockCache = {};
+// let detailStockCache = {};
 
-let detailSubscribers = [];
+// let detailSubscribers = [];
 
-let detailUnsubscribe = null;
+// let detailUnsubscribe = null;
 
-export function listenDetailStockCached(callback) {
-  detailSubscribers.push(callback);
+// export function listenDetailStockCached(callback) {
+//   detailSubscribers.push(callback);
 
-  callback(detailStockCache);
+//   callback(detailStockCache);
 
-  if (!detailUnsubscribe) {
-    detailUnsubscribe = onValue(
-      ref(db, "detail_stock"),
+//   if (!detailUnsubscribe) {
+//     detailUnsubscribe = onValue(
+//       ref(db, "detail_stock"),
 
-      (snap) => {
-        detailStockCache = snap.val() || {};
+//       (snap) => {
+//         detailStockCache = snap.val() || {};
 
-        detailSubscribers.forEach((cb) => cb(detailStockCache));
-      }
-    );
-  }
+//         detailSubscribers.forEach((cb) => cb(detailStockCache));
+//       }
+//     );
+//   }
 
-  return () => {
-    detailSubscribers = detailSubscribers.filter((cb) => cb !== callback);
+//   return () => {
+//     detailSubscribers = detailSubscribers.filter((cb) => cb !== callback);
 
-    if (detailSubscribers.length === 0 && detailUnsubscribe) {
-      detailUnsubscribe();
+//     if (detailSubscribers.length === 0 && detailUnsubscribe) {
+//       detailUnsubscribe();
 
-      detailUnsubscribe = null;
-    }
-  };
-}
+//       detailUnsubscribe = null;
+//     }
+//   };
+// }
 
-/* =======================================================
-   TOKO CACHE
-======================================================= */
+// /* =======================================================
+//    TOKO CACHE
+// ======================================================= */
 
-let tokoSnapshot = null;
+// let tokoSnapshot = null;
 
-let tokoSubscribers = [];
+// let tokoSubscribers = [];
 
-let tokoUnsubscribe = null;
+// let tokoUnsubscribe = null;
 
-export function listenTokoCached(callback) {
-  tokoSubscribers.push(callback);
+// export function listenTokoCached(callback) {
+//   tokoSubscribers.push(callback);
 
-  if (tokoSnapshot) {
-    callback(tokoSnapshot);
-  }
+//   if (tokoSnapshot) {
+//     callback(tokoSnapshot);
+//   }
 
-  if (!tokoUnsubscribe) {
-    tokoUnsubscribe = onValue(
-      ref(db, "toko"),
+//   if (!tokoUnsubscribe) {
+//     tokoUnsubscribe = onValue(
+//       ref(db, "toko"),
 
-      (snap) => {
-        tokoSnapshot = snap;
+//       (snap) => {
+//         tokoSnapshot = snap;
 
-        tokoSubscribers.forEach((cb) => cb(snap));
-      }
-    );
-  }
+//         tokoSubscribers.forEach((cb) => cb(snap));
+//       }
+//     );
+//   }
 
   
 
-  return () => {
-    tokoSubscribers = tokoSubscribers.filter((cb) => cb !== callback);
+//   return () => {
+//     tokoSubscribers = tokoSubscribers.filter((cb) => cb !== callback);
 
-    if (tokoSubscribers.length === 0 && tokoUnsubscribe) {
-      tokoUnsubscribe();
+//     if (tokoSubscribers.length === 0 && tokoUnsubscribe) {
+//       tokoUnsubscribe();
 
-      tokoUnsubscribe = null;
+//       tokoUnsubscribe = null;
 
-      tokoSnapshot = null;
-    }
-  };
-}
+//       tokoSnapshot = null;
+//     }
+//   };
+// }
