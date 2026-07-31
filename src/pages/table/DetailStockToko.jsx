@@ -1,17 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import {
-  listenAllTransaksi,
-  listenMasterBarang,
-  deleteTransaksi,
-} from "../../services/FirebaseService";
 import {
   listenDetailStockCached,
   listenAllTransaksiCached,
+  listenMasterBarangCached,
 } from "../../services/FirebaseCache";
-import { ref, remove, get, onValue } from "firebase/database";
+import { get, ref, remove } from "firebase/database";
 import { db } from "../../firebase";
-import * as XLSX from "xlsx";
 import {
   FaSearch,
   FaExchangeAlt,
@@ -48,7 +51,7 @@ const normalizeText = (v) =>
 
 const isApproved = (t) => String(t.STATUS || "").toUpperCase() === "APPROVED";
 
-export default function DetailStockToko(props) {
+function DetailStockToko(props) {
   const { state } = useLocation();
   const navigate = useNavigate();
   const tableRef = useRef(null);
@@ -60,21 +63,15 @@ export default function DetailStockToko(props) {
      STATE
   ====================== */
   const [transaksi, setTransaksi] = useState([]);
-  const [allTransaksi, setAllTransaksi] = useState([]);
   const [masterBarang, setMasterBarang] = useState([]);
-  const [search, setSearch] = useState(props?.searchTerm || "");
+  const [localSearch, setLocalSearch] = useState("");
+  const search = props?.searchTerm ?? localSearch;
+  const deferredSearch = useDeferredValue(search);
 
   // ======================================
   // 🔥 SYNC SEARCH DASHBOARD
   // ======================================
-  useEffect(() => {
-    if (props?.searchTerm !== undefined) {
-      setSearch(props.searchTerm);
-    }
-  }, [props?.searchTerm]);
-
   const [page, setPage] = useState(1);
-  const [deletedIds, setDeletedIds] = useState(new Set());
   const [detailStock, setDetailStock] = useState({});
   const detailStockHash = useRef("");
   const handleDetailStock = useCallback((rows) => {
@@ -111,18 +108,18 @@ export default function DetailStockToko(props) {
 
   useEffect(() => {
     const unsub1 = listenAllTransaksiCached((rows) => {
-      const filtered = (rows || []).filter((r) => !deletedIds.has(r.id));
-
-      setTransaksi(filtered);
+      setTransaksi((previous) => (previous === rows ? previous : rows || []));
     });
 
-    const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
+    const unsub2 = listenMasterBarangCached((rows) => {
+      setMasterBarang((previous) => (previous === rows ? previous : rows || []));
+    });
 
     return () => {
       unsub1 && unsub1();
       unsub2 && unsub2();
     };
-  }, [deletedIds]); // 🔥 WAJIB
+  }, []);
 
   // ===============================
   // 🔥 STOCK ENGINE UNIVERSAL
@@ -1216,7 +1213,7 @@ export default function DetailStockToko(props) {
    SEARCH FILTER UNIVERSAL
 ====================== */
   const filtered = useMemo(() => {
-    const keyword = String(search || "")
+    const keyword = String(deferredSearch || "")
       .trim()
       .toLowerCase();
 
@@ -1255,7 +1252,7 @@ export default function DetailStockToko(props) {
         keterangan.includes(keyword)
       );
     });
-  }, [mergedRows, search]);
+  }, [mergedRows, deferredSearch]);
 
   // ======================================
   // 🔥 TOTAL STOK FINAL
@@ -1288,6 +1285,11 @@ export default function DetailStockToko(props) {
     });
   };
 
+  // Dashboard hanya mengirim sinyal; ekspor memakai snapshot tabel ini.
+  useEffect(() => {
+    if (props?.exportSignal > 0) exportExcel();
+  }, [props?.exportSignal]);
+
   /* ======================
      RENDER
   ====================== */
@@ -1316,7 +1318,7 @@ export default function DetailStockToko(props) {
                 placeholder="Cari NO DO / Brand / Barang / IMEI"
                 value={search}
                 onChange={(e) => {
-                  setSearch(e.target.value);
+                  setLocalSearch(e.target.value);
                   setPage(1);
                 }}
               />
@@ -1502,3 +1504,5 @@ export default function DetailStockToko(props) {
     </div>
   );
 }
+
+export default memo(DetailStockToko);

@@ -1,6 +1,10 @@
 import { ref, onValue } from "firebase/database";
 import { db } from "../firebase";
-import { listenAllTransaksi, listenStockAll } from "./FirebaseService";
+import {
+  listenAllTransaksi,
+  listenStockAll,
+  listenMasterBarang,
+} from "./FirebaseService";
 /* =======================================================
    DETAIL STOCK CACHE
 ======================================================= */
@@ -32,6 +36,37 @@ export function listenAllTransaksiCached(callback) {
       transaksiUnsub();
 
       transaksiUnsub = null;
+    }
+  };
+}
+
+/* =======================================================
+   MASTER BARANG CACHE
+   Satu listener dipakai bersama oleh semua halaman yang memakai cache.
+======================================================= */
+let masterBarangCache = [];
+let masterBarangSubscribers = [];
+let masterBarangUnsub = null;
+
+export function listenMasterBarangCached(callback) {
+  masterBarangSubscribers.push(callback);
+  callback(masterBarangCache);
+
+  if (!masterBarangUnsub) {
+    masterBarangUnsub = listenMasterBarang((rows) => {
+      masterBarangCache = Array.isArray(rows) ? rows : [];
+      masterBarangSubscribers.forEach((subscriber) => subscriber(masterBarangCache));
+    });
+  }
+
+  return () => {
+    masterBarangSubscribers = masterBarangSubscribers.filter(
+      (subscriber) => subscriber !== callback
+    );
+
+    if (masterBarangSubscribers.length === 0 && masterBarangUnsub) {
+      masterBarangUnsub();
+      masterBarangUnsub = null;
     }
   };
 }

@@ -1,14 +1,11 @@
-const normalizeText = (v) =>
-  String(v || "")
+// Dipakai oleh TransferBarang dan DetailStockToko.
+// Fungsi ini murni: tidak memasang listener Firebase dan tidak mengubah transaksi.
+const normalizeText = (value) =>
+  String(value || "")
     .trim()
     .replace(/\s+/g, " ")
     .toUpperCase();
 
-    const DEV = process.env.NODE_ENV === "development";
-
-// ======================================
-// 🔥 DETECT NON IMEI
-// ======================================
 const isNonImeiItem = (imei) => {
   const clean = String(imei || "")
     .trim()
@@ -16,106 +13,73 @@ const isNonImeiItem = (imei) => {
     .replace(/-/g, "")
     .toUpperCase();
 
-  return !clean || ["NONIMEI", "NONIMEI.", "NON", "-", ""].includes(clean);
+  return !clean || ["NONIMEI", "NONIMEI.", "NON"].includes(clean);
 };
 
-// ======================================
-// 🔥 FINAL REAL STOCK NON IMEI
-// ======================================
+const getStockEffect = (metode, qty) => {
+  // Arus masuk: pembelian, refund/retur, dan transaksi transfer masuk/reject.
+  if (
+    [
+      "PEMBELIAN",
+      "REFUND",
+      "RETUR",
+      "TRANSFER_MASUK",
+      "TRANSFER_REJECT",
+      "TRANSFER BARANG",
+    ].includes(metode)
+  ) {
+    return qty;
+  }
+
+  // Arus keluar: penjualan dan transfer dari toko asal.
+  if (["PENJUALAN", "TRANSFER_KELUAR", "TRANSFER BARANG KELUAR"].includes(metode)) {
+    return -qty;
+  }
+
+  return 0;
+};
+
+// FINAL REAL STOCK NON-IMEI.
+// Letakkan validasi status di sini agar seluruh pemanggil memakai aturan yang sama.
 export const buildFinalNonImeiStock = ({
   transaksi = [],
   toko = "",
   brand = "",
   barang = "",
 }) => {
+  const targetToko = normalizeText(toko);
+  const targetBrand = normalizeText(brand);
+  const targetBarang = normalizeText(barang);
+
+  // Target belum lengkap: hindari scan seluruh riwayat transaksi saat form belum dipilih.
+  if (!targetToko || !targetBrand || !targetBarang || !Array.isArray(transaksi)) {
+    return 0;
+  }
+
   let saldo = 0;
 
-  transaksi.forEach((trx) => {
-    if (!trx) return;
+  for (const trx of transaksi) {
+    if (!trx || !isNonImeiItem(trx.IMEI ?? trx.imei)) continue;
 
-    // ======================================
-    // 🔥 HANYA NON IMEI
-    // ======================================
-    if (!isNonImeiItem(trx.IMEI)) {
-      return;
-    }
+    // Pending, void, dan transaksi tidak disetujui tidak boleh memengaruhi stok.
+    const status = normalizeText(trx.STATUS ?? trx.status);
+    if (!["APPROVED", "REFUND"].includes(status)) continue;
 
-    // ======================================
-    // 🔥 FILTER TOKO
-    // ======================================
     const trxToko = normalizeText(
       trx.NAMA_TOKO || trx.namaToko || trx.toko || trx.tokoPengirim
     );
+    if (trxToko !== targetToko) continue;
 
-    if (trxToko !== normalizeText(toko)) {
-      return;
-    }
+    if (normalizeText(trx.NAMA_BRAND || trx.brand) !== targetBrand) continue;
+    if (normalizeText(trx.NAMA_BARANG || trx.barang) !== targetBarang) continue;
 
-    // ======================================
-    // 🔥 FILTER BRAND
-    // ======================================
-    const trxBrand = normalizeText(trx.NAMA_BRAND || trx.brand);
+    const qty = Math.abs(Number(trx.QTY ?? trx.qty ?? 0));
+    if (!Number.isFinite(qty) || qty <= 0) continue;
 
-    if (trxBrand !== normalizeText(brand)) {
-      return;
-    }
-
-    // ======================================
-    // 🔥 FILTER BARANG
-    // ======================================
-    const trxBarang = normalizeText(trx.NAMA_BARANG || trx.barang);
-
-    if (trxBarang !== normalizeText(barang)) {
-      return;
-    }
-
-    // ======================================
-    // 🔥 QTY
-    // ======================================
-    const qty = Math.abs(Number(trx.QTY || trx.qty || 0));
-
-    // ======================================
-    // 🔥 METODE
-    // ======================================
     const metode = normalizeText(trx.PAYMENT_METODE || trx.metode || trx.jenis);
+    saldo += getStockEffect(metode, qty);
+  }
 
-    // =============================
-    // LETAKKAN CODE BARU DI SINI
-    // =============================
-
-    const effect = (() => {
-      switch (metode) {
-        case "PEMBELIAN":
-        case "REFUND":
-        case "RETUR":
-        case "TRANSFER_MASUK":
-        case "TRANSFER_REJECT":
-        case "TRANSFER BARANG":
-          return qty;
-
-        case "PENJUALAN":
-        case "TRANSFER_KELUAR":
-        case "TRANSFER BARANG KELUAR":
-          return -qty;
-
-        default:
-          return 0;
-      }
-    })();
-
-    saldo += effect;
-  });
-
-  saldo = Math.max(0, saldo);
-
-  if (DEV) {
-    console.log("🔥 FINAL NON IMEI STOCK:", {
-        toko,
-        brand,
-        barang,
-        saldo,
-    });
-}
-  
-  return saldo;
+  // Stok tidak pernah dikembalikan sebagai nilai negatif.
+  return Math.max(0, saldo);
 };
