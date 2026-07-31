@@ -4,6 +4,38 @@ import { listenAllTransaksi, listenStockAll } from "./FirebaseService";
 /* =======================================================
    DETAIL STOCK CACHE
 ======================================================= */
+
+
+let transaksiCache = [];
+
+let transaksiSubscribers = [];
+
+let transaksiUnsub = null;
+
+export function listenAllTransaksiCached(callback) {
+  transaksiSubscribers.push(callback);
+
+  callback(transaksiCache);
+
+  if (!transaksiUnsub) {
+    transaksiUnsub = listenAllTransaksi((rows) => {
+      transaksiCache = rows || [];
+
+      transaksiSubscribers.forEach((cb) => cb(transaksiCache));
+    });
+  }
+
+  return () => {
+    transaksiSubscribers = transaksiSubscribers.filter((cb) => cb !== callback);
+
+    if (transaksiSubscribers.length === 0 && transaksiUnsub) {
+      transaksiUnsub();
+
+      transaksiUnsub = null;
+    }
+  };
+}
+
 let stockCache = [];
 
 let stockListeners = [];
@@ -45,36 +77,6 @@ export function listenStockAllCached(callback) {
 
     };
 
-}
-
-let transaksiCache = [];
-
-let transaksiSubscribers = [];
-
-let transaksiUnsub = null;
-
-export function listenAllTransaksiCached(callback) {
-  transaksiSubscribers.push(callback);
-
-  callback(transaksiCache);
-
-  if (!transaksiUnsub) {
-    transaksiUnsub = listenAllTransaksi((rows) => {
-      transaksiCache = rows || [];
-
-      transaksiSubscribers.forEach((cb) => cb(transaksiCache));
-    });
-  }
-
-  return () => {
-    transaksiSubscribers = transaksiSubscribers.filter((cb) => cb !== callback);
-
-    if (transaksiSubscribers.length === 0 && transaksiUnsub) {
-      transaksiUnsub();
-
-      transaksiUnsub = null;
-    }
-  };
 }
 
 let detailStockCache = {};
@@ -139,6 +141,8 @@ export function listenTokoCached(callback) {
       }
     );
   }
+
+  
 
   return () => {
     tokoSubscribers = tokoSubscribers.filter((cb) => cb !== callback);

@@ -66,8 +66,6 @@ export default function Dashboard() {
 
   const [stokMaster, setStokMaster] = useState([]);
 
-  
-
   const [filterType, setFilterType] = useState("semua");
   const [filterValue, setFilterValue] = useState("");
   const [filterToko, setFilterToko] = useState("semua");
@@ -118,69 +116,19 @@ export default function Dashboard() {
   }, [transaksi]);
 
   const tokoList = useMemo(() => {
-
     return [
-
-        ...new Set(
-
-            dataTransaksi
-
-                .map(x => x.NAMA_TOKO || x.TOKO)
-
-                .filter(Boolean)
-
-        )
-
-    ];
-
-}, [dataTransaksi]);
-
-const salesList = useMemo(() => {
-
-  return [
-
       ...new Set(
+        dataTransaksi
 
-          dataTransaksi
+          .map((x) => x.NAMA_TOKO || x.TOKO)
 
-              .map(x => x.NAMA_SALES)
-
-              .filter(Boolean)
-
-      )
-
-  ];
-
-}, [dataTransaksi]);
-
-  const [penjualan, setPenjualan] = useState([]);
+          .filter(Boolean)
+      ),
+    ];
+  }, [dataTransaksi]);
 
   const [penjualanList, setPenjualanList] = useState([]);
   const DEV = process.env.NODE_ENV === "development";
-
-  // =====================================
-  // GLOBAL REFUND CHECK
-  // =====================================
-  const isRefundTransaction = (trx = {}) => {
-    const invoice = String(trx?.invoice || trx?.NO_INVOICE || "")
-      .trim()
-      .toUpperCase();
-
-    return (
-      trx?.deleted === true ||
-      trx?.deletedFromPenjualan === true ||
-      trx?.refundProcessed === true ||
-      trx?.refundLocked === true ||
-      trx?.IS_REFUND === true ||
-      trx?.HIDE_FROM_PENJUALAN === true ||
-      trx?.HIDE_FROM_TABLE === true ||
-      String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
-      String(trx?.STATUS || "").toUpperCase() === "REFUND_DELETED" ||
-      String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
-      String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND" ||
-      invoice.startsWith("REF-")
-    );
-  };
 
   const isValidPenjualan = (trx = {}) => {
     const invoice = String(trx?.invoice || trx?.NO_INVOICE || "")
@@ -248,174 +196,303 @@ const salesList = useMemo(() => {
   // ================= DASHBOARD DARI DATA TRANSAKSI PENJUALAN =================
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // 1️⃣ INFORMASI PENJUALAN (INVOICE UNIK)
-  const totalTransaksi = useMemo(() => {
-    const map = {};
+  const dashboardSummary = useMemo(() => {
+    if (!Array.isArray(penjualanList) || penjualanList.length === 0) {
 
-    penjualanList.forEach((trx) => {
-      if (
-        String(trx.PAYMENT_METODE || "").toUpperCase() !== "PENJUALAN" ||
-        trx.STATUS !== "Approved"
-      )
-        return;
-
-      const inv = String(trx.NO_INVOICE || "").trim();
-      if (inv) map[inv] = true;
-    });
-
-    return Object.keys(map).length;
-  }, [penjualanList]);
-
-  // 2️⃣ PENJUALAN HARI INI (TOTAL NOMINAL UNIK PER INVOICE)
-  const totalPenjualanHariIni = useMemo(() => {
-    const mapInvoice = {};
-    const today = new Date().toISOString().slice(0, 10);
-
-    penjualanList.forEach((trx) => {
-      const tanggalRaw = trx.tanggal || trx.createdAt;
-      if (!tanggalRaw) return;
-
-      const formatDate = (d) => {
-        if (!d) return "";
-        return new Date(d).toLocaleDateString("en-CA");
-        // hasil: YYYY-MM-DD (format aman)
+      return {
+  
+          totalTransaksi: 0,
+  
+          totalTransaksiHariIni: 0,
+  
+          totalHariIni: 0,
+  
+          totalOmzet: 0,
+  
+          totalQty: 0,
+  
+          totalPending: 0,
+  
+          totalApproved: 0,
+  
+          totalTransfer: 0,
+  
+          totalPiutang: 0,
+  
+          totalNominalPenjualan: 0,
+  
+          totalPenjualanBarang: 0,
+  
+          totalPenjualanBarangPerBulan: 0,
+  
+          totalNominalPenjualanPerBulan: 0,
+  
+          omzetPerHari: [],
+  
+          omzetPerBulan: [],
+  
+          omzetPerSales: [],
+  
+          omzetPerToko: [],
+  
       };
+  
+  }
 
-      const tanggal = formatDate(trx.tanggal || trx.createdAt);
-
-      const inv = String(trx.invoice || "").trim();
-      if (!inv) return;
-
-      if (!mapInvoice[inv]) {
-        let total = 0;
-
-        // 🔥 PERSIS seperti TablePenjualan
-        if (Number(trx.payment?.grandTotal || 0) > 0) {
-          total = Number(trx.payment.grandTotal);
-        } else if (Array.isArray(trx.items)) {
-          total =
-            trx.items.reduce(
-              (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-              0
-            ) + Number(trx.payment?.nominalMdr || 0);
-        }
-
-        mapInvoice[inv] = total;
-      }
-    });
-
-    return Object.values(mapInvoice).reduce((s, v) => s + v, 0);
-  }, [penjualanList]);
-
-  // ================= 🔥 MASTER KPI (SUMBER: TABLE PENJUALAN) =================
-  const dashboardPenjualan = useMemo(() => {
-    const mapInvoice = {};
-
-    const todayLocal = new Date().toLocaleDateString("en-CA");
-
-    const formatDate = (d) => {
-      if (!d) return "";
-      return new Date(d).toLocaleDateString("en-CA");
-    };
-
-    penjualanList.forEach((trx) => {
-      // =====================================
-      // SKIP REFUND
-      // =====================================
-      const isRefund =
-        trx?.deleted === true ||
-        trx?.deletedFromPenjualan === true ||
-        trx?.refundProcessed === true ||
-        trx?.refundLocked === true ||
-        trx?.IS_REFUND === true ||
-        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
-        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
-        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
-
-      if (isRefund) return;
-
-      const invoice = String(
-        trx?.invoice || trx?.NO_INVOICE || trx?.noInvoice || ""
-      ).trim();
-
-      if (!invoice) return;
-
-      if (!mapInvoice[invoice]) {
-        const total =
-          Number(trx?.payment?.grandTotal || 0) ||
-          Number(trx?.GRAND_TOTAL || 0) ||
-          (Array.isArray(trx?.items)
-            ? trx.items.reduce(
-                (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-                0
-              )
-            : 0);
-
-        const qty = (trx.items || []).reduce(
-          (s, it) => s + Number(it.qty || 0),
-          0
-        );
-
-        const tanggal = formatDate(
-          trx?.tanggal || trx?.createdAt || trx?.TANGGAL_TRANSAKSI
-        );
-
-        mapInvoice[invoice] = {
-          total,
-          qty,
-          tanggal,
-        };
-      }
-    });
-
-    const list = Object.values(mapInvoice);
-
-    return {
-      totalTransaksi: list.length,
-
-      totalQty: list.reduce((s, x) => s + x.qty, 0),
-
-      totalOmzet: list.reduce((s, x) => s + x.total, 0),
-
-      totalHariIni: list
-        .filter((x) => x.tanggal === todayLocal)
-        .reduce((s, x) => s + x.total, 0),
-    };
-  }, [penjualanList]);
-
-  const totalTransaksiSalesReport = useMemo(() => {
     const today = new Date().toLocaleDateString("en-CA");
 
-    const mapInvoice = {};
+    const current = new Date();
+    const currentMonth = current.getMonth();
+    const currentYear = current.getFullYear();
 
-    penjualanList.forEach((trx) => {
-      if (!isValidPenjualan(trx)) return;
+    const invoiceMap = new Map();
+    const piutangInvoice = new Set();
 
-      const tanggal = new Date(
-        trx?.tanggal || trx?.createdAt
-      ).toLocaleDateString("en-CA");
+    let totalTransaksi = 0;
+    let totalTransaksiHariIni = 0;
+    let totalHariIni = 0;
+    let totalOmzet = 0;
+    let totalQty = 0;
+    let totalPending = 0;
+    let totalApproved = 0;
+    let totalTransfer = 0;
+    let totalPiutang = 0;
+    let totalNominalPenjualan = 0;
+    let totalPenjualanBarang = 0;
+    let totalPenjualanBarangPerBulan = 0;
+    let totalNominalPenjualanPerBulan = 0;
 
-      if (tanggal !== today) return;
+    const omzetPerHariMap = new Map();
+    const omzetPerBulanMap = new Map();
+    const omzetPerSalesMap = new Map();
+    const omzetPerTokoMap = new Map();
 
-      const invoice = String(trx?.invoice || trx?.NO_INVOICE || "").trim();
+    for (const trx of penjualanList) {
+      //------------------------------------
+      // REFUND
+      //------------------------------------
 
-      if (!invoice) return;
+      if (!isValidPenjualan(trx)) continue;
 
-      mapInvoice[invoice] = true;
-    });
+      const invoice = String(
+        trx.invoice || trx.NO_INVOICE || trx.noInvoice || ""
+      ).trim();
 
-    return Object.keys(mapInvoice).length;
+      if (!invoice) continue;
+
+      //------------------------------------
+      // STATUS
+      //------------------------------------
+
+      const status = String(
+        trx.STATUS || trx.status || trx.statusPembayaran || ""
+      ).toUpperCase();
+
+      if (status === "PENDING") totalPending++;
+
+      if (status === "APPROVED") totalApproved++;
+
+      //------------------------------------
+      // PAYMENT
+      //------------------------------------
+
+      const payment = String(
+        trx.SYSTEM_PAYMENT || trx.systemPayment || ""
+      ).toUpperCase();
+
+      if (payment === "PIUTANG") {
+        piutangInvoice.add(invoice);
+      }
+
+      //------------------------------------
+      // TANGGAL
+      //------------------------------------
+
+      const rawDate = trx.tanggal || trx.createdAt || trx.TANGGAL_TRANSAKSI;
+
+      const trxDate = rawDate ? new Date(rawDate) : null;
+
+      const dateKey = trxDate ? trxDate.toLocaleDateString("en-CA") : "";
+
+      const monthKey = trxDate
+        ? `${trxDate.getFullYear()}-${String(trxDate.getMonth() + 1).padStart(
+            2,
+            "0"
+          )}`
+        : "";
+
+      //------------------------------------
+      // TOTAL
+      //------------------------------------
+
+      let grandTotal = 0;
+
+      if (Number(trx?.payment?.grandTotal || 0) > 0) {
+        grandTotal = Number(trx.payment.grandTotal);
+      } else if (Array.isArray(trx.items)) {
+        grandTotal =
+          trx.items.reduce(
+            (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
+            0
+          ) + Number(trx?.payment?.nominalMdr || 0);
+      }
+
+      //------------------------------------
+      // QTY
+      //------------------------------------
+
+      const qty = Array.isArray(trx.items)
+        ? trx.items.reduce((s, it) => s + Number(it.qty || 0), 0)
+        : Number(trx.qty || trx.QTY || 0);
+
+      //------------------------------------
+      // ANTI DOUBLE INVOICE
+      //------------------------------------
+
+      if (!invoiceMap.has(invoice)) {
+        invoiceMap.set(invoice, true);
+
+        totalTransaksi++;
+
+        totalOmzet += grandTotal;
+
+        totalNominalPenjualan += grandTotal;
+
+        totalQty += qty;
+
+        totalPenjualanBarang += qty;
+
+        if (dateKey === today) {
+          // jumlah invoice hari ini
+          totalTransaksiHariIni++;
+
+          // omzet hari ini
+          totalHariIni += grandTotal;
+        }
+
+        if (
+          trxDate &&
+          trxDate.getMonth() === currentMonth &&
+          trxDate.getFullYear() === currentYear
+        ) {
+          totalPenjualanBarangPerBulan += qty;
+
+          totalNominalPenjualanPerBulan += grandTotal;
+        }
+      }
+
+      //------------------------------------
+      // TRANSFER
+      //------------------------------------
+
+      const metode = String(trx.PAYMENT_METODE || "").toUpperCase();
+
+      if (
+        metode === "TRANSFER" ||
+        metode === "TRANSFER_MASUK" ||
+        metode === "TRANSFER_KELUAR"
+      ) {
+        totalTransfer++;
+      }
+
+      //------------------------------------
+      // CHART HARI
+      //------------------------------------
+
+      if (dateKey) {
+        omzetPerHariMap.set(
+          dateKey,
+          (omzetPerHariMap.get(dateKey) || 0) + grandTotal
+        );
+      }
+
+      //------------------------------------
+      // CHART BULAN
+      //------------------------------------
+
+      if (monthKey) {
+        omzetPerBulanMap.set(
+          monthKey,
+          (omzetPerBulanMap.get(monthKey) || 0) + grandTotal
+        );
+      }
+
+      //------------------------------------
+      // SALES
+      //------------------------------------
+
+      const sales = trx.NAMA_SALES || "Tidak diketahui";
+
+      omzetPerSalesMap.set(
+        sales,
+        (omzetPerSalesMap.get(sales) || 0) + grandTotal
+      );
+
+      //------------------------------------
+      // TOKO
+      //------------------------------------
+
+      const toko = String(trx.NAMA_TOKO || trx.TOKO || "-").toUpperCase();
+
+      omzetPerTokoMap.set(toko, (omzetPerTokoMap.get(toko) || 0) + grandTotal);
+    }
+
+    totalPiutang = piutangInvoice.size;
+
+    return {
+      totalTransaksi,
+      totalTransaksiHariIni,
+      totalHariIni,
+      totalOmzet,
+      totalQty,
+      totalPending,
+      totalApproved,
+      totalTransfer,
+      totalPiutang,
+      totalNominalPenjualan,
+      totalPenjualanBarang,
+      totalPenjualanBarangPerBulan,
+      totalNominalPenjualanPerBulan,
+
+      omzetPerHari: Object.entries(omzetPerHariMap)
+        .map(([tanggal, omzet]) => ({ tanggal, omzet }))
+        .sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal)),
+
+      omzetPerBulan: Object.entries(omzetPerBulanMap)
+        .map(([bulan, omzet]) => ({ bulan, omzet }))
+        .sort((a, b) => new Date(a.bulan) - new Date(b.bulan)),
+
+      omzetPerSales: Object.entries(omzetPerSalesMap).map(([sales, omzet]) => ({
+        sales,
+        omzet,
+      })),
+
+      omzetPerToko: Object.entries(omzetPerTokoMap).map(([toko, omzet]) => ({
+        toko,
+        omzet,
+      })),
+    };
   }, [penjualanList]);
 
-  /* ================= LISTENER ================= */
-
-  // useEffect(() => {
-  //   const unsub = listenPenjualan((data) => {
-  //     console.log("🔥 PENJUALAN ASLI:", data);
-  //     setPenjualanList(Array.isArray(data) ? data : []);
-  //   });
-  //   return () => unsub && unsub();
-  // }, []);
+  const {
+    totalTransaksi,
+    totalTransaksiHariIni, // <-- TAMBAHKAN BARIS INI
+    totalHariIni,
+    totalOmzet,
+    totalQty,
+    totalPending,
+    totalApproved,
+    totalTransfer,
+    totalPiutang,
+    totalNominalPenjualan,
+    totalPenjualanBarang,
+    totalPenjualanBarangPerBulan,
+    totalNominalPenjualanPerBulan,
+    omzetPerHari,
+    omzetPerBulan,
+    omzetPerSales,
+    omzetPerToko,
+  } = dashboardSummary;
 
   useEffect(() => {
     const u1 = listenStockAllCached((s) => {
@@ -433,79 +510,12 @@ const salesList = useMemo(() => {
     };
   }, []);
 
- 
-
   useEffect(() => {
     // 🔥 HAPUS TRANSAKSI LEGACY DARI TOKO 1
     forceDeleteTransaksi(1, (val) => {
       return !val.NAMA_TOKO || String(val.NAMA_TOKO).toUpperCase() === "TOKO 1";
     });
   }, []);
-
-  // =======================================================
-  // LISTEN SEMUA TRANSAKSI (UNTUK OMZET, PIUTANG, DLL)
-  // =======================================================
-  // useEffect(() => {
-  //   const unsub = listenAllTransaksi((listRaw = []) => {
-  //     const formatted = (listRaw || []).map((r) => ({
-  //       ...r,
-  //       id: r.id,
-  //       TANGGAL_TRANSAKSI: r.TANGGAL_TRANSAKSI || r.TANGGAL || "",
-  //       NO_INVOICE: r.NO_INVOICE || "",
-  //       NAMA_USER: r.NAMA_USER || "",
-  //       NO_HP_USER: r.NO_HP_USER || "",
-  //       NAMA_PIC_TOKO: r.NAMA_PIC_TOKO || "",
-  //       NAMA_SALES: r.NAMA_SALES || "",
-  //       TITIPAN_REFERENSI: r.TITIPAN_REFERENSI || "",
-  //       NAMA_TOKO: String(r.NAMA_TOKO || r.TOKO || ""),
-  //       TOKO: String(r.NAMA_TOKO || r.TOKO || ""),
-  //       NAMA_BRAND: r.NAMA_BRAND || r.BRAND || "",
-  //       NAMA_BARANG: r.NAMA_BARANG || r.BARANG || "",
-  //       QTY: Number(r.QTY || 0),
-  //       NOMOR_UNIK: r.NOMOR_UNIK || r.IMEI || r.NO_DINAMO || r.NO_RANGKA || "",
-  //       IMEI: r.IMEI || "",
-  //       NO_DINAMO: r.NO_DINAMO || "",
-  //       NO_RANGKA: r.NO_RANGKA || "",
-  //       KATEGORI_HARGA: r.KATEGORI_HARGA || "",
-  //       HARGA_UNIT: Number(r.HARGA_UNIT || r.HARGA || 0),
-  //       PAYMENT_METODE: r.PAYMENT_METODE || "",
-  //       SYSTEM_PAYMENT: r.SYSTEM_PAYMENT || "",
-  //       MDR: Number(r.MDR || 0),
-  //       POTONGAN_MDR: Number(r.POTONGAN_MDR || 0),
-  //       NO_ORDER_KONTRAK: r.NO_ORDER_KONTRAK || "",
-  //       TENOR: r.TENOR || "",
-  //       DP_USER_MERCHANT: Number(r.DP_USER_MERCHANT || 0),
-  //       DP_USER_TOKO: Number(r.DP_USER_TOKO || 0),
-  //       REQUEST_DP_TALANGAN: Number(r.REQUEST_DP_TALANGAN || 0),
-  //       KETERANGAN: r.KETERANGAN || "",
-  //       STATUS: r.STATUS || "Pending",
-  //       TOTAL:
-  //         Number(r.TOTAL) ||
-  //         Number(r.QTY || 0) * Number(r.HARGA_UNIT || r.HARGA || 0),
-  //     }));
-
-  //     setDataTransaksi(formatted);
-
-  //     const tokoNames = [
-  //       ...new Set(formatted.map((r) => r.NAMA_TOKO || r.TOKO).filter(Boolean)),
-  //     ];
-  //     if (tokoNames.length > 0) setTokoList(tokoNames);
-
-  //     const uniqueSales = [
-  //       ...new Set(formatted.map((r) => r.NAMA_SALES).filter(Boolean)),
-  //     ];
-  //     setSalesList(uniqueSales);
-  //   });
-
-  //   return () => unsub && unsub();
-  // }, []);
-
-  const totalHariIni = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return penjualan
-      .filter((p) => p.tanggal === today)
-      .reduce((s, p) => s + Number(p.payment.grandTotal || 0), 0);
-  }, [penjualan]);
 
   // ==========================
   // STOCK BY TOKO (SINGLE SOURCE OF TRUTH)
@@ -539,68 +549,88 @@ const salesList = useMemo(() => {
   // =======================================================
   // FILTERING (UNTUK CHART & INFO)
   // =======================================================
-  const filteredData = useMemo(() => {
-    let f = dataTransaksi;
+  const dashboardFiltered = useMemo(() => {
+    let rows = dataTransaksi;
 
     if (filterToko !== "semua") {
-      f = f.filter((r) => (r.NAMA_TOKO || r.TOKO) === filterToko);
+      rows = rows.filter((r) => (r.NAMA_TOKO || r.TOKO) === filterToko);
     }
+
     if (filterSales !== "semua") {
-      f = f.filter((r) => r.NAMA_SALES === filterSales);
+      rows = rows.filter((r) => r.NAMA_SALES === filterSales);
     }
 
     if (filterType !== "semua" && filterValue) {
       const val = new Date(filterValue);
-      f = f.filter((r) => {
+
+      rows = rows.filter((r) => {
         const d = new Date(r.TANGGAL_TRANSAKSI);
+
         if (isNaN(d.getTime())) return false;
 
-        if (filterType === "hari") {
-          return (
-            d.toISOString().slice(0, 10) === val.toISOString().slice(0, 10)
-          );
+        switch (filterType) {
+          case "hari":
+            return (
+              d.toISOString().slice(0, 10) === val.toISOString().slice(0, 10)
+            );
+
+          case "bulan":
+            return (
+              d.getFullYear() === val.getFullYear() &&
+              d.getMonth() === val.getMonth()
+            );
+
+          case "tahun":
+            return d.getFullYear() === val.getFullYear();
+
+          default:
+            return true;
         }
-        if (filterType === "bulan") {
-          return (
-            d.getFullYear() === val.getFullYear() &&
-            d.getMonth() === val.getMonth()
-          );
-        }
-        if (filterType === "tahun") {
-          return d.getFullYear() === val.getFullYear();
-        }
-        return true;
       });
     }
 
-    return f;
-  }, [dataTransaksi, filterType, filterValue, filterToko, filterSales]);
-  if (DEV) {
-    console.log("SALES REPORT TOTAL =", filteredData.length);
-  }
+    const dataHariIni = [];
 
-  if (DEV) {
-    console.log("DASHBOARD TOTAL =", totalTransaksiSalesReport);
-  }
+    let totalPenjualan = 0;
 
-  if (DEV) {
-    console.log("DASHBOARD TRANSAKSI =", totalTransaksiSalesReport);
-  }
-  const dataHariIni = useMemo(() => {
-    return filteredData.filter(
-      (x) =>
-        x.TANGGAL_TRANSAKSI && x.TANGGAL_TRANSAKSI.slice(0, 10) === todayStr
-    );
-  }, [filteredData, todayStr]);
+    for (const row of rows) {
+      if (row.STATUS === "Approved") totalPenjualan++;
+
+      if (
+        row.TANGGAL_TRANSAKSI &&
+        row.TANGGAL_TRANSAKSI.slice(0, 10) === todayStr
+      ) {
+        dataHariIni.push(row);
+      }
+    }
+
+    return {
+      rows,
+
+      dataHariIni,
+
+      totalPenjualan,
+    };
+  }, [
+    dataTransaksi,
+    filterType,
+    filterValue,
+    filterSales,
+    filterToko,
+    todayStr,
+  ]);
+
+  const {
+    rows: filteredData,
+
+    dataHariIni,
+
+    totalPenjualan,
+  } = dashboardFiltered;
 
   // =======================================================
   // METRIK DASHBOARD PUSAT
   // =======================================================
-  const totalOmzet = useMemo(() => {
-    return filteredData
-      .filter((x) => x.STATUS === "Approved")
-      .reduce((a, b) => a + Number(b.TOTAL || 0), 0);
-  }, [filteredData]);
 
   const totalStockSemuaToko = useMemo(() => {
     return Object.values(stokByToko || {}).reduce((sum, tokoData) => {
@@ -610,430 +640,6 @@ const salesList = useMemo(() => {
       );
     }, 0);
   }, [stokByToko]);
-
-  const totalPenjualan = useMemo(() => {
-    return filteredData.filter((x) => x.STATUS === "Approved").length;
-  }, [filteredData]);
-
-  const totalPending = useMemo(() => {
-    return filteredData.filter((x) => x.STATUS === "Pending").length;
-  }, [filteredData]);
-
-  const totalPiutang = useMemo(() => {
-    return filteredData
-      .filter((x) => x.SYSTEM_PAYMENT === "PIUTANG" && x.STATUS === "Approved")
-      .reduce((a, b) => a + Number(b.TOTAL || 0), 0);
-  }, [filteredData]);
-
-  // =======================================================
-  // DATA UNTUK CHART
-  // =======================================================
-  const COLORS = [
-    "#2563EB",
-    "#10B981",
-    "#F59E0B",
-    "#EF4444",
-    "#8B5CF6",
-    "#14B8A6",
-    "#F97316",
-    "#3B82F6",
-  ];
-
-  const registeredTokoSet = useMemo(() => {
-    return new Set(TOKO_LIST.map((t) => t.toUpperCase().trim()));
-  }, []);
-
-  const omzetPerToko = useMemo(() => {
-    const map = {};
-
-    filteredData.forEach((x) => {
-      let tokoRaw = x.NAMA_TOKO ?? x.TOKO;
-
-      // 🔥 FORCE STRING + SAFETY
-      if (typeof tokoRaw !== "string") {
-        if (tokoRaw === null || tokoRaw === undefined) return;
-        tokoRaw = String(tokoRaw);
-      }
-
-      const toko = tokoRaw.toUpperCase().trim();
-
-      // 🔥 FILTER TOKO RESMI SAJA
-      if (!registeredTokoSet.has(toko)) return;
-
-      map[toko] = (map[toko] || 0) + Number(x.TOTAL || 0);
-    });
-
-    return Object.entries(map).map(([toko, omzet]) => ({
-      toko,
-      omzet,
-    }));
-  }, [filteredData, registeredTokoSet]);
-
-  const totalPiutangAktif = useMemo(() => {
-    const invoiceSet = new Set();
-
-    penjualanList.forEach((trx) => {
-      if (!isValidPenjualan(trx)) return;
-      // =====================================
-      // SKIP REFUND
-      // =====================================
-      const isRefund =
-        trx?.deleted === true ||
-        trx?.deletedFromPenjualan === true ||
-        trx?.refundProcessed === true ||
-        trx?.refundLocked === true ||
-        trx?.IS_REFUND === true ||
-        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
-        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
-        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
-
-      if (isRefund) return;
-
-      // =====================================
-      // HANYA PENJUALAN KREDIT / PIUTANG
-      // =====================================
-      const isPiutang =
-        (String(trx?.SYSTEM_PAYMENT || "").toUpperCase() === "PIUTANG" ||
-          String(trx?.systemPayment || "").toUpperCase() === "PIUTANG" ||
-          String(trx?.paymentMethod || "").toUpperCase() === "KREDIT" ||
-          String(trx?.PAYMENT_METODE || "").toUpperCase() === "KREDIT") &&
-        isValidPenjualan(trx);
-
-      if (!isPiutang) return;
-
-      // =====================================
-      // INVOICE
-      // =====================================
-      const invoice = String(
-        trx?.invoice || trx?.NO_INVOICE || trx?.noInvoice || ""
-      ).trim();
-
-      if (!invoice) return;
-
-      invoiceSet.add(invoice);
-    });
-
-    return invoiceSet.size;
-  }, [penjualanList]);
-
-  const omzetPerSales = useMemo(() => {
-    const map = {};
-    filteredData.forEach((x) => {
-      const s = x.NAMA_SALES || "Tidak diketahui";
-      map[s] = (map[s] || 0) + Number(x.TOTAL || 0);
-    });
-    return Object.entries(map).map(([sales, omzet]) => ({ sales, omzet }));
-  }, [filteredData]);
-
-  // ================= TOTAL PENJUALAN HARI INI =================
-  const today = new Date().toISOString().slice(0, 10);
-
-  const totalNominalPenjualan = useMemo(() => {
-    if (!Array.isArray(penjualanList)) return 0;
-
-    const mapInvoice = {};
-
-    penjualanList.forEach((trx) => {
-      if (!isValidPenjualan(trx)) return;
-      // =====================================
-      // SKIP REFUND
-      // =====================================
-      const isRefund =
-        trx?.deleted === true ||
-        trx?.deletedFromPenjualan === true ||
-        trx?.refundProcessed === true ||
-        trx?.refundLocked === true ||
-        trx?.IS_REFUND === true ||
-        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
-        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
-        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
-
-      if (isRefund) return;
-
-      const invoice = String(trx?.invoice || trx?.NO_INVOICE || "").trim();
-
-      if (!invoice) return;
-
-      let total = 0;
-
-      if (Number(trx?.payment?.grandTotal || 0) > 0) {
-        total = Number(trx.payment.grandTotal);
-      } else if (Array.isArray(trx?.items)) {
-        total =
-          trx.items.reduce(
-            (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-            0
-          ) + Number(trx?.payment?.nominalMdr || 0);
-      }
-
-      if (!mapInvoice[invoice]) {
-        mapInvoice[invoice] = total;
-      }
-    });
-
-    return Object.values(mapInvoice).reduce((s, v) => s + v, 0);
-  }, [penjualanList]);
-
-  const totalPenjualanBarangPerBulan = useMemo(() => {
-    if (!Array.isArray(penjualanList)) return 0;
-
-    const now = new Date();
-
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const invoiceMap = {};
-
-    penjualanList.forEach((trx) => {
-      if (!isValidPenjualan(trx)) return;
-
-      // =====================================
-      // TANGGAL TRANSAKSI
-      // =====================================
-      const rawDate = trx?.tanggal || trx?.createdAt || trx?.TANGGAL_TRANSAKSI;
-
-      if (!rawDate) return;
-
-      const trxDate = new Date(rawDate);
-
-      if (
-        trxDate.getMonth() !== currentMonth ||
-        trxDate.getFullYear() !== currentYear
-      ) {
-        return;
-      }
-
-      // =====================================
-      // INVOICE
-      // =====================================
-      const invoice = String(
-        trx?.invoice || trx?.NO_INVOICE || trx?.noInvoice || ""
-      ).trim();
-
-      if (!invoice) return;
-
-      // =====================================
-      // TOTAL QTY
-      // =====================================
-      const qty = Array.isArray(trx?.items)
-        ? trx.items.reduce((sum, item) => sum + Number(item.qty || 0), 0)
-        : Number(trx?.qty || trx?.QTY || 0);
-
-      // =====================================
-      // ANTI DOUBLE INVOICE
-      // =====================================
-      if (!invoiceMap[invoice]) {
-        invoiceMap[invoice] = qty;
-      }
-    });
-
-    return Object.values(invoiceMap).reduce((sum, qty) => sum + qty, 0);
-  }, [penjualanList]);
-
-  const totalPenjualanBarangReal = useMemo(() => {
-    const mapInvoice = {};
-
-    penjualanList.forEach((trx) => {
-      if (!Array.isArray(trx.items)) return;
-
-      const invoice = String(trx.invoice || "").trim();
-
-      if (!invoice) return;
-
-      const isRefund =
-        trx?.deleted === true ||
-        trx?.deletedFromPenjualan === true ||
-        trx?.refundProcessed === true ||
-        trx?.refundLocked === true ||
-        trx?.IS_REFUND === true ||
-        String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
-        String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
-        String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
-
-      if (isRefund) return;
-
-      const totalQty = trx.items.reduce(
-        (s, item) => s + Number(item.qty || 0),
-        0
-      );
-
-      if (!mapInvoice[invoice]) {
-        mapInvoice[invoice] = {
-          qty: totalQty,
-          toko: trx.toko || "-",
-          status: trx.statusPembayaran || "OK",
-        };
-      }
-    });
-
-    const salesReportData = Object.values(mapInvoice);
-
-    return salesReportData.reduce((sum, row) => sum + Number(row.qty || 0), 0);
-  }, [penjualanList]);
-
-  const totalNominalPenjualanPerBulan = useMemo(() => {
-    if (!Array.isArray(penjualanList)) return 0;
-
-    const now = new Date();
-
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const mapInvoice = {};
-
-    penjualanList.forEach((trx) => {
-      if (!isValidPenjualan(trx)) return;
-
-      // =====================================
-      // TANGGAL TRANSAKSI
-      // =====================================
-      const rawDate = trx?.tanggal || trx?.createdAt || trx?.TANGGAL_TRANSAKSI;
-
-      if (!rawDate) return;
-
-      const trxDate = new Date(rawDate);
-
-      if (
-        trxDate.getMonth() !== currentMonth ||
-        trxDate.getFullYear() !== currentYear
-      ) {
-        return;
-      }
-
-      // =====================================
-      // INVOICE
-      // =====================================
-      const invoice = String(
-        trx?.invoice || trx?.NO_INVOICE || trx?.noInvoice || ""
-      ).trim();
-
-      if (!invoice) return;
-
-      // =====================================
-      // TOTAL
-      // =====================================
-      let total = 0;
-
-      if (Number(trx?.payment?.grandTotal || 0) > 0) {
-        total = Number(trx.payment.grandTotal);
-      } else if (Array.isArray(trx?.items)) {
-        total =
-          trx.items.reduce(
-            (s, it) => s + Number(it.qty || 0) * Number(it.hargaAktif || 0),
-            0
-          ) + Number(trx?.payment?.nominalMdr || 0);
-      }
-
-      // =====================================
-      // ANTI DOUBLE INVOICE
-      // =====================================
-      if (!mapInvoice[invoice]) {
-        mapInvoice[invoice] = total;
-      }
-    });
-
-    return Object.values(mapInvoice).reduce((sum, value) => sum + value, 0);
-  }, [penjualanList]);
-
-  const omzetPerHari = useMemo(() => {
-    const map = {};
-    filteredData.forEach((x) => {
-      if (!x.TANGGAL_TRANSAKSI) return;
-      const tgl = new Date(x.TANGGAL_TRANSAKSI).toISOString().slice(0, 10);
-      map[tgl] = (map[tgl] || 0) + Number(x.TOTAL || 0);
-    });
-    return Object.entries(map)
-      .map(([tanggal, omzet]) => ({ tanggal, omzet }))
-      .sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
-  }, [filteredData]);
-
-  const omzetPerBulan = useMemo(() => {
-    const map = {};
-    filteredData.forEach((x) => {
-      if (!x.TANGGAL_TRANSAKSI) return;
-      const d = new Date(x.TANGGAL_TRANSAKSI);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-        2,
-        "0"
-      )}`;
-      map[key] = (map[key] || 0) + Number(x.TOTAL || 0);
-    });
-    return Object.entries(map)
-      .map(([bulan, omzet]) => ({ bulan, omzet }))
-      .sort((a, b) => new Date(a.bulan) - new Date(b.bulan));
-  }, [filteredData]);
-
-  // =======================================================
-  // EXPORT EXCEL (TANPA TABLE)
-  // =======================================================
-  const exportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filteredData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Dashboard_Pusat");
-    XLSX.writeFile(wb, "Dashboard_Pusat.xlsx");
-  };
-
-  const TOKO_AKTIF = "CILANGKAP PUSAT";
-
-  /* ============================
-      🔥 PENJUALAN CEPAT IMEI
-  ============================ */
-  const handleSearchImei = () => {
-    const imei = searchImei.trim();
-    if (!imei) return alert("Masukan IMEI");
-
-    // 1. Cari IMEI
-    const imeiFound = transaksi.find((t) => {
-      const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-      const status = String(t.STATUS || "").toUpperCase();
-
-      return (
-        String(t.IMEI || "")
-          .trim()
-          .toUpperCase() === imei.toUpperCase() &&
-        (metode.includes("PEMBELIAN") || metode.includes("TRANSFER")) &&
-        status === "APPROVED"
-      );
-    });
-
-    if (!imeiFound) {
-      alert(`IMEI ${imei} tidak ditemukan`);
-      return;
-    }
-
-    // 2. CEK TOKO
-    if (
-      String(imeiFound.NAMA_TOKO || "").toUpperCase() !==
-      TOKO_AKTIF.toUpperCase()
-    ) {
-      alert(
-        `❌ Stok IMEI ada di toko ${imeiFound.NAMA_TOKO}, bukan di ${TOKO_AKTIF}`
-      );
-      return;
-    }
-
-    // 3. Lanjut jual
-    const payload = {
-      kategoriBarang: imeiFound.KATEGORI_BRAND,
-      namaBrand: imeiFound.NAMA_BRAND,
-      namaBarang: imeiFound.NAMA_BARANG,
-      imei,
-      qty: 1,
-
-      hargaMap: {
-        srp: imeiFound.HARGA_UNIT || 0,
-        grosir: imeiFound.HARGA_GROSIR || 0,
-        reseller: imeiFound.HARGA_RESELLER || 0,
-      },
-    };
-
-    navigate("/toko/cilangkap-pusat/penjualan", {
-      state: {
-        fastSale: true,
-        imeiData: payload,
-      },
-    });
-  };
 
   const handleOpenStockOpname = () => {
     navigate("/stok-opname");
@@ -1131,7 +737,7 @@ const salesList = useMemo(() => {
           </div>
 
           <div className="text-xl font-bold text-blue-600">
-            {totalTransaksiSalesReport.toLocaleString("id-ID")} Transaksi
+          {Number(totalTransaksiHariIni || 0).toLocaleString("id-ID")} Transaksi
           </div>
 
           <p className="text-[11px] text-gray-500">Total Transaksi Hari Ini</p>
@@ -1154,11 +760,14 @@ const salesList = useMemo(() => {
           </div>
 
           <div className="mt-2 text-lg font-bold text-green-700">
-            {totalNominalPenjualanPerBulan.toLocaleString("id-ID", {
-              style: "currency",
-              currency: "IDR",
-              maximumFractionDigits: 0,
-            })}
+            {dashboardSummary.totalNominalPenjualanPerBulan.toLocaleString(
+              "id-ID",
+              {
+                style: "currency",
+                currency: "IDR",
+                maximumFractionDigits: 0,
+              }
+            )}
           </div>
           <p className="text-[11px] text-gray-500 mt-1">
             Bulan{" "}
@@ -1184,7 +793,7 @@ const salesList = useMemo(() => {
           </div>
 
           <div className="text-xl font-bold text-indigo-600">
-            Rp {dashboardPenjualan.totalHariIni.toLocaleString("id-ID")}
+            Rp {dashboardSummary.totalHariIni.toLocaleString("id-ID")}
           </div>
 
           <p className="text-[11px] text-gray-500">
@@ -1270,7 +879,7 @@ const salesList = useMemo(() => {
           </p>
 
           <div className="text-xl font-bold text-red-600">
-            {totalPiutangAktif}
+            {dashboardSummary.totalPiutang}
             Transaksi
           </div>
 
@@ -1290,7 +899,7 @@ const salesList = useMemo(() => {
           </div>
 
           <div className="text-xl font-bold text-sky-600">
-            {totalPenjualanBarangReal.toLocaleString("id-ID")} Unit
+            {dashboardSummary.totalPenjualanBarang.toLocaleString("id-ID")} Unit
           </div>
 
           <p className="text-[11px] text-gray-500">
