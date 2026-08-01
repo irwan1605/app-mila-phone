@@ -20,7 +20,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 // ===== Firebase Services =====
 import {
-  listenAllTransaksi,
   addTransaksi,
   updateTransaksi,
   deleteTransaksi,
@@ -31,6 +30,7 @@ import {
   listenKaryawan,
   listenMasterStoreHead,
 } from "../../services/FirebaseService";
+import { listenAllTransaksiCached } from "../../services/FirebaseCache";
 // import TableLaporanPenjualan from "../table/TableLaporanPenjualan";
 
 // ===== Konfigurasi Toko =====
@@ -229,27 +229,6 @@ export default function FinanceReport() {
   }, [isPicToko, tokoLogin]);
 
   useEffect(() => {
-    const unsub = onValue(ref(db, "master_karyawan"), (snap) => {
-      const arr = [];
-      snap.forEach((c) => {
-        const v = c.val();
-        if (!v) return;
-
-        arr.push({
-          nama: v.nama || "",
-          jabatan: v.jabatan || "",
-          toko: v.toko || "",
-          handle: v.handle || "",
-        });
-      });
-
-      setMasterKaryawan(arr);
-    });
-
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
     const unsubKaryawan = onValue(ref(db, "master_karyawan"), (snap) => {
       const arr = [];
       snap.forEach((c) => {
@@ -304,60 +283,6 @@ export default function FinanceReport() {
     return () => unsub();
   }, []);
 
-  useEffect(() => {
-    const unsub = listenAllTransaksi((items) => {
-      const metode = new Set();
-
-      (items || []).forEach((r) => {
-        if (r.KATEGORI_PEMBAYARAN) {
-          metode.add(r.KATEGORI_PEMBAYARAN);
-        }
-      });
-
-      setMasterPayment(Array.from(metode));
-    });
-
-    return () => unsub && unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsub = onValue(ref(db, "master_payment_metode"), (snap) => {
-      const arr = [];
-
-      snap.forEach((c) => {
-        const v = c.val();
-        if (!v) return;
-
-        arr.push(v.nama || v.NAMA || "");
-      });
-
-      setPaymentMethods(arr);
-    });
-
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsub = onValue(ref(db, "master_bank"), (snap) => {
-      const arr = [];
-
-      snap.forEach((child) => {
-        const val = child.val();
-
-        console.log("MASTER BANK:", val); // DEBUG
-
-        if (val?.jenis) {
-          arr.push(String(val.jenis).toUpperCase());
-        }
-      });
-      if (DEV) {
-        console.log("JENIS LIST:", arr); // DEBUG
-      }
-      setPaymentJenisList(arr);
-    });
-
-    return () => unsub();
-  }, []);
   useEffect(() => {
     const unsub = listenPaymentJenis((list) => {
       if (DEV) {
@@ -460,14 +385,20 @@ export default function FinanceReport() {
   // Realtime Listener Firebase
   // ===============================
   useEffect(() => {
-    const unsub = listenAllTransaksi((items) => {
+    const unsub = listenAllTransaksiCached((items) => {
       const map = (items || []).map(normalizeRecord);
+      const metode = new Set();
+
+      (items || []).forEach((row) => {
+        if (row.KATEGORI_PEMBAYARAN) {
+          metode.add(row.KATEGORI_PEMBAYARAN);
+        }
+      });
 
       setAllData(map);
-
       setSetoran(map.filter((x) => x.TIPE === "SETORAN"));
-
       setPengeluaran(map.filter((x) => x.TIPE === "PENGELUARAN"));
+      setMasterPayment(Array.from(metode));
     });
 
     return () => unsub && unsub();
@@ -475,7 +406,9 @@ export default function FinanceReport() {
 
   useEffect(() => {
     const unsub = listenMasterPaymentMetode((data) => {
-      setMasterPaymentMetode(Array.isArray(data) ? data : []);
+      const rows = Array.isArray(data) ? data : [];
+      setMasterPaymentMetode(rows);
+      setPaymentMethods(rows.map((row) => row.nama || row.NAMA || ""));
     });
 
     return () => unsub && unsub();

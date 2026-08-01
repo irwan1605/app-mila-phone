@@ -2,11 +2,11 @@
 // INVENTORY REPORT — PRO MAX FINAL (FIX 100%)
 // ======================================================================
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { updateTransaksi } from "../../services/FirebaseService";
 import {
-  listenAllTransaksi,
-  listenMasterBarang,
-  updateTransaksi,
-} from "../../services/FirebaseService";
+  listenAllTransaksiCached,
+  listenMasterBarangCached,
+} from "../../services/FirebaseCache";
 import { FaStore } from "react-icons/fa";
 import { useNavigate, useLocation } from "react-router-dom";
 import { hitungSemuaStok } from "../../utils/stockUtils";
@@ -91,8 +91,8 @@ export default function InventoryReport() {
   // LISTENER
   // ======================
   useEffect(() => {
-    const unsubTrx = listenAllTransaksi(setTransaksi);
-    const unsubBarang = listenMasterBarang((rows) => {
+    const unsubTrx = listenAllTransaksiCached(setTransaksi);
+    const unsubBarang = listenMasterBarangCached((rows) => {
       const map = {};
       rows?.forEach((b) => {
         const key = `${normalize(b.NAMA_BRAND)}|${normalize(b.NAMA_BARANG)}`;

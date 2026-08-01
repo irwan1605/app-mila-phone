@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { listenAllTransaksi } from "../services/FirebaseService";
+import { listenAllTransaksiCached } from "../services/FirebaseCache";
 import * as XLSX from "xlsx";
 import { FaFileExcel, FaSearch } from "react-icons/fa";
 
@@ -10,7 +10,7 @@ export default function RefundReport() {
 
   /* ================= LISTENER ================= */
   useEffect(() => {
-    const unsub = listenAllTransaksi((data = []) => {
+    const unsub = listenAllTransaksiCached((data = []) => {
       // 1️⃣ ambil semua transaksi refund
       const refundRowsRaw = [];
 
@@ -188,8 +188,6 @@ export default function RefundReport() {
       });
       
       setRows(cleanedRows);
-
-      setRows(sorted);
     });
 
     return () => unsub && unsub();

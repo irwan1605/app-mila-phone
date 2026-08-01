@@ -16,7 +16,6 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
 import {
-  listenAllTransaksi,
   listenPenjualan,
   updateTransaksi,
   deleteTransaksi,
@@ -24,6 +23,7 @@ import {
   listenKaryawan,
   listenMasterPaymentMetode,
 } from "../../services/FirebaseService";
+import { listenAllTransaksiCached } from "../../services/FirebaseCache";
 import { useLocation } from "react-router-dom";
 
 /* fallback toko names */
@@ -102,7 +102,7 @@ export default function SalesReport() {
     loggedUser?.role === "superadmin" || loggedUser?.role === "admin";
 
   useEffect(() => {
-    const unsub = listenAllTransaksi((data = []) => {
+    const unsub = listenAllTransaksiCached((data = []) => {
       // =========================
       // 1. Ambil semua data refund
       // =========================
