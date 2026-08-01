@@ -77,7 +77,7 @@ export default function DashboardToko(props) {
   // ======================= ROLE USER =======================
   const roleUser = localStorage.getItem("ROLE_USER");
   const isPicToko = roleUser === "PIC_TOKO";
-
+  const DEV = process.env.NODE_ENV === "development";
   const toko = TOKO_LIST.find((t) => t.id === String(tokoId));
   const TOKO_AKTIF = toko?.tokoName || "";
 
@@ -1210,9 +1210,9 @@ export default function DashboardToko(props) {
       navigate("/transfer-barang");
     }
   };
-
+  if (DEV) {
   console.log("🔥 FIREBASE TOKO ID:", firebaseTokoId);
-
+  }
   /// ======================================
   // 🔥 FILTER FINAL CLEAN
   // ======================================

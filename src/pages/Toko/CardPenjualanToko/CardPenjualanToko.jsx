@@ -148,7 +148,7 @@ export default function CardPenjualanToko() {
 
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState(null);
-
+  const DEV = process.env.NODE_ENV === "development";
   const [printData, setPrintData] = useState(null);
   const [stockRealtime, setStockRealtime] = useState({});
   const location = useLocation();
@@ -171,7 +171,9 @@ export default function CardPenjualanToko() {
   }, []);
 
   useEffect(() => {
+    if (DEV) {
     console.log("PENJUALAN LIST:", penjualanList);
+    }
   }, [penjualanList]);
 
   useEffect(() => {
@@ -464,9 +466,9 @@ export default function CardPenjualanToko() {
       alert("❌ Pembayaran belum lengkap");
       return;
     }
-
+    if (DEV) {
     console.log("PAYMENT:", payment);
-
+    }
     const tokoIdFix = normalizeTokoId(tokoAktifId);
 
     if (!tokoIdFix || tokoIdFix === "[object Object]") {
@@ -563,9 +565,9 @@ export default function CardPenjualanToko() {
           ) {
             throw new Error(`IMEI ${imei} sudah TERJUAL`);
           }
-
+          if (DEV) {
           console.log("🔥 FINAL STATUS:", imei, finalStatus);
-
+          }
           const canSell = [
             "AVAILABLE",
             "REFUND",
@@ -630,14 +632,14 @@ export default function CardPenjualanToko() {
             "READY_RESALE",
             "PEMBELIAN",
           ].includes(String(finalStatus || "").toUpperCase());
-
+          if (DEV) {
           console.log("🔥 FINAL SALE CHECK", {
             imei,
             stockFinalStatus,
             stockData,
             bolehJual,
           });
-
+        }
           if (!bolehJual) {
             throw new Error(`IMEI ${imei} sudah TERJUAL`);
           }

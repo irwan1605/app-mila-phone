@@ -68,7 +68,7 @@ export default function Dashboard() {
   const [filterValue, setFilterValue] = useState("");
   const [filterToko, setFilterToko] = useState("semua");
   const [filterSales, setFilterSales] = useState("semua");
-
+  const DEV = process.env.NODE_ENV === "development";
   const [searchImei, setSearchImei] = useState("");
 
   const [stockData, setStockData] = useState({});
@@ -150,15 +150,17 @@ export default function Dashboard() {
 
   useEffect(() => {
     const unsub = listenPenjualan((data) => {
-      console.log("🔥 DATA PENJUALAN DARI listenPenjualan:", data);
+      if (DEV) {
+        console.log("🔥 DATA PENJUALAN DARI listenPenjualan:", data);
+      }
       setPenjualanList(Array.isArray(data) ? data : []);
     });
 
     return () => unsub && unsub();
   }, []);
-
-  console.log("DATA PENJUALAN:", penjualanList);
-
+  if (DEV) {
+    console.log("DATA PENJUALAN:", penjualanList);
+  }
   // ================== DASHBOARD PENJUALAN (SUMBER: TABLE PENJUALAN) ==================
   // ================= DASHBOARD DARI DATA TRANSAKSI PENJUALAN =================
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -491,13 +493,15 @@ export default function Dashboard() {
 
     return f;
   }, [dataTransaksi, filterType, filterValue, filterToko, filterSales]);
-
-  console.log("SALES REPORT TOTAL =", filteredData.length);
-
-  console.log("DASHBOARD TOTAL =", totalTransaksiSalesReport);
-
-  console.log("DASHBOARD TRANSAKSI =", totalTransaksiSalesReport);
-
+  if (DEV) {
+    console.log("SALES REPORT TOTAL =", filteredData.length);
+  }
+  if (DEV) {
+    console.log("DASHBOARD TOTAL =", totalTransaksiSalesReport);
+  }
+  if (DEV) {
+    console.log("DASHBOARD TRANSAKSI =", totalTransaksiSalesReport);
+  }
   const dataHariIni = useMemo(() => {
     return filteredData.filter(
       (x) =>
@@ -744,14 +748,14 @@ export default function Dashboard() {
 
   const totalPenjualanBarangReal = useMemo(() => {
     const mapInvoice = {};
-  
+
     penjualanList.forEach((trx) => {
       if (!Array.isArray(trx.items)) return;
-  
+
       const invoice = String(trx.invoice || "").trim();
-  
+
       if (!invoice) return;
-  
+
       const isRefund =
         trx?.deleted === true ||
         trx?.deletedFromPenjualan === true ||
@@ -761,14 +765,14 @@ export default function Dashboard() {
         String(trx?.statusPembayaran || "").toUpperCase() === "REFUND" ||
         String(trx?.STATUS || "").toUpperCase() === "REFUND" ||
         String(trx?.PAYMENT_METODE || "").toUpperCase() === "REFUND";
-  
+
       if (isRefund) return;
-  
+
       const totalQty = trx.items.reduce(
         (s, item) => s + Number(item.qty || 0),
         0
       );
-  
+
       if (!mapInvoice[invoice]) {
         mapInvoice[invoice] = {
           qty: totalQty,
@@ -777,13 +781,10 @@ export default function Dashboard() {
         };
       }
     });
-  
+
     const salesReportData = Object.values(mapInvoice);
-  
-    return salesReportData.reduce(
-      (sum, row) => sum + Number(row.qty || 0),
-      0
-    );
+
+    return salesReportData.reduce((sum, row) => sum + Number(row.qty || 0), 0);
   }, [penjualanList]);
 
   const totalNominalPenjualanPerBulan = useMemo(() => {

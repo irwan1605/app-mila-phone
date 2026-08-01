@@ -23,7 +23,7 @@ export default function FormPaymentSection({
   const [masterTenor, setMasterTenor] = useState([]);
   const [masterBank, setMasterBank] = useState([]);
   const [dashboardPayment, setDashboardPayment] = useState(0);
-
+  const DEV = process.env.NODE_ENV === "development";
   /* ================= SPLIT STATE ================= */
   const [paymentSplit, setPaymentSplit] = useState({
     enabled: false,
@@ -93,9 +93,9 @@ export default function FormPaymentSection({
         status: b.status || b.STATUS || "",
         jenis: b.jenis || b.JENIS || "",
       }));
-
+      if (DEV) {
       console.log("MASTER BANK CLEAN:", clean);
-
+      }
       setMasterBank(clean);
     });
 
@@ -107,7 +107,9 @@ export default function FormPaymentSection({
   }, []);
 
   useEffect(() => {
+    if (DEV) {
     console.log("MASTER BANK RAW:", masterBank);
+    }
   }, [masterBank]);
 
   const getBankByMetode = () => {

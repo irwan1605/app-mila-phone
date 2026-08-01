@@ -57,6 +57,8 @@ export default function DetailStockToko(props) {
   const [transaksi, setTransaksi] = useState([]);
   const [masterBarang, setMasterBarang] = useState([]);
   const [search, setSearch] = useState(props?.searchTerm || "");
+  const DEV = process.env.NODE_ENV === "development";
+
 
   // ======================================
   // 🔥 SYNC SEARCH DASHBOARD
@@ -580,9 +582,9 @@ export default function DetailStockToko(props) {
         map[skuKey] = supplier;
       }
     });
-
+    if (DEV) {
     console.log("🔥 SUPPLIER LOOKUP FINAL:", map);
-
+    }
     return map;
   }, [transaksi]);
 
@@ -610,8 +612,9 @@ export default function DetailStockToko(props) {
               .trim() === String(row.brand).toLowerCase().trim()
           ) {
             const path = `toko/${tokoId}/transaksi/${id}`;
+            if (DEV) {
             console.log("🔥 FORCE DELETE:", path);
-
+            }
             await remove(ref(db, path));
             totalDelete++;
           }
@@ -628,8 +631,9 @@ export default function DetailStockToko(props) {
         .replace(/\s+/g, "_");
 
       const stockPath = `stock/${namaToko}/${sku}`;
+      if (DEV) {
       console.log("🔥 DELETE STOCK:", stockPath);
-
+      }
       await remove(ref(db, stockPath));
 
       alert(`✅ ${totalDelete} DATA TERHAPUS TOTAL (FORCE MODE)`);
