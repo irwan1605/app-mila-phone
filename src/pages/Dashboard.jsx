@@ -33,11 +33,13 @@ import {
 import CardPenjualanToko from "../features/dashboad/CardPenjualanToko";
 
 import {
-  listenAllTransaksi,
-  listenStockAll,
   forceDeleteTransaksi,
   listenPenjualan,
 } from "../services/FirebaseService";
+import {
+  listenAllTransaksiCached,
+  listenStockAllCached,
+} from "../services/FirebaseCache";
 
 // 🔥 TAMBAHKAN DISINI
 const TOKO_LIST = [
@@ -335,8 +337,11 @@ export default function Dashboard() {
   // }, []);
 
   useEffect(() => {
-    const u1 = listenStockAll((s) => setStockData(s || {}));
-    const u2 = listenAllTransaksi((t) =>
+    const u1 = listenStockAllCached((s) => {
+      setStockData(s || {});
+      setStokMaster(Array.isArray(s) ? s : []);
+    });
+    const u2 = listenAllTransaksiCached((t) =>
       setTransaksi(Array.isArray(t) ? t : [])
     );
 
@@ -344,13 +349,6 @@ export default function Dashboard() {
       u1 && u1();
       u2 && u2();
     };
-  }, []);
-
-  useEffect(() => {
-    const unsub = listenStockAll((listRaw = []) => {
-      setStokMaster(Array.isArray(listRaw) ? listRaw : []);
-    });
-    return () => unsub && unsub();
   }, []);
 
   useEffect(() => {
@@ -364,7 +362,7 @@ export default function Dashboard() {
   // LISTEN SEMUA TRANSAKSI (UNTUK OMZET, PIUTANG, DLL)
   // =======================================================
   useEffect(() => {
-    const unsub = listenAllTransaksi((listRaw = []) => {
+    const unsub = listenAllTransaksiCached((listRaw = []) => {
       const formatted = (listRaw || []).map((r) => ({
         ...r,
         id: r.id,

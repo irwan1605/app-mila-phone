@@ -3,7 +3,8 @@ const normalizeText = (v) =>
     .trim()
     .replace(/\s+/g, " ")
     .toUpperCase();
-const DEV = process.env.NODE_ENV === "development";
+const stockIndexCache = new WeakMap();
+const KEY_SEPARATOR = "\u0001";
 // ======================================
 // 🔥 DETECT NON IMEI
 // ======================================
@@ -26,92 +27,61 @@ export const buildFinalNonImeiStock = ({
   brand = "",
   barang = "",
 }) => {
-  let saldo = 0;
+  // Satu array snapshot Firebase hanya dipindai sekali. Pemanggilan berikutnya
+  // (satu kali per row tabel) menjadi lookup O(1), tanpa mengubah aturan saldo.
+  let stockIndex = stockIndexCache.get(transaksi);
 
-  transaksi.forEach((trx) => {
-    if (!trx) return;
+  if (!stockIndex) {
+    stockIndex = new Map();
 
-    // ======================================
-    // 🔥 HANYA NON IMEI
-    // ======================================
-    if (!isNonImeiItem(trx.IMEI)) {
-      return;
-    }
+    transaksi.forEach((trx) => {
+      if (!trx) return;
 
-    // ======================================
-    // 🔥 FILTER TOKO
-    // ======================================
-    const trxToko = normalizeText(
-      trx.NAMA_TOKO || trx.namaToko || trx.toko || trx.tokoPengirim
-    );
-
-    if (trxToko !== normalizeText(toko)) {
-      return;
-    }
-
-    // ======================================
-    // 🔥 FILTER BRAND
-    // ======================================
-    const trxBrand = normalizeText(trx.NAMA_BRAND || trx.brand);
-
-    if (trxBrand !== normalizeText(brand)) {
-      return;
-    }
-
-    // ======================================
-    // 🔥 FILTER BARANG
-    // ======================================
-    const trxBarang = normalizeText(trx.NAMA_BARANG || trx.barang);
-
-    if (trxBarang !== normalizeText(barang)) {
-      return;
-    }
-
-    // ======================================
-    // 🔥 QTY
-    // ======================================
-    const qty = Math.abs(Number(trx.QTY || trx.qty || 0));
-
-    // ======================================
-    // 🔥 METODE
-    // ======================================
-    const metode = normalizeText(trx.PAYMENT_METODE || trx.metode || trx.jenis);
-
-    // =============================
-    // LETAKKAN CODE BARU DI SINI
-    // =============================
-
-    const effect = (() => {
-      switch (metode) {
-        case "PEMBELIAN":
-        case "REFUND":
-        case "RETUR":
-        case "TRANSFER_MASUK":
-        case "TRANSFER_REJECT":
-        case "TRANSFER BARANG":
-          return qty;
-
-        case "PENJUALAN":
-        case "TRANSFER_KELUAR":
-        case "TRANSFER BARANG KELUAR":
-          return -qty;
-
-        default:
-          return 0;
+      // Hanya transaksi barang non-IMEI yang memengaruhi index ini.
+      if (!isNonImeiItem(trx.IMEI)) {
+        return;
       }
-    })();
 
-    saldo += effect;
-  });
+      const trxToko = normalizeText(
+        trx.NAMA_TOKO || trx.namaToko || trx.toko || trx.tokoPengirim
+      );
 
-  saldo = Math.max(0, saldo);
-  if (DEV) {
-    console.log("🔥 FINAL NON IMEI STOCK:", {
-      toko,
-      brand,
-      barang,
-      saldo,
+      const trxBrand = normalizeText(trx.NAMA_BRAND || trx.brand);
+      const trxBarang = normalizeText(trx.NAMA_BARANG || trx.barang);
+
+      const qty = Math.abs(Number(trx.QTY || trx.qty || 0));
+
+      const metode = normalizeText(
+        trx.PAYMENT_METODE || trx.metode || trx.jenis
+      );
+
+      const effect = (() => {
+        switch (metode) {
+          case "PEMBELIAN":
+          case "REFUND":
+          case "RETUR":
+          case "TRANSFER_MASUK":
+          case "TRANSFER_REJECT":
+          case "TRANSFER BARANG":
+            return qty;
+
+          case "PENJUALAN":
+          case "TRANSFER_KELUAR":
+          case "TRANSFER BARANG KELUAR":
+            return -qty;
+
+          default:
+            return 0;
+        }
+      })();
+
+      const key = [trxToko, trxBrand, trxBarang].join(KEY_SEPARATOR);
+      stockIndex.set(key, (stockIndex.get(key) || 0) + effect);
     });
+
+    stockIndexCache.set(transaksi, stockIndex);
   }
-  return saldo;
+
+  const key = [toko, brand, barang].map(normalizeText).join(KEY_SEPARATOR);
+  return Math.max(0, stockIndex.get(key) || 0);
 };

@@ -20,9 +20,12 @@ import DetailStockToko from "./table/DetailStockToko";
 import {
   listenPenjualanHemat,
   listenTransaksiByTokoHemat,
-  listenAllTransaksi,
-  listenMasterBarang,
 } from "../services/FirebaseService";
+import {
+  listenAllTransaksiCached,
+  listenDetailStockCached,
+  listenMasterBarangCached,
+} from "../services/FirebaseCache";
 import { buildFinalStockRows } from "../utils/buildFinalStockRows";
 import { exportStockExcel } from "../utils/stock/exportStockExcel";
 import { filterExportRows } from "../utils/stock/filterExportRows";
@@ -139,8 +142,10 @@ export default function DashboardToko(props) {
      REALTIME LISTENER
   ====================== */
   useEffect(() => {
-    const unsub1 = listenAllTransaksi((rows) => setTransaksi(rows || []));
-    const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
+    const unsub1 = listenAllTransaksiCached((rows) => setTransaksi(rows || []));
+    const unsub2 = listenMasterBarangCached((rows) =>
+      setMasterBarang(rows || [])
+    );
 
     return () => {
       unsub1 && unsub1();
@@ -152,11 +157,7 @@ export default function DashboardToko(props) {
   // 🔥 DETAIL STOCK REALTIME
   // ===============================
   useEffect(() => {
-    const refStock = ref(db, "detail_stock");
-
-    const unsub = onValue(refStock, (snap) => {
-      setDetailStock(snap.val() || {});
-    });
+    const unsub = listenDetailStockCached(setDetailStock);
 
     return () => unsub();
   }, []);

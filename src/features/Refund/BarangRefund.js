@@ -6,6 +6,8 @@ const normalizeImei = (v) =>
     .toUpperCase()
     .replace(/\s+/g, "");
 
+    const DEV = process.env.NODE_ENV === "development";
+
 const normalizeText = (v) =>
   String(v || "")
     .trim()
@@ -68,10 +70,12 @@ const buildRefundSoldTracker = (transaksi = []) => {
           if (tracker[key]?.hasRefund) {
             tracker[key].soldAfterRefund = true;
           }
+          if (DEV) {
           console.log(
             "REFUND SOLD DETECTED",
             key
           );
+        }
         });
       });
 
@@ -208,9 +212,9 @@ export const buildRefundSoldSet = (transaksi = []) => {
       set.add(imei);
     }
   });
-
+  if (DEV) {
   console.log("REFUND SOLD SET", Array.from(set));
-
+  }
   return set;
 };
 

@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  listenAllTransaksi,
-  listenMasterBarang,
   deleteTransaksi,
 } from "../../services/FirebaseService";
-import { ref, remove, get, onValue } from "firebase/database";
+import {
+  listenAllTransaksiCached,
+  listenDetailStockCached,
+  listenMasterBarangCached,
+} from "../../services/FirebaseCache";
+import { ref, remove, get } from "firebase/database";
 import { db } from "../../firebase";
 import * as XLSX from "xlsx";
 import {
@@ -54,7 +57,7 @@ export default function DetailStockToko(props) {
   /* ======================
      STATE
   ====================== */
-  const [transaksi, setTransaksi] = useState([]);
+  const [transaksiRaw, setTransaksi] = useState([]);
   const [masterBarang, setMasterBarang] = useState([]);
   const [search, setSearch] = useState(props?.searchTerm || "");
   const DEV = process.env.NODE_ENV === "development";
@@ -72,6 +75,10 @@ export default function DetailStockToko(props) {
   const [page, setPage] = useState(1);
   const [deletedIds, setDeletedIds] = useState(new Set());
   const [detailStock, setDetailStock] = useState({});
+  const transaksi = useMemo(
+    () => transaksiRaw.filter((row) => !deletedIds.has(row.id)),
+    [transaksiRaw, deletedIds]
+  );
   const refundSoldSet = useMemo(
     () => buildRefundSoldSet(transaksi),
     [transaksi]
@@ -83,28 +90,23 @@ export default function DetailStockToko(props) {
   // 🔥 LISTENER DETAIL STOCK
   // ======================================
   useEffect(() => {
-    const refStock = ref(db, "detail_stock");
-
-    const unsub = onValue(refStock, (snap) => {
-      setDetailStock(snap.val() || {});
-    });
+    const unsub = listenDetailStockCached(setDetailStock);
 
     return () => unsub();
   }, []);
 
   useEffect(() => {
-    const unsub1 = listenAllTransaksi((rows) => {
-      const filtered = (rows || []).filter((r) => !deletedIds.has(r.id));
-      setTransaksi(filtered);
-    });
+    const unsub1 = listenAllTransaksiCached((rows) => setTransaksi(rows || []));
 
-    const unsub2 = listenMasterBarang((rows) => setMasterBarang(rows || []));
+    const unsub2 = listenMasterBarangCached((rows) =>
+      setMasterBarang(rows || [])
+    );
 
     return () => {
       unsub1 && unsub1();
       unsub2 && unsub2();
     };
-  }, [deletedIds]); // 🔥 WAJIB
+  }, []);
 
   // ===============================
   // 🔥 STOCK ENGINE UNIVERSAL
