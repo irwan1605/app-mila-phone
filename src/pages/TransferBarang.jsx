@@ -5,14 +5,18 @@ import { FaExchangeAlt, FaSearch, FaPlus, FaPrint } from "react-icons/fa";
 import {
   listenMasterToko,
   listenMasterKategoriBarang,
-  listenMasterBarang,
   lockImeiTransfer,
   listenKaryawan,
 } from "../services/FirebaseService";
+import {
+  listenAllTransaksiCached,
+  listenMasterBarangCached,
+  listenTokoCached,
+} from "../services/FirebaseCache";
 import { hitungStokBarang } from "../utils/stockUtils";
 
 import FirebaseService from "../services/FirebaseService";
-import { ref, onValue, update, push, off } from "firebase/database";
+import { ref, onValue, update, push } from "firebase/database";
 import { db } from "../firebase/FirebaseInit";
 import TableTransferBarang from "./table/TableTransferBarang";
 import PrintSuratJalan from "./Print/PrintSuratJalan";
@@ -179,30 +183,7 @@ export default function TransferBarang() {
   const [allTransaksi, setAllTransaksi] = useState([]);
 
   useEffect(() => {
-    const tokoRef = ref(db, "toko");
-
-    return onValue(tokoRef, (snap) => {
-      const arr = [];
-
-      snap.forEach((tokoSnap) => {
-        const transaksiSnap = tokoSnap.child("transaksi");
-
-        transaksiSnap.forEach((trxSnap) => {
-          const trx = trxSnap.val();
-
-          if (!trx) return;
-
-          arr.push({
-            id: trxSnap.key,
-            ...trx,
-          });
-        });
-      });
-
-      console.log("🔥 ALL TRANSAKSI:", arr.length);
-
-      setAllTransaksi(arr);
-    });
+    return listenAllTransaksiCached(setAllTransaksi);
   }, []);
 
   /* ================= TOKO ================= */
@@ -437,7 +418,7 @@ export default function TransferBarang() {
 
   // ================= INVENTORY ACCESSORIES (NON IMEI) =================
   useEffect(() => {
-    return onValue(ref(db, "toko"), (snap) => {
+    return listenTokoCached((snap) => {
       const map = {};
 
       snap.forEach((tokoSnap) => {
@@ -644,14 +625,6 @@ export default function TransferBarang() {
     setDaftarTransfer((prev) => prev.filter((_, i) => i !== index));
   };
 
-  useEffect(() => {
-    const unsub = listenKaryawan((data) => {
-      setMasterKaryawan(Array.isArray(data) ? data : []);
-    });
-
-    return () => unsub && unsub();
-  }, []);
-
   /* ================= UI ================= */
   const [imeiInput, setImeiInput] = useState("");
   const [imeiSearch, setImeiSearch] = useState("");
@@ -663,9 +636,7 @@ export default function TransferBarang() {
 
   // ================= INVENTORY NORMALIZATION (FINAL) =================
   useEffect(() => {
-    const tokoRef = ref(db, "toko");
-
-    const unsubscribe = onValue(tokoRef, (snap) => {
+    const unsubscribe = listenTokoCached((snap) => {
       const map = {}; // key = imei
 
       snap.forEach((tokoSnap) => {
@@ -811,21 +782,6 @@ export default function TransferBarang() {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const barangRef = ref(db, "dataManagement/masterBarang");
-
-    onValue(barangRef, (snap) => {
-      const data = snap.val() || {};
-      const arr = Object.entries(data).map(([id, v]) => ({
-        id,
-        ...v,
-      }));
-      setMasterBarang(arr);
-    });
-
-    return () => off(barangRef);
-  }, []);
-
   // ================= DARI NOTIFIKASI NAVBAR =================
   useEffect(() => {
     if (location.state?.fromNotif) {
@@ -843,10 +799,10 @@ export default function TransferBarang() {
   /* ================= MASTER DATA ================= */
   /* ================= MASTER DATA ================= */
   useEffect(() => {
-    listenMasterToko(setMasterToko);
-    listenMasterKategoriBarang(setMasterKategori);
-    listenMasterBarang(setMasterBarang);
-    FirebaseService.listenTransferRequests(setHistory);
+    const unsubToko = listenMasterToko(setMasterToko);
+    const unsubKategori = listenMasterKategoriBarang(setMasterKategori);
+    const unsubBarang = listenMasterBarangCached(setMasterBarang);
+    const unsubHistory = FirebaseService.listenTransferRequests(setHistory);
 
     // 🔥 MASTER KARYAWAN (NAMA PENGIRIM)
     const unsubKaryawan = listenKaryawan((data) => {
@@ -854,6 +810,10 @@ export default function TransferBarang() {
     });
 
     return () => {
+      unsubToko && unsubToko();
+      unsubKategori && unsubKategori();
+      unsubBarang && unsubBarang();
+      unsubHistory && unsubHistory();
       unsubKaryawan && unsubKaryawan();
     };
   }, []);

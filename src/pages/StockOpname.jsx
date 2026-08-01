@@ -3,13 +3,16 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   addTransaksi,
   updateTransaksi,
-  listenAllTransaksi,
   deleteTransaksi,
   addStock,
   reduceStock,
   listenMasterBarangHarga,
 } from "../services/FirebaseService";
-import { ref, remove, get, onValue } from "firebase/database";
+import {
+  listenAllTransaksiCached,
+  listenDetailStockCached,
+} from "../services/FirebaseCache";
+import { ref, remove, get } from "firebase/database";
 import { db } from "../firebase";
 import StockBarang from "../data/StockBarang";
 import * as XLSX from "xlsx";
@@ -128,8 +131,27 @@ export default function StockOpname() {
   // "filter" | "semua"
 
   useEffect(() => {
-    const unsub = listenAllTransaksi((rows) => {
-      setTransaksi(rows || []);
+    const unsub = listenAllTransaksiCached((rows = []) => {
+      setTransaksi(rows);
+      setAllTransaksi(
+        rows.filter(
+          (t) =>
+            t &&
+            ["APPROVED", "REFUND"].includes(
+              String(t.STATUS || "").toUpperCase()
+            ) &&
+            [
+              "PEMBELIAN",
+              "TRANSFER_MASUK",
+              "STOK OPNAME",
+              "VOID OPNAME",
+              "PENJUALAN",
+              "TRANSFER_KELUAR",
+              "REFUND",
+              "RETUR",
+            ].includes(String(t.PAYMENT_METODE || "").toUpperCase())
+        )
+      );
     });
 
     return () => unsub && unsub();
@@ -150,11 +172,7 @@ export default function StockOpname() {
   const [allTransaksi, setAllTransaksi] = useState([]);
   const [detailStock, setDetailStock] = useState({});
   useEffect(() => {
-    const stockRef = ref(db, "detail_stock");
-
-    const unsub = onValue(stockRef, (snap) => {
-      setDetailStock(snap.val() || {});
-    });
+    const unsub = listenDetailStockCached(setDetailStock);
 
     return () => unsub();
   }, []);
@@ -196,38 +214,6 @@ export default function StockOpname() {
       setFilterToko(tokoLogin); // 🔒 PIC toko dikunci ke tokonya
     }
   }, [isSuperAdmin, tokoLogin]);
-
-  useEffect(() => {
-    if (typeof listenAllTransaksi !== "function") return;
-
-    const unsub = listenAllTransaksi((rows = []) => {
-      if (DEV) {
-        console.log("🔥 ALL TRANSAKSI (RAW):", rows);
-      }
-
-      setAllTransaksi(
-        rows.filter(
-          (t) =>
-            t &&
-            ["APPROVED", "REFUND"].includes(
-              String(t.STATUS || "").toUpperCase()
-            ) &&
-            [
-              "PEMBELIAN",
-              "TRANSFER_MASUK",
-              "STOK OPNAME",
-              "VOID OPNAME",
-              "PENJUALAN",
-              "TRANSFER_KELUAR",
-              "REFUND",
-              "RETUR",
-            ].includes(String(t.PAYMENT_METODE || "").toUpperCase())
-        )
-      );
-    });
-
-    return () => unsub && unsub();
-  }, []);
 
   // =======================================
   // STOCK ENGINE V3 (EVENT BASED)

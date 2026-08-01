@@ -1,7 +1,6 @@
 // MasterPembelian.jsx — fixed addStock signature (ensure sku passed)
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  listenAllTransaksi,
   addTransaksi,
   updateTransaksi,
   deleteTransaksi,
@@ -10,12 +9,15 @@ import {
   listenMasterToko,
   listenMasterKategoriBarang,
   addLogPembelian,
-  listenStockAll,
-  listenMasterBarang,
   updateMasterBarangHarga,
   listenMasterSupplier,
   addMasterSupplier,
 } from "../services/FirebaseService";
+import {
+  listenAllTransaksiCached,
+  listenMasterBarangCached,
+  listenStockAllCached,
+} from "../services/FirebaseCache";
 
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -234,14 +236,14 @@ export default function MasterPembelian() {
   }, []);
 
   useEffect(() => {
-    const unsub = listenMasterBarang((rows) => {
+    const unsub = listenMasterBarangCached((rows) => {
       setMasterBarang(rows || []);
     });
     return () => unsub && unsub();
   }, []);
 
   useEffect(() => {
-    const unsub = listenStockAll((snap) => {
+    const unsub = listenStockAllCached((snap) => {
       setStockSnapshot(snap || {});
     });
     return () => unsub && unsub();
@@ -255,16 +257,7 @@ export default function MasterPembelian() {
   }, []);
 
   useEffect(() => {
-    const unsub = listenMasterToko((rows) => {
-      setMasterToko(rows || []);
-    });
-    return () => unsub && unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsub =
-      typeof listenAllTransaksi === "function"
-        ? listenAllTransaksi((rows) => {
+    const unsub = listenAllTransaksiCached((rows) => {
             // =====================================
             // FILTER DATA INVALID
             // =====================================
@@ -276,8 +269,7 @@ export default function MasterPembelian() {
             );
 
             setAllTransaksi(cleanRows);
-          })
-        : null;
+          });
 
     return () => unsub && unsub();
   }, []);

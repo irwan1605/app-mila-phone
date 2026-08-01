@@ -71,6 +71,10 @@ export default function TablePenjualan({ data = [] }) {
       return [];
     }
   });
+  const refundBlacklistSet = useMemo(
+    () => new Set(refundBlacklist.map((invoice) => normalize(invoice))),
+    [refundBlacklist]
+  );
 
   // ======================================
   // 🔥 REALTIME REFUND BLACKLIST
@@ -131,7 +135,7 @@ export default function TablePenjualan({ data = [] }) {
       // ======================================
       const isRefund =
         refundRealtimeBlacklist.has(invoice) ||
-        refundBlacklist.includes(invoice) ||
+        refundBlacklistSet.has(invoice) ||
         trx?.HIDE_FROM_PENJUALAN === true ||
         trx?.deleted === true ||
         trx?.deletedFromPenjualan === true ||
@@ -145,7 +149,7 @@ export default function TablePenjualan({ data = [] }) {
 
       return !isRefund;
     });
-  }, [data, refundBlacklist]);
+  }, [data, refundBlacklistSet]);
 
   const [refundLoading, setRefundLoading] = useState(null);
   const [page, setPage] = useState(1);
@@ -160,6 +164,7 @@ export default function TablePenjualan({ data = [] }) {
   const [showRefund, setShowRefund] = useState(false);
   const [localHiddenRefund, setLocalHiddenRefund] = useState({});
   const [globalRefundRealtime, setGlobalRefundRealtime] = useState({});
+
 
   useEffect(() => {
     const unsub = listenRefundRealtime(setGlobalRefundRealtime);
