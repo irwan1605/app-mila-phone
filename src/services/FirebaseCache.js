@@ -4,6 +4,7 @@ import {
   listenAllTransaksi,
   listenStockAll,
   listenMasterBarang,
+  listenPenjualan,
 } from "./FirebaseService";
 /* =======================================================
    DETAIL STOCK CACHE
@@ -15,6 +16,35 @@ let transaksiCache = [];
 let transaksiSubscribers = [];
 
 let transaksiUnsub = null;
+
+let penjualanCache = [];
+let penjualanSubscribers = [];
+let penjualanUnsub = null;
+
+export function listenPenjualanCached(callback) {
+  penjualanSubscribers.push(callback);
+  callback(penjualanCache);
+
+  if (!penjualanUnsub) {
+    penjualanUnsub = listenPenjualan((rows) => {
+      penjualanCache = Array.isArray(rows) ? rows : [];
+      penjualanSubscribers.forEach((subscriber) =>
+        subscriber(penjualanCache)
+      );
+    });
+  }
+
+  return () => {
+    penjualanSubscribers = penjualanSubscribers.filter(
+      (subscriber) => subscriber !== callback
+    );
+
+    if (penjualanSubscribers.length === 0 && penjualanUnsub) {
+      penjualanUnsub();
+      penjualanUnsub = null;
+    }
+  };
+}
 
 export function listenAllTransaksiCached(callback) {
   transaksiSubscribers.push(callback);
