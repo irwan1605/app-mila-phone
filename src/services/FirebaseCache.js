@@ -4,7 +4,6 @@ import {
   listenAllTransaksi,
   listenStockAll,
   listenMasterBarang,
-  listenPenjualan,
 } from "./FirebaseService";
 /* =======================================================
    DETAIL STOCK CACHE
@@ -16,33 +15,86 @@ let transaksiCache = [];
 let transaksiSubscribers = [];
 
 let transaksiUnsub = null;
+let transaksiStopTimer = null;
 
 let penjualanCache = [];
 let penjualanSubscribers = [];
-let penjualanUnsub = null;
+const buildPenjualanCache = (rows = []) =>
+  rows
+    .filter((trx) => {
+      const statusPembayaran = String(trx?.statusPembayaran || "")
+        .toUpperCase()
+        .trim();
+      const status = String(trx?.STATUS || "").toUpperCase().trim();
+
+      return !(
+        statusPembayaran === "REFUND" ||
+        status === "REFUND" ||
+        trx?.refundProcessed === true ||
+        trx?.IS_REFUND === true
+      );
+    })
+    .map((trx) => ({
+      ...trx,
+      trxKey: trx?.trxKey || trx?.id,
+    }))
+    .sort((a, b) => Number(b?.createdAt || 0) - Number(a?.createdAt || 0));
+
+const notifyTransaksiSubscribers = (rows) => {
+  transaksiSubscribers.forEach((subscriber) => subscriber(rows));
+  penjualanSubscribers.forEach((subscriber) =>
+    subscriber(penjualanCache)
+  );
+};
+
+const ensureTransaksiListener = () => {
+  if (transaksiStopTimer) {
+    clearTimeout(transaksiStopTimer);
+    transaksiStopTimer = null;
+  }
+  if (transaksiUnsub) return;
+
+  transaksiUnsub = listenAllTransaksi((rows) => {
+    transaksiCache = Array.isArray(rows) ? rows : [];
+    penjualanCache = buildPenjualanCache(transaksiCache);
+    notifyTransaksiSubscribers(transaksiCache);
+  });
+};
+
+const stopTransaksiListenerIfIdle = () => {
+  if (
+    transaksiSubscribers.length > 0 ||
+    penjualanSubscribers.length > 0 ||
+    !transaksiUnsub ||
+    transaksiStopTimer
+  ) return;
+
+  // Hindari download ulang snapshot besar ketika pengguna berpindah route.
+  transaksiStopTimer = setTimeout(() => {
+    transaksiStopTimer = null;
+    if (
+      transaksiSubscribers.length === 0 &&
+      penjualanSubscribers.length === 0 &&
+      transaksiUnsub
+    ) {
+      transaksiUnsub();
+      transaksiUnsub = null;
+    }
+  }, 15000);
+};
 
 export function listenPenjualanCached(callback) {
   penjualanSubscribers.push(callback);
   callback(penjualanCache);
 
-  if (!penjualanUnsub) {
-    penjualanUnsub = listenPenjualan((rows) => {
-      penjualanCache = Array.isArray(rows) ? rows : [];
-      penjualanSubscribers.forEach((subscriber) =>
-        subscriber(penjualanCache)
-      );
-    });
-  }
+  ensureTransaksiListener();
 
   return () => {
     penjualanSubscribers = penjualanSubscribers.filter(
       (subscriber) => subscriber !== callback
     );
 
-    if (penjualanSubscribers.length === 0 && penjualanUnsub) {
-      penjualanUnsub();
-      penjualanUnsub = null;
-    }
+    stopTransaksiListenerIfIdle();
   };
 }
 
@@ -51,22 +103,12 @@ export function listenAllTransaksiCached(callback) {
 
   callback(transaksiCache);
 
-  if (!transaksiUnsub) {
-    transaksiUnsub = listenAllTransaksi((rows) => {
-      transaksiCache = rows || [];
-
-      transaksiSubscribers.forEach((cb) => cb(transaksiCache));
-    });
-  }
+  ensureTransaksiListener();
 
   return () => {
     transaksiSubscribers = transaksiSubscribers.filter((cb) => cb !== callback);
 
-    if (transaksiSubscribers.length === 0 && transaksiUnsub) {
-      transaksiUnsub();
-
-      transaksiUnsub = null;
-    }
+    stopTransaksiListenerIfIdle();
   };
 }
 
@@ -101,81 +143,48 @@ export function listenMasterBarangCached(callback) {
   };
 }
 
-let stockCache = [];
+let stockCache = {};
 
 let stockListeners = [];
 
 let stockUnsub = null;
+let stockStopTimer = null;
 
 export function listenStockAllCached(callback) {
+  stockListeners.push(callback);
+  callback(stockCache);
 
-    stockListeners.push(callback);
+  if (stockStopTimer) {
+    clearTimeout(stockStopTimer);
+    stockStopTimer = null;
+  }
 
-    callback(stockCache);
-
-    if (!stockUnsub) {
-
-        stockUnsub = listenStockAll((rows) => {
-
-            stockCache = rows || [];
-
-            stockListeners.forEach(cb => cb(stockCache));
-
-        });
-
-    }
-
-    return () => {
-
-        stockListeners =
-            stockListeners.filter(x => x !== callback);
-
-        if (stockListeners.length === 0) {
-
-            stockUnsub?.();
-
-            stockUnsub = null;
-
-            stockCache = [];
-
-        }
-
-    };
-
-}
-
-let detailStockCache = {};
-
-let detailSubscribers = [];
-
-let detailUnsubscribe = null;
-
-export function listenDetailStockCached(callback) {
-  detailSubscribers.push(callback);
-
-  callback(detailStockCache);
-
-  if (!detailUnsubscribe) {
-    detailUnsubscribe = onValue(
-      ref(db, "detail_stock"),
-
-      (snap) => {
-        detailStockCache = snap.val() || {};
-
-        detailSubscribers.forEach((cb) => cb(detailStockCache));
-      }
-    );
+  if (!stockUnsub) {
+    stockUnsub = listenStockAll((rows) => {
+      stockCache = rows || {};
+      stockListeners.forEach((subscriber) => subscriber(stockCache));
+    });
   }
 
   return () => {
-    detailSubscribers = detailSubscribers.filter((cb) => cb !== callback);
+    stockListeners = stockListeners.filter(
+      (subscriber) => subscriber !== callback
+    );
 
-    if (detailSubscribers.length === 0 && detailUnsubscribe) {
-      detailUnsubscribe();
-
-      detailUnsubscribe = null;
+    if (stockListeners.length === 0 && stockUnsub && !stockStopTimer) {
+      stockStopTimer = setTimeout(() => {
+        stockStopTimer = null;
+        if (stockListeners.length === 0 && stockUnsub) {
+          stockUnsub();
+          stockUnsub = null;
+        }
+      }, 15000);
     }
   };
+}
+
+export function listenDetailStockCached(callback) {
+  return listenStockAllCached(callback);
 }
 
 /* =======================================================

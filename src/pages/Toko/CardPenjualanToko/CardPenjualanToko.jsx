@@ -20,16 +20,12 @@ import TablePenjualan from "../../table/TablePenjualan";
 import ExportExcelButton from "../../../components/ExportExcelButton";
 import CetakInvoicePenjualan from "../../Print/CetakInvoicePenjualan";
 import { useLocation } from "react-router-dom";
-import { ref, onValue } from "firebase/database";
-import { db } from "../../../firebase/FirebaseInit";
 import { getFinalIMEIStatus } from "../../../utils/imeiStatusEngine";
 import { validateFinalImeiSale } from "../../../utils/validateFinalImeiSale";
 
 import {
-  listenPenjualan,
   addPenjualan,
   kurangiStokToko,
-  listenStockAll,
   kurangiStokImei,
   ensureImeiInInventory,
   unlockImeiRealtime,
@@ -40,6 +36,10 @@ import {
   lockImeiRealtime,
   addTransaksi,
 } from "../../../services/FirebaseService";
+import {
+  listenPenjualanCached,
+  listenStockAllCached,
+} from "../../../services/FirebaseCache";
 
 // ================= UTIL =================
 const genInvoice = () =>
@@ -158,16 +158,16 @@ export default function CardPenjualanToko() {
   const [stockOpnameRows, setStockOpnameRows] = useState([]);
 
   useEffect(() => {
-    const unsub = onValue(ref(db, "detail_stock"), (snap) => {
-      const data = snap.val() || {};
+    const unsub = listenStockAllCached((data = {}) => {
       setDetailStockLookup(data);
+      setStockRealtime(data);
 
       if (data && Object.keys(data).length > 0) {
-        setIsStockReady(true); // ✅ tandai siap
+        setIsStockReady(true);
       }
     });
 
-    return () => unsub();
+    return () => unsub && unsub();
   }, []);
 
   useEffect(() => {
@@ -203,13 +203,6 @@ export default function CardPenjualanToko() {
   }, [location.state]);
 
   useEffect(() => {
-    const unsub = listenStockAll((data) => {
-      setStockRealtime(data || {});
-    });
-    return () => unsub && unsub();
-  }, []);
-
-  useEffect(() => {
     if (!formUser.namaToko) return;
 
     const sync = async () => {
@@ -228,7 +221,7 @@ export default function CardPenjualanToko() {
 
   // ================= LISTEN TABLE =================
   useEffect(() => {
-    const unsub = listenPenjualan((rows) =>
+    const unsub = listenPenjualanCached((rows) =>
       setPenjualanList(Array.isArray(rows) ? rows : [])
     );
     return () => unsub && unsub();

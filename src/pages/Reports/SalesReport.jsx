@@ -16,14 +16,16 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
 import {
-  listenPenjualan,
   updateTransaksi,
   deleteTransaksi,
   listenMasterStoreHead,
   listenKaryawan,
   listenMasterPaymentMetode,
 } from "../../services/FirebaseService";
-import { listenAllTransaksiCached } from "../../services/FirebaseCache";
+import {
+  listenAllTransaksiCached,
+  listenPenjualanCached,
+} from "../../services/FirebaseCache";
 import { useLocation } from "react-router-dom";
 
 /* fallback toko names */
@@ -171,7 +173,7 @@ export default function SalesReport() {
     if (!masterSH.length || !masterKaryawan.length || !masterPayment.length)
       return;
 
-    const unsub = listenPenjualan((data = []) => {
+    const unsub = listenPenjualanCached((data = []) => {
       const mapInvoice = {};
 
       (data || []).forEach((trx) => {

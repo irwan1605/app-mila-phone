@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
-  listenAllTransaksi,
   addTransaksi,
   updateTransaksi,
   deleteTransaksi,
   addStock,
   reduceStock,
 } from "../../services/FirebaseService";
+import { listenAllTransaksiCached } from "../../services/FirebaseCache";
 import StockBarang from "../../data/StockBarang";
 import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
@@ -141,8 +141,8 @@ export default function CardStockOpnameToko() {
 
   // ===================== LISTENER ALL TRANSAKSI =====================
   useEffect(() => {
-    if (typeof listenAllTransaksi === "function") {
-      const unsub = listenAllTransaksi((items = []) => {
+    if (typeof listenAllTransaksiCached === "function") {
+      const unsub = listenAllTransaksiCached((items = []) => {
         const norm = items.map((r) => normalizeRecord(r));
 
         setAllTransaksiGlobal(norm);

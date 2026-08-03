@@ -13,14 +13,7 @@ import {
   FaCashRegister,
 } from "react-icons/fa";
 
-import { ref, onValue, get } from "firebase/database";
-import { db } from "../firebase";
 import DetailStockToko from "./table/DetailStockToko";
-
-import {
-  listenPenjualanHemat,
-  listenTransaksiByTokoHemat,
-} from "../services/FirebaseService";
 import {
   listenAllTransaksiCached,
   listenDetailStockCached,
@@ -142,7 +135,36 @@ export default function DashboardToko(props) {
      REALTIME LISTENER
   ====================== */
   useEffect(() => {
-    const unsub1 = listenAllTransaksiCached((rows) => setTransaksi(rows || []));
+    const unsub1 = listenAllTransaksiCached((rows = []) => {
+      const safeRows = Array.isArray(rows) ? rows : [];
+      const tokoRows = safeRows.filter((row) => {
+        const rowTokoId = String(row?.tokoId || "");
+        const rowTokoName = String(row?.NAMA_TOKO || row?.TOKO || "")
+          .trim()
+          .toUpperCase();
+
+        return (
+          rowTokoId === String(firebaseTokoId || "") ||
+          rowTokoId === String(tokoId || "") ||
+          rowTokoName === String(TOKO_AKTIF || "").trim().toUpperCase()
+        );
+      });
+
+      setTransaksi(safeRows);
+      setAllTransaksi(safeRows);
+      setTransaksiToko(tokoRows);
+      setStockToko(
+        tokoRows.filter((row) => {
+          const status = String(row?.STATUS || "").toUpperCase();
+          const metode = String(row?.PAYMENT_METODE || "").toUpperCase();
+          return (
+            ["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode) &&
+            status === "APPROVED"
+          );
+        })
+      );
+      setLoadingStock(false);
+    });
     const unsub2 = listenMasterBarangCached((rows) =>
       setMasterBarang(rows || [])
     );
@@ -151,7 +173,7 @@ export default function DashboardToko(props) {
       unsub1 && unsub1();
       unsub2 && unsub2();
     };
-  }, []);
+  }, [firebaseTokoId, tokoId, TOKO_AKTIF]);
 
   // ===============================
   // 🔥 DETAIL STOCK REALTIME
@@ -161,40 +183,6 @@ export default function DashboardToko(props) {
 
     return () => unsub();
   }, []);
-
-  useEffect(() => {
-    if (!firebaseTokoId) return;
-
-    const dbRef = ref(db, `toko/${firebaseTokoId}/transaksi`);
-
-    const unsub = onValue(dbRef, (snap) => {
-      if (!snap.exists()) {
-        setStockToko([]);
-        setLoadingStock(false);
-        return;
-      }
-
-      const raw = snap.val();
-      const rows = Object.values(raw);
-
-      // 🔥 FILTER STOK REAL
-      const stokAktif = rows.filter((x) => {
-        const status = String(x.STATUS || "").toUpperCase();
-
-        const metode = String(x.PAYMENT_METODE || "").toUpperCase();
-
-        return (
-          ["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode) &&
-          status === "APPROVED"
-        );
-      });
-
-      setStockToko(stokAktif);
-      setLoadingStock(false);
-    });
-
-    return () => unsub();
-  }, [firebaseTokoId]);
 
   // ======================= LAPORAN VOID & RETURN =======================
   const [laporanVoid, setLaporanVoid] = useState([]);
@@ -249,42 +237,6 @@ export default function DashboardToko(props) {
   useEffect(() => {
     localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
   }, [isDark]);
-
-  // ======================= LISTENER FIREBASE (HEMAT KUOTA) =======================
-  useEffect(() => {
-    // ✅ Listener GLOBAL hemat: untuk chart & laporan antar toko
-    const unsubGlobal =
-      typeof listenPenjualanHemat === "function"
-        ? listenPenjualanHemat(
-            (list) => {
-              setAllTransaksi(Array.isArray(list) ? list : []);
-            },
-            {
-              // bisa kamu sesuaikan:
-              limit: 500, // ambil 500 transaksi terakhir secara global
-            }
-          )
-        : null;
-
-    // ✅ Listener KHUSUS TOKO: untuk VOID, RETURN & IMEI stok toko ini
-    const unsubToko =
-      typeof listenTransaksiByTokoHemat === "function" && tokoId
-        ? listenTransaksiByTokoHemat(
-            tokoId,
-            {
-              limit: 500, // ambil 500 transaksi terakhir toko ini
-            },
-            (list) => {
-              setTransaksiToko(Array.isArray(list) ? list : []);
-            }
-          )
-        : null;
-
-    return () => {
-      unsubGlobal && unsubGlobal();
-      unsubToko && unsubToko();
-    };
-  }, [tokoId]);
 
   const normalize = (v) =>
     String(v || "")

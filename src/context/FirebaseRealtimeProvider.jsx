@@ -8,18 +8,20 @@ import React, {
 } from "react";
 
 import {
-    listenPenjualan,
-    listenStockAll,
     listenInventory,
     listenTransfer,
     listenUsers,
-    listenMasterBarang,
     listenMasterBank,
     listenMasterTenor,
     listenMasterMDR,
     listenMasterStoreHead,
     listenKaryawan,
 } from "../services/FirebaseService";
+import {
+    listenMasterBarangCached,
+    listenPenjualanCached,
+    listenStockAllCached,
+} from "../services/FirebaseCache";
 
 const FirebaseRealtimeContext = createContext(null);
 
@@ -91,7 +93,7 @@ export function FirebaseRealtimeProvider({ children }) {
 
         unsubs.push(
 
-            listenPenjualan((rows)=>{
+            listenPenjualanCached((rows)=>{
 
                 if(!mounted.current) return;
 
@@ -107,7 +109,7 @@ export function FirebaseRealtimeProvider({ children }) {
 
         unsubs.push(
 
-            listenStockAll((rows)=>{
+            listenStockAllCached((rows)=>{
 
                 if(!mounted.current) return;
 
@@ -181,11 +183,11 @@ export function FirebaseRealtimeProvider({ children }) {
         // MASTER BARANG
         //---------------------------------------
 
-        if(typeof listenMasterBarang==="function"){
+        if(typeof listenMasterBarangCached==="function"){
 
             unsubs.push(
 
-                listenMasterBarang(setMasterBarang)
+                listenMasterBarangCached(setMasterBarang)
 
             );
 

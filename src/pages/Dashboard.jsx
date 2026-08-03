@@ -279,14 +279,6 @@ export default function Dashboard() {
 
   /* ================= LISTENER ================= */
 
-  // useEffect(() => {
-  //   const unsub = listenPenjualan((data) => {
-  //     console.log("🔥 PENJUALAN ASLI:", data);
-  //     setPenjualanList(Array.isArray(data) ? data : []);
-  //   });
-  //   return () => unsub && unsub();
-  // }, []);
-
   useEffect(() => {
     const u1 = listenStockAllCached((s) => {
       setStockData(s || {});
