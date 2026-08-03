@@ -97,10 +97,9 @@ const Sidebar = ({ role, toko, onLogout }) => {
 
     const tokoName = TOKO_LIST[tokoId - 1];
 
-    const unsub = FirebaseService.listenTransferRequests((rows) => {
+    const unsub = FirebaseService.listenPendingTransferRequests((rows) => {
       const pending = (rows || []).filter(
         (t) =>
-          t.status === "Pending" &&
           String(t.ke).toUpperCase() === String(tokoName).toUpperCase()
       );
 

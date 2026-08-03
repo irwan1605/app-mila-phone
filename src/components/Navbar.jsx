@@ -5,8 +5,6 @@ import "./Navbar.css";
 import { LogOut, UserCircle } from "lucide-react";
 import { FaBell } from "react-icons/fa";
 
-import { ref, onValue } from "firebase/database";
-import { db } from "../firebase/FirebaseInit";
 import { updateUserAccount } from "../services/FirebaseService";
 import { renameUsername } from "../services/FirebaseService";
 
@@ -36,8 +34,10 @@ const Navbar = ({ user, onLogout }) => {
   const [firebaseUsers, setFirebaseUsers] = useState([]);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
-  const [notifTransfer, setNotifTransfer] = useState([]);
   const [pendingTransfer, setPendingTransfer] = useState([]);
+  const [dismissedTransferIds, setDismissedTransferIds] = useState(
+    () => new Set()
+  );
 
   // ===== EDIT ACCOUNT STATE =====
   const [editUsername, setEditUsername] = useState("");
@@ -84,13 +84,11 @@ const Navbar = ({ user, onLogout }) => {
     const normalize = (v) =>
       String(v || "").trim().toUpperCase();
   
-    return FirebaseService.listenTransferRequests((rows) => {
+    return FirebaseService.listenPendingTransferRequests((rows) => {
   
       const myTransfer = [];
   
       (rows || []).forEach((t) => {
-        if (t.status !== "Pending") return;
-  
         const dari = normalize(t.dari || t.tokoPengirim);
         const ke = normalize(t.ke);
   
@@ -112,45 +110,19 @@ const Navbar = ({ user, onLogout }) => {
 
   
 
-  useEffect(() => {
-    if (notifTransfer.length > 0) {
-      console.log("🔔 Ada transfer menunggu approval");
-    }
-  }, [notifTransfer]);
+  const visibleNotification = useMemo(
+    () =>
+      pendingTransfer.find(
+        (transfer) => !dismissedTransferIds.has(transfer.id || transfer.key)
+      ),
+    [pendingTransfer, dismissedTransferIds]
+  );
 
- 
-  const lastTransferSound = useRef(null);
-
-  const bellAudio = useRef(null);
-
-  useEffect(() => {
-    bellAudio.current = new Audio("/bell.mp3");
-  }, []);
-
-  useEffect(() => {
-    if (!pendingTransfer.length) return;
-    if (!TOKO_LOGIN) return;
-  
-    const normalize = (v) =>
-      String(v || "").trim().toUpperCase();
-  
-    const trx = pendingTransfer[0];
-  
-    const dari = normalize(trx.dari || trx.tokoPengirim);
-    const ke = normalize(trx.ke);
-    const tokoLogin = normalize(TOKO_LOGIN);
-  
-    // ✅ HARD STOP
-    if (dari !== tokoLogin && ke !== tokoLogin) return;
-  
-    const id = trx.id || trx.key;
-  
-    if (lastTransferSound.current === id) return;
-  
-    lastTransferSound.current = id;
-  
-    bellAudio.current?.play().catch(() => {});
-  }, [pendingTransfer, TOKO_LOGIN]);
+  const dismissNotification = () => {
+    const id = visibleNotification?.id || visibleNotification?.key;
+    if (!id) return;
+    setDismissedTransferIds((previous) => new Set(previous).add(id));
+  };
   
   
 
@@ -405,6 +377,31 @@ const Navbar = ({ user, onLogout }) => {
                 className="px-4 py-2 rounded bg-indigo-600 text-white"
               >
                 Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {visibleNotification && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl p-6 w-[min(24rem,calc(100vw-2rem))] text-black shadow-2xl">
+            <h3 className="text-lg font-bold mb-2">
+              Transfer Menunggu Persetujuan
+            </h3>
+            <p className="text-sm text-gray-700">
+              Transfer dari {visibleNotification.dari ||
+                visibleNotification.tokoPengirim ||
+                "toko lain"}
+              {visibleNotification.ke ? ` ke ${visibleNotification.ke}` : ""}
+              {" sedang menunggu diproses."}
+            </p>
+            <div className="flex justify-end mt-5">
+              <button
+                type="button"
+                onClick={dismissNotification}
+                className="px-5 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+              >
+                OK
               </button>
             </div>
           </div>
