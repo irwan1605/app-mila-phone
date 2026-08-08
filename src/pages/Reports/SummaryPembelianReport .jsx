@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import { listenAllTransaksi } from "../../services/FirebaseService";
+import { listenAllTransaksiCached } from "../../services/FirebaseCache";
 import CetakInvoicePembelian from "../Print/CetakInvoicePembelian";
 
 /* ================= UTIL ================= */
@@ -32,7 +32,7 @@ export default function SummaryPembelianReport() {
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
-    const unsub = listenAllTransaksi((data) => {
+    const unsub = listenAllTransaksiCached((data) => {
       const pembelian = (data || []).filter(
         (d) => String(d.PAYMENT_METODE || "").toUpperCase() === "PEMBELIAN"
       );

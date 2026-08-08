@@ -1039,60 +1039,53 @@ export default function TablePenjualan({ data = [] }) {
     }
 
     refundProcessRef.current.add(invoiceKey);
-    // ======================================
-    // 🔥 HARD LOCK CLICK
-    // ======================================
-    if (
-      row?.deleted === true ||
-      row?.deletedFromPenjualan === true ||
-      row?.refundProcessed === true ||
-      row?.IS_REFUND === true ||
-      row?.refundLocked === true
-    ) {
-      alert("Transaksi sudah direfund");
 
-      return;
+    try {
+      // ======================================
+      // 🔥 HARD LOCK CLICK
+      // ======================================
+      if (
+        row?.deleted === true ||
+        row?.deletedFromPenjualan === true ||
+        row?.refundProcessed === true ||
+        row?.IS_REFUND === true ||
+        row?.refundLocked === true
+      ) {
+        alert("Transaksi sudah direfund");
+        return;
+      }
+
+      const success = await handleRefundPenjualan({
+        row,
+        rows,
+        userLogin,
+        setDeletedRows,
+        setInstantRefund,
+        setLocalHiddenRefund,
+        setRefundLoading,
+      });
+
+      if (!success) return;
+
+      // ======================================
+      // 🔥 FORCE REFRESH FIREBASE
+      // ======================================
+      window.dispatchEvent(new Event("storage"));
+
+      // ======================================
+      // 🔥 NOTIFIKASI REFUND BERHASIL
+      // ======================================
+      showRefundSuccess({
+        toko: row.toko,
+        brand: row.namaBrand,
+        barang: row.namaBarang,
+        qty: row.qty,
+        imei: row.imei,
+      });
+    } finally {
+      // Gagal maupun berhasil harus dapat diklik ulang setelah proses selesai.
+      refundProcessRef.current.delete(invoiceKey);
     }
-
-    await handleRefundPenjualan({
-      row,
-
-      rows,
-
-      userLogin,
-
-      setDeletedRows,
-
-      setInstantRefund,
-
-      setLocalHiddenRefund,
-
-      setRefundLoading,
-    });
-
-    // ======================================
-    // 🔥 FORCE REFRESH FIREBASE
-    // ======================================
-    window.dispatchEvent(new Event("storage"));
-
-    // ======================================
-    // 🔥 NOTIFIKASI REFUND BERHASIL
-    // ======================================
-    showRefundSuccess({
-      toko: row.toko,
-
-      brand: row.namaBrand,
-
-      barang: row.namaBarang,
-
-      qty: row.qty,
-
-      imei: row.imei,
-    });
-    // ======================================
-    // 🔥 RELEASE LOCK
-    // ======================================
-    refundProcessRef.current.delete(invoiceKey);
   };
 
   /* ================= EXPORT EXCEL ================= */

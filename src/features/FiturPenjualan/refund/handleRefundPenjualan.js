@@ -99,10 +99,6 @@ export const handleRefundPenjualan = async ({
       throw new Error("Transaksi tidak ditemukan");
     }
 
-    if (!trx) {
-      throw new Error("Transaksi tidak ditemukan");
-    }
-
     // =========================================
     // BLOCK DOUBLE REFUND
     // =========================================
@@ -217,7 +213,7 @@ export const handleRefundPenjualan = async ({
     // 🔥 GLOBAL REFUND LOCK
     // FIREBASE REALTIME
     // =========================================
-    await update(ref(db, `toko/${row.tokoId}/transaksi/${row.id}`), {
+    await update(ref(db, `toko/${trx.tokoId}/transaksi/${trx.trxKey || trx.id}`), {
       refundProcessed: true,
 
       refundLocked: true,

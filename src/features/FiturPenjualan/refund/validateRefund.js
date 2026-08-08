@@ -22,6 +22,82 @@ const normalizeImei = (v) =>
     .toUpperCase()
     .replace(/\s+/g, "");
 
+const getInvoice = (trx = {}) =>
+  normalize(trx.invoice || trx.NO_INVOICE || trx.noInvoice);
+
+const getTokoName = (trx = {}) =>
+  normalize(trx.toko || trx.NAMA_TOKO || trx.TOKO || trx.namaToko);
+
+// Resolve key Firebase asli. Transaksi legacy dapat menyimpan field `id` yang
+// berbeda dari key `/toko/{tokoId}/transaksi/{key}`.
+export const resolveRefundTransaction = async ({ row, rows = [] }) => {
+  const invoice = getInvoice(row);
+  const tokoName = getTokoName(row);
+  const localMatch = rows.find(
+    (candidate) => getInvoice(candidate) === invoice
+  );
+  const source = localMatch || row || {};
+  const preferredTokoId = String(source.tokoId || row?.tokoId || "").trim();
+  const candidateKeys = [
+    source.trxKey,
+    source.firebaseKey,
+    source.key,
+    source.id,
+    row?.trxKey,
+    row?.firebaseKey,
+    row?.key,
+    row?.id,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  if (preferredTokoId) {
+    for (const key of [...new Set(candidateKeys)]) {
+      const snap = await get(
+        ref(db, `toko/${preferredTokoId}/transaksi/${key}`)
+      );
+      if (snap.exists() && (!invoice || getInvoice(snap.val()) === invoice)) {
+        return {
+          ...source,
+          ...snap.val(),
+          id: key,
+          trxKey: key,
+          tokoId: preferredTokoId,
+        };
+      }
+    }
+  }
+
+  const tokoSnap = await get(ref(db, "toko"));
+  if (!tokoSnap.exists()) return null;
+
+  let resolved = null;
+  tokoSnap.forEach((storeSnap) => {
+    if (resolved) return;
+
+    storeSnap.child("transaksi").forEach((trxSnap) => {
+      if (resolved) return;
+      const value = trxSnap.val() || {};
+      const keyMatch = candidateKeys.includes(trxSnap.key);
+      const invoiceMatch = invoice && getInvoice(value) === invoice;
+      const storeName = getTokoName(value);
+      const tokoMatch = !tokoName || !storeName || tokoName === storeName;
+
+      if ((keyMatch || invoiceMatch) && tokoMatch) {
+        resolved = {
+          ...source,
+          ...value,
+          id: trxSnap.key,
+          trxKey: trxSnap.key,
+          tokoId: storeSnap.key,
+        };
+      }
+    });
+  });
+
+  return resolved;
+};
+
 // ======================================================
 // VALIDATE REFUND
 // ======================================================
@@ -39,7 +115,7 @@ export const validateRefund = async ({ row, rows = [], userLogin }) => {
   // CARI TRANSAKSI
   // ====================================================
 
-  const trx = rows.find((x) => normalize(x.invoice) === normalize(row.invoice));
+  const trx = await resolveRefundTransaction({ row, rows });
 
   if (!trx) {
     throw new Error("Transaksi penjualan tidak ditemukan");

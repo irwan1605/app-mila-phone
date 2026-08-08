@@ -39,7 +39,6 @@ import {
   runTransaction,
   query,
   orderByChild,
-  equalTo,
   limitToLast,
   startAt,
   endAt,
@@ -1610,27 +1609,6 @@ export const listenTransferRequests = (callback) => {
     }));
     callback(arr); // ⬅️ JANGAN FILTER
   });
-};
-
-// Listener khusus badge/notifikasi: Firebase hanya mengirim transfer Pending.
-export const listenPendingTransferRequests = (callback) => {
-  const pendingQuery = query(
-    ref(db, "transfer_barang"),
-    orderByChild("status"),
-    equalTo("Pending")
-  );
-
-  return onValue(
-    pendingQuery,
-    (snap) => {
-      const raw = snap.val() || {};
-      callback(Object.entries(raw).map(([id, value]) => ({ id, ...value })));
-    },
-    (error) => {
-      console.error("listenPendingTransferRequests error:", error);
-      callback([]);
-    }
-  );
 };
 
 // update transfer request (approve / reject)
@@ -4305,7 +4283,6 @@ const FirebaseService = {
   listenTransaksiByToko,
   listenTransaksiByTokoHemat, // ✅ fungsi hemat-kuota baru
   listenTransferRequests,
-  listenPendingTransferRequests,
   listenUsers,
   potongStockMasterByImei,
   reduceStock,

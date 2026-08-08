@@ -8,6 +8,22 @@
 3. Notifikasi Navbar ditutup secara lokal dengan tombol **OK**. Data transfer tidak
    dihapus atau diubah sehingga alur approval/reject tetap sama.
 
+### Optimasi halaman laporan
+
+- `FirebaseCache` membaca transaksi dengan event incremental per toko. Initial load
+  tetap lengkap, sedangkan update berikutnya hanya mengirim transaksi yang berubah.
+- Histori `transfer_barang` di cache memakai `child_added`, `child_changed`, dan
+  `child_removed`, bukan snapshot root berulang.
+- Finance Report tidak lagi memasang listener transaksi kedua yang hasilnya hanya
+  dipakai oleh tabel yang sudah dinonaktifkan.
+- Summary Pembelian memakai cache transaksi bersama.
+- Summary Transfer memakai cache transfer dan transaksi bersama; listener langsung
+  pada root `transfer_barang` dan `toko` sudah dihapus.
+- Inventory Report dan Sales Report sudah memakai cache bersama. Dua subscription
+  di Sales Report tetap dilayani oleh satu koneksi Firebase dari cache.
+- Finance Report Monthly hanya memakai state/local storage dan tidak membuat query
+  Firebase, sehingga tidak memerlukan perubahan query.
+
 Tambahkan index berikut pada Realtime Database Rules agar query Pending diproses
 secara efisien oleh server:
 
@@ -67,4 +83,3 @@ Urutan rollout yang aman:
 3. Migrasikan layar operasional dari `listenAllTransaksi` ke listener per toko.
 4. Buat indeks laporan ringkas per tanggal agar laporan tidak membaca histori penuh.
 5. Batasi histori transfer/penjualan (misalnya 200 terbaru), dengan pagination untuk data lama.
-

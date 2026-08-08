@@ -25,7 +25,6 @@ import {
   deleteTransaksi,
   listenPaymentJenis,
   listenMasterPaymentMetode,
-  listenTransaksi,
   listenMasterSales,
   listenKaryawan,
   listenMasterStoreHead,
@@ -154,7 +153,6 @@ export default function FinanceReport() {
   const tokoIdFromState = location.state?.tokoId || null;
   const tokoNameFromState = location.state?.tokoName || null;
   const [uploading, setUploading] = useState(false);
-  const [dataPenjualan, setDataPenjualan] = useState([]);
   const DEV = process.env.NODE_ENV === "development";
 
   const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
@@ -201,17 +199,6 @@ export default function FinanceReport() {
       unsubSales && unsubSales();
       unsubKaryawan && unsubKaryawan();
     };
-  }, []);
-
-  useEffect(() => {
-    const unsub = listenTransaksi((rows) => {
-      if (DEV) {
-        console.log("🔥 DATA MASUK KE TABLE:", rows);
-      }
-      setDataPenjualan(rows);
-    });
-
-    return () => unsub && unsub();
   }, []);
 
   useEffect(() => {
