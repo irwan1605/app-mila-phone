@@ -7,6 +7,16 @@ import {
   listenKaryawan,
 } from "../services/FirebaseService";
 
+const resolveTokoId = (value) => {
+  const numeric = Number(value);
+  if (Number.isInteger(numeric) && TOKO_LABELS[numeric]) return String(numeric);
+  const normalized = String(value || "").trim().toUpperCase();
+  const entry = Object.entries(TOKO_LABELS).find(
+    ([, name]) => String(name).trim().toUpperCase() === normalized
+  );
+  return entry?.[0] || "";
+};
+
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
@@ -64,13 +74,14 @@ export default function UserManagement() {
         if (roleFilter === "ALL") return true;
         if (roleFilter === "superadmin") return u.role === "superadmin";
         if (roleFilter === "pic_toko") return u.role.startsWith("pic_toko");
+        if (roleFilter === "spv_toko") return u.role.startsWith("spv_toko");
         return true;
       })
       .filter((u) => {
         if (tokoFilter === "ALL") return true;
         const tokoId = String(tokoFilter);
-        if (u.role.startsWith("pic_toko")) {
-          const rid = u.role.replace("pic_toko", "");
+        if (u.role.startsWith("pic_toko") || u.role.startsWith("spv_toko")) {
+          const rid = u.role.replace(/^(pic_toko|spv_toko)/, "");
           return rid === tokoId;
         }
         return String(u.toko) === tokoId;
@@ -86,13 +97,18 @@ export default function UserManagement() {
       return;
     }
 
-    if (users.some((u) => u.username === form.username)) {
+    const username = form.username.trim();
+    if (
+      users.some(
+        (u) => String(u.username || "").toLowerCase() === username.toLowerCase()
+      )
+    ) {
       alert("Username sudah digunakan.");
       return;
     }
 
     let role = form.role;
-    let toko = form.toko || null;
+    let toko = resolveTokoId(form.toko) || null;
     
     // ✅ PIC TOKO
     if (role === "pic_toko") {
@@ -119,7 +135,7 @@ export default function UserManagement() {
     
 
     const newUser = {
-      username: form.username,
+      username,
       password: form.password,
       role,
       toko,
@@ -156,6 +172,10 @@ export default function UserManagement() {
       toko = role.replace("pic_toko", "");
       role = "pic_toko";
     }
+    else if (role.startsWith("spv_toko")) {
+      toko = role.replace("spv_toko", "") || toko;
+      role = "spv_toko";
+    }
 
     setEditForm({
       username: u.username,
@@ -170,14 +190,14 @@ export default function UserManagement() {
 
   const updateUser = async () => {
     let role = editForm.role;
-    let toko = editForm.toko || null;
+    let toko = resolveTokoId(editForm.toko) || null;
 
-    if (role === "pic_toko") {
+    if (role === "pic_toko" || role === "spv_toko") {
       if (!toko) {
-        alert("Pilih toko untuk PIC Toko.");
+        alert("Pilih toko untuk PIC/SPV Toko.");
         return;
       }
-      role = `pic_toko${toko}`;
+      role = `${role}${toko}`;
     } else {
       toko = null;
     }
@@ -244,7 +264,7 @@ export default function UserManagement() {
                 ...form,
                 name: k?.NAMA || "",
                 nik: k?.NIK || "",
-                toko: k?.TOKO_BERTUGAS || "",
+                toko: resolveTokoId(k?.TOKO_BERTUGAS),
               });
             }}
           >
@@ -292,7 +312,7 @@ export default function UserManagement() {
           </select>
         </div>
 
-        {form.role === "pic_toko" && (
+        {(form.role === "pic_toko" || form.role === "spv_toko") && (
           <div>
             <label className="text-xs">Toko</label>
             <select
@@ -492,7 +512,8 @@ export default function UserManagement() {
                 </select>
               </div>
 
-              {editForm.role === "pic_toko" && (
+              {(editForm.role === "pic_toko" ||
+                editForm.role === "spv_toko") && (
                 <div>
                   <label className="text-xs">Toko</label>
                   <select

@@ -6,7 +6,7 @@ import { Link, useLocation } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import "./Sidebar.css";
 import { useGlobalSearch } from "../context/GlobalSearchContext";
-import FirebaseService from "../services/FirebaseService";
+import { listenPendingTransferRequests } from "../services/FirebaseService";
 
 import {
   FaHome,
@@ -79,8 +79,12 @@ const Sidebar = ({ role, toko, onLogout }) => {
     const role = String(user?.role || "").toLowerCase();
     const tokoId = user?.toko;
 
-    // ✅ Hanya untuk PIC TOKO
-    if (!role.startsWith("pic_toko") || !tokoId) return;
+    // Notifikasi transfer berlaku untuk PIC dan SPV toko.
+    if (
+      (!role.startsWith("pic_toko") && !role.startsWith("spv_toko")) ||
+      !tokoId
+    )
+      return;
 
     const TOKO_LIST = [
       "CILANGKAP PUSAT",
@@ -93,11 +97,12 @@ const Sidebar = ({ role, toko, onLogout }) => {
       "PITARA",
       "KOTA WISATA",
       "SAWANGAN",
+      "BENGKEL",
     ];
 
     const tokoName = TOKO_LIST[tokoId - 1];
 
-    const unsub = FirebaseService.listenPendingTransferRequests((rows) => {
+    const unsub = listenPendingTransferRequests((rows) => {
       const pending = (rows || []).filter(
         (t) =>
           String(t.ke).toUpperCase() === String(tokoName).toUpperCase()

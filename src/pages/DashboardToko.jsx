@@ -28,8 +28,6 @@ import { buildDashboardStockRows } from "../utils/stock/buildDashboardStockRows"
 
 import * as XLSX from "xlsx";
 
-const userLogin = JSON.parse(localStorage.getItem("userLogin") || "{}");
-
 // ======================= KONSTAN =======================
 const TOKO_LIST = [
   { id: "1", tokoName: "CILANGKAP PUSAT", code: "cilangkap-pusat" },
@@ -71,8 +69,20 @@ export default function DashboardToko(props) {
   const tokoId = props.tokoId || params.tokoId || params.id;
   const navigate = useNavigate();
   // ======================= ROLE USER =======================
-  const roleUser = localStorage.getItem("ROLE_USER");
-  const isPicToko = roleUser === "PIC_TOKO";
+  const sessionUser = useMemo(() => {
+    if (props.user) return props.user;
+    try {
+      return JSON.parse(
+        localStorage.getItem("user") ||
+          localStorage.getItem("userLogin") ||
+          "{}"
+      );
+    } catch {
+      return {};
+    }
+  }, [props.user]);
+  const roleUser = String(sessionUser.role || "").toLowerCase();
+  const isPicToko = roleUser.startsWith("pic_toko");
   const DEV = process.env.NODE_ENV === "development";
   const toko = TOKO_LIST.find((t) => t.id === String(tokoId));
   const TOKO_AKTIF = toko?.tokoName || "";
@@ -91,7 +101,7 @@ export default function DashboardToko(props) {
     11: "-OhxxxxBENGKEL",
   };
 
-  const firebaseTokoId = MAP_TOKO[userLogin.toko] || MAP_TOKO[tokoId];
+  const firebaseTokoId = MAP_TOKO[sessionUser.toko] || MAP_TOKO[tokoId];
 
   // ✅ SIMPAN TOKO LOGIN & ROLE (UNTUK TRANSFER BARANG)
   useEffect(() => {

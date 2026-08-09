@@ -8,11 +8,15 @@ export default function ProtectedRoute({ allowedRoles = [], children }) {
 
   if (!user) return <Navigate to="/" replace />;
 
-  const role = user.role || "";
+  const role = String(user.role || "").trim().toLowerCase();
 
   const ok =
     allowedRoles.includes(role) ||
-    (allowedRoles.includes("pic_toko") && role.startsWith("pic_toko"));
+    allowedRoles.some(
+      (allowedRole) =>
+        (allowedRole === "pic_toko" || allowedRole === "spv_toko") &&
+        role.startsWith(allowedRole)
+    );
 
   return ok ? children : <Navigate to="/dashboard" replace />;
 }
