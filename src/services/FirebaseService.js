@@ -981,7 +981,7 @@ export const deleteTransaksi = async (tokoId, transaksiId) => {
     // =========================================
     if (!foundPath) {
       if (DEV) {
-      console.warn("⚠️ DATA SUDAH HILANG:", transaksiId);
+        console.warn("⚠️ DATA SUDAH HILANG:", transaksiId);
       }
       return {
         success: true,
@@ -994,7 +994,7 @@ export const deleteTransaksi = async (tokoId, transaksiId) => {
     // =========================================
     await remove(ref(db, foundPath));
     if (DEV) {
-    console.log("✅ DELETE FIREBASE:", foundPath);
+      console.log("✅ DELETE FIREBASE:", foundPath);
     }
     return {
       success: true,
@@ -1064,7 +1064,7 @@ export const listenAllTransaksi = (callback) => {
 
       const finalRows = Array.from(unique.values());
       if (DEV) {
-      console.log("🔥 TOTAL TRANSAKSI FINAL:", finalRows.length);
+        console.log("🔥 TOTAL TRANSAKSI FINAL:", finalRows.length);
       }
       // 🔥 FIX CALLBACK
       callback(finalRows);
@@ -1103,12 +1103,12 @@ export const forceDeleteTransaksi = async (tokoId, matchFn) => {
         }
       } catch (e) {
         if (DEV) {
-        console.warn(
-          "forceDeleteTransaksi matchFn error for child:",
-          child.key,
-          e
-        );
-      }
+          console.warn(
+            "forceDeleteTransaksi matchFn error for child:",
+            child.key,
+            e
+          );
+        }
       }
     });
 
@@ -1209,11 +1209,11 @@ export const cekImeiSudahTerjual = async (imei) => {
 export const addPenjualan = async (tokoId, transaksi) => {
   try {
     if (DEV) {
-    console.log("TOKO ID:", tokoId);
+      console.log("TOKO ID:", tokoId);
     }
     const r = ref(db, `toko/${tokoId}/transaksi`);
     if (DEV) {
-    console.log("REF PATH:", r.toString());
+      console.log("REF PATH:", r.toString());
     }
     const newRef = push(r);
 
@@ -1224,11 +1224,11 @@ export const addPenjualan = async (tokoId, transaksi) => {
       createdAt: Date.now(),
     };
     if (DEV) {
-    console.log("PAYLOAD:", payload);
+      console.log("PAYLOAD:", payload);
     }
     await set(newRef, payload);
     if (DEV) {
-    console.log("✅ PENJUALAN TERSIMPAN");
+      console.log("✅ PENJUALAN TERSIMPAN");
     }
     return newRef.key;
   } catch (e) {
@@ -1738,7 +1738,7 @@ export const potongStockMasterByImei = async (imei) => {
 
     if (!snap.exists()) {
       if (DEV) {
-      console.warn("DATA TOKO TIDAK DITEMUKAN");
+        console.warn("DATA TOKO TIDAK DITEMUKAN");
       }
       return;
     }
@@ -1766,7 +1766,7 @@ export const potongStockMasterByImei = async (imei) => {
 
     if (!target || !targetPath) {
       if (DEV) {
-      console.warn("❌ STOK PUSAT TIDAK DITEMUKAN UNTUK IMEI:", imei);
+        console.warn("❌ STOK PUSAT TIDAK DITEMUKAN UNTUK IMEI:", imei);
       }
       return;
     }
@@ -1778,7 +1778,7 @@ export const potongStockMasterByImei = async (imei) => {
       TANGGAL_KELUAR: new Date().toISOString().slice(0, 10),
     });
     if (DEV) {
-    console.log("✅ STOCK MASTER BERHASIL DIPOTONG UNTUK IMEI:", imei);
+      console.log("✅ STOCK MASTER BERHASIL DIPOTONG UNTUK IMEI:", imei);
     }
   } catch (err) {
     console.error("❌ GAGAL POTONG STOK MASTER:", err);
@@ -2470,13 +2470,13 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
           if (trxImei === currentImei) {
             if (DEV) {
-            console.log("✅ MATCH IMEI", {
-              imei,
-              trxImei,
-              toko: trx.NAMA_TOKO,
-              metode: trx.PAYMENT_METODE,
-            });
-          }
+              console.log("✅ MATCH IMEI", {
+                imei,
+                trxImei,
+                toko: trx.NAMA_TOKO,
+                metode: trx.PAYMENT_METODE,
+              });
+            }
           }
 
           imeiHistory.push(trx);
@@ -2568,7 +2568,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
           // ======================================
           if (metode === "TRANSFER_KELUAR") {
             if (DEV) {
-            console.log("📦 TRANSFER OWNER:", imei);
+              console.log("📦 TRANSFER OWNER:", imei);
             }
           }
         });
@@ -2588,7 +2588,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
       // ======================================
       if (imeiHistory.length === 0) {
         if (DEV) {
-        console.warn("⚠️ IMEI HISTORY EMPTY", imei);
+          console.warn("⚠️ IMEI HISTORY EMPTY", imei);
         }
         continue;
       }
@@ -2637,19 +2637,19 @@ export const approveTransferFINAL = async ({ transfer }) => {
       // ======================================
       const rejectEngine = getRejectStatus(imeiHistory);
       if (DEV) {
-      console.log("🔥 IMEI HISTORY CHECK", {
-        imei,
-        historyCount: imeiHistory.length,
+        console.log("🔥 IMEI HISTORY CHECK", {
+          imei,
+          historyCount: imeiHistory.length,
 
-        history: imeiHistory.map((x) => ({
-          metode: x.PAYMENT_METODE,
+          history: imeiHistory.map((x) => ({
+            metode: x.PAYMENT_METODE,
 
-          toko: x.NAMA_TOKO,
+            toko: x.NAMA_TOKO,
 
-          status: x.STATUS,
-        })),
-      });
-    }
+            status: x.STATUS,
+          })),
+        });
+      }
       // ======================================
       // FINAL STATUS ENGINE
       // ======================================
@@ -2676,21 +2676,21 @@ export const approveTransferFINAL = async ({ transfer }) => {
         )
       );
       if (DEV) {
-      console.log("🔥 TRANSFER CHECK", {
-        imei,
-        finalStatus,
-        historyCount: imeiHistory.length,
+        console.log("🔥 TRANSFER CHECK", {
+          imei,
+          finalStatus,
+          historyCount: imeiHistory.length,
 
-        methods: imeiHistory.map((x) => x.PAYMENT_METODE),
-      });
-    }
-    if (DEV) {
-      console.log("🔥 FINAL TRANSACTION", {
-        imei,
-        finalMetode,
-        historyCount: imeiHistory.length,
-      });
-    }
+          methods: imeiHistory.map((x) => x.PAYMENT_METODE),
+        });
+      }
+      if (DEV) {
+        console.log("🔥 FINAL TRANSACTION", {
+          imei,
+          finalMetode,
+          historyCount: imeiHistory.length,
+        });
+      }
       const detailStockSnap = await get(ref(db, `detail_stock/${imei}`));
 
       const stockInfo = detailStockSnap.val() || {};
@@ -2710,7 +2710,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
       if (finalStatus === "NOT_FOUND") {
         if (hasTransferHistory) {
           if (DEV) {
-          console.warn("⚠️ TRANSFER FALLBACK", imei);
+            console.warn("⚠️ TRANSFER FALLBACK", imei);
           }
           // ======================================
           // 🔥 OVERRIDE STATUS
@@ -2729,11 +2729,11 @@ export const approveTransferFINAL = async ({ transfer }) => {
         throw new Error(`IMEI ${imei} sudah TERJUAL`);
       }
       if (DEV) {
-      console.log("🔥 FINAL IMEI STATUS", {
-        imei,
-        finalStatus,
-      });
-    }
+        console.log("🔥 FINAL IMEI STATUS", {
+          imei,
+          finalStatus,
+        });
+      }
       // ======================================
       // 🔥 FINAL STATUS DARI REJECT ENGINE
       // ======================================
@@ -2796,7 +2796,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
       ) {
         if (finalRejectStatus === "AVAILABLE") {
           if (DEV) {
-          console.log("✅ REJECT OVERRIDE AKTIF", imei);
+            console.log("✅ REJECT OVERRIDE AKTIF", imei);
           }
           return;
         }
@@ -2804,33 +2804,33 @@ export const approveTransferFINAL = async ({ transfer }) => {
         throw new Error(`IMEI ${imei} sudah TERJUAL`);
       }
       if (DEV) {
-      console.log("🔥 FINAL IMEI CHECK", {
-        imei,
-        saldo,
-        sudahTerjual,
-        refundActive,
-        rejectActive,
-        rejectCanTransfer,
-        hasRejectHistory,
-        finalMetode,
-        finalStatusAvailable,
-        finalStatusSold,
-        historyCount: imeiHistory.length,
-      });
-    }
+        console.log("🔥 FINAL IMEI CHECK", {
+          imei,
+          saldo,
+          sudahTerjual,
+          refundActive,
+          rejectActive,
+          rejectCanTransfer,
+          hasRejectHistory,
+          finalMetode,
+          finalStatusAvailable,
+          finalStatusSold,
+          historyCount: imeiHistory.length,
+        });
+      }
 
-    if (DEV) {
-      console.log("🔥 REJECT FINAL", {
-        imei,
-        saldo,
-        sudahTerjual,
-        refundActive,
-        rejectActive,
-        rejectCanTransfer,
-        hasRejectHistory,
-        rejectEngine,
-      });
-    }
+      if (DEV) {
+        console.log("🔥 REJECT FINAL", {
+          imei,
+          saldo,
+          sudahTerjual,
+          refundActive,
+          rejectActive,
+          rejectCanTransfer,
+          hasRejectHistory,
+          rejectEngine,
+        });
+      }
     }
   }
 
@@ -2868,7 +2868,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
         throw new Error(`❌ IMEI kosong di index ${i}`);
       }
       if (DEV) {
-      console.log("🚀 PROSES IMEI:", imei);
+        console.log("🚀 PROSES IMEI:", imei);
       }
       // 🔻 TRANSFER KELUAR
       await push(ref(db, `toko/${tokoPengirim}/transaksi`), {
@@ -3742,7 +3742,7 @@ export const refundRestorePenjualan = async (trx) => {
     // =====================================
     await update(ref(db), updates);
     if (DEV) {
-    console.log("✅ REFUND BERHASIL");
+      console.log("✅ REFUND BERHASIL");
     }
     return true;
   } catch (err) {
@@ -3838,7 +3838,7 @@ export const listenPenjualan = (cb) => {
       return Number(b.createdAt || 0) - Number(a.createdAt || 0);
     });
     if (DEV) {
-    console.log("🔥 TABLE PENJUALAN FINAL:", result);
+      console.log("🔥 TABLE PENJUALAN FINAL:", result);
     }
     cb(result);
   });

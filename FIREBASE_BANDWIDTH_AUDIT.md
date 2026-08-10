@@ -12,8 +12,8 @@
 
 - `FirebaseCache` membaca transaksi dengan event incremental per toko. Initial load
   tetap lengkap, sedangkan update berikutnya hanya mengirim transaksi yang berubah.
-- Histori `transfer_barang` di cache memakai `child_added`, `child_changed`, dan
-  `child_removed`, bukan snapshot root berulang.
+- Cache `detail_stock` memakai event incremental. Perubahan satu IMEI tidak lagi
+  mengirim ulang seluruh snapshot stok kepada cache.
 - Finance Report tidak lagi memasang listener transaksi kedua yang hasilnya hanya
   dipakai oleh tabel yang sudah dinonaktifkan.
 - Summary Pembelian memakai cache transaksi bersama.
@@ -23,6 +23,15 @@
   di Sales Report tetap dilayani oleh satu koneksi Firebase dari cache.
 - Finance Report Monthly hanya memakai state/local storage dan tidak membuat query
   Firebase, sehingga tidak memerlukan perubahan query.
+
+### Optimasi autentikasi PIC/SPV
+
+- Hanya `App` yang memasang listener `users` ketika layar login aktif. Listener
+  duplikat di komponen Login dan pembacaan penuh `getAllUsersOnce()` sudah dihapus.
+- Setelah berhasil login, listener daftar user dihentikan. Halaman User Management
+  tetap memiliki listener sendiri dan hanya aktif saat halaman admin dibuka.
+- Role `pic_toko{id}` dan `spv_toko{id}`, ID/nama toko lama, session, serta route
+  `/toko/{id}` dinormalisasi tanpa mengubah data transaksi.
 
 Tambahkan index berikut pada Realtime Database Rules agar query Pending diproses
 secara efisien oleh server:
@@ -54,8 +63,8 @@ yang sudah ada.
 
 | Prioritas | Lokasi | Pola mahal | Perbaikan aman |
 | --- | --- | --- | --- |
-| Kritis | `FirebaseService.listenAllTransaksi` | Listener pada root `toko` ikut mengunduh info toko dan seluruh transaksi semua cabang setiap ada perubahan | Untuk layar operasional gunakan `listenTransaksiByTokoHemat`; laporan lintas toko perlu node indeks/denormalisasi khusus per tanggal |
-| Kritis | `FirebaseService.listenStockAll` | Listener permanen pada seluruh `detail_stock` | Gunakan node per toko/status atau query indeks yang sesuai layar; cache yang ada sudah mencegah listener duplikat dalam satu tab |
+| Kritis | `FirebaseService.listenAllTransaksi` | Listener legacy pada root `toko` ikut mengunduh info toko dan seluruh transaksi semua cabang setiap ada perubahan | Semua konsumen `FirebaseCache` sekarang memakai versi incremental; migrasikan pemanggilan legacy langsung secara bertahap |
+| Kritis | `FirebaseService.listenStockAll` | Listener legacy pada seluruh `detail_stock` | Semua konsumen cache sekarang memakai versi incremental; halaman langsung perlu dimigrasikan bertahap |
 | Tinggi | `listenTransferRequests` dan listener langsung di halaman transfer/report | Membaca seluruh histori transfer secara realtime | Badge sudah diperbaiki; halaman histori sebaiknya memakai query tanggal/`limitToLast` dan tombol muat berikutnya |
 | Tinggi | Pemanggilan `get(ref(db, "toko"))` di form/refund | Satu lookup nama/ID mengunduh semua toko beserta child transaksi | Baca `toko/{id}/info`, atau gunakan cache metadata toko yang tidak mencakup transaksi |
 | Sedang | Listener master yang sama di beberapa komponen | Snapshot master diunduh ulang per komponen | Pusatkan ke `FirebaseCache` seperti `listenMasterBarangCached` |

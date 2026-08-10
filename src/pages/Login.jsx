@@ -33,9 +33,14 @@ const TOKO_NAMES = {
 
 const resolveTokoId = (value) => {
   const numeric = Number(value);
-  if (Number.isInteger(numeric) && numeric >= 1 && numeric <= 11) return numeric;
-  const normalized = String(value || "").trim().toUpperCase();
-  const entry = Object.entries(TOKO_NAMES).find(([, name]) => name === normalized);
+  if (Number.isInteger(numeric) && numeric >= 1 && numeric <= 11)
+    return numeric;
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
+  const entry = Object.entries(TOKO_NAMES).find(
+    ([, name]) => name === normalized
+  );
   return entry ? Number(entry[0]) : null;
 };
 
