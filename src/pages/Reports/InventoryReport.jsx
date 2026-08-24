@@ -7,10 +7,11 @@ import {
   listenAllTransaksiCached,
   listenMasterBarangCached,
 } from "../../services/FirebaseCache";
-import { FaStore } from "react-icons/fa";
+import { FaFileExcel, FaStore } from "react-icons/fa";
+import * as XLSX from "xlsx";
 import { useNavigate, useLocation } from "react-router-dom";
 import { hitungSemuaStok } from "../../utils/stockUtils";
-import CardPersediaanBarang from "../../features/dashboad/CardPersediaanBarang";
+import { buildInventoryReportSuperAdmin } from "../../features/dashboad/utils/buildInventoryReportSuperAdmin";
 
 // =======================
 // CONST
@@ -59,12 +60,26 @@ const normalize = (v) =>
 // ======================================================================
 export default function InventoryReport() {
   const navigate = useNavigate();
-  const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
-
-  const isSuperAdmin =
-    loggedUser?.role === "superadmin" || loggedUser?.level === "superadmin";
-
-  const tokoUser = loggedUser?.toko || localStorage.getItem("TOKO_LOGIN") || "";
+  const loggedUser = useMemo(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const userLogin = JSON.parse(localStorage.getItem("userLogin") || "{}");
+      return { ...userLogin, ...user };
+    } catch {
+      return {};
+    }
+  }, []);
+  const role = String(
+    loggedUser?.role ||
+      loggedUser?.level ||
+      localStorage.getItem("ROLE_USER") ||
+      ""
+  ).toLowerCase();
+  const isSuperAdmin = role === "superadmin" || role === "admin";
+  const roleTokoId = role.replace(/^(pic_toko|spv_toko)/, "");
+  const tokoUserRaw =
+    loggedUser?.toko || roleTokoId || localStorage.getItem("TOKO_LOGIN") || "";
+  const tokoUser = TOKO_LIST[Number(tokoUserRaw) - 1] || tokoUserRaw;
   const tableRef = useRef(null);
 
   const [transaksi, setTransaksi] = useState([]);
@@ -80,12 +95,6 @@ export default function InventoryReport() {
 
   const location = useLocation();
   const state = location.state;
-
-  useEffect(() => {
-    if (state?.autoSearch) {
-      setSearch(state.autoSearch);
-    }
-  }, [state]);
 
   // ======================
   // LISTENER
@@ -425,9 +434,10 @@ export default function InventoryReport() {
     });
   }, [transaksi, stokMap, imeiTerjual]);
 
-  const stockRealSuperAdmin = CardPersediaanBarang({
-    detailStock: stokMap,
-  });
+  const stockRealSuperAdmin = useMemo(
+    () => buildInventoryReportSuperAdmin({ detailStock: stokMap }),
+    [stokMap]
+  );
 
   const stockRealFiltered = useMemo(() => {
     return (stockRealSuperAdmin || []).filter((row) => {
@@ -501,6 +511,53 @@ export default function InventoryReport() {
       }))
       .filter((row) => Object.keys(row.kategori || {}).length > 0);
   }, [cardStockPerToko, stockRealSuperAdmin, searchGlobal]);
+
+  // Dataset tunggal untuk tampilan dan export. PIC/SPV tidak pernah menerima
+  // baris toko lain, sedangkan Superadmin/Admin melihat seluruh toko.
+  const visibleStockPerToko = useMemo(
+    () =>
+      filteredStockPerToko.filter(
+        (row) =>
+          isSuperAdmin || normalize(row.toko) === normalize(tokoUser)
+      ),
+    [filteredStockPerToko, isSuperAdmin, tokoUser]
+  );
+
+  const totalVisibleStock = useMemo(
+    () =>
+      visibleStockPerToko.reduce(
+        (total, row) =>
+          total +
+          Object.values(row.kategori || {}).reduce(
+            (sum, qty) => sum + Number(qty || 0),
+            0
+          ),
+        0
+      ),
+    [visibleStockPerToko]
+  );
+
+  const exportExcel = () => {
+    const exportRows = visibleStockPerToko.flatMap((row) =>
+      Object.entries(row.kategori || {}).map(([kategori, qty]) => ({
+        TOKO: row.toko,
+        KATEGORI: kategori,
+        QTY: Number(qty || 0),
+      }))
+    );
+    const worksheet = XLSX.utils.json_to_sheet(exportRows, {
+      header: ["TOKO", "KATEGORI", "QTY"],
+    });
+    worksheet["!cols"] = [{ wch: 25 }, { wch: 25 }, { wch: 12 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "INVENTORY");
+    XLSX.writeFile(
+      workbook,
+      `INVENTORY_${isSuperAdmin ? "SEMUA_TOKO" : normalize(tokoUser)}_${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx`
+    );
+  };
 
   const tokoHasilPencarian = useMemo(() => {
     if (!searchGlobal) return [];
@@ -631,6 +688,13 @@ export default function InventoryReport() {
             className="w-full p-3 rounded-xl bg-white/10 border border-white/20 outline-none"
           />
         </div>
+        <button
+          type="button"
+          onClick={exportExcel}
+          className="mb-6 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center gap-2 font-semibold"
+        >
+          <FaFileExcel /> Export Excel
+        </button>
 
         {searchGlobal && (
           <div className="mb-4 text-sm text-yellow-300">
@@ -680,18 +744,20 @@ export default function InventoryReport() {
           <div className="flex gap-4 items-center">
             <FaStore className="text-5xl" />
             <div>
-              <h2 className="text-2xl font-bold">CILANGKAP PUSAT</h2>
+              <h2 className="text-2xl font-bold">
+                {isSuperAdmin ? "SEMUA TOKO" : normalize(tokoUser)}
+              </h2>
               <p className="text-sm opacity-80">
-                TOTAL STOCK SEMUA TOKO: {totalStockRealSemuaToko}
+                TOTAL STOCK TERLIHAT: {totalVisibleStock}
               </p>
             </div>
           </div>
           <div className="text-sm font-semibold">
-            Total Item: {totalStockRealSemuaToko}
+            Total Item: {totalVisibleStock}
           </div>
 
           <p className="mt-4 text-4xl font-bold">
-            {totalStockRealSemuaToko.toLocaleString("id-ID")}
+            {totalVisibleStock.toLocaleString("id-ID")}
           </p>
         </div>
         {/* ================================================================== */}
@@ -699,13 +765,7 @@ export default function InventoryReport() {
         {/* ================================================================== */}
         {/* CARD KECIL */}
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-          {filteredStockPerToko
-            .filter((t) => {
-              if (isSuperAdmin) return true;
-
-              // PIC hanya lihat tokonya sendiri
-              return normalize(t.toko) === normalize(tokoUser);
-            })
+          {visibleStockPerToko
             .map((t, i) => (
               <div
                 key={t.toko}

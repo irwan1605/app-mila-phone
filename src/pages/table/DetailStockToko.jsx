@@ -10,7 +10,6 @@ import {
 } from "../../services/FirebaseCache";
 import { ref, remove, get } from "firebase/database";
 import { db } from "../../firebase";
-import * as XLSX from "xlsx";
 import {
   FaSearch,
   FaExchangeAlt,
@@ -20,7 +19,10 @@ import {
 import { buildFinalStockRows } from "../../utils/buildFinalStockRows";
 import { buildFinalNonImeiStock } from "../../utils/FungsiTransferBarang/buildFinalNonImeiStock";
 import { exportStockExcel } from "../../utils/stock/exportStockExcel";
-import { filterExportRows } from "../../utils/stock/filterExportRows";
+import {
+  filterVisibleStockRows,
+  finalizeVisibleStockRows,
+} from "../../utils/stock/finalizeVisibleStockRows";
 import { filterRefundSoldRows } from "../../features/Refund/BarangRefund";
 import { buildRefundSoldSet } from "../../features/Refund/BarangRefund";
 /* ======================
@@ -872,7 +874,14 @@ const rows = useMemo(() => {
   // ======================================
   // 🔥 MERGED ROWS FINAL
   // ======================================
+  /* eslint-disable no-unreachable */
   const mergedRows = useMemo(() => {
+    // Pipeline final sudah dipusatkan di finalizeVisibleStockRows di bawah.
+    // Return awal menjaga blok legacy ini tidak melakukan kalkulasi berulang.
+    return rows;
+
+    /* istanbul ignore next -- legacy fallback retained temporarily */
+    // eslint-disable-next-line no-unreachable
     const finalMap = {};
 
     rows.forEach((r) => {
@@ -1183,80 +1192,69 @@ const rows = useMemo(() => {
     refundAvailableSet,
     refundFinalTracker,
   ]);
+  /* eslint-enable no-unreachable */
+
+  const unifiedRows = useMemo(
+    () =>
+      finalizeVisibleStockRows({
+        rows,
+        transaksi,
+        namaToko,
+        finalOwnerTracker,
+        imeiTerjual,
+        refundAvailableSet,
+        refundSoldSet,
+        supplierLookup,
+        masterMap,
+      }),
+    [
+      rows,
+      transaksi,
+      namaToko,
+      finalOwnerTracker,
+      imeiTerjual,
+      refundAvailableSet,
+      refundSoldSet,
+      supplierLookup,
+      masterMap,
+    ]
+  );
 
   /* ======================
    SEARCH FILTER UNIVERSAL
 ====================== */
-  const filtered = useMemo(() => {
-    const keyword = String(search || "")
-      .trim()
-      .toLowerCase();
-
-    if (!keyword) return mergedRows;
-
-    return mergedRows.filter((r) => {
-      const imei = String(r.imei || "").toLowerCase();
-
-      const barang = String(r.barang || "").toLowerCase();
-
-      const toko = String(r.namaToko || r.toko || "").toLowerCase();
-
-      const brand = String(r.brand || "").toLowerCase();
-
-      const noDo = String(r.noDo || "").toLowerCase();
-
-      const tanggal = String(r.tanggal || "")
-        .replace("T", " ")
-        .toLowerCase();
-
-      const supplier = String(r.supplier || "").toLowerCase();
-
-      const status = String(r.statusBarang || "").toLowerCase();
-
-      const keterangan = String(r.keterangan || "").toLowerCase();
-
-      return (
-        imei.includes(keyword) ||
-        barang.includes(keyword) ||
-        toko.includes(keyword) ||
-        brand.includes(keyword) ||
-        noDo.includes(keyword) ||
-        tanggal.includes(keyword) ||
-        supplier.includes(keyword) ||
-        status.includes(keyword) ||
-        keterangan.includes(keyword)
-      );
-    });
-  }, [mergedRows, search]);
+  const filtered = useMemo(
+    () => filterVisibleStockRows(unifiedRows, search),
+    [unifiedRows, search]
+  );
 
   // ======================================
   // 🔥 TOTAL STOK FINAL
   // ======================================
   const totalStokFinal = useMemo(() => {
-    return mergedRows.reduce((sum, item) => {
+    return unifiedRows.reduce((sum, item) => {
       return sum + Number(item.qty || 0);
     }, 0);
-  }, [rows]);
+  }, [unifiedRows]);
 
   /* ======================
      PAGINATION
   ====================== */
   const pageCount = Math.ceil(filtered.length / pageSize) || 1;
-  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const paginated = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize]
+  );
 
   /* ======================
      EXPORT EXCEL
   ====================== */
   const exportExcel = () => {
-    const exportRows = filterExportRows({
-      rows: filtered,
-      transaksi,
-    });
-
     exportStockExcel({
-      rows: exportRows,
+      rows: filtered,
       namaToko,
       fileName: "DETAIL_STOCK",
+      exactRows: true,
     });
   };
 

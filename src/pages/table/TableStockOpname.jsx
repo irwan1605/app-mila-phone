@@ -1,7 +1,35 @@
 // src/pages/table/TableStockOpname.jsx
 import React from "react";
 
-export default function TableStockOpname({
+export const getStockOpnameDisplayRow = (row = {}) => {
+  const lastTransaction = String(row.lastTransaksi || "").toUpperCase();
+  const isRefund = lastTransaction.includes("REFUND");
+  const isRetur = lastTransaction.includes("RETUR");
+  const returnType = isRetur ? "RETUR" : "REFUND";
+  const returnQty = isRefund || isRetur ? Math.max(1, Number(row.qty || 0)) : 0;
+
+  return {
+    ...row,
+    qty: isRefund || isRetur ? returnQty : Number(row.qty || 0),
+    statusBarang:
+      isRefund || isRetur
+        ? `${returnType} (${returnQty})`
+        : !row.imei
+        ? `NON IMEI (${Number(row.qty || 0)})`
+        : Number(row.qty || 0) > 0
+        ? "TERSEDIA"
+        : "TERJUAL",
+    keterangan: lastTransaction.includes("TRANSFER")
+      ? "TRANSFER BARANG"
+      : isRefund || isRetur
+      ? `${returnType} BARANG (${returnQty})`
+      : !row.imei
+      ? "PEMBELIAN"
+      : row.lastTransaksi || "-",
+  };
+};
+
+function TableStockOpname({
   data = [],
   opnameMap = {},
   setOpnameMap,
@@ -35,35 +63,14 @@ export default function TableStockOpname({
 
         <tbody>
           {data.map((r, i) => {
+            const displayRow = getStockOpnameDisplayRow(r);
             // ✅ stok fisik
             const fisik = Number(opnameMap[r.key] ?? "");
 
             // ✅ selisih
             const selisih = Number.isNaN(fisik)
               ? ""
-              : fisik - Number(r.qty || 0);
-
-            // ======================================
-            // 🔥 REFUND FINAL STATUS
-            // ======================================
-            const isRefund =
-              String(r.lastTransaksi || "").toUpperCase() === "REFUND";
-
-            // ======================================
-            // 🔥 QTY REFUND FINAL
-            // ======================================
-            const refundQty = isRefund ? Math.max(1, Number(r.qty || 0)) : 0;
-
-            // ======================================
-            // 🔥 STATUS FINAL
-            // ======================================
-            const status = isRefund
-              ? `REFUND (${refundQty})`
-              : !r.imei
-              ? `NON IMEI (${Number(r.qty || 0)})`
-              : r.qty > 0
-              ? "TERSEDIA"
-              : "TERJUAL";
+              : fisik - Number(displayRow.qty || 0);
 
             return (
               <tr key={r.key} className="hover:bg-gray-50">
@@ -84,27 +91,17 @@ export default function TableStockOpname({
                 </td>
 
                 {/* ✅ SOLD sudah tidak ada */}
-                <td className="p-2 border text-center font-bold">{status}</td>
+                <td className="p-2 border text-center font-bold">
+                  {displayRow.statusBarang}
+                </td>
 
                 <td className="p-2 border text-xs text-gray-600">
-                  {String(r.lastTransaksi || "")
-                    .toUpperCase()
-                    .includes("TRANSFER")
-                    ? "TRANSFER BARANG"
-                    : String(r.lastTransaksi || "")
-                        .toUpperCase()
-                        .includes("REFUND")
-                    ? `REFUND BARANG (${refundQty})`
-                    : !r.imei
-                    ? "PEMBELIAN"
-                    : r.lastTransaksi || "-"}
+                  {displayRow.keterangan}
                 </td>
 
                 {/* ✅ stok dari engine */}
                 <td className="p-2 border text-center">
-                  {isRefund
-                    ? Math.max(1, Number(r.qty || 0))
-                    : Number(r.qty || 0)}
+                  {displayRow.qty}
                 </td>
 
                 <td className="p-2 border">
@@ -166,3 +163,5 @@ export default function TableStockOpname({
     </div>
   );
 }
+
+export default React.memo(TableStockOpname);

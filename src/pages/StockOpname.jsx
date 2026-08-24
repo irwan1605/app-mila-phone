@@ -15,15 +15,17 @@ import {
 import { ref, remove, get } from "firebase/database";
 import { db } from "../firebase";
 import StockBarang from "../data/StockBarang";
-import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { useLocation } from "react-router-dom";
 import { deriveStockFromTransaksi } from "../utils/stockDerived";
 import { useNavigate } from "react-router-dom";
 import { buildFinalStockRows } from "../utils/buildFinalStockRows";
-import { filterExportRows } from "../utils/stock/filterExportRows";
 import { exportStockExcel } from "../utils/stock/exportStockExcel";
+import {
+  filterVisibleStockRows,
+  finalizeVisibleStockRows,
+} from "../utils/stock/finalizeVisibleStockRows";
 import {
   filterRefundSoldRows,
   buildRefundSoldSet,
@@ -40,7 +42,9 @@ import {
   FaSave,
   FaTimes,
 } from "react-icons/fa";
-import TableStockOpname from "./table/TableStockOpname";
+import TableStockOpname, {
+  getStockOpnameDisplayRow,
+} from "./table/TableStockOpname";
 
 const TOKO_ID_MAP = {
   1: "CILANGKAP PUSAT",
@@ -59,19 +63,14 @@ const TOKO_ID_MAP = {
 /* ======================================================
    KONSTANTA
 ====================================================== */
-const fallbackTokoNames = [
-  "CILANGKAP PUSAT",
-  "CIBINONG",
-  "GAS ALAM",
-  "CITEUREUP",
-  "MARKETPLACE",
-  "METLAND 1",
-  "METLAND 2",
-  "PITARA",
-  "KOTA WISATA",
-  "SAWANGAN",
-  "BENGKEL",
-];
+const fallbackTokoNames = Object.values(TOKO_ID_MAP);
+
+const resolveOfficialToko = (value) => {
+  const mapped = TOKO_ID_MAP[Number(value)];
+  if (mapped) return mapped;
+  const normalized = normalizeText(value);
+  return fallbackTokoNames.find((name) => normalizeText(name) === normalized) || "";
+};
 
 const rowsPerPageDefault = 12;
 const FORM_STORAGE_KEY = "stockOpnameFormDraft";
@@ -133,25 +132,7 @@ export default function StockOpname() {
   useEffect(() => {
     const unsub = listenAllTransaksiCached((rows = []) => {
       setTransaksi(rows);
-      setAllTransaksi(
-        rows.filter(
-          (t) =>
-            t &&
-            ["APPROVED", "REFUND"].includes(
-              String(t.STATUS || "").toUpperCase()
-            ) &&
-            [
-              "PEMBELIAN",
-              "TRANSFER_MASUK",
-              "STOK OPNAME",
-              "VOID OPNAME",
-              "PENJUALAN",
-              "TRANSFER_KELUAR",
-              "REFUND",
-              "RETUR",
-            ].includes(String(t.PAYMENT_METODE || "").toUpperCase())
-        )
-      );
+      setAllTransaksi(rows);
     });
 
     return () => unsub && unsub();
@@ -162,9 +143,23 @@ export default function StockOpname() {
   const [viewMode, setViewMode] = useState("SKU"); // SKU | IMEI
 
   /* ================== USER ================== */
-  const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
-  const isSuperAdmin =
-    loggedUser?.role === "superadmin" || loggedUser?.level === "superadmin";
+  const loggedUser = useMemo(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const userLogin = JSON.parse(localStorage.getItem("userLogin") || "{}");
+      return { ...userLogin, ...user };
+    } catch {
+      return {};
+    }
+  }, []);
+  const role = String(
+    loggedUser?.role ||
+      loggedUser?.level ||
+      localStorage.getItem("ROLE_USER") ||
+      ""
+  ).toLowerCase();
+  const isSuperAdmin = role === "superadmin" || role === "admin";
+  const isStoreRole = role.startsWith("pic_toko") || role.startsWith("spv_toko");
 
   const location = useLocation();
   const lockedTokoFromNav = location?.state?.lockedToko || null;
@@ -178,16 +173,15 @@ export default function StockOpname() {
   }, []);
   const [filterToko, setFilterToko] = useState("semua");
 
+  const roleTokoId = isStoreRole ? role.replace(/^(pic_toko|spv_toko)/, "") : "";
   const rawTokoLogin =
     lockedTokoFromNav ||
     loggedUser?.toko ||
+    roleTokoId ||
     localStorage.getItem("TOKO_LOGIN") ||
     null;
 
-  const tokoLogin =
-    typeof rawTokoLogin === "number"
-      ? TOKO_ID_MAP[rawTokoLogin]
-      : TOKO_ID_MAP[Number(rawTokoLogin)] || rawTokoLogin;
+  const tokoLogin = resolveOfficialToko(rawTokoLogin);
 
   /* ======================================================
      LOAD MASTER HARGA
@@ -455,6 +449,7 @@ export default function StockOpname() {
           "PEMBELIAN",
           "TRANSFER_MASUK",
           "REFUND",
+          "RETUR",
           "TRANSFER_REJECT",
           "VOID OPNAME",
         ].includes(metode)
@@ -507,114 +502,48 @@ export default function StockOpname() {
   // 100% SAMA DETAIL STOCK TOKO
   // ======================================
   const stockOpnameData = useMemo(() => {
-    let rows = buildFinalStockRows({
-      transaksi: allTransaksi,
-      detailStock,
-      namaToko: filterToko === "semua" ? "" : filterToko,
-      masterMap: {},
-      supplierLookup,
+    const tokoTargets =
+      filterToko === "semua"
+        ? fallbackTokoNames
+        : [resolveOfficialToko(filterToko)].filter(Boolean);
+
+    let rows = tokoTargets.flatMap((targetToko) => {
+      const baseRows = filterRefundSoldRows({
+        rows: buildFinalStockRows({
+          transaksi: allTransaksi,
+          detailStock,
+          namaToko: targetToko,
+          masterMap: {},
+          supplierLookup,
+        }),
+        transaksi: allTransaksi,
+      });
+
+      return finalizeVisibleStockRows({
+        rows: baseRows,
+        transaksi: allTransaksi,
+        namaToko: targetToko,
+        finalOwnerTracker,
+        imeiTerjual,
+        refundAvailableSet,
+        refundSoldSet,
+        supplierLookup,
+        masterMap: {},
+      });
     });
-
-    rows = rows.filter((row) => {
-      if (!row.imei) {
-        return true;
-      }
-
-      return !refundSoldSet.has(normalizeImei(row.imei));
-    });
-
-    rows = filterRefundSoldRows({
-      rows,
-      transaksi: allTransaksi,
-    });
-
-    // ======================================
-    // 🔥 HILANGKAN BARANG SUDAH TERJUAL
-    // ======================================
-
-    rows = rows.filter((row) => {
-      const lastAction = String(
-        row.keterangan || row.lastTransaksi || ""
-      ).toUpperCase();
-
-      const isRefund = lastAction.includes("REFUND");
-
-      // ======================================
-      // BARANG REFUND HARUS TETAP TAMPIL
-      // ======================================
-      if (isRefund) {
-        return true;
-      }
-
-      // ======================================
-      // BARANG LAIN
-      // ======================================
-      if (Number(row.qty || 0) <= 0) {
-        return false;
-      }
-
-      if (row.imei && imeiTerjual.has(normalizeImei(row.imei))) {
-        return false;
-      }
-
-      return true;
-    });
-
-    // rows = rows.filter((r) => {
-    //   if (!r.imei) {
-    //     return Number(r.qty || 0) > 0;
-    //   }
-
-    //   return Number(r.qty || 0) > 0;
-    // });
-
-    // ======================================
-    // 🔥 FILTER TOKO
-    // ======================================
-    if (filterToko !== "semua") {
-      rows = rows.filter(
-        (r) =>
-          String(r.namaToko || "")
-            .trim()
-            .toUpperCase() ===
-          String(filterToko || "")
-            .trim()
-            .toUpperCase()
-      );
-    }
 
     // ======================================
     // 🔥 SEARCH
     // ======================================
-    if (search) {
-      const keyword = search.toLowerCase();
-
-      rows = rows.filter((r) => {
-        return (
-          String(r.barang || "")
-            .toLowerCase()
-            .includes(keyword) ||
-          String(r.brand || "")
-            .toLowerCase()
-            .includes(keyword) ||
-          String(r.namaToko || "")
-            .toLowerCase()
-            .includes(keyword) ||
-          String(r.imei || "")
-            .toLowerCase()
-            .includes(keyword) ||
-          String(r.supplier || "")
-            .toLowerCase()
-            .includes(keyword)
-        );
-      });
-    }
+    rows = filterVisibleStockRows(rows, search);
 
     // ======================================
     // 🔥 FORMAT FINAL TABLE
     // ======================================
     return rows.map((r, i) => ({
-      key: r.imei ? `IMEI_${normalizeImei(r.imei)}` : `NONIMEI_${i}`,
+      key:
+        r.key ||
+        (r.imei ? `IMEI_${normalizeImei(r.imei)}` : `NONIMEI_${i}`),
 
       tanggal: r.tanggal || "-",
 
@@ -653,7 +582,17 @@ export default function StockOpname() {
 
       noDo: r.noDo || "-",
     }));
-  }, [allTransaksi, detailStock, supplierLookup, filterToko, search]);
+  }, [
+    allTransaksi,
+    detailStock,
+    supplierLookup,
+    filterToko,
+    search,
+    finalOwnerTracker,
+    imeiTerjual,
+    refundAvailableSet,
+    refundSoldSet,
+  ]);
 
   // ===============================
   // 3️⃣ STOCK MAP (AGREGAT STOK)
@@ -830,13 +769,8 @@ export default function StockOpname() {
     }
 
     // 👑 SUPERADMIN → semua toko
-    return Array.from(
-      new Set([
-        ...allTransaksi.map((r) => r.NAMA_TOKO).filter(Boolean),
-        ...fallbackTokoNames,
-      ])
-    );
-  }, [isSuperAdmin, tokoLogin, allTransaksi]);
+    return fallbackTokoNames;
+  }, [isSuperAdmin, tokoLogin]);
 
   function normalizeRecord(r = {}) {
     return {
@@ -907,15 +841,13 @@ export default function StockOpname() {
   // HASIL 100% SAMA DENGAN DetailStockToko.jsx
   // ==========================================
   const exportStockOpnameExcel = () => {
-    const exportRows = filterExportRows({
-      rows: filteredTableData,
-      transaksi: allTransaksi,
-    });
+    const exportRows = filteredTableData.map(getStockOpnameDisplayRow);
 
     exportStockExcel({
       rows: exportRows,
       namaToko: filterToko === "semua" ? "SEMUA_TOKO" : filterToko,
       fileName: "STOCK_OPNAME",
+      exactRows: true,
     });
   };
 
@@ -1068,13 +1000,17 @@ export default function StockOpname() {
           <div className="min-w-[180px]">
             <select
               value={filterToko}
-              onChange={(e) => setFilterToko(e.target.value)}
+              onChange={(e) => {
+                setFilterToko(e.target.value);
+                setExportMode(e.target.value === "semua" ? "semua" : "filter");
+                setCurrentPage(1);
+              }}
               disabled={!isSuperAdmin}
               className={`p-2 border rounded w-full ${
                 !isSuperAdmin ? "bg-gray-100 cursor-not-allowed" : ""
               }`}
             >
-              {isSuperAdmin && tokoLogin && (
+              {isSuperAdmin && (
                 <option value="semua">SEMUA TOKO</option>
               )}
               {tokoOptions.map((toko) => (
@@ -1144,11 +1080,18 @@ export default function StockOpname() {
           <div className="min-w-[180px]">
             <select
               value={exportMode}
-              onChange={(e) => setExportMode(e.target.value)}
+              onChange={(e) => {
+                const mode = e.target.value;
+                setExportMode(mode);
+                if (isSuperAdmin && mode === "semua") {
+                  setFilterToko("semua");
+                }
+              }}
+              disabled={!isSuperAdmin}
               className="p-2 border rounded w-full"
             >
               <option value="filter">Export Toko Terpilih</option>
-              <option value="semua">Export Semua Toko</option>
+              {isSuperAdmin && <option value="semua">Export Semua Toko</option>}
             </select>
           </div>
         </div>

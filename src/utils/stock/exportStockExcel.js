@@ -10,6 +10,7 @@ export const exportStockExcel = ({
   rows = [],
   namaToko = "",
   fileName = "STOCK",
+  exactRows = false,
 }) => {
   try {
     // ======================================
@@ -21,7 +22,7 @@ export const exportStockExcel = ({
     // TANPA MENGUBAH TAMPILAN TABLE
     // ======================================
 
-    const finalRows = (rows || []).filter((r) => {
+    const finalRows = exactRows ? [...(rows || [])] : (rows || []).filter((r) => {
       const statusBarang = String(r.statusBarang || "").toUpperCase();
 
       const keterangan = String(r.keterangan || "").toUpperCase();
