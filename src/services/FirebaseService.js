@@ -2378,6 +2378,15 @@ export const approveTransferFINAL = async ({ transfer }) => {
       ]
     : [];
 
+  const normalizeTransferImei = (value) =>
+    String(value || "").trim().replace(/\s+/g, "").toUpperCase();
+  const refundImeiSet = new Set(
+    (transfer.REFUND_IMEIS || []).map(normalizeTransferImei)
+  );
+  const returImeiSet = new Set(
+    (transfer.RETUR_IMEIS || []).map(normalizeTransferImei)
+  );
+
   const {
     tokoPengirim,
     ke,
@@ -2863,6 +2872,25 @@ export const approveTransferFINAL = async ({ transfer }) => {
     // =====================================================
     for (let i = 0; i < safeImeis.length; i++) {
       const imei = safeImeis[i];
+      const normalizedTransferImei = normalizeTransferImei(imei);
+      const isRefundTransfer =
+        transfer.IS_REFUND === true ||
+        transfer.IS_REFUND_TRANSFER === true ||
+        refundImeiSet.has(normalizedTransferImei);
+      const isReturTransfer =
+        transfer.IS_RETUR === true ||
+        transfer.IS_RETUR_TRANSFER === true ||
+        returImeiSet.has(normalizedTransferImei);
+      const transferSource = isRefundTransfer
+        ? "REFUND"
+        : isReturTransfer
+        ? "RETUR"
+        : "NORMAL";
+      const transferAction = isRefundTransfer
+        ? "TRANSFER_REFUND"
+        : isReturTransfer
+        ? "TRANSFER_RETUR"
+        : "TRANSFER";
 
       if (!imei) {
         throw new Error(`❌ IMEI kosong di index ${i}`);
@@ -2885,6 +2913,8 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         IMEI: imei,
 
+        TRANSFER_ID: id,
+
         QTY: 1,
 
         PAYMENT_METODE: "TRANSFER_KELUAR",
@@ -2893,21 +2923,15 @@ export const approveTransferFINAL = async ({ transfer }) => {
         // ENGINE REFUND / RETUR
         // ===============================
 
-        SUMBER_STOCK:
-          transfer.SUMBER_STOCK ||
-          (transfer.IS_REFUND
-            ? "REFUND"
-            : transfer.IS_RETUR
-            ? "RETUR"
-            : "NORMAL"),
+        SUMBER_STOCK: transferSource,
 
         IS_REFUND: transfer.IS_REFUND === true,
 
         IS_RETUR: transfer.IS_RETUR === true,
 
-        IS_REFUND_TRANSFER: transfer.IS_REFUND === true,
+        IS_REFUND_TRANSFER: isRefundTransfer,
 
-        IS_RETUR_TRANSFER: transfer.IS_RETUR === true,
+        IS_RETUR_TRANSFER: isReturTransfer,
 
         CAN_TRANSFER: true,
 
@@ -2915,11 +2939,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         CURRENT_OWNER: ke,
 
-        LAST_ACTION: transfer.IS_REFUND
-          ? "TRANSFER_REFUND"
-          : transfer.IS_RETUR
-          ? "TRANSFER_RETUR"
-          : "TRANSFER",
+        LAST_ACTION: transferAction,
 
         OWNER_AKHIR: ke,
 
@@ -2962,25 +2982,21 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         IMEI: imei,
 
+        TRANSFER_ID: id,
+
         QTY: 1,
 
         PAYMENT_METODE: "TRANSFER_MASUK",
 
-        SUMBER_STOCK:
-          transfer.SUMBER_STOCK ||
-          (transfer.IS_REFUND
-            ? "REFUND"
-            : transfer.IS_RETUR
-            ? "RETUR"
-            : "NORMAL"),
+        SUMBER_STOCK: transferSource,
 
         IS_REFUND: transfer.IS_REFUND === true,
 
         IS_RETUR: transfer.IS_RETUR === true,
 
-        IS_REFUND_TRANSFER: transfer.IS_REFUND === true,
+        IS_REFUND_TRANSFER: isRefundTransfer,
 
-        IS_RETUR_TRANSFER: transfer.IS_RETUR === true,
+        IS_RETUR_TRANSFER: isReturTransfer,
 
         CAN_TRANSFER: true,
 
@@ -2988,11 +3004,7 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
         CURRENT_OWNER: ke,
 
-        LAST_ACTION: transfer.IS_REFUND
-          ? "TRANSFER_REFUND"
-          : transfer.IS_RETUR
-          ? "TRANSFER_RETUR"
-          : "TRANSFER",
+        LAST_ACTION: transferAction,
 
         OWNER_AKHIR: ke,
 
@@ -3033,6 +3045,8 @@ export const approveTransferFINAL = async ({ transfer }) => {
 
       IMEI: "",
 
+      TRANSFER_ID: id,
+
       QTY: safeQty,
 
       PAYMENT_METODE: "TRANSFER_KELUAR",
@@ -3069,6 +3083,8 @@ export const approveTransferFINAL = async ({ transfer }) => {
       KATEGORI_BRAND: kategori,
 
       IMEI: "",
+
+      TRANSFER_ID: id,
 
       QTY: safeQty,
 

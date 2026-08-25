@@ -1,3 +1,5 @@
+import { sortStockTransactions } from "../../../utils/stock/stockTransactionOrder";
+
 const normalizeImei = (v) =>
   String(v || "")
     .trim()
@@ -7,11 +9,7 @@ const normalizeImei = (v) =>
 export const buildFinalImeiStockOpname = ({ transaksi = [] }) => {
   const map = {};
 
-  const sorted = [...transaksi].sort(
-    (a, b) =>
-      new Date(a.CREATED_AT || a.TANGGAL_TRANSAKSI || 0).getTime() -
-      new Date(b.CREATED_AT || b.TANGGAL_TRANSAKSI || 0).getTime()
-  );
+  const sorted = sortStockTransactions(transaksi);
 
   sorted.forEach((t) => {
     if (!t?.IMEI) return;

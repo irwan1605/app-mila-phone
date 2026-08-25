@@ -1,5 +1,7 @@
 // src/features/Refund/BarangRefund.js
 
+import { sortStockTransactions } from "../../utils/stock/stockTransactionOrder";
+
 const normalizeImei = (value) =>
   String(value || "")
     .trim()
@@ -69,13 +71,27 @@ const isReturnEvent = (trx = {}, method = getMethod(trx)) => {
   );
 };
 
-const isRefundLineage = (trx = {}, method = getMethod(trx)) =>
-  isReturnEvent(trx, method) ||
-  trx.IS_REFUND_TRANSFER === true ||
-  trx.IS_RETUR_TRANSFER === true ||
-  ["REFUND", "RETUR", "RETURN"].includes(normalizeText(trx.SUMBER_STOCK)) ||
-  normalizeText(trx.LAST_ACTION).includes("REFUND") ||
-  normalizeText(trx.LAST_ACTION).includes("RETUR");
+const isRefundLineage = (trx = {}, method = getMethod(trx)) => {
+  const lastAction = normalizeText(trx.LAST_ACTION);
+  const explicitTransferLineage =
+    trx.IS_REFUND_TRANSFER === true || trx.IS_RETUR_TRANSFER === true;
+  const explicitlyNormalTransfer =
+    ["TRANSFER_MASUK", "TRANSFER_KELUAR"].includes(method) &&
+    trx.IS_REFUND_TRANSFER === false &&
+    trx.IS_RETUR_TRANSFER === false &&
+    !lastAction.includes("REFUND") &&
+    !lastAction.includes("RETUR");
+
+  if (explicitlyNormalTransfer) return false;
+
+  return (
+    isReturnEvent(trx, method) ||
+    explicitTransferLineage ||
+    ["REFUND", "RETUR", "RETURN"].includes(normalizeText(trx.SUMBER_STOCK)) ||
+    lastAction.includes("REFUND") ||
+    lastAction.includes("RETUR")
+  );
+};
 
 const isValidEvent = (trx = {}) => {
   const status = getStatus(trx);
@@ -106,10 +122,7 @@ const getImeis = (trx = {}) => {
 };
 
 const sortTransactions = (transactions = []) =>
-  transactions
-    .map((trx, index) => ({ trx, index, timestamp: getTimestamp(trx) }))
-    .sort((a, b) => a.timestamp - b.timestamp || a.index - b.index)
-    .map(({ trx }) => trx);
+  sortStockTransactions(transactions);
 
 const createImeiState = () => ({
   hasRefund: false,

@@ -12,6 +12,7 @@ import {
   listenAllTransaksiCached,
   listenMasterBarangCached,
   listenTokoCached,
+  listenTransferRequestsCached,
 } from "../services/FirebaseCache";
 import { hitungStokBarang } from "../utils/stockUtils";
 
@@ -802,7 +803,7 @@ export default function TransferBarang() {
     const unsubToko = listenMasterToko(setMasterToko);
     const unsubKategori = listenMasterKategoriBarang(setMasterKategori);
     const unsubBarang = listenMasterBarangCached(setMasterBarang);
-    const unsubHistory = FirebaseService.listenTransferRequests(setHistory);
+    const unsubHistory = listenTransferRequestsCached(setHistory);
 
     // 🔥 MASTER KARYAWAN (NAMA PENGIRIM)
     const unsubKaryawan = listenKaryawan((data) => {

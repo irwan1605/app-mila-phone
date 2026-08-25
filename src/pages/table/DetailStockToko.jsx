@@ -23,6 +23,7 @@ import {
   filterVisibleStockRows,
   finalizeVisibleStockRows,
 } from "../../utils/stock/finalizeVisibleStockRows";
+import { sortStockTransactions } from "../../utils/stock/stockTransactionOrder";
 import { filterRefundSoldRows } from "../../features/Refund/BarangRefund";
 import { buildRefundSoldSet } from "../../features/Refund/BarangRefund";
 /* ======================
@@ -376,11 +377,7 @@ export default function DetailStockToko(props) {
     // ======================================
     // 🔥 SORT HISTORI TRANSAKSI
     // ======================================
-    const sorted = [...transaksi].sort(
-      (a, b) =>
-        new Date(a.CREATED_AT || 0).getTime() -
-        new Date(b.CREATED_AT || 0).getTime()
-    );
+    const sorted = sortStockTransactions(transaksi);
 
     sorted.forEach((t) => {
       if (!t?.IMEI) return;

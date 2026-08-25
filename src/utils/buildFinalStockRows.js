@@ -1,6 +1,10 @@
 // src/utils/buildFinalStockRows.js
 
 import { buildFinalImeiStockOpname } from "../features/FiturPenjualan/ImeiStock/buildFinalImeiStockOpname";
+import {
+  buildFinalImeiOwnerTracker,
+  sortStockTransactions,
+} from "./stock/stockTransactionOrder";
 
 export const normalize = (v) =>
   String(v || "")
@@ -33,92 +37,15 @@ export const buildFinalStockRows = ({
   // ======================================
   // 🔥 FINAL OWNER TRACKER
   // ======================================
-  const finalOwnerTracker = {};
-
-  const sorted = [...transaksi].sort(
-    (a, b) =>
-      new Date(a.CREATED_AT || 0).getTime() -
-      new Date(b.CREATED_AT || 0).getTime()
+  const finalOwnerTracker = buildFinalImeiOwnerTracker(
+    transaksi,
+    normalizeImei
   );
+
+  const sorted = sortStockTransactions(transaksi);
 
   const activeImeiSet = buildFinalImeiStockOpname({
     transaksi,
-  });
-
-  sorted.forEach((t) => {
-    if (!t?.IMEI) return;
-
-    const imei = normalizeImei(t.IMEI);
-
-    const metode = String(t.PAYMENT_METODE || "").toUpperCase();
-
-    const status = String(t.STATUS || "").toUpperCase();
-
-    if (!["APPROVED", "REFUND"].includes(status)) return;
-
-    // ======================================
-    // 🔥 STOCK MASUK
-    // ======================================
-    if (
-      [
-        "PEMBELIAN",
-        "TRANSFER_MASUK",
-        "REFUND",
-        "RETUR", // ✅ Tambahkan
-        "TRANSFER_REJECT",
-        "VOID OPNAME",
-      ].includes(metode)
-    ) {
-      finalOwnerTracker[imei] = {
-        toko: t.NAMA_TOKO || "-",
-        active: true,
-      };
-
-      return;
-    }
-
-    // ======================================
-    // 🔥 TRANSFER KELUAR
-    // ======================================
-    // ======================================
-    // 🔥 TRANSFER KELUAR
-    // ======================================
-    if (metode === "TRANSFER_KELUAR") {
-      finalOwnerTracker[imei] = {
-        toko:
-          t.TOKO_TUJUAN ||
-          t.ke ||
-          t.tokoTujuan ||
-          t.tokoPenerima ||
-          t.NAMA_TOKO ||
-          "-",
-
-        active: true,
-
-        metode: "TRANSFER_KELUAR",
-
-        asal: t.NAMA_TOKO || t.tokoPengirim || t.dari || "-",
-
-        tujuan: t.TOKO_TUJUAN || t.ke || t.tokoTujuan || t.tokoPenerima || "-",
-
-        isRefundTransfer:
-          String(t.IS_REFUND_TRANSFER || "").toUpperCase() === "TRUE" ||
-          String(t.SUMBER_STOCK || "").toUpperCase() === "REFUND" ||
-          String(t.LAST_ACTION || "").toUpperCase() === "REFUND",
-      };
-
-      return;
-    }
-
-    // ======================================
-    // 🔥 STOCK KELUAR
-    // ======================================
-    if (["PENJUALAN", "REJECT", "STOK OPNAME"].includes(metode)) {
-      finalOwnerTracker[imei] = {
-        toko: t.NAMA_TOKO || "-",
-        active: false,
-      };
-    }
   });
 
   // ======================================
@@ -203,8 +130,7 @@ export const buildFinalStockRows = ({
       // ======================================
       const isTransferRefund =
         metode === "TRANSFER_MASUK" &&
-        (String(t.SUMBER_STOCK || "").toUpperCase() === "REFUND" ||
-          String(t.LAST_ACTION || "").toUpperCase() === "REFUND" ||
+        (String(t.LAST_ACTION || "").toUpperCase().includes("REFUND") ||
           String(t.IS_REFUND_TRANSFER || "").toUpperCase() === "TRUE");
 
       map[imei] = {

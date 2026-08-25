@@ -120,4 +120,35 @@ describe("refund/retur lifecycle", () => {
     expect(buildRefundReturnTracker(normal)["12345"].hasReturn).toBe(false);
     expect(buildRefundSoldSet(normal).size).toBe(0);
   });
+
+  test("metadata transfer normal lama yang kontradiktif tidak dianggap refund", () => {
+    const history = [
+      trx("PEMBELIAN", 1),
+      trx("TRANSFER_KELUAR", 2, {
+        CURRENT_OWNER: "BENGKEL",
+        OWNER_AKHIR: "BENGKEL",
+        SUMBER_STOCK: "REFUND",
+        IS_REFUND: false,
+        IS_REFUND_TRANSFER: false,
+        IS_RETUR: false,
+        IS_RETUR_TRANSFER: false,
+        LAST_ACTION: "TRANSFER",
+      }),
+      trx("TRANSFER_MASUK", 2, {
+        NAMA_TOKO: "BENGKEL",
+        CURRENT_OWNER: "BENGKEL",
+        OWNER_AKHIR: "BENGKEL",
+        SUMBER_STOCK: "REFUND",
+        IS_REFUND: false,
+        IS_REFUND_TRANSFER: false,
+        IS_RETUR: false,
+        IS_RETUR_TRANSFER: false,
+        LAST_ACTION: "TRANSFER",
+      }),
+    ];
+
+    const state = buildRefundReturnTracker(history)["12345"];
+    expect(state.hasReturn).toBe(false);
+    expect(buildRefundSoldSet(history).has("12345")).toBe(false);
+  });
 });

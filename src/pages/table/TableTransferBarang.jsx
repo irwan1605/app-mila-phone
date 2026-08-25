@@ -1,14 +1,23 @@
 // src/pages/table/TableTransferBarang.jsx
 import React, { useEffect, useState, useMemo } from "react";
-import { ref, onValue, update, push, get } from "firebase/database";
+import { ref, update, push, get } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase/FirebaseInit";
 import FirebaseService from "../../services/FirebaseService";
 import { FaPrint } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import {
+  listenAllTransaksiCached,
+  listenTransferRequestsCached,
+} from "../../services/FirebaseCache";
+import { buildFinalImeiOwnerTracker } from "../../utils/stock/stockTransactionOrder";
+import { buildRefundReturnTracker } from "../../features/Refund/BarangRefund";
 
-export default function TableTransferBarang({ currentRole }) {
+const normalizeImei = (value) =>
+  String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+
+function TableTransferBarang({ currentRole }) {
   // ================= NORMALIZE ROLE =================
   const role = String(currentRole || "")
     .toLowerCase()
@@ -101,61 +110,28 @@ export default function TableTransferBarang({ currentRole }) {
   const rowsPerPage = 10; // jumlah data per halaman
 
   useEffect(() => {
-    return onValue(ref(db, "toko"), (snap) => {
-      const map = {}; // key = imei
-
-      snap.forEach((tokoSnap) => {
-        const trxSnap = tokoSnap.child("transaksi");
-        if (!trxSnap.exists()) return;
-
-        trxSnap.forEach((trx) => {
-          const v = trx.val();
-          if (!v.IMEI) return;
-
-          const imei = String(v.IMEI).trim();
-          const metode = String(v.PAYMENT_METODE || "").toUpperCase();
-
-          // DEFAULT
-          if (!map[imei]) {
-            map[imei] = {
-              imei,
-              status: "AVAILABLE",
-              toko: String(v.NAMA_TOKO || "").toUpperCase(), // 🔥 FIX OWNER
-            };
-          }
-
-          // RULE MUTLAK
-          if (metode === "REFUND") {
-            map[imei].status = "AVAILABLE";
-          } else if (metode === "PENJUALAN") {
-            map[imei].status = "SOLD";
-          } else if (metode === "TRANSFER_KELUAR") {
-            // Jangan matikan barang
-            if (map[imei].status !== "SOLD") map[imei].status = "AVAILABLE";
-          } else if (metode === "TRANSFER_MASUK") {
-            if (map[imei].status !== "SOLD") {
-              map[imei].status = "AVAILABLE";
-
-              // ======================================
-              // 🔥 OWNER FINAL
-              // ======================================
-              map[imei].toko = String(
-                v.NAMA_TOKO || v.ke || v.tokoTujuan || "-"
-              ).toUpperCase();
-
-              // ======================================
-              // 🔥 TRACK REFUND
-              // ======================================
-              map[imei].isRefundTransfer =
-                String(v.SUMBER_STOCK || "").toUpperCase() === "REFUND";
-
-              map[imei].lastAction = v.LAST_ACTION || "TRANSFER_MASUK";
-            }
-          }
-        });
-      });
-
-      setInventory(Object.values(map));
+    return listenAllTransaksiCached((transactions = []) => {
+      const owners = buildFinalImeiOwnerTracker(transactions, normalizeImei);
+      const returnTracker = buildRefundReturnTracker(transactions);
+      setInventory(
+        Object.entries(owners).map(([imei, owner]) => {
+          const returnState = returnTracker[imei];
+          const activeReturn = Boolean(returnState?.hasReturn && returnState.available);
+          return {
+            imei,
+            toko: String(owner.toko || "").toUpperCase(),
+            status: owner.active
+              ? activeReturn
+                ? returnState.returnType || "REFUND"
+                : "AVAILABLE"
+              : "SOLD",
+            isReturn: activeReturn,
+            returnType: activeReturn ? returnState.returnType : "",
+            lastAction: owner.metode,
+            transferId: owner.transferId,
+          };
+        })
+      );
     });
   }, []);
 
@@ -209,65 +185,16 @@ export default function TableTransferBarang({ currentRole }) {
   }, [safeRows, TOKO_LOGIN, isSuperAdmin]);
 
   useEffect(() => {
-    return onValue(ref(db, "toko"), (snap) => {
-      const map = {}; // key = imei
-
-      snap.forEach((tokoSnap) => {
-        const trxSnap = tokoSnap.child("transaksi");
-        if (!trxSnap.exists()) return;
-
-        trxSnap.forEach((trx) => {
-          const v = trx.val();
-          if (!v.IMEI) return;
-
-          const imei = String(v.IMEI).trim();
-          const metode = String(v.PAYMENT_METODE || "").toUpperCase();
-
-          // DEFAULT
-          if (!map[imei]) {
-            map[imei] = { imei, status: "AVAILABLE" };
-          }
-
-          if (
-            metode === "PEMBELIAN" ||
-            metode === "REFUND" ||
-            metode === "TRANSFER_MASUK" ||
-            metode === "INPUT_STOK"
-          ) {
-            map[imei].status = "AVAILABLE";
-          } else if (metode === "PENJUALAN") {
-            map[imei].status = "SOLD";
-          } else if (metode === "TRANSFER_KELUAR") {
-            if (map[imei].status !== "SOLD") map[imei].status = "OUT";
-          }
-        });
-      });
-
-      setInventory(Object.values(map));
-    });
-  }, []);
-
-  useEffect(() => {
-    return onValue(ref(db, "transfer_barang"), (snap) => {
-      const arr = [];
-
-      snap.forEach((c) => {
-        const val = c.val();
-        if (!val || typeof val !== "object") return;
-
+    return listenTransferRequestsCached((transferRows = []) => {
+      const arr = transferRows.map((val) => {
         const imeis = Array.isArray(val.imeis) ? val.imeis : [];
-
         const uniqueImeis = [...new Set(imeis.map((i) => String(i).trim()))];
 
-        arr.push({
-          id: c.key,
+        return {
           ...val,
           imeis: uniqueImeis,
-
-          // ✅ FIX QTY FINAL
-          qty:
-            uniqueImeis.length > 0 ? uniqueImeis.length : Number(val.qty || 0),
-        });
+          qty: uniqueImeis.length > 0 ? uniqueImeis.length : Number(val.qty || 0),
+        };
       });
 
       if (DEV) {
@@ -758,6 +685,7 @@ export default function TableTransferBarang({ currentRole }) {
                           // 🔥 DETECT REFUND ITEM
                           // ======================================
                           const refundImeis = [];
+                          const returImeis = [];
 
                           for (const imei of r.imeis || []) {
                             const found = inventory.find(
@@ -768,16 +696,12 @@ export default function TableTransferBarang({ currentRole }) {
                             // ======================================
                             // 🔥 REFUND ACTIVE
                             // ======================================
-                            if (
-                              found &&
-                              [
-                                "REFUND",
-                                "AVAILABLE",
-                                "TRANSFER_MASUK",
-                              ].includes(
-                                String(found.status || "").toUpperCase()
-                              )
-                            ) {
+                            const returnType = String(
+                              found?.returnType || found?.status || ""
+                            ).toUpperCase();
+                            if (found?.isReturn && returnType === "RETUR") {
+                              returImeis.push(imei);
+                            } else if (found?.isReturn) {
                               refundImeis.push(imei);
                             }
                           }
@@ -795,14 +719,24 @@ export default function TableTransferBarang({ currentRole }) {
                                 // ======================================
                                 IS_REFUND_TRANSFER: refundImeis.length > 0,
 
+                                IS_RETUR_TRANSFER: returImeis.length > 0,
+
                                 SUMBER_STOCK:
-                                  refundImeis.length > 0 ? "REFUND" : "NORMAL",
+                                  refundImeis.length > 0
+                                    ? "REFUND"
+                                    : returImeis.length > 0
+                                    ? "RETUR"
+                                    : "NORMAL",
 
                                 REFUND_IMEIS: refundImeis,
 
+                                RETUR_IMEIS: returImeis,
+
                                 LAST_ACTION:
                                   refundImeis.length > 0
-                                    ? "REFUND"
+                                    ? "TRANSFER_REFUND"
+                                    : returImeis.length > 0
+                                    ? "TRANSFER_RETUR"
                                     : "TRANSFER",
 
                                 APPROVED_AT: Date.now(),
@@ -1029,3 +963,5 @@ export default function TableTransferBarang({ currentRole }) {
     </div>
   );
 }
+
+export default React.memo(TableTransferBarang);

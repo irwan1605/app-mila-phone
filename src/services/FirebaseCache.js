@@ -4,6 +4,7 @@ import {
   listenAllTransaksi,
   listenStockAll,
   listenMasterBarang,
+  listenTransferRequests,
 } from "./FirebaseService";
 /* =======================================================
    DETAIL STOCK CACHE
@@ -109,6 +110,34 @@ export function listenAllTransaksiCached(callback) {
     transaksiSubscribers = transaksiSubscribers.filter((cb) => cb !== callback);
 
     stopTransaksiListenerIfIdle();
+  };
+}
+
+let transferCache = [];
+let transferSubscribers = [];
+let transferUnsub = null;
+
+// Transfer form dan tabel transfer berada pada layar yang sama. Keduanya
+// berbagi satu listener agar snapshot histori tidak diunduh dua kali.
+export function listenTransferRequestsCached(callback) {
+  transferSubscribers.push(callback);
+  callback(transferCache);
+
+  if (!transferUnsub) {
+    transferUnsub = listenTransferRequests((rows = []) => {
+      transferCache = Array.isArray(rows) ? rows : [];
+      transferSubscribers.forEach((subscriber) => subscriber(transferCache));
+    });
+  }
+
+  return () => {
+    transferSubscribers = transferSubscribers.filter(
+      (subscriber) => subscriber !== callback
+    );
+    if (transferSubscribers.length === 0 && transferUnsub) {
+      transferUnsub();
+      transferUnsub = null;
+    }
   };
 }
 

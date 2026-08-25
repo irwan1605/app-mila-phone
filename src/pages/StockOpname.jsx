@@ -26,6 +26,7 @@ import {
   filterVisibleStockRows,
   finalizeVisibleStockRows,
 } from "../utils/stock/finalizeVisibleStockRows";
+import { sortStockTransactions } from "../utils/stock/stockTransactionOrder";
 import {
   filterRefundSoldRows,
   buildRefundSoldSet,
@@ -422,11 +423,7 @@ export default function StockOpname() {
     // ======================================
     // 🔥 SORT HISTORI TRANSAKSI
     // ======================================
-    const sorted = [...transaksi].sort(
-      (a, b) =>
-        new Date(a.CREATED_AT || 0).getTime() -
-        new Date(b.CREATED_AT || 0).getTime()
-    );
+    const sorted = sortStockTransactions(transaksi);
 
     sorted.forEach((t) => {
       if (!t?.IMEI) return;
@@ -472,7 +469,14 @@ export default function StockOpname() {
       // ======================================
       if (metode === "TRANSFER_KELUAR") {
         map[imei] = {
-          toko: t.TOKO_TUJUAN || t.ke || t.tokoTujuan || t.NAMA_TOKO || "-",
+          toko:
+            t.OWNER_AKHIR ||
+            t.CURRENT_OWNER ||
+            t.TOKO_TUJUAN ||
+            t.ke ||
+            t.tokoTujuan ||
+            t.NAMA_TOKO ||
+            "-",
 
           active: true,
 
