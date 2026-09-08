@@ -7,18 +7,24 @@
 2. Navbar tidak lagi membuat atau memainkan `/bell.mp3`.
 3. Notifikasi Navbar ditutup secara lokal dengan tombol **OK**. Data transfer tidak
    dihapus atau diubah sehingga alur approval/reject tetap sama.
+4. Popup Sidebar hanya memilih satu transfer Pending terbaru. Tombol **TUTUP**
+   menyimpan signature dan watermark per role/toko di browser, sehingga popup tidak
+   muncul lagi setelah render ulang, pindah halaman, refresh, atau transfer terbaru
+   berubah menjadi Approved. Update yang benar-benar lebih baru tetap ditampilkan.
+5. Listener notifikasi Pending memakai event child incremental. Sesudah initial
+   load, Firebase hanya mengirim transfer yang ditambah, diubah, atau dikeluarkan
+   dari hasil query Pending—bukan snapshot Pending lengkap setiap kali berubah.
 
 ### Optimasi halaman laporan
 
-- `FirebaseCache` membaca transaksi dengan event incremental per toko. Initial load
-  tetap lengkap, sedangkan update berikutnya hanya mengirim transaksi yang berubah.
-- Cache `detail_stock` memakai event incremental. Perubahan satu IMEI tidak lagi
-  mengirim ulang seluruh snapshot stok kepada cache.
+- `FirebaseCache` membagikan satu listener transaksi dan stok kepada banyak halaman
+  dalam tab yang sama. Namun sumber listener tersebut masih memakai snapshot penuh;
+  ini tetap menjadi target migrasi berikutnya dan tidak diklaim sudah incremental.
 - Finance Report tidak lagi memasang listener transaksi kedua yang hasilnya hanya
   dipakai oleh tabel yang sudah dinonaktifkan.
 - Summary Pembelian memakai cache transaksi bersama.
-- Summary Transfer memakai cache transfer dan transaksi bersama; listener langsung
-  pada root `transfer_barang` dan `toko` sudah dihapus.
+- Beberapa halaman histori masih mempunyai listener langsung pada root
+  `transfer_barang`/`toko`; daftar temuan aktual terdapat pada tabel di bawah.
 - Inventory Report dan Sales Report sudah memakai cache bersama. Dua subscription
   di Sales Report tetap dilayani oleh satu koneksi Firebase dari cache.
 - Finance Report Monthly hanya memakai state/local storage dan tidak membuat query
@@ -63,8 +69,10 @@ yang sudah ada.
 
 | Prioritas | Lokasi | Pola mahal | Perbaikan aman |
 | --- | --- | --- | --- |
-| Kritis | `FirebaseService.listenAllTransaksi` | Listener legacy pada root `toko` ikut mengunduh info toko dan seluruh transaksi semua cabang setiap ada perubahan | Semua konsumen `FirebaseCache` sekarang memakai versi incremental; migrasikan pemanggilan legacy langsung secara bertahap |
-| Kritis | `FirebaseService.listenStockAll` | Listener legacy pada seluruh `detail_stock` | Semua konsumen cache sekarang memakai versi incremental; halaman langsung perlu dimigrasikan bertahap |
+| Kritis | `FirebaseService.listenAllTransaksi` | Listener pada root `toko` ikut mengunduh info toko dan seluruh transaksi semua cabang setiap ada perubahan | Pecah listener per `toko/{id}/transaksi`, lalu gunakan child events atau query tanggal/limit sesuai layar |
+| Kritis | `FirebaseService.listenStockAll` | Listener pada seluruh `detail_stock` | Gunakan child events untuk cache lengkap atau node/query per toko/status untuk layar operasional |
+| Tinggi | `SummaryTransferReport` | Listener langsung pada root `transfer_barang` dan `toko` | Pindahkan ke cache transfer bersama dan sumber transaksi per toko/incremental |
+| Tinggi | `PrintSuratJalan` | Listener root `toko` untuk metadata | Baca/cache node metadata toko terpisah; jangan ikut membaca child transaksi |
 | Tinggi | `listenTransferRequests` dan listener langsung di halaman transfer/report | Membaca seluruh histori transfer secara realtime | Badge sudah diperbaiki; halaman histori sebaiknya memakai query tanggal/`limitToLast` dan tombol muat berikutnya |
 | Tinggi | Pemanggilan `get(ref(db, "toko"))` di form/refund | Satu lookup nama/ID mengunduh semua toko beserta child transaksi | Baca `toko/{id}/info`, atau gunakan cache metadata toko yang tidak mencakup transaksi |
 | Sedang | Listener master yang sama di beberapa komponen | Snapshot master diunduh ulang per komponen | Pusatkan ke `FirebaseCache` seperti `listenMasterBarangCached` |

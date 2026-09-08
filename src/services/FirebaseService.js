@@ -31,6 +31,9 @@ import {
   getDatabase,
   ref,
   onValue,
+  onChildAdded,
+  onChildChanged,
+  onChildRemoved,
   get,
   set,
   update,
@@ -1621,17 +1624,42 @@ export const listenPendingTransferRequests = (callback) => {
     equalTo("Pending")
   );
 
-  return onValue(
-    pendingQuery,
-    (snap) => {
-      const raw = snap.val() || {};
-      callback(Object.entries(raw).map(([id, value]) => ({ id, ...value })));
-    },
-    (error) => {
-      console.error("listenPendingTransferRequests error:", error);
-      callback([]);
-    }
-  );
+  const pendingRows = new Map();
+  let notifyTimer = null;
+
+  // Gabungkan initial child_added dalam satu callback dan sesudahnya hanya proses
+  // child yang berubah. Ini mencegah snapshot seluruh daftar Pending terunduh ulang.
+  const notify = () => {
+    if (notifyTimer) return;
+    notifyTimer = setTimeout(() => {
+      notifyTimer = null;
+      callback(Array.from(pendingRows.values()));
+    }, 0);
+  };
+  const upsert = (snap) => {
+    pendingRows.set(snap.key, { id: snap.key, ...snap.val() });
+    notify();
+  };
+  const handleError = (error) => {
+    console.error("listenPendingTransferRequests error:", error);
+  };
+  const unsubs = [
+    onChildAdded(pendingQuery, upsert, handleError),
+    onChildChanged(pendingQuery, upsert, handleError),
+    onChildRemoved(
+      pendingQuery,
+      (snap) => {
+        pendingRows.delete(snap.key);
+        notify();
+      },
+      handleError
+    ),
+  ];
+
+  return () => {
+    if (notifyTimer) clearTimeout(notifyTimer);
+    unsubs.forEach((unsub) => unsub && unsub());
+  };
 };
 
 // update transfer request (approve / reject)

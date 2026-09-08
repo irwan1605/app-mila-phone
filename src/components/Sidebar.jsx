@@ -43,12 +43,58 @@ const TOKO_LABELS = {
 
 const ALL_TOKO_IDS = Object.keys(TOKO_LABELS).map(Number);
 
+const transferTime = (transfer) => {
+  const raw =
+    transfer?.updatedAt ||
+    transfer?.UPDATE_AT ||
+    transfer?.createdAt ||
+    transfer?.tanggal ||
+    transfer?.TANGGAL ||
+    0;
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  return new Date(raw).getTime() || 0;
+};
+
+const transferId = (transfer) => String(transfer?.id || transfer?.key || "");
+
+const isNewerTransfer = (candidate, dismissed) => {
+  if (!dismissed?.id) return true;
+  const candidateId = transferId(candidate);
+
+  // ID sama dengan isi berbeda berarti record tersebut benar-benar di-update.
+  if (candidateId === dismissed.id) return true;
+
+  const candidateTime = transferTime(candidate);
+  const dismissedTime = Number(dismissed.time || 0);
+  if (candidateTime || dismissedTime) return candidateTime > dismissedTime;
+  return candidateId.localeCompare(dismissed.id) > 0;
+};
+
+// Signature berubah bila transfer yang sama benar-benar diperbarui. Karena itu
+// update baru boleh tampil lagi, sedangkan render/snapshot ulang tidak.
+const transferSignature = (transfer) =>
+  JSON.stringify({
+    id: transfer?.id || transfer?.key || "",
+    updatedAt: transfer?.updatedAt || transfer?.UPDATE_AT || "",
+    status: transfer?.status || "",
+    dari: transfer?.dari || transfer?.tokoPengirim || "",
+    ke: transfer?.ke || "",
+    barang: transfer?.barang || transfer?.namaBarang || "",
+    qty: transfer?.qty || "",
+    imeis: transfer?.imeis || [],
+  });
+
 const Sidebar = ({ role, toko, onLogout }) => {
   const location = useLocation();
   const activePath = location.pathname;
   const [transferNotif, setTransferNotif] = useState(0);
   const [showPopup, setShowPopup] = useState(false);
   const [popupData, setPopupData] = useState(null);
+  const notificationStorageKey = `TRANSFER_NOTIF_CLOSED:${String(
+    role || ""
+  ).toLowerCase()}:${String(toko || "")}`;
+  const activePopupSignature = useRef(null);
 
   const { searchQuery } = useGlobalSearch();
 
@@ -111,20 +157,62 @@ const Sidebar = ({ role, toko, onLogout }) => {
       // ✅ UPDATE BADGE JUMLAH
       setTransferNotif(pending.length);
 
-      // ✅ POPUP & SUARA JIKA ADA TRANSFER BARU
-      if (pending.length > 0) {
-        const last = pending[pending.length - 1];
-
-        setPopupData(last);
-        setShowPopup(true);
-
-        // ✅ BUNYIKAN SUARA
-        notifSound.play().catch(() => {});
+      if (!pending.length) {
+        activePopupSignature.current = null;
+        setPopupData(null);
+        setShowPopup(false);
+        return;
       }
+
+      // Hanya satu transfer terbaru. Push ID Firebase dipakai sebagai fallback
+      // kronologis bila data lama belum mempunyai createdAt/updatedAt.
+      const latest = [...pending].sort((a, b) => {
+        const byTime = transferTime(b) - transferTime(a);
+        if (byTime) return byTime;
+        return String(b.id || b.key || "").localeCompare(
+          String(a.id || a.key || "")
+        );
+      })[0];
+      const signature = transferSignature(latest);
+      const dismissedRaw = localStorage.getItem(notificationStorageKey);
+      let dismissed = null;
+      try {
+        const parsed = dismissedRaw ? JSON.parse(dismissedRaw) : null;
+        dismissed = parsed?.signature ? parsed : { signature: dismissedRaw };
+      } catch {
+        // Kompatibilitas value lama yang hanya berisi signature.
+        dismissed = { signature: dismissedRaw };
+      }
+
+      if (
+        signature === dismissed?.signature ||
+        !isNewerTransfer(latest, dismissed) ||
+        signature === activePopupSignature.current
+      )
+        return;
+
+      activePopupSignature.current = signature;
+      setPopupData(latest);
+      setShowPopup(true);
+      notifSound.play().catch(() => {});
     });
 
     return () => unsub && unsub();
-  }, []);
+  }, [notificationStorageKey]);
+
+  const closeTransferPopup = () => {
+    if (popupData) {
+      localStorage.setItem(
+        notificationStorageKey,
+        JSON.stringify({
+          signature: transferSignature(popupData),
+          id: transferId(popupData),
+          time: transferTime(popupData),
+        })
+      );
+    }
+    setShowPopup(false);
+  };
 
   // ESC Close
   useEffect(() => {
@@ -788,15 +876,15 @@ const Sidebar = ({ role, toko, onLogout }) => {
           <div className="font-bold text-sm mb-1">📦 TRANSFER BARU MASUK!</div>
           <div className="text-xs">
             <div>
-              <b>Dari:</b> {popupData.dari}
+              <b>Dari:</b> {popupData.dari || popupData.tokoPengirim || "-"}
             </div>
             <div>
-              <b>Barang:</b> {popupData.barang}
+              <b>Barang:</b> {popupData.barang || popupData.namaBarang || "-"}
             </div>
           </div>
 
           <button
-            onClick={() => setShowPopup(false)}
+            onClick={closeTransferPopup}
             className="mt-2 w-full bg-white text-indigo-700 py-1 rounded text-xs font-bold hover:bg-indigo-100"
           >
             TUTUP
