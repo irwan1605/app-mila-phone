@@ -2953,6 +2953,7 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
 
         {/* SEARCH IMEI */}
         <div className="relative w-full md:w-96">
+        <label className="text-xs font-semibold">Input No IMEI di Sini Lalu Enter</label>
           <input
             placeholder="🔍 Cari / Input IMEI lalu Enter..."
             value={imeiSearch}
@@ -3180,7 +3181,7 @@ Barang hanya bisa ditransfer dari stok toko sendiri.`
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    handleAddImeiAuto(); // 🔥 AUTO MASUK TABLE
+                    handleSearchByImei(); // 🔥 pakai function di atas
                   }
                 }}
                 className="input"
