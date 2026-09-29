@@ -37,8 +37,7 @@ import {
 } from "../services/FirebaseService";
 import {
   listenAllTransaksiCached,
-  listenPenjualanCached,
-  listenStockAllCached,
+  selectPenjualanRows,
 } from "../services/FirebaseCache";
 
 // 🔥 TAMBAHKAN DISINI
@@ -61,11 +60,6 @@ export default function Dashboard() {
 
   /* ================= STATE ================= */
   const [dataTransaksi, setDataTransaksi] = useState([]);
-  const [stokMaster, setStokMaster] = useState([]);
-
-  const [tokoList, setTokoList] = useState([]);
-  const [salesList, setSalesList] = useState([]);
-
   const [filterType, setFilterType] = useState("semua");
   const [filterValue, setFilterValue] = useState("");
   const [filterToko, setFilterToko] = useState("semua");
@@ -73,10 +67,7 @@ export default function Dashboard() {
   const DEV = process.env.NODE_ENV === "development";
   const [searchImei, setSearchImei] = useState("");
 
-  const [stockData, setStockData] = useState({});
   const [transaksi, setTransaksi] = useState([]);
-  const [penjualan, setPenjualan] = useState([]);
-
   const [penjualanList, setPenjualanList] = useState([]);
 
   // =====================================
@@ -150,19 +141,6 @@ export default function Dashboard() {
     return true;
   };
 
-  useEffect(() => {
-    const unsub = listenPenjualanCached((data) => {
-      if (DEV) {
-        console.log("🔥 DATA PENJUALAN DARI listenPenjualan:", data);
-      }
-      setPenjualanList(Array.isArray(data) ? data : []);
-    });
-
-    return () => unsub && unsub();
-  }, []);
-  if (DEV) {
-    console.log("DATA PENJUALAN:", penjualanList);
-  }
   // ================== DASHBOARD PENJUALAN (SUMBER: TABLE PENJUALAN) ==================
   // ================= DASHBOARD DARI DATA TRANSAKSI PENJUALAN =================
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -280,17 +258,9 @@ export default function Dashboard() {
   /* ================= LISTENER ================= */
 
   useEffect(() => {
-    const u1 = listenStockAllCached((s) => {
-      setStockData(s || {});
-      setStokMaster(Array.isArray(s) ? s : []);
-    });
-
-    return () => {
-      u1 && u1();
-    };
-  }, []);
-
-  useEffect(() => {
+    const cleanupKey = "dashboard_legacy_toko_1_cleanup_v1";
+    if (sessionStorage.getItem(cleanupKey) === "done") return;
+    sessionStorage.setItem(cleanupKey, "done");
     // 🔥 HAPUS TRANSAKSI LEGACY DARI TOKO 1
     forceDeleteTransaksi(1, (val) => {
       return !val.NAMA_TOKO || String(val.NAMA_TOKO).toUpperCase() === "TOKO 1";
@@ -303,6 +273,7 @@ export default function Dashboard() {
   useEffect(() => {
     const unsub = listenAllTransaksiCached((listRaw = []) => {
       setTransaksi(Array.isArray(listRaw) ? listRaw : []);
+      setPenjualanList(selectPenjualanRows(listRaw));
       const formatted = (listRaw || []).map((r) => ({
         ...r,
         id: r.id,
@@ -342,26 +313,10 @@ export default function Dashboard() {
 
       setDataTransaksi(formatted);
 
-      const tokoNames = [
-        ...new Set(formatted.map((r) => r.NAMA_TOKO || r.TOKO).filter(Boolean)),
-      ];
-      if (tokoNames.length > 0) setTokoList(tokoNames);
-
-      const uniqueSales = [
-        ...new Set(formatted.map((r) => r.NAMA_SALES).filter(Boolean)),
-      ];
-      setSalesList(uniqueSales);
     });
 
     return () => unsub && unsub();
   }, []);
-
-  const totalHariIni = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return penjualan
-      .filter((p) => p.tanggal === today)
-      .reduce((s, p) => s + Number(p.payment.grandTotal || 0), 0);
-  }, [penjualan]);
 
   // ==========================
   // STOCK BY TOKO (SINGLE SOURCE OF TRUTH)

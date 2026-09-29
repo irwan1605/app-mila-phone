@@ -5,6 +5,10 @@ import {
   listenStockAll,
   listenMasterBarang,
   listenTransferRequests,
+  listenPendingTransferRequests,
+  listenMasterStoreHead,
+  listenKaryawan,
+  listenMasterPaymentMetode,
 } from "./FirebaseService";
 /* =======================================================
    DETAIL STOCK CACHE
@@ -20,7 +24,7 @@ let transaksiStopTimer = null;
 
 let penjualanCache = [];
 let penjualanSubscribers = [];
-const buildPenjualanCache = (rows = []) =>
+export const selectPenjualanRows = (rows = []) =>
   rows
     .filter((trx) => {
       const statusPembayaran = String(trx?.statusPembayaran || "")
@@ -57,7 +61,7 @@ const ensureTransaksiListener = () => {
 
   transaksiUnsub = listenAllTransaksi((rows) => {
     transaksiCache = Array.isArray(rows) ? rows : [];
-    penjualanCache = buildPenjualanCache(transaksiCache);
+    penjualanCache = selectPenjualanRows(transaksiCache);
     notifyTransaksiSubscribers(transaksiCache);
   });
 };
@@ -140,6 +144,42 @@ export function listenTransferRequestsCached(callback) {
     }
   };
 }
+
+const createSharedListener = (listen, emptyValue = []) => {
+  let cache = emptyValue;
+  let subscribers = [];
+  let unsubscribe = null;
+
+  return (callback) => {
+    subscribers.push(callback);
+    callback(cache);
+    if (!unsubscribe) {
+      unsubscribe = listen((value) => {
+        cache = value || emptyValue;
+        subscribers.forEach((subscriber) => subscriber(cache));
+      });
+    }
+
+    return () => {
+      subscribers = subscribers.filter((subscriber) => subscriber !== callback);
+      if (subscribers.length === 0 && unsubscribe) {
+        unsubscribe();
+        unsubscribe = null;
+      }
+    };
+  };
+};
+
+export const listenPendingTransferRequestsCached = createSharedListener(
+  listenPendingTransferRequests
+);
+export const listenMasterStoreHeadCached = createSharedListener(
+  listenMasterStoreHead
+);
+export const listenKaryawanCached = createSharedListener(listenKaryawan);
+export const listenMasterPaymentMetodeCached = createSharedListener(
+  listenMasterPaymentMetode
+);
 
 /* =======================================================
    MASTER BARANG CACHE

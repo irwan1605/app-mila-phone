@@ -12,7 +12,7 @@ import { renameUsername } from "../services/FirebaseService";
 //   listenUsers,
 //   listenTransferRequests,
 // } from "../services/FirebaseService";
-import { listenPendingTransferRequests } from "../services/FirebaseService";
+import { listenPendingTransferRequestsCached } from "../services/FirebaseCache";
 
 const TOKO_MAP = {
   "1": "CILANGKAP PUSAT",
@@ -84,7 +84,7 @@ const Navbar = ({ user, onLogout }) => {
     const normalize = (v) =>
       String(v || "").trim().toUpperCase();
   
-    return listenPendingTransferRequests((rows) => {
+    return listenPendingTransferRequestsCached((rows) => {
   
       const myTransfer = [];
   

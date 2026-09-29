@@ -18,12 +18,11 @@ import jsPDF from "jspdf";
 import {
   updateTransaksi,
   deleteTransaksi,
-  listenMasterStoreHead,
-  listenKaryawan,
-  listenMasterPaymentMetode,
 } from "../../services/FirebaseService";
 import {
-  listenAllTransaksiCached,
+  listenKaryawanCached,
+  listenMasterPaymentMetodeCached,
+  listenMasterStoreHeadCached,
   listenPenjualanCached,
 } from "../../services/FirebaseCache";
 import { useLocation } from "react-router-dom";
@@ -60,17 +59,17 @@ export default function SalesReport() {
   const [filterStart, setFilterStart] = useState("");
   const [filterEnd, setFilterEnd] = useState("");
   const [search, setSearch] = useState("");
-  const [rows, setRows] = useState([]);
+  const [rawSales, setRawSales] = useState([]);
   const [masterSH, setMasterSH] = useState([]);
   const [masterKaryawan, setMasterKaryawan] = useState([]);
   const [masterPayment, setMasterPayment] = useState([]);
 
   useEffect(() => {
-    const unsubSH = listenMasterStoreHead((data) => {
+    const unsubSH = listenMasterStoreHeadCached((data) => {
       setMasterSH(data || []);
     });
 
-    const unsubKar = listenKaryawan((data) => {
+    const unsubKar = listenKaryawanCached((data) => {
       setMasterKaryawan(data || []);
     });
 
@@ -81,7 +80,7 @@ export default function SalesReport() {
   }, []);
 
   useEffect(() => {
-    const unsub = listenMasterPaymentMetode((data) => {
+    const unsub = listenMasterPaymentMetodeCached((data) => {
       setMasterPayment(data || []);
     });
 
@@ -103,45 +102,7 @@ export default function SalesReport() {
   const isSuper =
     loggedUser?.role === "superadmin" || loggedUser?.role === "admin";
 
-  useEffect(() => {
-    const unsub = listenAllTransaksiCached((data = []) => {
-      // =========================
-      // 1. Ambil semua data refund
-      // =========================
-      const refundList = data.filter(
-        (t) =>
-          t.PAYMENT_METODE === "RETUR" ||
-          t.PAYMENT_METODE === "REFUND" ||
-          t.STATUS === "REFUND"
-      );
-
-      // =========================
-      // 2. Ambil invoice yang direfund
-      // =========================
-      const refundInvoiceSet = new Set(
-        refundList.map((r) => r.INVOICE_ASAL || r.NO_INVOICE)
-      );
-
-      // =========================
-      // 3. Ambil penjualan normal (yang belum direfund)
-      // =========================
-      const penjualanBersih = data.filter((t) => {
-        const isRefund =
-          t.PAYMENT_METODE === "RETUR" || t.PAYMENT_METODE === "REFUND";
-
-        const kenaRefund = refundInvoiceSet.has(t.NO_INVOICE);
-
-        return !isRefund && !kenaRefund;
-      });
-
-      // =========================
-      // 4. tetap pakai state lama
-      // =========================
-      setRows(penjualanBersih);
-    });
-
-    return () => unsub && unsub();
-  }, []);
+  useEffect(() => listenPenjualanCached(setRawSales), []);
 
   /* ===================== REALTIME ===================== */
   // ================= HELPER =================
@@ -173,7 +134,7 @@ export default function SalesReport() {
     if (!masterSH.length || !masterKaryawan.length || !masterPayment.length)
       return;
 
-    const unsub = listenPenjualanCached((data = []) => {
+    const data = rawSales;
       const mapInvoice = {};
 
       (data || []).forEach((trx) => {
@@ -340,10 +301,7 @@ export default function SalesReport() {
       });
 
       setAllData(Object.values(mapInvoice));
-    });
-
-    return () => unsub && unsub();
-  }, [masterSH, masterKaryawan, masterPayment]);
+  }, [rawSales, masterSH, masterKaryawan, masterPayment]);
   
 
   const storeHeadMap = useMemo(() => {

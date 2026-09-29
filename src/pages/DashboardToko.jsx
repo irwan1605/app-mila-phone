@@ -25,6 +25,7 @@ import { filterExportRows } from "../utils/stock/filterExportRows";
 import { filterRefundSoldRows } from "../features/Refund/BarangRefund";
 
 import { buildDashboardStockRows } from "../utils/stock/buildDashboardStockRows";
+import { sortStockTransactions } from "../utils/stock/stockTransactionOrder";
 
 import * as XLSX from "xlsx";
 
@@ -119,11 +120,7 @@ export default function DashboardToko(props) {
   const [isDark, setIsDark] = useState(false);
 
   // ✅ LIST GLOBAL (HEMAT) UNTUK CHART PENJUALAN & STOK PER TOKO
-  const [allTransaksi, setAllTransaksi] = useState([]);
-
-  // ✅ LIST KHUSUS TOKO INI (HEMAT) UNTUK IMEI, VOID, RETURN
-  const [transaksiToko, setTransaksiToko] = useState([]);
-  const [stockToko, setStockToko] = useState([]);
+  // Data khusus toko diturunkan dari snapshot global dengan useMemo.
   const [detailStock, setDetailStock] = useState({});
   const [loadingStock, setLoadingStock] = useState(true);
   const [searchStock, setSearchStock] = useState("");
@@ -147,32 +144,7 @@ export default function DashboardToko(props) {
   useEffect(() => {
     const unsub1 = listenAllTransaksiCached((rows = []) => {
       const safeRows = Array.isArray(rows) ? rows : [];
-      const tokoRows = safeRows.filter((row) => {
-        const rowTokoId = String(row?.tokoId || "");
-        const rowTokoName = String(row?.NAMA_TOKO || row?.TOKO || "")
-          .trim()
-          .toUpperCase();
-
-        return (
-          rowTokoId === String(firebaseTokoId || "") ||
-          rowTokoId === String(tokoId || "") ||
-          rowTokoName === String(TOKO_AKTIF || "").trim().toUpperCase()
-        );
-      });
-
       setTransaksi(safeRows);
-      setAllTransaksi(safeRows);
-      setTransaksiToko(tokoRows);
-      setStockToko(
-        tokoRows.filter((row) => {
-          const status = String(row?.STATUS || "").toUpperCase();
-          const metode = String(row?.PAYMENT_METODE || "").toUpperCase();
-          return (
-            ["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode) &&
-            status === "APPROVED"
-          );
-        })
-      );
       setLoadingStock(false);
     });
     const unsub2 = listenMasterBarangCached((rows) =>
@@ -184,6 +156,34 @@ export default function DashboardToko(props) {
       unsub2 && unsub2();
     };
   }, [firebaseTokoId, tokoId, TOKO_AKTIF]);
+
+  const transaksiToko = useMemo(() => {
+    const activeName = String(TOKO_AKTIF || "").trim().toUpperCase();
+    return transaksi.filter((row) => {
+      const rowTokoId = String(row?.tokoId || "");
+      const rowTokoName = String(row?.NAMA_TOKO || row?.TOKO || "")
+        .trim()
+        .toUpperCase();
+      return (
+        rowTokoId === String(firebaseTokoId || "") ||
+        rowTokoId === String(tokoId || "") ||
+        rowTokoName === activeName
+      );
+    });
+  }, [transaksi, firebaseTokoId, tokoId, TOKO_AKTIF]);
+
+  const stockToko = useMemo(
+    () =>
+      transaksiToko.filter((row) => {
+        const status = String(row?.STATUS || "").toUpperCase();
+        const metode = String(row?.PAYMENT_METODE || "").toUpperCase();
+        return (
+          ["PEMBELIAN", "TRANSFER_MASUK", "REFUND"].includes(metode) &&
+          status === "APPROVED"
+        );
+      }),
+    [transaksiToko]
+  );
 
   // ===============================
   // 🔥 DETAIL STOCK REALTIME
@@ -210,7 +210,7 @@ export default function DashboardToko(props) {
       map[t.tokoName] = { VOID: 0, RETURN: 0 };
     });
 
-    (allTransaksi || []).forEach((x) => {
+    (transaksi || []).forEach((x) => {
       const tokoName = x.NAMA_TOKO;
       const total = Number(x.TOTAL || x.HARGA_UNIT || 0);
 
@@ -230,7 +230,7 @@ export default function DashboardToko(props) {
       VOID: val.VOID,
       RETURN: val.RETURN,
     }));
-  }, [allTransaksi]);
+  }, [transaksi]);
 
   // ======================= DRAFT STORAGE (ANTI HILANG SAAT REFRESH) =======================
   const DRAFT_KEY = `DASHBOARD_DRAFT_TOKO_${tokoId}`;
@@ -266,6 +266,10 @@ export default function DashboardToko(props) {
       .replace(/\s+/g, " ");
 
   const isApproved = (t) => String(t.STATUS || "").toUpperCase() === "APPROVED";
+  const sortedTransaksi = useMemo(
+    () => sortStockTransactions(transaksi),
+    [transaksi]
+  );
 
   // ===============================
   // 🔥 SUPPLIER LOOKUP UNIVERSAL
@@ -276,11 +280,7 @@ export default function DashboardToko(props) {
     // ======================================
     // 🔥 SORT TRANSAKSI TERLAMA → TERBARU
     // ======================================
-    const sorted = [...transaksi].sort(
-      (a, b) =>
-        new Date(a.TANGGAL_TRANSAKSI || 0).getTime() -
-        new Date(b.TANGGAL_TRANSAKSI || 0).getTime()
-    );
+    const sorted = sortedTransaksi;
 
     sorted.forEach((t) => {
       if (String(t.STATUS || "").toUpperCase() !== "APPROVED") {
@@ -365,7 +365,7 @@ export default function DashboardToko(props) {
     });
 
     return map;
-  }, [transaksi]);
+  }, [sortedTransaksi]);
 
   // ======================= SUMMARY DASHBOARD TOKO =======================
 
@@ -514,11 +514,7 @@ export default function DashboardToko(props) {
   const refundAvailableSet = useMemo(() => {
     const set = new Set();
 
-    const sorted = [...transaksi].sort(
-      (a, b) =>
-        new Date(a.CREATED_AT || a.TANGGAL_TRANSAKSI || 0).getTime() -
-        new Date(b.CREATED_AT || b.TANGGAL_TRANSAKSI || 0).getTime()
-    );
+    const sorted = sortedTransaksi;
 
     sorted.forEach((t) => {
       if (!t?.IMEI) return;
@@ -556,7 +552,7 @@ export default function DashboardToko(props) {
     });
 
     return set;
-  }, [transaksi]);
+  }, [sortedTransaksi]);
 
   // ======================================
   // 🔥 REFUND SUDAH TERJUAL
@@ -734,11 +730,7 @@ export default function DashboardToko(props) {
   const finalOwnerTracker = useMemo(() => {
     const map = {};
 
-    const sorted = [...transaksi].sort(
-      (a, b) =>
-        new Date(a.CREATED_AT || 0).getTime() -
-        new Date(b.CREATED_AT || 0).getTime()
-    );
+    const sorted = sortedTransaksi;
 
     sorted.forEach((t) => {
       if (!t?.IMEI) return;
@@ -801,7 +793,7 @@ export default function DashboardToko(props) {
     });
 
     return map;
-  }, [transaksi]);
+  }, [sortedTransaksi]);
 
   // ======================================
   // 🔥 FINAL REFUND ACTIVE TRACKER
@@ -809,11 +801,7 @@ export default function DashboardToko(props) {
   const refundFinalTracker = useMemo(() => {
     const map = {};
 
-    const sorted = [...transaksi].sort(
-      (a, b) =>
-        new Date(a.CREATED_AT || a.TANGGAL_TRANSAKSI || 0).getTime() -
-        new Date(b.CREATED_AT || b.TANGGAL_TRANSAKSI || 0).getTime()
-    );
+    const sorted = sortedTransaksi;
 
     sorted.forEach((t) => {
       if (!t?.IMEI) return;
@@ -855,7 +843,7 @@ export default function DashboardToko(props) {
     });
 
     return map;
-  }, [transaksi]);
+  }, [sortedTransaksi]);
 
   // ======================================
   // 🔥 IMEI TRANSFER ACTIVE TRACKER
@@ -863,11 +851,7 @@ export default function DashboardToko(props) {
   const imeiTransferTracker = useMemo(() => {
     const map = {};
 
-    const sorted = [...transaksi].sort(
-      (a, b) =>
-        new Date(a.CREATED_AT || 0).getTime() -
-        new Date(b.CREATED_AT || 0).getTime()
-    );
+    const sorted = sortedTransaksi;
 
     sorted.forEach((t) => {
       if (!t?.IMEI) return;
@@ -919,7 +903,7 @@ export default function DashboardToko(props) {
     });
 
     return map;
-  }, [transaksi]);
+  }, [sortedTransaksi]);
 
   const imeiFinalMap = useMemo(() => {
     const map = {};
@@ -927,11 +911,7 @@ export default function DashboardToko(props) {
     // ======================================
     // 🔥 SORT TRANSAKSI
     // ======================================
-    const sorted = [...transaksi].sort(
-      (a, b) =>
-        new Date(a.TANGGAL_TRANSAKSI || 0).getTime() -
-        new Date(b.TANGGAL_TRANSAKSI || 0).getTime()
-    );
+    const sorted = sortedTransaksi;
 
     sorted.forEach((t) => {
       if (String(t.STATUS || "").toUpperCase() !== "APPROVED" || !t.IMEI) {
@@ -1034,7 +1014,7 @@ export default function DashboardToko(props) {
     });
 
     return map;
-  }, [transaksi]);
+  }, [sortedTransaksi]);
 
   /* ======================
    BUILD ROWS UNIVERSAL (SYNC DETAIL STOCK)
